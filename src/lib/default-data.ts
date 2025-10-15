@@ -54,8 +54,11 @@ export const DEFAULT_CREDIT_CARDS = [
 ];
 
 export const DEFAULT_SETTINGS = [
-  { key: 'default_account_id', value: '1' },
-  { key: 'auto_categorize', value: 'true' },
-  { key: 'theme', value: 'light' },
+  { key: 'salary', value: '163000.00' },
+  { key: 'tax_rate', value: '0.2122' },
+  { key: 'pre_tax_deductions', value: '2388.13' },
+  { key: 'taxes_per_month', value: '2154.31' },
+  { key: 'monthly_net_income', value: '7996.02' },
+  { key: 'monthly_budget', value: '8114.08' },
 ];
 

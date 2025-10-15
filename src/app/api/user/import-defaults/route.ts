@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
-import { 
-  DEFAULT_CATEGORIES, 
-  DEFAULT_ACCOUNTS, 
+import {
+  DEFAULT_CATEGORIES,
+  DEFAULT_ACCOUNTS,
   DEFAULT_CREDIT_CARDS,
-  DEFAULT_SETTINGS 
+  DEFAULT_SETTINGS
 } from '@/lib/default-data';
 
 /**
