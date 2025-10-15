@@ -14,9 +14,19 @@ BEGIN
       AND column_name = 'include_in_totals'
       AND data_type != 'boolean'
   ) THEN
+    -- Drop default first (it's an integer default that can't be auto-converted)
+    ALTER TABLE accounts
+      ALTER COLUMN include_in_totals DROP DEFAULT;
+
+    -- Convert column type
     ALTER TABLE accounts
       ALTER COLUMN include_in_totals TYPE BOOLEAN
       USING (include_in_totals::INTEGER != 0);
+
+    -- Add new boolean default
+    ALTER TABLE accounts
+      ALTER COLUMN include_in_totals SET DEFAULT true;
+
     RAISE NOTICE 'Converted accounts.include_in_totals to BOOLEAN';
   ELSE
     RAISE NOTICE 'accounts.include_in_totals is already BOOLEAN';
@@ -35,9 +45,19 @@ BEGIN
       AND column_name = 'include_in_totals'
       AND data_type != 'boolean'
   ) THEN
+    -- Drop default first (it's an integer default that can't be auto-converted)
+    ALTER TABLE credit_cards
+      ALTER COLUMN include_in_totals DROP DEFAULT;
+
+    -- Convert column type
     ALTER TABLE credit_cards
       ALTER COLUMN include_in_totals TYPE BOOLEAN
       USING (include_in_totals::INTEGER != 0);
+
+    -- Add new boolean default
+    ALTER TABLE credit_cards
+      ALTER COLUMN include_in_totals SET DEFAULT true;
+
     RAISE NOTICE 'Converted credit_cards.include_in_totals to BOOLEAN';
   ELSE
     RAISE NOTICE 'credit_cards.include_in_totals is already BOOLEAN';
