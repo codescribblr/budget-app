@@ -22,6 +22,7 @@ jobs:
       - name: 🔄 Run database migrations
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        working-directory: ./budget-app
         run: |
           chmod +x scripts/run-migrations.sh
           ./scripts/run-migrations.sh

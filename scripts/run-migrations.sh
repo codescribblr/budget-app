@@ -41,13 +41,19 @@ echo -e "${BLUE}🚀 Starting database migrations...${NC}\n"
 
 # Create migrations tracking table if it doesn't exist
 echo -e "${YELLOW}📊 Creating migrations tracking table...${NC}"
-psql "$SUPABASE_DB_URL" -c "
+if ! psql "$SUPABASE_DB_URL" -c "
   CREATE TABLE IF NOT EXISTS $MIGRATIONS_TABLE (
     id SERIAL PRIMARY KEY,
     migration_name TEXT NOT NULL UNIQUE,
     executed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
-" > /dev/null 2>&1
+" 2>&1; then
+  echo -e "${RED}❌ Failed to create migrations table${NC}"
+  echo -e "${RED}   Check your SUPABASE_DB_URL and database connection${NC}"
+  exit 2
+fi
+
+echo -e "${GREEN}✓${NC} Migrations table ready\n"
 
 # Get list of executed migrations
 EXECUTED_MIGRATIONS=$(psql "$SUPABASE_DB_URL" -t -c "SELECT migration_name FROM $MIGRATIONS_TABLE ORDER BY migration_name;" 2>/dev/null | tr -d ' ')
@@ -84,15 +90,18 @@ for MIGRATION_FILE in $MIGRATION_FILES; do
   PENDING_COUNT=$((PENDING_COUNT + 1))
   
   echo -e "${YELLOW}📝 Running migration: $MIGRATION_NAME${NC}"
-  
+
   # Execute the migration
-  if psql "$SUPABASE_DB_URL" -f "$MIGRATION_FILE" > /dev/null 2>&1; then
+  if psql "$SUPABASE_DB_URL" -f "$MIGRATION_FILE" 2>&1; then
     # Record the migration as executed
-    psql "$SUPABASE_DB_URL" -c "INSERT INTO $MIGRATIONS_TABLE (migration_name) VALUES ('$MIGRATION_NAME');" > /dev/null 2>&1
+    if ! psql "$SUPABASE_DB_URL" -c "INSERT INTO $MIGRATIONS_TABLE (migration_name) VALUES ('$MIGRATION_NAME');" 2>&1; then
+      echo -e "${RED}❌ Failed to record migration${NC}"
+      exit 1
+    fi
     echo -e "${GREEN}✅ Migration completed: $MIGRATION_NAME${NC}\n"
   else
     echo -e "${RED}❌ Migration failed: $MIGRATION_NAME${NC}"
-    echo -e "${RED}   Check the SQL syntax and try again${NC}"
+    echo -e "${RED}   Check the SQL syntax and database connection${NC}"
     exit 1
   fi
 done
