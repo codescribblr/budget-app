@@ -89,7 +89,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         const newHash = generateTransactionHash(item.date, item.description, amount, item.originalData);
 
         // Auto-include when amount changes (unless it's a duplicate)
-        const newStatus = item.isDuplicate ? 'excluded' : 'pending';
+        const newStatus: 'pending' | 'confirmed' | 'excluded' = item.isDuplicate ? 'excluded' : 'pending';
 
         // Update the amount and adjust the single split if it exists
         const updatedItem = { ...item, amount, hash: newHash, isDuplicate: false, status: newStatus };

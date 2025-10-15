@@ -314,7 +314,7 @@ export async function getAllPendingChecks(): Promise<PendingCheck[]> {
   const { data, error } = await supabase
     .from('pending_checks')
     .select('*')
-    .order('date', { ascending: false });
+    .order('created_at', { ascending: false });
 
   if (error) throw error;
   return data as PendingCheck[];
@@ -338,10 +338,8 @@ export async function getPendingCheckById(id: number): Promise<PendingCheck | nu
 }
 
 export async function createPendingCheck(data: {
-  check_number: string;
-  payee: string;
+  description: string;
   amount: number;
-  date: string;
 }): Promise<PendingCheck> {
   const { supabase, user } = await getAuthenticatedUser();
 
@@ -349,10 +347,8 @@ export async function createPendingCheck(data: {
     .from('pending_checks')
     .insert({
       user_id: user.id,
-      check_number: data.check_number,
-      payee: data.payee,
+      description: data.description,
       amount: data.amount,
-      date: data.date,
     })
     .select()
     .single();
@@ -364,10 +360,8 @@ export async function createPendingCheck(data: {
 export async function updatePendingCheck(
   id: number,
   data: Partial<{
-    check_number: string;
-    payee: string;
+    description: string;
     amount: number;
-    date: string;
   }>
 ): Promise<PendingCheck | null> {
   const { supabase } = await getAuthenticatedUser();
@@ -434,23 +428,30 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   if (pcError) throw pcError;
 
-  // Calculate totals
-  const totalBudgeted = (categories as Category[]).reduce((sum, cat) => sum + Number(cat.monthly_amount), 0);
-  const totalAllocated = (categories as Category[]).reduce((sum, cat) => sum + Number(cat.current_balance), 0);
-  const totalAccounts = (accounts as Account[]).reduce((sum, acc) => sum + Number(acc.balance), 0);
-  const totalCreditCards = (creditCards as CreditCard[]).reduce((sum, cc) => sum + Number(cc.balance), 0);
-  const totalPendingChecks = (pendingChecks as PendingCheck[]).reduce((sum, pc) => sum + Number(pc.amount), 0);
+  // Calculate totals (only include accounts/credit cards with include_in_totals = 1)
+  const totalMonies = (accounts as Account[])
+    .filter(acc => acc.include_in_totals === 1)
+    .reduce((sum, acc) => sum + Number(acc.balance), 0);
+
+  const totalEnvelopes = (categories as Category[])
+    .filter(cat => !cat.is_system)
+    .reduce((sum, cat) => sum + Number(cat.current_balance), 0);
+
+  const totalCreditCardBalances = (creditCards as CreditCard[])
+    .filter(cc => cc.include_in_totals === 1)
+    .reduce((sum, cc) => sum + Number(cc.current_balance), 0);
+
+  const totalPendingChecks = (pendingChecks as any[])
+    .reduce((sum, pc) => sum + Number(pc.amount), 0);
+
+  const currentSavings = totalMonies - totalEnvelopes - totalCreditCardBalances - totalPendingChecks;
 
   return {
-    categories: categories as Category[],
-    accounts: accounts as Account[],
-    creditCards: creditCards as CreditCard[],
-    pendingChecks: pendingChecks as PendingCheck[],
-    totalBudgeted,
-    totalAllocated,
-    totalAccounts,
-    totalCreditCards,
-    totalPendingChecks,
+    total_monies: totalMonies,
+    total_envelopes: totalEnvelopes,
+    total_credit_card_balances: totalCreditCardBalances,
+    total_pending_checks: totalPendingChecks,
+    current_savings: currentSavings,
   };
 }
 

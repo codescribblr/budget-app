@@ -47,11 +47,10 @@ CREATE TABLE credit_cards (
 CREATE TABLE pending_checks (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  check_number TEXT NOT NULL,
-  payee TEXT NOT NULL,
+  description TEXT NOT NULL,
   amount DECIMAL(10,2) NOT NULL,
-  date TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Transactions table
