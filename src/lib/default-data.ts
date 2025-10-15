@@ -34,8 +34,8 @@ export const DEFAULT_CATEGORIES = [
 ];
 
 export const DEFAULT_ACCOUNTS = [
-  { name: 'Checking', balance: 5000, include_in_totals: true },
-  { name: 'Savings', balance: 10000, include_in_totals: true },
+  { name: 'Checking', balance: 5000, account_type: 'checking' as const, include_in_totals: true },
+  { name: 'Savings', balance: 10000, account_type: 'savings' as const, include_in_totals: true },
 ];
 
 export const DEFAULT_CREDIT_CARDS = [

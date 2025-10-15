@@ -50,6 +50,7 @@ export async function POST() {
           user_id: user.id,
           name: account.name,
           balance: account.balance,
+          account_type: account.account_type,
           include_in_totals: account.include_in_totals,
         });
 
