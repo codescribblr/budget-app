@@ -161,19 +161,25 @@ export async function getAccountById(id: number): Promise<Account | null> {
 export async function createAccount(data: {
   name: string;
   balance?: number;
+  account_type?: 'checking' | 'savings' | 'cash';
+  include_in_totals?: number;
+  sort_order?: number;
 }): Promise<Account> {
   const { supabase, user } = await getAuthenticatedUser();
-  
+
   const { data: account, error } = await supabase
     .from('accounts')
     .insert({
       user_id: user.id,
       name: data.name,
       balance: data.balance ?? 0,
+      account_type: data.account_type ?? 'checking',
+      include_in_totals: data.include_in_totals ?? 1,
+      sort_order: data.sort_order ?? 0,
     })
     .select()
     .single();
-  
+
   if (error) throw error;
   return account as Account;
 }
@@ -183,6 +189,9 @@ export async function updateAccount(
   data: Partial<{
     name: string;
     balance: number;
+    account_type: 'checking' | 'savings' | 'cash';
+    include_in_totals: number;
+    sort_order: number;
   }>
 ): Promise<Account | null> {
   const { supabase } = await getAuthenticatedUser();
@@ -248,22 +257,27 @@ export async function getCreditCardById(id: number): Promise<CreditCard | null> 
 
 export async function createCreditCard(data: {
   name: string;
-  balance?: number;
   credit_limit?: number;
+  available_credit?: number;
+  include_in_totals?: number;
+  sort_order?: number;
 }): Promise<CreditCard> {
   const { supabase, user } = await getAuthenticatedUser();
-  
+
   const { data: creditCard, error } = await supabase
     .from('credit_cards')
     .insert({
       user_id: user.id,
       name: data.name,
-      balance: data.balance ?? 0,
       credit_limit: data.credit_limit ?? 0,
+      available_credit: data.available_credit ?? 0,
+      current_balance: 0,
+      include_in_totals: data.include_in_totals ?? 1,
+      sort_order: data.sort_order ?? 0,
     })
     .select()
     .single();
-  
+
   if (error) throw error;
   return creditCard as CreditCard;
 }
@@ -272,24 +286,27 @@ export async function updateCreditCard(
   id: number,
   data: Partial<{
     name: string;
-    balance: number;
     credit_limit: number;
+    available_credit: number;
+    current_balance: number;
+    include_in_totals: number;
+    sort_order: number;
   }>
 ): Promise<CreditCard | null> {
   const { supabase } = await getAuthenticatedUser();
-  
+
   const { data: creditCard, error } = await supabase
     .from('credit_cards')
     .update(data)
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) {
     if (error.code === 'PGRST116') return null;
     throw error;
   }
-  
+
   return creditCard as CreditCard;
 }
 

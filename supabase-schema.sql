@@ -30,7 +30,11 @@ CREATE TABLE accounts (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   name TEXT NOT NULL,
   balance DECIMAL(10,2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  account_type TEXT NOT NULL CHECK(account_type IN ('checking', 'savings', 'cash')),
+  include_in_totals INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Credit cards table
@@ -38,9 +42,13 @@ CREATE TABLE credit_cards (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   name TEXT NOT NULL,
-  balance DECIMAL(10,2) NOT NULL DEFAULT 0,
+  available_credit DECIMAL(10,2) NOT NULL DEFAULT 0,
+  current_balance DECIMAL(10,2) NOT NULL DEFAULT 0,
   credit_limit DECIMAL(10,2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  include_in_totals INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Pending checks table

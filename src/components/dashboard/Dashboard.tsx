@@ -19,6 +19,7 @@ import AccountList from './AccountList';
 import CreditCardList from './CreditCardList';
 import PendingCheckList from './PendingCheckList';
 import SummaryCards from './SummaryCards';
+import SignOutButton from '@/components/auth/SignOutButton';
 
 export default function Dashboard() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -87,6 +88,7 @@ export default function Dashboard() {
           <Button variant="outline" onClick={() => window.location.href = '/reports'} size="sm" className="md:size-default">
             Reports
           </Button>
+          <SignOutButton />
         </div>
       </div>
 
