@@ -1,0 +1,43 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  migrate-and-deploy:
+    name: Run Migrations & Deploy
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🗄️ Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: 🔄 Run database migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          chmod +x scripts/run-migrations.sh
+          ./scripts/run-migrations.sh
+
+      - name: 🚀 Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: ./budget-app
+
+      - name: ✅ Deployment complete
+        run: |
+          echo "🎉 Deployment completed successfully!"
+          echo "📊 Migrations applied"
+          echo "🌐 Application deployed to Vercel"
+
