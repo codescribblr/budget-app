@@ -28,6 +28,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: newName,
+          monthly_amount: parseFloat(newMonthlyAmount) || 0,
           current_balance: parseFloat(newBalance),
         }),
       });
@@ -35,6 +36,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
       setIsEditDialogOpen(false);
       setEditingCategory(null);
       setNewName('');
+      setNewMonthlyAmount('');
       setNewBalance('');
       onUpdate();
     } catch (error) {
@@ -87,6 +89,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
   const openEditDialog = (category: Category) => {
     setEditingCategory(category);
     setNewName(category.name);
+    setNewMonthlyAmount(category.monthly_amount.toString());
     setNewBalance(category.current_balance.toString());
     setIsEditDialogOpen(true);
   };
@@ -186,6 +189,19 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
               />
             </div>
             <div>
+              <label className="text-sm font-medium">Monthly Budget Amount</label>
+              <Input
+                type="number"
+                step="0.01"
+                value={newMonthlyAmount}
+                onChange={(e) => setNewMonthlyAmount(e.target.value)}
+                placeholder="0.00"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Used by "Use Monthly Amounts" button when allocating to envelopes
+              </p>
+            </div>
+            <div>
               <label className="text-sm font-medium">Current Balance</label>
               <Input
                 type="number"
@@ -222,7 +238,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Monthly Amount</label>
+              <label className="text-sm font-medium">Monthly Budget Amount</label>
               <Input
                 type="number"
                 step="0.01"
@@ -230,6 +246,9 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
                 onChange={(e) => setNewMonthlyAmount(e.target.value)}
                 placeholder="0.00"
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                Used by "Use Monthly Amounts" button when allocating to envelopes
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium">Starting Balance</label>
