@@ -1,0 +1,156 @@
+// Database types
+export interface Category {
+  id: number;
+  name: string;
+  monthly_amount: number;
+  current_balance: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Account {
+  id: number;
+  name: string;
+  balance: number;
+  account_type: 'checking' | 'savings' | 'cash';
+  include_in_totals: number; // SQLite boolean (0 or 1)
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreditCard {
+  id: number;
+  name: string;
+  credit_limit: number;
+  available_credit: number;
+  current_balance: number; // Calculated: credit_limit - available_credit
+  include_in_totals: number; // SQLite boolean (0 or 1)
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Transaction {
+  id: number;
+  date: string;
+  description: string;
+  total_amount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TransactionSplit {
+  id: number;
+  transaction_id: number;
+  category_id: number;
+  amount: number;
+  created_at: string;
+}
+
+export interface PendingCheck {
+  id: number;
+  description: string;
+  amount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Setting {
+  id: number;
+  key: string;
+  value: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// API request/response types
+export interface CreateCategoryRequest {
+  name: string;
+  monthly_amount: number;
+  current_balance?: number;
+  sort_order?: number;
+}
+
+export interface UpdateCategoryRequest {
+  name?: string;
+  monthly_amount?: number;
+  current_balance?: number;
+  sort_order?: number;
+}
+
+export interface CreateAccountRequest {
+  name: string;
+  balance: number;
+  account_type: 'checking' | 'savings' | 'cash';
+  include_in_totals?: number;
+  sort_order?: number;
+}
+
+export interface UpdateAccountRequest {
+  name?: string;
+  balance?: number;
+  account_type?: 'checking' | 'savings' | 'cash';
+  include_in_totals?: number;
+  sort_order?: number;
+}
+
+export interface CreateCreditCardRequest {
+  name: string;
+  credit_limit: number;
+  available_credit: number;
+  include_in_totals?: number;
+  sort_order?: number;
+}
+
+export interface UpdateCreditCardRequest {
+  name?: string;
+  credit_limit?: number;
+  available_credit?: number;
+  include_in_totals?: number;
+  sort_order?: number;
+}
+
+export interface CreateTransactionRequest {
+  date: string;
+  description: string;
+  splits: {
+    category_id: number;
+    amount: number;
+  }[];
+}
+
+export interface UpdateTransactionRequest {
+  date?: string;
+  description?: string;
+  splits?: {
+    category_id: number;
+    amount: number;
+  }[];
+}
+
+export interface CreatePendingCheckRequest {
+  description: string;
+  amount: number;
+}
+
+export interface UpdatePendingCheckRequest {
+  description?: string;
+  amount?: number;
+}
+
+// View models with joined data
+export interface TransactionWithSplits extends Transaction {
+  splits: (TransactionSplit & { category_name: string })[];
+}
+
+// Dashboard summary
+export interface DashboardSummary {
+  total_monies: number;
+  total_envelopes: number;
+  total_credit_card_balances: number;
+  total_pending_checks: number;
+  current_savings: number;
+}
+

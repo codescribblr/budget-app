@@ -1,0 +1,142 @@
+import { useState } from 'react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { formatCurrency } from '@/lib/utils';
+import type { PendingCheck } from '@/lib/types';
+
+interface PendingCheckListProps {
+  pendingChecks: PendingCheck[];
+  onUpdate: () => void;
+}
+
+export default function PendingCheckList({ pendingChecks, onUpdate }: PendingCheckListProps) {
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [newDescription, setNewDescription] = useState('');
+  const [newAmount, setNewAmount] = useState('');
+
+  const handleDelete = async (id: number) => {
+    try {
+      await fetch(`/api/pending-checks/${id}`, {
+        method: 'DELETE',
+      });
+      onUpdate();
+    } catch (error) {
+      console.error('Error deleting pending check:', error);
+    }
+  };
+
+  const handleAddCheck = async () => {
+    try {
+      await fetch('/api/pending-checks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: newDescription,
+          amount: parseFloat(newAmount),
+        }),
+      });
+
+      setIsAddDialogOpen(false);
+      setNewDescription('');
+      setNewAmount('');
+      onUpdate();
+    } catch (error) {
+      console.error('Error adding pending check:', error);
+    }
+  };
+
+  const totalAmount = pendingChecks.reduce((sum, check) => sum + check.amount, 0);
+
+  return (
+    <>
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <Button onClick={() => setIsAddDialogOpen(true)} size="sm">
+            Add Pending Check
+          </Button>
+        </div>
+
+        {pendingChecks.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Description</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pendingChecks.map((check) => (
+                <TableRow key={check.id}>
+                  <TableCell className="font-medium">{check.description}</TableCell>
+                  <TableCell className="text-right font-semibold">
+                    {formatCurrency(check.amount)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(check.id)}
+                    >
+                      Delete
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="font-bold bg-muted/50">
+                <TableCell>Total</TableCell>
+                <TableCell className="text-right">{formatCurrency(totalAmount)}</TableCell>
+                <TableCell></TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        ) : (
+          <div className="text-center text-muted-foreground py-4">
+            No pending checks
+          </div>
+        )}
+      </div>
+
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Pending Check</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Input
+                id="description"
+                type="text"
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                placeholder="e.g., First paycheck"
+              />
+            </div>
+            <div>
+              <Label htmlFor="amount">Amount</Label>
+              <Input
+                id="amount"
+                type="number"
+                step="0.01"
+                value={newAmount}
+                onChange={(e) => setNewAmount(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddCheck}>Add</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+

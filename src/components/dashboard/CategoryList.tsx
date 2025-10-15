@@ -1,0 +1,256 @@
+import { useState } from 'react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { formatCurrency } from '@/lib/utils';
+import type { Category } from '@/lib/types';
+
+interface CategoryListProps {
+  categories: Category[];
+  onUpdate: () => void;
+}
+
+export default function CategoryList({ categories, onUpdate }: CategoryListProps) {
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [newName, setNewName] = useState('');
+  const [newBalance, setNewBalance] = useState('');
+  const [newMonthlyAmount, setNewMonthlyAmount] = useState('');
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+
+  const handleUpdateCategory = async () => {
+    if (!editingCategory) return;
+
+    try {
+      await fetch(`/api/categories/${editingCategory.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newName,
+          current_balance: parseFloat(newBalance),
+        }),
+      });
+
+      setIsEditDialogOpen(false);
+      setEditingCategory(null);
+      setNewName('');
+      setNewBalance('');
+      onUpdate();
+    } catch (error) {
+      console.error('Error updating category:', error);
+    }
+  };
+
+  const handleAddCategory = async () => {
+    if (!newName.trim()) {
+      alert('Please enter a category name');
+      return;
+    }
+
+    try {
+      await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newName,
+          monthly_amount: parseFloat(newMonthlyAmount) || 0,
+          current_balance: parseFloat(newBalance) || 0,
+        }),
+      });
+
+      setIsAddDialogOpen(false);
+      setNewName('');
+      setNewMonthlyAmount('');
+      setNewBalance('');
+      onUpdate();
+    } catch (error) {
+      console.error('Error adding category:', error);
+    }
+  };
+
+  const handleDeleteCategory = async (category: Category) => {
+    if (!confirm(`Are you sure you want to delete "${category.name}"? This will also delete all transactions associated with this category.`)) {
+      return;
+    }
+
+    try {
+      await fetch(`/api/categories/${category.id}`, {
+        method: 'DELETE',
+      });
+      onUpdate();
+    } catch (error) {
+      console.error('Error deleting category:', error);
+    }
+  };
+
+  const openEditDialog = (category: Category) => {
+    setEditingCategory(category);
+    setNewName(category.name);
+    setNewBalance(category.current_balance.toString());
+    setIsEditDialogOpen(true);
+  };
+
+  const openAddDialog = () => {
+    setNewName('');
+    setNewMonthlyAmount('');
+    setNewBalance('0');
+    setIsAddDialogOpen(true);
+  };
+
+  const totalMonthly = categories.reduce((sum, cat) => sum + cat.monthly_amount, 0);
+  const totalCurrent = categories.reduce((sum, cat) => sum + cat.current_balance, 0);
+
+  return (
+    <>
+      <div className="flex flex-col h-full">
+        {/* Add Category Button */}
+        <div className="mb-3">
+          <Button onClick={openAddDialog} size="sm">
+            Add Category
+          </Button>
+        </div>
+
+        {/* Scrollable categories section */}
+        <div className="flex-1 overflow-y-auto">
+          <Table>
+            <TableHeader className="sticky top-0 bg-background z-10">
+              <TableRow>
+                <TableHead>Category</TableHead>
+                <TableHead className="text-right">Monthly</TableHead>
+                <TableHead className="text-right">Current Balance</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {categories.map((category) => (
+                <TableRow key={category.id}>
+                  <TableCell className="font-medium">{category.name}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(category.monthly_amount)}</TableCell>
+                  <TableCell className="text-right font-semibold">
+                    {formatCurrency(category.current_balance)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditDialog(category)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteCategory(category)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Fixed totals row at bottom */}
+        <div className="border-t bg-muted/50">
+          <Table>
+            <TableBody>
+              <TableRow className="font-bold">
+                <TableCell>Total</TableCell>
+                <TableCell className="text-right">{formatCurrency(totalMonthly)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(totalCurrent)}</TableCell>
+                <TableCell></TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Edit Category Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Category</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div>
+              <label className="text-sm font-medium">Category Name</label>
+              <Input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Category name"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Current Balance</label>
+              <Input
+                type="number"
+                step="0.01"
+                value={newBalance}
+                onChange={(e) => setNewBalance(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateCategory}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Category Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Category</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div>
+              <label className="text-sm font-medium">Category Name</label>
+              <Input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="e.g., Groceries"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Monthly Amount</label>
+              <Input
+                type="number"
+                step="0.01"
+                value={newMonthlyAmount}
+                onChange={(e) => setNewMonthlyAmount(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Starting Balance</label>
+              <Input
+                type="number"
+                step="0.01"
+                value={newBalance}
+                onChange={(e) => setNewBalance(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddCategory}>Add Category</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+

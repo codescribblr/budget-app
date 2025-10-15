@@ -1,0 +1,76 @@
+Date,Time,Cardholder,Amount,Points,Balance,Status,Type,Merchant,Description
+2025-10-14,"7:13 PM","Jonathan Wadsworth",2.61,8,,Pending,Purchase,"Taco Bell",
+2025-10-14,"6:31 PM","Jonathan Wadsworth",10.70,32,,Pending,Purchase,"Roller Time Family Skate Center of Easley",
+2025-10-14,"3:36 PM","Heather Wadsworth",44.82,134,,Pending,Purchase,"Vgo 25",
+2025-10-14,"11:07 AM","Jonathan Wadsworth",12.00,36,,Pending,Purchase,"Tropical Grille",
+2025-10-13,"7:47 PM","Heather Wadsworth",46.44,139,,Pending,Purchase,Walmart,
+2025-10-13,"4:52 PM","Heather Wadsworth",12.17,37,,Pending,Purchase,"Aldi Supermarket",
+2025-10-13,"1:26 PM","Jonathan Wadsworth",1.40,4,,Pending,Purchase,"Firehouse Subs",
+2025-10-13,"3:25 AM","Jonathan Wadsworth",68.89,207,,Pending,Purchase,Amazon,
+2025-10-12,"9:03 PM","Jonathan Wadsworth",4.96,15,4365.78,Posted,Purchase,McDonald’s,"MCDONALD'S F1667 GREENVILLE SC"
+2025-10-12,"6:24 PM","Heather Wadsworth",6.35,19,,Pending,Purchase,Arby's,
+2025-10-12,"6:16 PM","Heather Wadsworth",8.85,27,,Pending,Purchase,Arby's,
+2025-10-12,"5:57 PM","Heather Wadsworth",10.59,32,,Pending,Purchase,"Ross Dress for Less",
+2025-10-12,"8:32 AM","Heather Wadsworth",8.25,25,,Pending,Purchase,"QT 1104 INSIDE",
+2025-10-11,"6:37 PM","Heather Wadsworth",4.47,13,4360.82,Posted,Purchase,Walmart,"WAL-MART #1244 TAYLORS SC"
+2025-10-11,"6:09 PM","Jonathan Wadsworth",40.73,122,4356.35,Posted,Purchase,"Texas Roadhouse","TEXAS ROADHOUSE #2025 TAYLORS SC"
+2025-10-11,"10:12 AM","Jonathan Wadsworth",5.81,17,4315.62,Posted,Purchase,"Burger King","BURGER KING #16404 AHILL@CARROLSSC"
+2025-10-10,"6:36 PM","Jonathan Wadsworth",6.99,21,4309.81,Posted,Purchase,"Food Lion","FOOD LION #2854 GREER SC"
+2025-10-10,"5:55 PM","Heather Wadsworth",14.02,42,4302.82,Posted,Purchase,"Domino's Pizza","DOMINO'S 5627 336-558-5756 SC"
+2025-10-10,"3:00 PM","Jonathan Wadsworth",50.00,0,4288.80,Posted,Fee,"Gold Annual Subscription","GOLD ANNUAL SUBSCRIPTIO"
+2025-10-10,"2:40 PM","Heather Wadsworth",30.38,91,4238.80,Posted,Purchase,"Grandad's Apples","GRANDAD'S APPLES HENDERSONVLLENC"
+2025-10-10,"9:31 AM","Jonathan Wadsworth",1362.53,4088,4208.42,Posted,Purchase,Toyota,"FRED ANDERSON TOYOTA OF GGREER SC"
+2025-10-10,"2:53 AM","Jonathan Wadsworth",7.41,22,2845.89,Posted,Purchase,Amazon,"AMAZON MKTPL*NF08G9J62 Amzn.com/billWA"
+2025-10-09,"3:00 PM","Heather Wadsworth",-6.94,-21,2838.48,Posted,Refund,"Refund: Costco","COSTCO WHSE #1005 GREENVILLE SC"
+2025-10-09,"2:11 PM","Jonathan Wadsworth",80.20,241,2845.42,Posted,Purchase,"Restoration Family & Cosmetic Dentistry","RESTORATION FAMILY & COSMGREER SC"
+2025-10-09,"1:37 PM","Jonathan Wadsworth",18.54,56,2765.22,Posted,Purchase,"Hurricane Express Wash","HURRICANE EXPRESS WASH - GREER SC"
+2025-10-09,"12:17 PM","Jonathan Wadsworth",5.93,18,2746.68,Posted,Purchase,"Burger King","BURGER KING #27032 GREENVILLE SC"
+2025-10-09,"12:16 PM","Heather Wadsworth",5.39,16,2740.75,Posted,Purchase,Costco,"COSTCO WHSE #1005 GREENVILLE SC"
+2025-10-09,"12:08 PM","Heather Wadsworth",18.31,55,2735.36,Posted,Purchase,Costco,"COSTCO WHSE #1005 GREENVILLE SC"
+2025-10-09,"12:06 PM","Heather Wadsworth",22.95,69,2717.05,Posted,Purchase,Costco,"COSTCO WHSE #1005 GREENVILLE SC"
+2025-10-08,"7:39 PM","Jonathan Wadsworth",95.48,286,2694.10,Posted,Purchase,Costco,"COSTCO WHSE #1005 GREENVILLE SC"
+2025-10-08,"4:25 PM","Heather Wadsworth",35.04,105,2598.62,Posted,Purchase,Walmart,"WAL-MART #2328 GREENVILLE SC"
+2025-10-08,"12:39 PM","Jonathan Wadsworth",30.00,90,2563.58,Posted,Purchase,"Fins Car Wash","FINS CAR WASH 101 GREENVILLE SC"
+2025-10-08,"12:26 PM","Jonathan Wadsworth",10.12,30,2533.58,Posted,Purchase,"Taco Bell","TACO BELL #7027348 GREENVILLE SC"
+2025-10-08,"6:34 AM","Jonathan Wadsworth",8.20,25,2523.46,Posted,Purchase,Chick-fil-A,"CHICK-FIL-A #00830 TAYLORS SC"
+2025-10-07,"7:21 PM","Jonathan Wadsworth",1.73,5,2515.26,Posted,Purchase,"Qt 1121 Inside","QT 1121 EASLEY SC"
+2025-10-07,"7:10 PM","Jonathan Wadsworth",2.61,8,2513.53,Posted,Purchase,"Taco Bell","TACO BELL #027331 EASLEY SC"
+2025-10-07,"7:06 PM","Heather Wadsworth",6.35,0,,Declined,Purchase,"Ross Stores",
+2025-10-07,"7:06 PM","Heather Wadsworth",6.35,0,,Declined,Purchase,"Ross Stores",
+2025-10-07,"6:44 PM","Heather Wadsworth",1.00,0,,Declined,Purchase,"Qt 1113 Outside",
+2025-10-07,"6:24 PM","Jonathan Wadsworth",10.70,32,2510.92,Posted,Purchase,"Rtfsc Easley","SQ *RTFSC EASLEY Easley SC"
+2025-10-07,"1:09 PM","Jonathan Wadsworth",7.47,22,2500.22,Posted,Purchase,"Burger King","BURGER KING #6153 Q07 TRAVELERS RSTSC"
+2025-10-04,"6:14 PM","Jonathan Wadsworth",20.60,62,2492.75,Posted,Purchase,Zaxby's,"ZAXBYS 1106 TRAVELERS RESSC"
+2025-10-04,"1:46 PM","Jonathan Wadsworth",23.50,71,2472.15,Posted,Purchase,Walmart,"WAL-MART #1244 TAYLORS SC"
+2025-10-03,"5:29 PM","Jonathan Wadsworth",29.69,89,2448.65,Posted,Purchase,"Tropical Grille Greenville","TST*TROPICAL GRILLE TRAV Greenville SC"
+2025-10-03,"11:03 AM","Jonathan Wadsworth",3.01,9,2418.96,Posted,Purchase,Chick-fil-A,"CHICK-FIL-A #03967 TRAVELERS RESSC"
+2025-10-03,"10:59 AM","Jonathan Wadsworth",14.68,44,2415.95,Posted,Purchase,Walmart,"WM SUPERCENTER #5487 TRAVELERS RESSC"
+2025-10-03,"10:52 AM","Jonathan Wadsworth",84.95,255,2401.27,Posted,Purchase,Walmart,"WAL-MART #5487 TRAVELERS RESSC"
+2025-10-01,"7:32 PM","Jonathan Wadsworth",56.49,169,2316.32,Posted,Purchase,Walmart,"WM SUPERCENTER #5487 TRAVELERS RESSC"
+2025-10-01,"6:34 AM","Jonathan Wadsworth",8.24,25,2259.83,Posted,Purchase,Chick-fil-A,"CHICK-FIL-A #00830 TAYLORS SC"
+2025-09-30,"9:44 PM","Jonathan Wadsworth",10.44,31,2251.59,Posted,Purchase,Walmart,"WM SUPERCENTER #5487 TRAVELERS RESSC"
+2025-09-30,"7:25 PM","Jonathan Wadsworth",120.00,360,2241.15,Posted,Purchase,"Rtfsc Easley","SQ *RTFSC EASLEY Easley SC"
+2025-09-30,"4:41 PM","Jonathan Wadsworth",687.48,2062,2121.15,Posted,Purchase,Scdmv,"SCGOV866-340-7105DMV123 GREENVILLE SC"
+2025-09-30,"4:03 PM","Jonathan Wadsworth",10.64,32,1433.67,Posted,Purchase,"Greenville County Service Facility","GREENVILLE CNTY SVCE FEE GREENVILLE SC"
+2025-09-30,"4:02 PM","Jonathan Wadsworth",330.18,991,1423.03,Posted,Purchase,"Greenville County Tax","GREENVILLE COUNTY TAX GREENVILLE SC"
+2025-09-30,"11:02 AM","Jonathan Wadsworth",106.16,318,1092.85,Posted,Purchase,"Home Depot","THE HOME DEPOT #1126 GREER SC"
+2025-09-28,"2:14 PM","Jonathan Wadsworth",20.08,60,986.69,Posted,Purchase,Walmart,"WM SUPERCENTER #5487 864-834-7179 SC"
+2025-09-28,"8:06 AM","Jonathan Wadsworth",3.50,11,966.61,Posted,Purchase,"North Hills Community Church","SQ *NORTH HILLS CHURCH Taylors SC"
+2025-09-27,"5:56 PM","Jonathan Wadsworth",33.02,99,963.11,Posted,Purchase,"Texas Roadhouse","TEXAS ROADHOUSE #2025 TAYLORS SC"
+2025-09-26,"5:27 PM","Jonathan Wadsworth",29.87,90,930.09,Posted,Purchase,Walmart,"WM SUPERCENTER #1244 864-292-8155 SC"
+2025-09-26,"12:00 PM","Jonathan Wadsworth",8.85,27,900.22,Posted,Purchase,Arby's,"ARBYS ECOM 6936 828-274-5835 SC"
+2025-09-26,"9:30 AM","Jonathan Wadsworth",260.09,780,891.37,Posted,Purchase,Autozone,"AUTOZONE #0163 TAYLORS SC"
+2025-09-25,"12:44 PM","Jonathan Wadsworth",45.23,136,631.28,Posted,Purchase,"Tropical Grille","TST*TROPICAL GRILL PELHA Greenville SC"
+2025-09-24,"4:55 PM","Jonathan Wadsworth",11.66,35,586.05,Posted,Purchase,Chick-fil-A,"CHICK-FIL-A #00726 GREER SC"
+2025-09-24,"4:21 PM","Jonathan Wadsworth",32.27,97,574.39,Posted,Purchase,"Qt 1104 Outside","QT 1104 GREENVILLE SC"
+2025-09-24,"3:45 PM","Jonathan Wadsworth",30.00,90,542.12,Posted,Purchase,"Great Clips","8722 GREAT CLIPS AT THE PGREENVILLE SC"
+2025-09-24,"7:20 AM","Jonathan Wadsworth",4.74,14,512.12,Posted,Purchase,Chick-fil-A,"CHICK-FIL-A #00830 TAYLORS SC"
+2025-09-24,"6:33 AM","Jonathan Wadsworth",3.88,12,507.38,Posted,Purchase,Chick-fil-A,"CHICK-FIL-A #00830 864-322-2300 SC"
+2025-09-23,"7:28 PM","Jonathan Wadsworth",32.00,96,503.50,Posted,Purchase,Target,"TARGET 00011825 GREENVILLE SC"
+2025-09-22,"8:34 PM","Jonathan Wadsworth",327.25,982,471.50,Posted,Purchase,Www.Vevor.Com,"WWW.VEVOR.COM VEVOR.COM CA"
+2025-09-21,"6:57 PM","Jonathan Wadsworth",37.51,113,144.25,Posted,Purchase,Murphy7059atwalmart,"MURPHY7059ATWALMART TAYLORS SC"
+2025-09-20,"2:35 PM","Jonathan Wadsworth",37.94,114,106.74,Posted,Purchase,Murphy7273atwalmart,"MURPHY7273ATWALMART TRAVELERS RESSC"
+2025-09-20,"2:10 PM","Jonathan Wadsworth",14.87,45,68.80,Posted,Purchase,Arby's,"ARBYS ECOM 8296 864-877-3525 SC"
+2025-09-19,"8:36 PM","Jonathan Wadsworth",4.96,15,53.93,Posted,Purchase,"Jack In The Box","JACK IN THE BOX 6413 GREENVILLE SC"
+2025-09-19,"7:54 PM","Jonathan Wadsworth",9.48,28,48.97,Posted,Purchase,"Harris Teeter","HARRIS TEETER #357 GREENVILLE SC"
+2025-09-19,"6:20 PM","Jonathan Wadsworth",39.49,118,39.49,Posted,Purchase,"Texas Roadhouse","TEXAS ROADHOUSE #2025 TAYLORS SC"
