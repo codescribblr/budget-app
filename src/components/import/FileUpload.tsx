@@ -146,10 +146,13 @@ async function processTransactions(transactions: ParsedTransaction[]): Promise<P
     const isDuplicate = duplicateSet.has(transaction.hash);
     const suggestion = suggestions[index];
     const suggestedCategory = suggestion?.categoryId;
+    const hasSplits = !!suggestedCategory;
 
     return {
       ...transaction,
       isDuplicate,
+      // Auto-exclude duplicates AND uncategorized transactions
+      status: isDuplicate || !hasSplits ? 'excluded' : 'pending',
       suggestedCategory,
       splits: suggestedCategory
         ? [{

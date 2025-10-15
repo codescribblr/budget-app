@@ -19,6 +19,12 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
+  // Filter out system categories (like Transfer) from envelope display
+  const envelopeCategories = categories.filter(cat => !cat.is_system);
+
+  const totalMonthly = envelopeCategories.reduce((sum, cat) => sum + cat.monthly_amount, 0);
+  const totalCurrent = envelopeCategories.reduce((sum, cat) => sum + cat.current_balance, 0);
+
   const handleUpdateCategory = async () => {
     if (!editingCategory) return;
 
@@ -72,6 +78,11 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
   };
 
   const handleDeleteCategory = async (category: Category) => {
+    if (category.is_system) {
+      alert('System categories cannot be deleted.');
+      return;
+    }
+
     if (!confirm(`Are you sure you want to delete "${category.name}"? This will also delete all transactions associated with this category.`)) {
       return;
     }
@@ -87,6 +98,11 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
   };
 
   const openEditDialog = (category: Category) => {
+    if (category.is_system) {
+      alert('System categories cannot be edited.');
+      return;
+    }
+
     setEditingCategory(category);
     setNewName(category.name);
     setNewMonthlyAmount(category.monthly_amount.toString());
@@ -100,9 +116,6 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
     setNewBalance('0');
     setIsAddDialogOpen(true);
   };
-
-  const totalMonthly = categories.reduce((sum, cat) => sum + cat.monthly_amount, 0);
-  const totalCurrent = categories.reduce((sum, cat) => sum + cat.current_balance, 0);
 
   return (
     <>
@@ -126,7 +139,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
               </TableRow>
             </TableHeader>
             <TableBody>
-              {categories.map((category) => (
+              {envelopeCategories.map((category) => (
                 <TableRow key={category.id}>
                   <TableCell className="font-medium">{category.name}</TableCell>
                   <TableCell className="text-right">{formatCurrency(category.monthly_amount)}</TableCell>

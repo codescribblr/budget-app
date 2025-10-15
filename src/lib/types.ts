@@ -5,6 +5,7 @@ export interface Category {
   monthly_amount: number;
   current_balance: number;
   sort_order: number;
+  is_system: boolean;
   created_at: string;
   updated_at: string;
 }

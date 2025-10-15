@@ -16,12 +16,15 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
   const [allocations, setAllocations] = useState<{ [key: number]: number }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const totalMonthlyBudget = categories.reduce((sum, cat) => sum + cat.monthly_amount, 0);
+  // Filter out system categories (like Transfer) from allocation
+  const envelopeCategories = categories.filter(cat => !cat.is_system);
+
+  const totalMonthlyBudget = envelopeCategories.reduce((sum, cat) => sum + cat.monthly_amount, 0);
   const availableToAllocate = currentSavings;
 
   const handleUseMonthlyAmounts = () => {
     const newAllocations: { [key: number]: number } = {};
-    categories.forEach(cat => {
+    envelopeCategories.forEach(cat => {
       newAllocations[cat.id] = cat.monthly_amount;
     });
     setAllocations(newAllocations);
@@ -35,7 +38,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
 
     const newAllocations: { [key: number]: number } = {};
 
-    categories.forEach(cat => {
+    envelopeCategories.forEach(cat => {
       const proportion = cat.monthly_amount / totalMonthlyBudget;
       newAllocations[cat.id] = parseFloat((availableToAllocate * proportion).toFixed(2));
     });
@@ -50,9 +53,9 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
     }
 
     const newAllocations: { [key: number]: number } = {};
-    const perCategory = parseFloat((availableToAllocate / categories.length).toFixed(2));
+    const perCategory = parseFloat((availableToAllocate / envelopeCategories.length).toFixed(2));
 
-    categories.forEach(cat => {
+    envelopeCategories.forEach(cat => {
       newAllocations[cat.id] = perCategory;
     });
 
@@ -162,10 +165,10 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
             </TableRow>
           </TableHeader>
           <TableBody>
-            {categories.map((category) => {
+            {envelopeCategories.map((category) => {
               const allocation = allocations[category.id] || 0;
               const newBalance = category.current_balance + allocation;
-              
+
               return (
                 <TableRow key={category.id}>
                   <TableCell className="font-medium">{category.name}</TableCell>

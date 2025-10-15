@@ -25,7 +25,8 @@ export async function parseImageFile(file: File): Promise<ParsedTransaction[]> {
 
   return transactions.map((txn) => {
     const merchant = extractMerchant(txn.description);
-    const hash = generateTransactionHash(txn.date, txn.description, txn.amount);
+    const originalData = JSON.stringify(txn);
+    const hash = generateTransactionHash(txn.date, txn.description, txn.amount, originalData);
 
     return {
       id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -33,7 +34,7 @@ export async function parseImageFile(file: File): Promise<ParsedTransaction[]> {
       description: txn.description,
       merchant,
       amount: txn.amount,
-      originalData: JSON.stringify(txn),
+      originalData,
       hash,
       isDuplicate: false,
       status: 'pending',

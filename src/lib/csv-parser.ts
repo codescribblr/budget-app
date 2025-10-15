@@ -37,8 +37,14 @@ export function extractMerchant(description: string): string {
 }
 
 // Generate hash for deduplication (simple hash for browser)
-export function generateTransactionHash(date: string, description: string, amount: number): string {
-  const data = `${date}|${description}|${amount}`;
+// Includes originalData to distinguish identical transactions that occur separately
+export function generateTransactionHash(date: string, description: string, amount: number, originalData?: string): string {
+  // Include originalData (entire CSV row) to distinguish truly identical transactions
+  // This handles cases like two $1.07 McDonald's purchases 2 minutes apart
+  const data = originalData
+    ? `${date}|${description}|${amount}|${originalData}`
+    : `${date}|${description}|${amount}`;
+
   let hash = 0;
   for (let i = 0; i < data.length; i++) {
     const char = data.charCodeAt(i);
@@ -157,7 +163,8 @@ function parseRow(
   }
 
   const merchant = extractMerchant(description);
-  const hash = generateTransactionHash(date, description, amount);
+  const originalData = JSON.stringify(row);
+  const hash = generateTransactionHash(date, description, amount, originalData);
 
   return {
     id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -165,7 +172,7 @@ function parseRow(
     description,
     merchant,
     amount,
-    originalData: JSON.stringify(row),
+    originalData,
     hash,
     isDuplicate: false,
     status: 'pending',

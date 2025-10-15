@@ -393,7 +393,7 @@ export function createTransaction(data: {
     UPDATE categories
     SET current_balance = current_balance - ?,
         updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
+    WHERE id = ? AND is_system = 0
   `);
 
   const transaction = db.transaction(() => {
@@ -440,7 +440,7 @@ export function updateTransaction(
     UPDATE categories
     SET current_balance = current_balance + ?,
         updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
+    WHERE id = ? AND is_system = 0
   `);
 
   const transaction = db.transaction(() => {
@@ -481,7 +481,7 @@ export function deleteTransaction(id: number): void {
     UPDATE categories
     SET current_balance = current_balance + ?,
         updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
+    WHERE id = ? AND is_system = 0
   `);
 
   const deleteTransactionTx = db.transaction(() => {
@@ -504,7 +504,7 @@ export function getDashboardSummary(): DashboardSummary {
     .get() as { total: number };
 
   const totalEnvelopes = db
-    .prepare('SELECT COALESCE(SUM(current_balance), 0) as total FROM categories')
+    .prepare('SELECT COALESCE(SUM(current_balance), 0) as total FROM categories WHERE is_system = 0')
     .get() as { total: number };
 
   const totalCreditCardBalances = db

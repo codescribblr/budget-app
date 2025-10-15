@@ -20,8 +20,9 @@ export default function SpendingByCategory({ transactions, categories }: Spendin
     });
   });
 
-  // Create array of categories with spending
+  // Create array of categories with spending (exclude system categories like Transfer)
   const categoriesWithSpending = categories
+    .filter(cat => !cat.is_system)
     .map(category => ({
       ...category,
       spent: categorySpending.get(category.id) || 0,

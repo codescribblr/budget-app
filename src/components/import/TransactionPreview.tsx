@@ -9,6 +9,8 @@ import { formatCurrency } from '@/lib/utils';
 import type { ParsedTransaction } from '@/lib/import-types';
 import type { Category } from '@/lib/types';
 import TransactionEditDialog from './TransactionEditDialog';
+import ImportConfirmationDialog from './ImportConfirmationDialog';
+import { generateTransactionHash } from '@/lib/csv-parser';
 
 interface TransactionPreviewProps {
   transactions: ParsedTransaction[];
@@ -26,6 +28,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   const [editingTransaction, setEditingTransaction] = useState<ParsedTransaction | null>(null);
   const [editingField, setEditingField] = useState<EditingField | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -50,14 +53,29 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   };
 
   const handleSaveEdit = (updated: ParsedTransaction) => {
-    setItems(items.map(item => item.id === updated.id ? updated : item));
+    setItems(items.map(item => {
+      if (item.id === updated.id) {
+        // Auto-include when categorized (unless it's a duplicate)
+        const hasSplits = updated.splits.length > 0;
+        const newStatus = updated.isDuplicate ? 'excluded' : (hasSplits ? 'pending' : 'excluded');
+        return { ...updated, status: newStatus };
+      }
+      return item;
+    }));
     setEditingTransaction(null);
   };
 
   const handleInlineDateChange = (transactionId: string, newDate: string) => {
-    setItems(items.map(item =>
-      item.id === transactionId ? { ...item, date: newDate } : item
-    ));
+    setItems(items.map(item => {
+      if (item.id === transactionId) {
+        // Recalculate hash when date changes (include originalData for uniqueness)
+        const newHash = generateTransactionHash(newDate, item.description, item.amount, item.originalData);
+        // Auto-include when date changes (unless it's a duplicate)
+        const newStatus = item.isDuplicate ? 'excluded' : 'pending';
+        return { ...item, date: newDate, hash: newHash, isDuplicate: false, status: newStatus };
+      }
+      return item;
+    }));
     setEditingField(null);
   };
 
@@ -67,8 +85,14 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
 
     setItems(items.map(item => {
       if (item.id === transactionId) {
+        // Recalculate hash when amount changes (include originalData for uniqueness)
+        const newHash = generateTransactionHash(item.date, item.description, amount, item.originalData);
+
+        // Auto-include when amount changes (unless it's a duplicate)
+        const newStatus = item.isDuplicate ? 'excluded' : 'pending';
+
         // Update the amount and adjust the single split if it exists
-        const updatedItem = { ...item, amount };
+        const updatedItem = { ...item, amount, hash: newHash, isDuplicate: false, status: newStatus };
         if (updatedItem.splits.length === 1) {
           updatedItem.splits = [{
             ...updatedItem.splits[0],
@@ -89,8 +113,11 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     setItems(items.map(item => {
       if (item.id === transactionId) {
         // Replace with a single split for the selected category
+        // Auto-include when categorized (unless it's a duplicate)
+        const newStatus = item.isDuplicate ? 'excluded' : 'pending';
         return {
           ...item,
+          status: newStatus,
           splits: [{
             categoryId: category.id,
             categoryName: category.name,
@@ -103,8 +130,20 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     setEditingField(null);
   };
 
-  const handleImport = async () => {
-    const toImport = items.filter(item => item.status !== 'excluded' && !item.isDuplicate);
+  const handleImportClick = () => {
+    // Show confirmation dialog
+    setShowConfirmation(true);
+  };
+
+  const handleConfirmImport = async () => {
+    setShowConfirmation(false);
+
+    // Only import categorized transactions (have splits)
+    const toImport = items.filter(item =>
+      item.status !== 'excluded' &&
+      !item.isDuplicate &&
+      item.splits.length > 0
+    );
 
     if (toImport.length === 0) {
       alert('No transactions to import');
@@ -124,7 +163,10 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         throw new Error('Failed to import transactions');
       }
 
-      alert(`Successfully imported ${toImport.length} transaction(s)`);
+      const result = await response.json();
+      const { imported } = result;
+
+      alert(`Successfully imported ${imported} transaction(s)`);
       onImportComplete();
     } catch (error) {
       console.error('Error importing transactions:', error);
@@ -134,26 +176,44 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     }
   };
 
-  const pendingCount = items.filter(item => item.status !== 'excluded' && !item.isDuplicate).length;
+  // Calculate counts for display and confirmation
+  const categorizedCount = items.filter(item =>
+    item.status !== 'excluded' &&
+    !item.isDuplicate &&
+    item.splits.length > 0
+  ).length;
+
+  const uncategorizedCount = items.filter(item => item.splits.length === 0).length;
+
   const duplicateCount = items.filter(item => item.isDuplicate).length;
-  const excludedCount = items.filter(item => item.status === 'excluded').length;
+
+  const manuallyExcludedCount = items.filter(item =>
+    item.status === 'excluded' &&
+    !item.isDuplicate &&
+    item.splits.length > 0
+  ).length;
+
+  const totalExcludedCount = items.filter(item => item.status === 'excluded').length;
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center p-4 bg-muted rounded-md">
         <div className="flex gap-6 text-sm">
           <div>
-            <span className="font-medium">To Import:</span> {pendingCount}
+            <span className="font-medium">Categorized:</span> {categorizedCount}
+          </div>
+          <div>
+            <span className="font-medium">Uncategorized:</span> {uncategorizedCount}
           </div>
           <div>
             <span className="font-medium">Duplicates:</span> {duplicateCount}
           </div>
           <div>
-            <span className="font-medium">Excluded:</span> {excludedCount}
+            <span className="font-medium">Excluded:</span> {totalExcludedCount}
           </div>
         </div>
-        <Button onClick={handleImport} disabled={isImporting || pendingCount === 0}>
-          {isImporting ? 'Importing...' : `Import ${pendingCount} Transaction${pendingCount !== 1 ? 's' : ''}`}
+        <Button onClick={handleImportClick} disabled={isImporting || categorizedCount === 0}>
+          {isImporting ? 'Importing...' : `Import ${categorizedCount} Transaction${categorizedCount !== 1 ? 's' : ''}`}
         </Button>
       </div>
 
@@ -175,7 +235,6 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
               const isEditingDate = editingField?.transactionId === transaction.id && editingField?.field === 'date';
               const isEditingAmount = editingField?.transactionId === transaction.id && editingField?.field === 'amount';
               const isEditingCategory = editingField?.transactionId === transaction.id && editingField?.field === 'category';
-              const isDisabled = transaction.isDuplicate || transaction.status === 'excluded';
 
               return (
                 <TableRow
@@ -190,8 +249,8 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                 >
                   {/* Date Cell - Inline Editable */}
                   <TableCell
-                    onClick={() => !isDisabled && setEditingField({ transactionId: transaction.id, field: 'date' })}
-                    className={!isDisabled ? 'cursor-pointer hover:bg-muted/50' : ''}
+                    onClick={() => setEditingField({ transactionId: transaction.id, field: 'date' })}
+                    className="cursor-pointer hover:bg-muted/50"
                   >
                     {isEditingDate ? (
                       <Input
@@ -217,8 +276,8 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
 
                   {/* Amount Cell - Inline Editable */}
                   <TableCell
-                    onClick={() => !isDisabled && setEditingField({ transactionId: transaction.id, field: 'amount' })}
-                    className={`text-right font-semibold ${!isDisabled ? 'cursor-pointer hover:bg-muted/50' : ''}`}
+                    onClick={() => setEditingField({ transactionId: transaction.id, field: 'amount' })}
+                    className="text-right font-semibold cursor-pointer hover:bg-muted/50"
                   >
                     {isEditingAmount ? (
                       <Input
@@ -237,8 +296,8 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
 
                   {/* Category Cell - Inline Editable */}
                   <TableCell
-                    onClick={() => !isDisabled && transaction.splits.length <= 1 && setEditingField({ transactionId: transaction.id, field: 'category' })}
-                    className={!isDisabled && transaction.splits.length <= 1 ? 'cursor-pointer hover:bg-muted/50' : ''}
+                    onClick={() => transaction.splits.length <= 1 && setEditingField({ transactionId: transaction.id, field: 'category' })}
+                    className={transaction.splits.length <= 1 ? 'cursor-pointer hover:bg-muted/50' : ''}
                   >
                     {isEditingCategory ? (
                       <Select
@@ -277,7 +336,11 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
 
                   {/* Status Cell */}
                   <TableCell>
-                    {transaction.isDuplicate ? (
+                    {transaction.status === 'excluded' && transaction.splits.length === 0 ? (
+                      <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded">
+                        Uncategorized
+                      </span>
+                    ) : transaction.status === 'excluded' && transaction.isDuplicate ? (
                       <span className="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded">
                         Duplicate
                       </span>
@@ -299,20 +362,17 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                         variant="ghost"
                         size="sm"
                         onClick={() => handleEdit(transaction)}
-                        disabled={transaction.isDuplicate}
                         title="Advanced edit (splits, etc.)"
                       >
                         Edit
                       </Button>
-                      {!transaction.isDuplicate && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleExclude(transaction.id)}
-                        >
-                          {transaction.status === 'excluded' ? 'Include' : 'Exclude'}
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleToggleExclude(transaction.id)}
+                      >
+                        {transaction.status === 'excluded' ? 'Include' : 'Exclude'}
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -330,6 +390,16 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
           onClose={() => setEditingTransaction(null)}
         />
       )}
+
+      <ImportConfirmationDialog
+        open={showConfirmation}
+        onConfirm={handleConfirmImport}
+        onCancel={() => setShowConfirmation(false)}
+        categorizedCount={categorizedCount}
+        uncategorizedCount={uncategorizedCount}
+        manuallyExcludedCount={manuallyExcludedCount}
+        duplicateCount={duplicateCount}
+      />
     </div>
   );
 }

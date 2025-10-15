@@ -25,8 +25,8 @@ export async function POST(request: Request) {
     `);
 
     const insertTransaction = db.prepare(`
-      INSERT INTO transactions (date, description)
-      VALUES (?, ?)
+      INSERT INTO transactions (date, description, total_amount)
+      VALUES (?, ?, ?)
     `);
 
     const insertSplit = db.prepare(`
@@ -47,6 +47,14 @@ export async function POST(request: Request) {
 
     const importAll = db.transaction((txns: ParsedTransaction[]) => {
       for (const txn of txns) {
+        // Only import transactions that have splits (are categorized)
+        if (txn.splits.length === 0) {
+          continue; // Skip uncategorized transactions
+        }
+
+        // Calculate total amount from splits
+        const totalAmount = txn.splits.reduce((sum, split) => sum + split.amount, 0);
+
         // Insert into imported_transactions
         const importedResult = insertImported.run(
           importDate,
@@ -61,26 +69,24 @@ export async function POST(request: Request) {
 
         const importedId = importedResult.lastInsertRowid;
 
-        // If transaction has splits, create transaction(s)
-        if (txn.splits.length > 0) {
-          // Create main transaction
-          const transactionResult = insertTransaction.run(
-            txn.date,
-            txn.description
-          );
+        // Create main transaction
+        const transactionResult = insertTransaction.run(
+          txn.date,
+          txn.description,
+          totalAmount
+        );
 
-          const transactionId = transactionResult.lastInsertRowid;
+        const transactionId = transactionResult.lastInsertRowid;
 
-          // Create splits and update category balances
-          for (const split of txn.splits) {
-            insertSplit.run(transactionId, split.categoryId, split.amount);
-            updateCategoryBalance.run(split.amount, split.categoryId);
-          }
-
-          // Link imported transaction to created transaction
-          insertLink.run(importedId, transactionId);
-          importedCount++;
+        // Create splits and update category balances
+        for (const split of txn.splits) {
+          insertSplit.run(transactionId, split.categoryId, split.amount);
+          updateCategoryBalance.run(split.amount, split.categoryId);
         }
+
+        // Link imported transaction to created transaction
+        insertLink.run(importedId, transactionId);
+        importedCount++;
       }
     });
 
