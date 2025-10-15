@@ -112,5 +112,15 @@ if [ $PENDING_COUNT -eq 0 ]; then
   echo -e "${GREEN}✨ No pending migrations to run${NC}"
 else
   echo -e "${GREEN}✅ All $PENDING_COUNT pending migrations completed successfully!${NC}"
+
+  # Reload PostgREST schema cache
+  echo ""
+  echo -e "${YELLOW}🔄 Reloading PostgREST schema cache...${NC}"
+  if psql "$SUPABASE_DB_URL" -c "NOTIFY pgrst, 'reload schema';" 2>&1; then
+    echo -e "${GREEN}✅ Schema cache reloaded${NC}"
+  else
+    echo -e "${YELLOW}⚠️  Could not reload schema cache (this is normal if PostgREST is not listening)${NC}"
+    echo -e "${YELLOW}   The schema will be reloaded automatically on next API request${NC}"
+  fi
 fi
 
