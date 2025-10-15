@@ -162,7 +162,7 @@ export async function createAccount(data: {
   name: string;
   balance?: number;
   account_type?: 'checking' | 'savings' | 'cash';
-  include_in_totals?: number;
+  include_in_totals?: boolean;
   sort_order?: number;
 }): Promise<Account> {
   const { supabase, user } = await getAuthenticatedUser();
@@ -174,7 +174,7 @@ export async function createAccount(data: {
       name: data.name,
       balance: data.balance ?? 0,
       account_type: data.account_type ?? 'checking',
-      include_in_totals: data.include_in_totals ?? 1,
+      include_in_totals: data.include_in_totals ?? true,
       sort_order: data.sort_order ?? 0,
     })
     .select()
@@ -190,7 +190,7 @@ export async function updateAccount(
     name: string;
     balance: number;
     account_type: 'checking' | 'savings' | 'cash';
-    include_in_totals: number;
+    include_in_totals: boolean;
     sort_order: number;
   }>
 ): Promise<Account | null> {
@@ -259,7 +259,7 @@ export async function createCreditCard(data: {
   name: string;
   credit_limit?: number;
   available_credit?: number;
-  include_in_totals?: number;
+  include_in_totals?: boolean;
   sort_order?: number;
 }): Promise<CreditCard> {
   const { supabase, user } = await getAuthenticatedUser();
@@ -276,7 +276,7 @@ export async function createCreditCard(data: {
       credit_limit: creditLimit,
       available_credit: availableCredit,
       current_balance: currentBalance,
-      include_in_totals: data.include_in_totals ?? 1,
+      include_in_totals: data.include_in_totals ?? true,
       sort_order: data.sort_order ?? 0,
     })
     .select()
@@ -293,7 +293,7 @@ export async function updateCreditCard(
     credit_limit: number;
     available_credit: number;
     current_balance: number;
-    include_in_totals: number;
+    include_in_totals: boolean;
     sort_order: number;
   }>
 ): Promise<CreditCard | null> {
@@ -465,9 +465,9 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   if (pcError) throw pcError;
 
-  // Calculate totals (only include accounts/credit cards with include_in_totals = 1)
+  // Calculate totals (only include accounts/credit cards with include_in_totals = true)
   const totalMonies = (accounts as Account[])
-    .filter(acc => acc.include_in_totals === 1)
+    .filter(acc => acc.include_in_totals === true)
     .reduce((sum, acc) => sum + Number(acc.balance), 0);
 
   const totalEnvelopes = (categories as Category[])
@@ -475,7 +475,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     .reduce((sum, cat) => sum + Number(cat.current_balance), 0);
 
   const totalCreditCardBalances = (creditCards as CreditCard[])
-    .filter(cc => cc.include_in_totals === 1)
+    .filter(cc => cc.include_in_totals === true)
     .reduce((sum, cc) => sum + Number(cc.current_balance), 0);
 
   const totalPendingChecks = (pendingChecks as any[])

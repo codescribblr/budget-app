@@ -15,7 +15,7 @@ export interface Account {
   name: string;
   balance: number;
   account_type: 'checking' | 'savings' | 'cash';
-  include_in_totals: number; // SQLite boolean (0 or 1)
+  include_in_totals: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -27,7 +27,7 @@ export interface CreditCard {
   credit_limit: number;
   available_credit: number;
   current_balance: number; // Calculated: credit_limit - available_credit
-  include_in_totals: number; // SQLite boolean (0 or 1)
+  include_in_totals: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -85,7 +85,7 @@ export interface CreateAccountRequest {
   name: string;
   balance: number;
   account_type: 'checking' | 'savings' | 'cash';
-  include_in_totals?: number;
+  include_in_totals?: boolean;
   sort_order?: number;
 }
 
@@ -93,7 +93,7 @@ export interface UpdateAccountRequest {
   name?: string;
   balance?: number;
   account_type?: 'checking' | 'savings' | 'cash';
-  include_in_totals?: number;
+  include_in_totals?: boolean;
   sort_order?: number;
 }
 
@@ -101,7 +101,7 @@ export interface CreateCreditCardRequest {
   name: string;
   credit_limit: number;
   available_credit: number;
-  include_in_totals?: number;
+  include_in_totals?: boolean;
   sort_order?: number;
 }
 
@@ -109,7 +109,7 @@ export interface UpdateCreditCardRequest {
   name?: string;
   credit_limit?: number;
   available_credit?: number;
-  include_in_totals?: number;
+  include_in_totals?: boolean;
   sort_order?: number;
 }
 

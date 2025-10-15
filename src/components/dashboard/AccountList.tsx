@@ -29,7 +29,7 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           balance: parseFloat(newBalance),
-          include_in_totals: includeInTotals ? 1 : 0,
+          include_in_totals: includeInTotals,
         }),
       });
 
@@ -57,7 +57,7 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
         body: JSON.stringify({
           name: accountName,
           balance: parseFloat(newBalance) || 0,
-          include_in_totals: includeInTotals ? 1 : 0,
+          include_in_totals: includeInTotals,
         }),
       });
 
@@ -90,7 +90,7 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
     setEditingAccount(account);
     setAccountName(account.name);
     setNewBalance(account.balance.toString());
-    setIncludeInTotals(account.include_in_totals === 1);
+    setIncludeInTotals(account.include_in_totals);
     setIsEditDialogOpen(true);
   };
 

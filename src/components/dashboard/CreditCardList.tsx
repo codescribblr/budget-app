@@ -31,7 +31,7 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
         body: JSON.stringify({
           credit_limit: parseFloat(creditLimit),
           available_credit: parseFloat(availableCredit),
-          include_in_totals: includeInTotals ? 1 : 0,
+          include_in_totals: includeInTotals,
         }),
       });
 
@@ -61,7 +61,7 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
           name: cardName,
           credit_limit: parseFloat(creditLimit) || 0,
           available_credit: parseFloat(availableCredit) || 0,
-          include_in_totals: includeInTotals ? 1 : 0,
+          include_in_totals: includeInTotals,
         }),
       });
 
@@ -96,7 +96,7 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
     setCardName(card.name);
     setCreditLimit(card.credit_limit.toString());
     setAvailableCredit(card.available_credit.toString());
-    setIncludeInTotals(card.include_in_totals === 1);
+    setIncludeInTotals(card.include_in_totals);
     setIsEditDialogOpen(true);
   };
 
