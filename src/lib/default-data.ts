@@ -54,11 +54,13 @@ export const DEFAULT_CREDIT_CARDS = [
 ];
 
 export const DEFAULT_SETTINGS = [
-  { key: 'salary', value: '163000.00' },
+  { key: 'annual_salary', value: '163000.00' },
   { key: 'tax_rate', value: '0.2122' },
-  { key: 'pre_tax_deductions', value: '2388.13' },
-  { key: 'taxes_per_month', value: '2154.31' },
-  { key: 'monthly_net_income', value: '7996.02' },
-  { key: 'monthly_budget', value: '8114.08' },
+  { key: 'pre_tax_deductions_monthly', value: '2388.13' },
+  // Note: The following are calculated, not stored:
+  // - taxes_per_month = ((annual_salary - (pre_tax_deductions_monthly * 12)) * tax_rate) / 12
+  // - monthly_gross_income = annual_salary / 12
+  // - monthly_net_income = monthly_gross_income - taxes_per_month - pre_tax_deductions_monthly
+  // - monthly_budget = sum of all category monthly_amounts
 ];
 
