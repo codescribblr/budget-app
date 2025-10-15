@@ -12,11 +12,11 @@ export async function DELETE() {
     const { supabase, user } = await getAuthenticatedUser();
 
     // First, delete all user data (same as clear-data)
+    // Note: transaction_splits and imported_transaction_links don't have user_id
+    // They will be deleted automatically via CASCADE when their parent records are deleted
     const tables = [
-      'transaction_splits',
-      'transactions',
-      'imported_transaction_links',
-      'imported_transactions',
+      'transactions',           // This will CASCADE delete transaction_splits
+      'imported_transactions',  // This will CASCADE delete imported_transaction_links
       'merchant_mappings',
       'pending_checks',
       'credit_cards',
