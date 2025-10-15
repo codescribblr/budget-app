@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTransactionById, updateTransaction, deleteTransaction } from '@/lib/queries';
+import { getTransactionById, updateTransaction, deleteTransaction } from '@/lib/supabase-queries';
 import type { UpdateTransactionRequest } from '@/lib/types';
 
 export async function GET(
@@ -8,15 +8,18 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const transaction = getTransactionById(parseInt(id));
+    const transaction = await getTransactionById(parseInt(id));
 
     if (!transaction) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
 
     return NextResponse.json(transaction);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching transaction:', error);
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json({ error: 'Failed to fetch transaction' }, { status: 500 });
   }
 }
@@ -28,15 +31,18 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = (await request.json()) as UpdateTransactionRequest;
-    const transaction = updateTransaction(parseInt(id), body);
+    const transaction = await updateTransaction(parseInt(id), body);
 
     if (!transaction) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
 
     return NextResponse.json(transaction);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating transaction:', error);
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 });
   }
 }
@@ -47,11 +53,13 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    deleteTransaction(parseInt(id));
+    await deleteTransaction(parseInt(id));
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting transaction:', error);
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json({ error: 'Failed to delete transaction' }, { status: 500 });
   }
 }
-

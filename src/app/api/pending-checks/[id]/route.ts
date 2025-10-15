@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPendingCheckById, updatePendingCheck, deletePendingCheck } from '@/lib/queries';
+import { getPendingCheckById, updatePendingCheck, deletePendingCheck } from '@/lib/supabase-queries';
 import type { UpdatePendingCheckRequest } from '@/lib/types';
 
 export async function GET(
@@ -8,15 +8,18 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const pendingCheck = getPendingCheckById(parseInt(id));
+    const pendingCheck = await getPendingCheckById(parseInt(id));
 
     if (!pendingCheck) {
       return NextResponse.json({ error: 'Pending check not found' }, { status: 404 });
     }
 
     return NextResponse.json(pendingCheck);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching pending check:', error);
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json({ error: 'Failed to fetch pending check' }, { status: 500 });
   }
 }
@@ -28,15 +31,18 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = (await request.json()) as UpdatePendingCheckRequest;
-    const pendingCheck = updatePendingCheck(parseInt(id), body);
+    const pendingCheck = await updatePendingCheck(parseInt(id), body);
 
     if (!pendingCheck) {
       return NextResponse.json({ error: 'Pending check not found' }, { status: 404 });
     }
 
     return NextResponse.json(pendingCheck);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating pending check:', error);
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json({ error: 'Failed to update pending check' }, { status: 500 });
   }
 }
@@ -47,11 +53,13 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    deletePendingCheck(parseInt(id));
+    await deletePendingCheck(parseInt(id));
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting pending check:', error);
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json({ error: 'Failed to delete pending check' }, { status: 500 });
   }
 }
-

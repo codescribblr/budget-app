@@ -1,25 +1,15 @@
 import { NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { getAllMerchantMappings, deleteMerchantMapping } from '@/lib/supabase-queries';
 
 export async function GET() {
   try {
-    const mappings = db.prepare(`
-      SELECT 
-        mm.id,
-        mm.merchant_pattern,
-        mm.normalized_merchant,
-        mm.confidence_score,
-        mm.last_used,
-        c.name as category_name,
-        c.id as category_id
-      FROM merchant_mappings mm
-      JOIN categories c ON mm.category_id = c.id
-      ORDER BY mm.confidence_score DESC, mm.last_used DESC
-    `).all();
-
+    const mappings = await getAllMerchantMappings();
     return NextResponse.json({ mappings });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching merchant mappings:', error);
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json(
       { error: 'Failed to fetch mappings' },
       { status: 500 }
@@ -30,16 +20,16 @@ export async function GET() {
 export async function DELETE(request: Request) {
   try {
     const { id } = await request.json();
-
-    db.prepare('DELETE FROM merchant_mappings WHERE id = ?').run(id);
-
+    await deleteMerchantMapping(id);
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting merchant mapping:', error);
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json(
       { error: 'Failed to delete mapping' },
       { status: 500 }
     );
   }
 }
-
