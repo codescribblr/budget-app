@@ -1,0 +1,31 @@
+export interface ParsedTransaction {
+  id: string; // Temporary ID for UI
+  date: string;
+  description: string;
+  merchant: string;
+  amount: number;
+  originalData: string; // JSON string of original CSV row
+  hash: string; // Unique hash for deduplication
+  suggestedCategory?: number; // Category ID
+  isDuplicate: boolean;
+  duplicateOf?: number; // Transaction ID if duplicate
+  status: 'pending' | 'confirmed' | 'excluded';
+  splits: TransactionSplit[];
+}
+
+export interface TransactionSplit {
+  categoryId: number;
+  categoryName: string;
+  amount: number;
+}
+
+export interface CSVFormat {
+  name: string;
+  dateColumn: string;
+  descriptionColumn: string;
+  amountColumn: string;
+  debitColumn?: string;
+  creditColumn?: string;
+  hasHeader: boolean;
+}
+

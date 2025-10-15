@@ -57,6 +57,51 @@ for (const card of creditCards) {
 }
 console.log(`✓ Updated credit_limit for ${creditCards.length} credit cards`);
 
+// Create imported_transactions table to track original CSV data
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS imported_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      import_date TEXT NOT NULL,
+      source_file TEXT NOT NULL,
+      source_institution TEXT,
+      transaction_date TEXT NOT NULL,
+      description TEXT NOT NULL,
+      amount REAL NOT NULL,
+      original_data TEXT NOT NULL,
+      hash TEXT NOT NULL UNIQUE,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  console.log('✓ Created imported_transactions table');
+} catch (error: any) {
+  if (error.message.includes('already exists')) {
+    console.log('- imported_transactions table already exists');
+  } else {
+    throw error;
+  }
+}
+
+// Create link table between imported transactions and split transactions
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS imported_transaction_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      imported_transaction_id INTEGER NOT NULL,
+      transaction_id INTEGER NOT NULL,
+      FOREIGN KEY (imported_transaction_id) REFERENCES imported_transactions(id) ON DELETE CASCADE,
+      FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+    )
+  `);
+  console.log('✓ Created imported_transaction_links table');
+} catch (error: any) {
+  if (error.message.includes('already exists')) {
+    console.log('- imported_transaction_links table already exists');
+  } else {
+    throw error;
+  }
+}
+
 console.log('\nMigration complete!');
 db.close();
 
