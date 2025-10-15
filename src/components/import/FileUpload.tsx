@@ -133,9 +133,19 @@ async function processTransactions(transactions: ParsedTransaction[]): Promise<P
   const categoriesResponse = await fetch('/api/categories');
   const categories = await categoriesResponse.json();
 
-  return transactions.map(transaction => {
+  // Get smart category suggestions for all merchants
+  const merchants = transactions.map(t => t.merchant);
+  const categorizationResponse = await fetch('/api/categorize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ merchants }),
+  });
+  const { suggestions } = await categorizationResponse.json();
+
+  return transactions.map((transaction, index) => {
     const isDuplicate = duplicateSet.has(transaction.hash);
-    const suggestedCategory = suggestCategory(transaction.merchant, categories);
+    const suggestion = suggestions[index];
+    const suggestedCategory = suggestion?.categoryId;
 
     return {
       ...transaction,
@@ -152,28 +162,5 @@ async function processTransactions(transactions: ParsedTransaction[]): Promise<P
   });
 }
 
-function suggestCategory(merchant: string, categories: any[]): number | undefined {
-  const merchantLower = merchant.toLowerCase();
 
-  // Simple keyword matching for common merchants
-  const categoryMap: { [key: string]: string[] } = {
-    'groceries': ['walmart', 'costco', 'aldi', 'food lion', 'harris teeter', 'publix', 'target'],
-    'restaurants': ['mcdonald', 'burger king', 'chick-fil-a', 'taco bell', 'wendy', 'arby', 'pizza', 'chipotle', 'zaxby', 'tropical grille', 'texas roadhouse', 'domino', 'jack in the box', 'firehouse'],
-    'gas': ['qt ', 'murphy', 'shell', 'exxon', 'bp ', 'chevron'],
-    'entertainment': ['amazon', 'disney', 'netflix', 'hulu', 'spotify'],
-    'auto': ['toyota', 'autozone', 'car wash', 'express wash'],
-    'home': ['home depot', 'lowes', 'lowe\'s'],
-  };
-
-  for (const [categoryName, keywords] of Object.entries(categoryMap)) {
-    if (keywords.some(keyword => merchantLower.includes(keyword))) {
-      const category = categories.find(c => c.name.toLowerCase().includes(categoryName));
-      if (category) {
-        return category.id;
-      }
-    }
-  }
-
-  return undefined;
-}
 

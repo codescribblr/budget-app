@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import type { ParsedTransaction } from '@/lib/import-types';
+import { learnFromImportedTransactions } from '@/lib/smart-categorizer';
 
 export async function POST(request: Request) {
   try {
@@ -84,6 +85,20 @@ export async function POST(request: Request) {
     });
 
     importAll(transactions);
+
+    // Learn from the imported transactions
+    const learningData = transactions
+      .filter(txn => txn.splits.length > 0)
+      .flatMap(txn =>
+        txn.splits.map(split => ({
+          merchant: txn.merchant,
+          categoryId: split.categoryId,
+        }))
+      );
+
+    if (learningData.length > 0) {
+      learnFromImportedTransactions(learningData);
+    }
 
     return NextResponse.json({
       success: true,
