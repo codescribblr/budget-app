@@ -264,14 +264,18 @@ export async function createCreditCard(data: {
 }): Promise<CreditCard> {
   const { supabase, user } = await getAuthenticatedUser();
 
+  const creditLimit = data.credit_limit ?? 0;
+  const availableCredit = data.available_credit ?? 0;
+  const currentBalance = creditLimit - availableCredit;
+
   const { data: creditCard, error } = await supabase
     .from('credit_cards')
     .insert({
       user_id: user.id,
       name: data.name,
-      credit_limit: data.credit_limit ?? 0,
-      available_credit: data.available_credit ?? 0,
-      current_balance: 0,
+      credit_limit: creditLimit,
+      available_credit: availableCredit,
+      current_balance: currentBalance,
       include_in_totals: data.include_in_totals ?? 1,
       sort_order: data.sort_order ?? 0,
     })
@@ -294,6 +298,22 @@ export async function updateCreditCard(
   }>
 ): Promise<CreditCard | null> {
   const { supabase } = await getAuthenticatedUser();
+
+  // If credit_limit or available_credit is being updated, recalculate current_balance
+  if (data.credit_limit !== undefined || data.available_credit !== undefined) {
+    // Get current values if not provided in update
+    const { data: currentCard } = await supabase
+      .from('credit_cards')
+      .select('credit_limit, available_credit')
+      .eq('id', id)
+      .single();
+
+    if (currentCard) {
+      const creditLimit = data.credit_limit ?? currentCard.credit_limit;
+      const availableCredit = data.available_credit ?? currentCard.available_credit;
+      data.current_balance = creditLimit - availableCredit;
+    }
+  }
 
   const { data: creditCard, error } = await supabase
     .from('credit_cards')
