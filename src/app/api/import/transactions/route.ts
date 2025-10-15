@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import db from '@/lib/db';
 import type { ParsedTransaction } from '@/lib/import-types';
 
 export async function POST(request: Request) {
@@ -12,8 +12,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
-    const db = getDb();
     const importDate = new Date().toISOString();
     let importedCount = 0;
 

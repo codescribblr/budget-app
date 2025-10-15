@@ -52,10 +52,10 @@ export default function ImportTransactionsPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Upload CSV File</CardTitle>
+        <CardTitle>Upload CSV or Image</CardTitle>
         <CardDescription>
-          Upload a CSV file from your bank or credit card to import transactions.
-          Supported formats: Chase, Citi, Wells Fargo, and more.
+          Upload a CSV file or screenshot/photo of transactions from your bank or credit card.
+          Supports CSV files, screenshots, receipts, and statement images.
         </CardDescription>
       </CardHeader>
       <CardContent>

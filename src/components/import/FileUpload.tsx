@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { parseCSVFile } from '@/lib/csv-parser';
+import { parseImageFile } from '@/lib/image-parser';
 import type { ParsedTransaction } from '@/lib/import-types';
 
 interface FileUploadProps {
@@ -22,8 +23,27 @@ export default function FileUpload({ onFileUploaded }: FileUploadProps) {
     setError(null);
 
     try {
-      const transactions = await parseCSVFile(file);
-      
+      let transactions: ParsedTransaction[];
+
+      // Determine file type and use appropriate parser
+      const fileType = file.type;
+      const fileName = file.name.toLowerCase();
+
+      if (fileName.endsWith('.csv') || fileType === 'text/csv') {
+        transactions = await parseCSVFile(file);
+      } else if (
+        fileType.startsWith('image/') ||
+        fileName.endsWith('.jpg') ||
+        fileName.endsWith('.jpeg') ||
+        fileName.endsWith('.png') ||
+        fileName.endsWith('.pdf')
+      ) {
+        transactions = await parseImageFile(file);
+      } else {
+        setError('Unsupported file type. Please upload a CSV or image file.');
+        return;
+      }
+
       if (transactions.length === 0) {
         setError('No transactions found in the file');
         return;
@@ -31,7 +51,7 @@ export default function FileUpload({ onFileUploaded }: FileUploadProps) {
 
       // Check for duplicates and auto-categorize
       const processedTransactions = await processTransactions(transactions);
-      
+
       onFileUploaded(processedTransactions, file.name);
     } catch (err) {
       console.error('Error processing file:', err);
@@ -54,18 +74,18 @@ export default function FileUpload({ onFileUploaded }: FileUploadProps) {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv"
+        accept=".csv,.jpg,.jpeg,.png,.pdf,image/*"
         onChange={handleFileChange}
         className="hidden"
       />
       
       <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-8 text-center">
         <div className="space-y-4">
-          <div className="text-4xl">📄</div>
+          <div className="text-4xl">📄 📷</div>
           <div>
-            <p className="text-lg font-medium">Upload CSV File</p>
+            <p className="text-lg font-medium">Upload CSV or Image</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Click the button below to select a CSV file from your computer
+              Upload a CSV file or screenshot/photo of transactions
             </p>
           </div>
           <Button onClick={handleButtonClick} disabled={isProcessing}>
@@ -83,11 +103,14 @@ export default function FileUpload({ onFileUploaded }: FileUploadProps) {
       <div className="text-sm text-muted-foreground space-y-2">
         <p className="font-medium">Supported formats:</p>
         <ul className="list-disc list-inside space-y-1 ml-2">
-          <li>Citi Credit Cards (with rewards points)</li>
-          <li>Chase Credit Cards</li>
-          <li>Wells Fargo Checking</li>
-          <li>Citi Bank Statements</li>
+          <li><strong>CSV Files:</strong> Chase, Citi, Wells Fargo, and more</li>
+          <li><strong>Screenshots:</strong> Bank statements, transaction history</li>
+          <li><strong>Photos:</strong> Receipts, mobile banking screenshots</li>
+          <li><strong>Images:</strong> JPG, PNG, PDF</li>
         </ul>
+        <p className="text-xs mt-3 p-2 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
+          💡 <strong>Image processing requires OpenAI API key.</strong> Add OPENAI_API_KEY to your .env.local file.
+        </p>
       </div>
     </div>
   );

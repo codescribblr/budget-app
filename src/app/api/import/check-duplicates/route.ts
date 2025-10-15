@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import db from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
@@ -8,8 +8,6 @@ export async function POST(request: Request) {
     if (!Array.isArray(hashes) || hashes.length === 0) {
       return NextResponse.json({ duplicates: [] });
     }
-
-    const db = getDb();
     
     // Check which hashes already exist in imported_transactions
     const placeholders = hashes.map(() => '?').join(',');
