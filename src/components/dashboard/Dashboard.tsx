@@ -88,6 +88,9 @@ export default function Dashboard() {
           <Button variant="outline" onClick={() => window.location.href = '/reports'} size="sm" className="md:size-default">
             Reports
           </Button>
+          <Button variant="outline" onClick={() => window.location.href = '/settings'} size="sm" className="md:size-default">
+            Settings
+          </Button>
           <SignOutButton />
         </div>
       </div>

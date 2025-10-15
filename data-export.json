@@ -1,0 +1,882 @@
+{
+  "categories": [
+    {
+      "id": 2,
+      "name": "food",
+      "monthly_amount": 1400,
+      "current_balance": 1104.8799999999997,
+      "sort_order": 2,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 3,
+      "name": "shopping",
+      "monthly_amount": 80,
+      "current_balance": -102.98,
+      "sort_order": 3,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-15 02:13:13",
+      "is_system": 0
+    },
+    {
+      "id": 4,
+      "name": "medical (1st)",
+      "monthly_amount": 100,
+      "current_balance": 1009.8,
+      "sort_order": 4,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 5,
+      "name": "mortgage & insurance",
+      "monthly_amount": 2981,
+      "current_balance": 2981,
+      "sort_order": 5,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 6,
+      "name": "car insurance",
+      "monthly_amount": 207.34,
+      "current_balance": 1470.83,
+      "sort_order": 6,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 7,
+      "name": "car repairs",
+      "monthly_amount": 342.92,
+      "current_balance": 1141.04,
+      "sort_order": 7,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 8,
+      "name": "car taxes",
+      "monthly_amount": 100.17,
+      "current_balance": 227.06,
+      "sort_order": 8,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 9,
+      "name": "garbage pickup",
+      "monthly_amount": 25,
+      "current_balance": 75,
+      "sort_order": 9,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 10,
+      "name": "cell phone",
+      "monthly_amount": 115,
+      "current_balance": 889.22,
+      "sort_order": 10,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 11,
+      "name": "internet",
+      "monthly_amount": 75,
+      "current_balance": 173.5,
+      "sort_order": 11,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 12,
+      "name": "security system/cameras",
+      "monthly_amount": 0,
+      "current_balance": 0,
+      "sort_order": 12,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "is_system": 0
+    },
+    {
+      "id": 13,
+      "name": "utilities",
+      "monthly_amount": 250,
+      "current_balance": 731.97,
+      "sort_order": 13,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 14,
+      "name": "gifts",
+      "monthly_amount": 50,
+      "current_balance": 176.12,
+      "sort_order": 14,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 15,
+      "name": "home furnishings",
+      "monthly_amount": 50,
+      "current_balance": 284.28000000000003,
+      "sort_order": 15,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 16,
+      "name": "home repairs",
+      "monthly_amount": 100,
+      "current_balance": 101.86,
+      "sort_order": 16,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 17,
+      "name": "gas",
+      "monthly_amount": 160,
+      "current_balance": 219.04999999999995,
+      "sort_order": 17,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 18,
+      "name": "car payment",
+      "monthly_amount": 0,
+      "current_balance": 0,
+      "sort_order": 18,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "is_system": 0
+    },
+    {
+      "id": 19,
+      "name": "charity",
+      "monthly_amount": 661.29,
+      "current_balance": 961.29,
+      "sort_order": 19,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 20,
+      "name": "Heather's allowance",
+      "monthly_amount": 30,
+      "current_balance": 332.89,
+      "sort_order": 20,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 21,
+      "name": "Jon's allowance",
+      "monthly_amount": 30,
+      "current_balance": 235.02,
+      "sort_order": 21,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:27",
+      "is_system": 0
+    },
+    {
+      "id": 22,
+      "name": "kids allowance",
+      "monthly_amount": 180,
+      "current_balance": 520,
+      "sort_order": 22,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 23,
+      "name": "kids clothing",
+      "monthly_amount": 20,
+      "current_balance": 48.42999999999998,
+      "sort_order": 23,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 24,
+      "name": "kids activities",
+      "monthly_amount": 220.42,
+      "current_balance": 1505.8500000000001,
+      "sort_order": 24,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 25,
+      "name": "karate",
+      "monthly_amount": 258.5,
+      "current_balance": 860.37,
+      "sort_order": 25,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 26,
+      "name": "skating",
+      "monthly_amount": 125,
+      "current_balance": 527.6,
+      "sort_order": 26,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 27,
+      "name": "curriculum",
+      "monthly_amount": 66.67,
+      "current_balance": 139.67000000000002,
+      "sort_order": 27,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 28,
+      "name": "co-op",
+      "monthly_amount": 90,
+      "current_balance": 243.62,
+      "sort_order": 28,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 29,
+      "name": "memberships",
+      "monthly_amount": 33.33,
+      "current_balance": 326.25,
+      "sort_order": 29,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 30,
+      "name": "fun friday",
+      "monthly_amount": 20.83,
+      "current_balance": 94.36,
+      "sort_order": 30,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 31,
+      "name": "school supplies",
+      "monthly_amount": 8.33,
+      "current_balance": 59.96,
+      "sort_order": 31,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 32,
+      "name": "projects/extra school books",
+      "monthly_amount": 4.17,
+      "current_balance": 49.230000000000004,
+      "sort_order": 32,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 33,
+      "name": "association school",
+      "monthly_amount": 2.5,
+      "current_balance": 20,
+      "sort_order": 33,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 34,
+      "name": "Life/Disability Insurance (1st)",
+      "monthly_amount": 45,
+      "current_balance": 129.95999999999998,
+      "sort_order": 34,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 35,
+      "name": "Accounting",
+      "monthly_amount": 137.5,
+      "current_balance": 337.5,
+      "sort_order": 35,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 36,
+      "name": "His Radio (1st)",
+      "monthly_amount": 0,
+      "current_balance": 0,
+      "sort_order": 36,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "is_system": 0
+    },
+    {
+      "id": 37,
+      "name": "Compassion Inter. (6th)",
+      "monthly_amount": 46.17,
+      "current_balance": 93.23,
+      "sort_order": 37,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 38,
+      "name": "Additional Expenses",
+      "monthly_amount": 0,
+      "current_balance": -95,
+      "sort_order": 38,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "is_system": 0
+    },
+    {
+      "id": 39,
+      "name": "Auto Deposit Savings",
+      "monthly_amount": 0,
+      "current_balance": 0,
+      "sort_order": 39,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "is_system": 0
+    },
+    {
+      "id": 40,
+      "name": "Business Expenses",
+      "monthly_amount": 97.95,
+      "current_balance": 195.9,
+      "sort_order": 40,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:55:28",
+      "is_system": 0
+    },
+    {
+      "id": 41,
+      "name": "Transfer",
+      "monthly_amount": 0,
+      "current_balance": -955.85,
+      "sort_order": 41,
+      "created_at": "2025-10-15 10:49:18",
+      "updated_at": "2025-10-15 10:49:18",
+      "is_system": 1
+    }
+  ],
+  "accounts": [
+    {
+      "id": 2,
+      "name": "Rental Checking",
+      "balance": 1318.99,
+      "account_type": "checking",
+      "sort_order": 2,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "include_in_totals": 1
+    },
+    {
+      "id": 3,
+      "name": "Rental Savings",
+      "balance": 524.83,
+      "account_type": "savings",
+      "sort_order": 3,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "include_in_totals": 1
+    },
+    {
+      "id": 1,
+      "name": "Wells Main Checking",
+      "balance": 16500.01,
+      "account_type": "checking",
+      "sort_order": 1,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "include_in_totals": 1
+    }
+  ],
+  "credit_cards": [
+    {
+      "id": 4,
+      "name": "Chase",
+      "available_credit": 35000,
+      "current_balance": 0,
+      "sort_order": 4,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "include_in_totals": 1,
+      "credit_limit": 35000
+    },
+    {
+      "id": 5,
+      "name": "Chase Freedom",
+      "available_credit": 21774.53,
+      "current_balance": 225.47,
+      "sort_order": 5,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "include_in_totals": 1,
+      "credit_limit": 22000
+    },
+    {
+      "id": 2,
+      "name": "Citi",
+      "available_credit": 33416.6,
+      "current_balance": 583.4,
+      "sort_order": 2,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "include_in_totals": 1,
+      "credit_limit": 34000
+    },
+    {
+      "id": 3,
+      "name": "Gold",
+      "available_credit": 7476.54,
+      "current_balance": 2523.46,
+      "sort_order": 3,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "include_in_totals": 1,
+      "credit_limit": 10000
+    },
+    {
+      "id": 1,
+      "name": "Lowe's",
+      "available_credit": 19450,
+      "current_balance": 0,
+      "sort_order": 1,
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17",
+      "include_in_totals": 1,
+      "credit_limit": 19450
+    }
+  ],
+  "pending_checks": [],
+  "settings": [
+    {
+      "id": 1,
+      "key": "salary",
+      "value": "163000.00",
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17"
+    },
+    {
+      "id": 2,
+      "key": "tax_rate",
+      "value": "0.2122",
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17"
+    },
+    {
+      "id": 3,
+      "key": "pre_tax_deductions",
+      "value": "2388.13",
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17"
+    },
+    {
+      "id": 4,
+      "key": "taxes_per_month",
+      "value": "2154.31",
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17"
+    },
+    {
+      "id": 5,
+      "key": "monthly_net_income",
+      "value": "7996.02",
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17"
+    },
+    {
+      "id": 6,
+      "key": "monthly_budget",
+      "value": "8114.08",
+      "created_at": "2025-10-14 19:05:17",
+      "updated_at": "2025-10-14 19:05:17"
+    }
+  ],
+  "merchant_mappings": [
+    {
+      "id": 14,
+      "merchant_pattern": "ALDI 76041 TAYLORS",
+      "normalized_merchant": "aldi 76041 taylors",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 8,
+      "merchant_pattern": "ANNUAL MEMBERSHIP FEE",
+      "normalized_merchant": "annual membership fee",
+      "category_id": 38,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:10:40.826Z",
+      "created_at": "2025-10-15 11:10:40"
+    },
+    {
+      "id": 30,
+      "merchant_pattern": "ARBYS ECOM 6936 GREER",
+      "normalized_merchant": "arbys ecom 6936 greer",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 13,
+      "merchant_pattern": "Audible*NV7GR84O0 8882835051 NJ",
+      "normalized_merchant": "audiblenv7gr84o0 8882835051 nj",
+      "category_id": 29,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 12,
+      "merchant_pattern": "BOJANGLES' #1205 TAYLORS",
+      "normalized_merchant": "bojangles 1205 taylors",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 32,
+      "merchant_pattern": "CHICK-FIL-A #00830 TAYLORS",
+      "normalized_merchant": "chickfila 00830 taylors",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 26,
+      "merchant_pattern": "CHICK-FIL-A #03967 TRAVELERS RES",
+      "normalized_merchant": "chickfila 03967 travelers res",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 7,
+      "merchant_pattern": "CHIPOTLE 1245",
+      "normalized_merchant": "chipotle 1245",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:10:40.826Z",
+      "created_at": "2025-10-15 11:10:40"
+    },
+    {
+      "id": 2,
+      "merchant_pattern": "COSTCO WHSE #1005",
+      "normalized_merchant": "costco whse 1005",
+      "category_id": 2,
+      "confidence_score": 8,
+      "last_used": "2025-10-15T11:10:40.826Z",
+      "created_at": "2025-10-15 11:10:40"
+    },
+    {
+      "id": 31,
+      "merchant_pattern": "DOLLAR TREE TAYLORS",
+      "normalized_merchant": "dollar tree taylors",
+      "category_id": 3,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 25,
+      "merchant_pattern": "Disney Plus 8889057888 CA",
+      "normalized_merchant": "disney plus 8889057888 ca",
+      "category_id": 29,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 6,
+      "merchant_pattern": "JACK",
+      "normalized_merchant": "jack",
+      "category_id": 2,
+      "confidence_score": 5,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:10:40"
+    },
+    {
+      "id": 18,
+      "merchant_pattern": "LITTLE CAESARS 0101 00 TAYLORS",
+      "normalized_merchant": "little caesars 0101 00 taylors",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 15,
+      "merchant_pattern": "MCDONALD'S F1667 GREENVILLE",
+      "normalized_merchant": "mcdonalds f1667 greenville",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 37,
+      "merchant_pattern": "MURPHY7059ATWALMART TAYLORS SC",
+      "normalized_merchant": "murphy7059atwalmart taylors sc",
+      "category_id": 17,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 16,
+      "merchant_pattern": "McDonalds 1667 GREENVILLE SC",
+      "normalized_merchant": "mcdonalds 1667 greenville sc",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 9,
+      "merchant_pattern": "McDonalds 32623 TAYLORS NC",
+      "normalized_merchant": "mcdonalds 32623 taylors nc",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 3,
+      "merchant_pattern": "NC QUICK PASS",
+      "normalized_merchant": "nc quick pass",
+      "category_id": 7,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:10:40.825Z",
+      "created_at": "2025-10-15 11:10:40"
+    },
+    {
+      "id": 11,
+      "merchant_pattern": "NORTHHILLSCHURCH.COM TAYLORS SC",
+      "normalized_merchant": "northhillschurchcom taylors sc",
+      "category_id": 19,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 20,
+      "merchant_pattern": "POWER HOMESCHOOL",
+      "normalized_merchant": "power homeschool",
+      "category_id": 27,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 17,
+      "merchant_pattern": "PUBLIX #632 TAYLORS",
+      "normalized_merchant": "publix 632 taylors",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 5,
+      "merchant_pattern": "Payment Thank You - Web",
+      "normalized_merchant": "payment thank you web",
+      "category_id": 41,
+      "confidence_score": 2,
+      "last_used": "2025-10-15T11:10:40.826Z",
+      "created_at": "2025-10-15 11:10:40"
+    },
+    {
+      "id": 1,
+      "merchant_pattern": "Payment Thank You-Mobile",
+      "normalized_merchant": "payment thank youmobile",
+      "category_id": 41,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:10:40.825Z",
+      "created_at": "2025-10-15 11:10:40"
+    },
+    {
+      "id": 21,
+      "merchant_pattern": "QT 1104 GREENVILLE",
+      "normalized_merchant": "qt 1104 greenville",
+      "category_id": 17,
+      "confidence_score": 5,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 29,
+      "merchant_pattern": "QT 1104 GREENVILLE",
+      "normalized_merchant": "qt 1104 greenville",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 33,
+      "merchant_pattern": "QT 1105 GREENVILLE",
+      "normalized_merchant": "qt 1105 greenville",
+      "category_id": 17,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 4,
+      "merchant_pattern": "TARGET",
+      "normalized_merchant": "target",
+      "category_id": 3,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:10:40.826Z",
+      "created_at": "2025-10-15 11:10:40"
+    },
+    {
+      "id": 19,
+      "merchant_pattern": "TARGET 00019372 TAYLORS",
+      "normalized_merchant": "target 00019372 taylors",
+      "category_id": 23,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 36,
+      "merchant_pattern": "TARGET.COM BROOKLYN PARK",
+      "normalized_merchant": "targetcom brooklyn park",
+      "category_id": 23,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 35,
+      "merchant_pattern": "THE HOME DEPOT #1104 GREENVILLE",
+      "normalized_merchant": "home depot 1104 greenville",
+      "category_id": 15,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 34,
+      "merchant_pattern": "THE HOME DEPOT #1126 GREER SC",
+      "normalized_merchant": "home depot 1126 greer sc",
+      "category_id": 15,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 27,
+      "merchant_pattern": "TROPICAL GRILLE",
+      "normalized_merchant": "tropical grille",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 22,
+      "merchant_pattern": "WAL-MART #1244 TAYLORS",
+      "normalized_merchant": "walmart 1244 taylors",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 28,
+      "merchant_pattern": "WALMART.COM 8009256278 BENTONVILLE",
+      "normalized_merchant": "walmartcom 8009256278 bentonville",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 38,
+      "merchant_pattern": "WALMART.COM WALMART.COM",
+      "normalized_merchant": "walmartcom walmartcom",
+      "category_id": 23,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 10,
+      "merchant_pattern": "WCG INC. Colorado Spri CO",
+      "normalized_merchant": "wcg  colorado spri",
+      "category_id": 35,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 24,
+      "merchant_pattern": "WENDYS #0051 GREENVILLE",
+      "normalized_merchant": "wendys 0051 greenville",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    },
+    {
+      "id": 23,
+      "merchant_pattern": "WM SUPERCENTER #1244 TAYLORS",
+      "normalized_merchant": "wm supercenter 1244 taylors",
+      "category_id": 2,
+      "confidence_score": 1,
+      "last_used": "2025-10-15T11:48:43.347Z",
+      "created_at": "2025-10-15 11:48:43"
+    }
+  ]
+}

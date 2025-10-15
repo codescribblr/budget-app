@@ -4,19 +4,38 @@ import type { ParsedTransaction } from './import-types';
 // Detect CSV format based on headers
 export function detectCSVFormat(headers: string[]): string {
   const headerStr = headers.join(',').toLowerCase();
-  
+
   if (headerStr.includes('cardholder') && headerStr.includes('points')) {
     return 'citi-rewards';
   } else if (headerStr.includes('transaction date') && headerStr.includes('post date')) {
     return 'chase';
   } else if (headerStr.includes('status') && headerStr.includes('debit') && headerStr.includes('credit')) {
     return 'citi-statement';
-  } else if (!headers[0] && headers.length >= 5) {
-    // Wells Fargo format has no headers
+  } else if (isWellsFargoFormat(headers)) {
+    // Wells Fargo/Bank format has no headers - starts with date
     return 'wells-fargo';
   }
-  
+
   return 'unknown';
+}
+
+// Check if this looks like Wells Fargo format (no headers, starts with date)
+function isWellsFargoFormat(row: string[]): boolean {
+  if (row.length < 5) return false;
+
+  // Check if first column looks like a date (MM/DD/YYYY)
+  const datePattern = /^\d{1,2}\/\d{1,2}\/\d{4}$/;
+  if (!datePattern.test(row[0])) return false;
+
+  // Check if second column looks like an amount (with optional quotes and minus sign)
+  const amountStr = row[1].replace(/"/g, '');
+  const amountPattern = /^-?\d+\.\d{2}$/;
+  if (!amountPattern.test(amountStr)) return false;
+
+  // Check if third column is a status marker (usually "*")
+  if (row[2] !== '*' && row[2] !== '"*"') return false;
+
+  return true;
 }
 
 // Extract merchant name from description
@@ -82,10 +101,14 @@ function processCSVData(data: string[][], fileName: string): ParsedTransaction[]
   const format = detectCSVFormat(headers);
   const transactions: ParsedTransaction[] = [];
 
-  // Skip header row
-  for (let i = 1; i < data.length; i++) {
+  // Determine if first row is headers or data
+  const hasHeaders = format !== 'wells-fargo';
+  const startRow = hasHeaders ? 1 : 0;
+
+  // Process rows
+  for (let i = startRow; i < data.length; i++) {
     const row = data[i];
-    
+
     // Skip empty rows
     if (!row || row.every(cell => !cell || cell.trim() === '')) {
       continue;
