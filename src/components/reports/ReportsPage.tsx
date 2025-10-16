@@ -265,6 +265,7 @@ export default function ReportsPage() {
         <SpendingPieChart
           transactions={filteredTransactions}
           categories={categories}
+          selectedCategoryId={selectedCategoryId}
           onCategoryClick={handleCategoryClick}
         />
       </div>
