@@ -43,6 +43,33 @@ export interface Transaction {
   updated_at: string;
 }
 
+export interface MerchantGroup {
+  id: number;
+  user_id: string;
+  display_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MerchantMapping {
+  id: number;
+  user_id: string;
+  merchant_group_id: number | null;
+  pattern: string;
+  normalized_pattern: string;
+  is_automatic: boolean;
+  confidence_score: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MerchantGroupWithStats extends MerchantGroup {
+  transaction_count: number;
+  total_amount: number;
+  unique_patterns: number;
+  has_manual_mappings: boolean;
+}
+
 export interface TransactionSplit {
   id: number;
   transaction_id: number;
