@@ -81,6 +81,11 @@ export default function SpendingPieChart({ transactions, categories, onCategoryC
     }
   };
 
+  const renderLabel = (entry: any) => {
+    const percent = entry.percent as number;
+    return `${entry.name}: ${(percent * 100).toFixed(0)}%`;
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -97,7 +102,7 @@ export default function SpendingPieChart({ transactions, categories, onCategoryC
               cx="50%"
               cy="50%"
               labelLine={false}
-              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+              label={renderLabel}
               outerRadius={120}
               fill="#8884d8"
               dataKey="value"
@@ -109,8 +114,8 @@ export default function SpendingPieChart({ transactions, categories, onCategoryC
               ))}
             </Pie>
             <Tooltip content={<CustomTooltip />} />
-            <Legend 
-              verticalAlign="bottom" 
+            <Legend
+              verticalAlign="bottom"
               height={36}
               formatter={(value, entry: any) => {
                 const percentage = (entry.payload.value / totalSpent) * 100;
