@@ -6,6 +6,7 @@ export interface Category {
   current_balance: number;
   sort_order: number;
   is_system: boolean;
+  notes?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -72,6 +73,7 @@ export interface CreateCategoryRequest {
   monthly_amount: number;
   current_balance?: number;
   sort_order?: number;
+  notes?: string;
 }
 
 export interface UpdateCategoryRequest {
@@ -79,6 +81,7 @@ export interface UpdateCategoryRequest {
   monthly_amount?: number;
   current_balance?: number;
   sort_order?: number;
+  notes?: string;
 }
 
 export interface CreateAccountRequest {

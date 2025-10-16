@@ -62,9 +62,10 @@ export async function createCategory(data: {
   monthly_amount: number;
   current_balance?: number;
   sort_order?: number;
+  notes?: string;
 }): Promise<Category> {
   const { supabase, user } = await getAuthenticatedUser();
-  
+
   const { data: category, error } = await supabase
     .from('categories')
     .insert({
@@ -73,10 +74,11 @@ export async function createCategory(data: {
       monthly_amount: data.monthly_amount,
       current_balance: data.current_balance ?? 0,
       sort_order: data.sort_order ?? 0,
+      notes: data.notes ?? null,
     })
     .select()
     .single();
-  
+
   if (error) throw error;
   return category as Category;
 }
@@ -88,29 +90,31 @@ export async function updateCategory(
     monthly_amount: number;
     current_balance: number;
     sort_order: number;
+    notes: string;
   }>
 ): Promise<Category | null> {
   const { supabase } = await getAuthenticatedUser();
-  
+
   const updateData: any = { updated_at: new Date().toISOString() };
-  
+
   if (data.name !== undefined) updateData.name = data.name;
   if (data.monthly_amount !== undefined) updateData.monthly_amount = data.monthly_amount;
   if (data.current_balance !== undefined) updateData.current_balance = data.current_balance;
   if (data.sort_order !== undefined) updateData.sort_order = data.sort_order;
-  
+  if (data.notes !== undefined) updateData.notes = data.notes;
+
   const { data: category, error } = await supabase
     .from('categories')
     .update(updateData)
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) {
     if (error.code === 'PGRST116') return null; // Not found
     throw error;
   }
-  
+
   return category as Category;
 }
 

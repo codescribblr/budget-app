@@ -16,6 +16,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
   const [newName, setNewName] = useState('');
   const [newBalance, setNewBalance] = useState('');
   const [newMonthlyAmount, setNewMonthlyAmount] = useState('');
+  const [newNotes, setNewNotes] = useState('');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
@@ -36,6 +37,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
           name: newName,
           monthly_amount: parseFloat(newMonthlyAmount) || 0,
           current_balance: parseFloat(newBalance),
+          notes: newNotes || null,
         }),
       });
 
@@ -44,6 +46,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
       setNewName('');
       setNewMonthlyAmount('');
       setNewBalance('');
+      setNewNotes('');
       onUpdate();
     } catch (error) {
       console.error('Error updating category:', error);
@@ -64,6 +67,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
           name: newName,
           monthly_amount: parseFloat(newMonthlyAmount) || 0,
           current_balance: parseFloat(newBalance) || 0,
+          notes: newNotes || null,
         }),
       });
 
@@ -71,6 +75,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
       setNewName('');
       setNewMonthlyAmount('');
       setNewBalance('');
+      setNewNotes('');
       onUpdate();
     } catch (error) {
       console.error('Error adding category:', error);
@@ -107,6 +112,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
     setNewName(category.name);
     setNewMonthlyAmount(category.monthly_amount.toString());
     setNewBalance(category.current_balance.toString());
+    setNewNotes(category.notes || '');
     setIsEditDialogOpen(true);
   };
 
@@ -114,6 +120,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
     setNewName('');
     setNewMonthlyAmount('');
     setNewBalance('0');
+    setNewNotes('');
     setIsAddDialogOpen(true);
   };
 
@@ -224,6 +231,18 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
                 placeholder="0.00"
               />
             </div>
+            <div>
+              <label className="text-sm font-medium">Notes</label>
+              <textarea
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={newNotes}
+                onChange={(e) => setNewNotes(e.target.value)}
+                placeholder="e.g., car repairs = 900 for tires for 4 cars over 4 years, 60 for oil changes for 3 cars 3x per year, 100 for other repairs all /12 months"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional notes to track budget formulas or other information
+              </p>
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 Cancel
@@ -272,6 +291,18 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
                 onChange={(e) => setNewBalance(e.target.value)}
                 placeholder="0.00"
               />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Notes</label>
+              <textarea
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={newNotes}
+                onChange={(e) => setNewNotes(e.target.value)}
+                placeholder="e.g., car repairs = 900 for tires for 4 cars over 4 years, 60 for oil changes for 3 cars 3x per year, 100 for other repairs all /12 months"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional notes to track budget formulas or other information
+              </p>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
