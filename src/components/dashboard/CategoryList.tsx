@@ -6,6 +6,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/utils';
 import type { Category } from '@/lib/types';
+import { toast } from 'sonner';
+import { Check, X } from 'lucide-react';
 
 interface CategoryListProps {
   categories: Category[];
@@ -21,6 +23,10 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
   const [newIsSystem, setNewIsSystem] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+
+  // Inline editing state
+  const [editingBalanceId, setEditingBalanceId] = useState<number | null>(null);
+  const [editingBalanceValue, setEditingBalanceValue] = useState('');
 
   // Filter out system categories (like Transfer) from envelope display
   const envelopeCategories = categories.filter(cat => !cat.is_system);
@@ -127,6 +133,39 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
     setIsAddDialogOpen(true);
   };
 
+  // Inline balance editing handlers
+  const startEditingBalance = (category: Category) => {
+    setEditingBalanceId(category.id);
+    setEditingBalanceValue(category.current_balance.toString());
+  };
+
+  const cancelEditingBalance = () => {
+    setEditingBalanceId(null);
+    setEditingBalanceValue('');
+  };
+
+  const saveInlineBalance = async (categoryId: number) => {
+    try {
+      const response = await fetch(`/api/categories/${categoryId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          current_balance: parseFloat(editingBalanceValue) || 0,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update balance');
+
+      toast.success('Balance updated');
+      setEditingBalanceId(null);
+      setEditingBalanceValue('');
+      onUpdate();
+    } catch (error) {
+      console.error('Error updating balance:', error);
+      toast.error('Failed to update balance');
+    }
+  };
+
   return (
     <>
       <div className="flex flex-col h-full">
@@ -154,7 +193,49 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
                   <TableCell className="font-medium">{category.name}</TableCell>
                   <TableCell className="text-right">{formatCurrency(category.monthly_amount)}</TableCell>
                   <TableCell className="text-right font-semibold">
-                    {formatCurrency(category.current_balance)}
+                    {editingBalanceId === category.id ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={editingBalanceValue}
+                          onChange={(e) => setEditingBalanceValue(e.target.value)}
+                          className="w-28 h-8 text-right"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              saveInlineBalance(category.id);
+                            } else if (e.key === 'Escape') {
+                              cancelEditingBalance();
+                            }
+                          }}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => saveInlineBalance(category.id)}
+                        >
+                          <Check className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={cancelEditingBalance}
+                        >
+                          <X className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <span
+                        className="cursor-pointer hover:bg-muted px-2 py-1 rounded"
+                        onClick={() => startEditingBalance(category)}
+                        title="Click to edit balance"
+                      >
+                        {formatCurrency(category.current_balance)}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
