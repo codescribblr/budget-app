@@ -32,7 +32,7 @@ export async function POST() {
           monthly_amount: category.monthly_amount,
           current_balance: 0, // Start with 0 balance
           sort_order: category.sort_order,
-          is_system: false,
+          is_system: category.is_system,
         });
 
       if (error) {

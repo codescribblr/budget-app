@@ -74,6 +74,7 @@ export interface CreateCategoryRequest {
   current_balance?: number;
   sort_order?: number;
   notes?: string;
+  is_system?: boolean;
 }
 
 export interface UpdateCategoryRequest {
@@ -82,6 +83,7 @@ export interface UpdateCategoryRequest {
   current_balance?: number;
   sort_order?: number;
   notes?: string;
+  is_system?: boolean;
 }
 
 export interface CreateAccountRequest {

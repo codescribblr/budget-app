@@ -63,6 +63,7 @@ export async function createCategory(data: {
   current_balance?: number;
   sort_order?: number;
   notes?: string;
+  is_system?: boolean;
 }): Promise<Category> {
   const { supabase, user } = await getAuthenticatedUser();
 
@@ -75,6 +76,7 @@ export async function createCategory(data: {
       current_balance: data.current_balance ?? 0,
       sort_order: data.sort_order ?? 0,
       notes: data.notes ?? null,
+      is_system: data.is_system ?? false,
     })
     .select()
     .single();
@@ -91,6 +93,7 @@ export async function updateCategory(
     current_balance: number;
     sort_order: number;
     notes: string;
+    is_system: boolean;
   }>
 ): Promise<Category | null> {
   const { supabase } = await getAuthenticatedUser();
@@ -102,6 +105,7 @@ export async function updateCategory(
   if (data.current_balance !== undefined) updateData.current_balance = data.current_balance;
   if (data.sort_order !== undefined) updateData.sort_order = data.sort_order;
   if (data.notes !== undefined) updateData.notes = data.notes;
+  if (data.is_system !== undefined) updateData.is_system = data.is_system;
 
   const { data: category, error } = await supabase
     .from('categories')

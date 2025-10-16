@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/utils';
 import type { Category } from '@/lib/types';
@@ -17,6 +18,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
   const [newBalance, setNewBalance] = useState('');
   const [newMonthlyAmount, setNewMonthlyAmount] = useState('');
   const [newNotes, setNewNotes] = useState('');
+  const [newIsSystem, setNewIsSystem] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
@@ -38,6 +40,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
           monthly_amount: parseFloat(newMonthlyAmount) || 0,
           current_balance: parseFloat(newBalance),
           notes: newNotes || null,
+          is_system: newIsSystem,
         }),
       });
 
@@ -47,6 +50,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
       setNewMonthlyAmount('');
       setNewBalance('');
       setNewNotes('');
+      setNewIsSystem(false);
       onUpdate();
     } catch (error) {
       console.error('Error updating category:', error);
@@ -68,6 +72,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
           monthly_amount: parseFloat(newMonthlyAmount) || 0,
           current_balance: parseFloat(newBalance) || 0,
           notes: newNotes || null,
+          is_system: newIsSystem,
         }),
       });
 
@@ -76,6 +81,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
       setNewMonthlyAmount('');
       setNewBalance('');
       setNewNotes('');
+      setNewIsSystem(false);
       onUpdate();
     } catch (error) {
       console.error('Error adding category:', error);
@@ -103,16 +109,12 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
   };
 
   const openEditDialog = (category: Category) => {
-    if (category.is_system) {
-      alert('System categories cannot be edited.');
-      return;
-    }
-
     setEditingCategory(category);
     setNewName(category.name);
     setNewMonthlyAmount(category.monthly_amount.toString());
     setNewBalance(category.current_balance.toString());
     setNewNotes(category.notes || '');
+    setNewIsSystem(category.is_system);
     setIsEditDialogOpen(true);
   };
 
@@ -121,6 +123,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
     setNewMonthlyAmount('');
     setNewBalance('0');
     setNewNotes('');
+    setNewIsSystem(false);
     setIsAddDialogOpen(true);
   };
 
@@ -243,6 +246,19 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
                 Optional notes to track budget formulas or other information
               </p>
             </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="edit-is-system"
+                checked={newIsSystem}
+                onCheckedChange={(checked) => setNewIsSystem(checked === true)}
+              />
+              <label
+                htmlFor="edit-is-system"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                System Category (hidden from envelope list, available in dropdowns)
+              </label>
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 Cancel
@@ -303,6 +319,19 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
               <p className="text-xs text-muted-foreground mt-1">
                 Optional notes to track budget formulas or other information
               </p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="add-is-system"
+                checked={newIsSystem}
+                onCheckedChange={(checked) => setNewIsSystem(checked === true)}
+              />
+              <label
+                htmlFor="add-is-system"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                System Category (hidden from envelope list, available in dropdowns)
+              </label>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
