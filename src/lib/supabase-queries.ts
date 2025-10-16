@@ -610,6 +610,15 @@ export async function createTransaction(data: {
 
   if (txError) throw txError;
 
+  // Auto-assign merchant group (non-blocking)
+  try {
+    const { getOrCreateMerchantGroup } = await import('@/lib/db/merchant-groups');
+    await getOrCreateMerchantGroup(data.description, true);
+  } catch (error) {
+    console.error('Error auto-assigning merchant group:', error);
+    // Continue even if merchant grouping fails
+  }
+
   // Create splits and update category balances
   for (const split of data.splits) {
     // Insert split
@@ -945,6 +954,15 @@ export async function importTransactions(transactions: any[]): Promise<number> {
       .single();
 
     if (txError) throw txError;
+
+    // Auto-assign merchant group (non-blocking - don't fail import if this fails)
+    try {
+      const { getOrCreateMerchantGroup } = await import('@/lib/db/merchant-groups');
+      await getOrCreateMerchantGroup(txn.description, true);
+    } catch (error) {
+      console.error('Error auto-assigning merchant group:', error);
+      // Continue with import even if merchant grouping fails
+    }
 
     // Create splits and update category balances
     for (const split of txn.splits) {

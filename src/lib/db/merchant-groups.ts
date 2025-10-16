@@ -293,7 +293,7 @@ export async function updateMerchantMapping(
  */
 export async function deleteMerchantMapping(id: number): Promise<void> {
   const supabase = await createClient();
-  
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
@@ -304,5 +304,131 @@ export async function deleteMerchantMapping(id: number): Promise<void> {
     .eq('user_id', user.id);
 
   if (error) throw error;
+}
+
+/**
+ * Get merchant group for a transaction description
+ * Returns the group if found, null otherwise
+ */
+export async function getMerchantGroupForDescription(
+  description: string
+): Promise<MerchantGroup | null> {
+  const supabase = await createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  // First, check for exact pattern match
+  const { data: mapping, error: mappingError } = await supabase
+    .from('merchant_mappings')
+    .select('merchant_group_id')
+    .eq('pattern', description)
+    .eq('user_id', user.id)
+    .single();
+
+  if (mappingError && mappingError.code !== 'PGRST116') {
+    throw mappingError;
+  }
+
+  if (mapping && mapping.merchant_group_id) {
+    // Get the merchant group
+    return await getMerchantGroup(mapping.merchant_group_id);
+  }
+
+  return null;
+}
+
+/**
+ * Get or create merchant group for a transaction description
+ * This is used during transaction import to automatically assign groups
+ */
+export async function getOrCreateMerchantGroup(
+  description: string,
+  autoCreate: boolean = true
+): Promise<{ group: MerchantGroup | null; isNew: boolean; confidence: number }> {
+  const supabase = await createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  // Check for exact pattern match first
+  const existingGroup = await getMerchantGroupForDescription(description);
+  if (existingGroup) {
+    return { group: existingGroup, isNew: false, confidence: 1.0 };
+  }
+
+  if (!autoCreate) {
+    return { group: null, isNew: false, confidence: 0 };
+  }
+
+  // No exact match - try to find similar groups
+  const { normalizeMerchantName, findBestMatch, extractDisplayName, calculateConfidence } =
+    await import('@/lib/merchant-grouping');
+
+  const normalized = normalizeMerchantName(description);
+
+  // Get all existing groups with their normalized patterns
+  const { data: allMappings, error: mappingsError } = await supabase
+    .from('merchant_mappings')
+    .select('merchant_group_id, normalized_pattern')
+    .eq('user_id', user.id)
+    .not('merchant_group_id', 'is', null);
+
+  if (mappingsError) throw mappingsError;
+
+  // Get unique groups with their patterns
+  const groupPatterns = new Map<number, string>();
+  allMappings?.forEach(m => {
+    if (m.merchant_group_id && !groupPatterns.has(m.merchant_group_id)) {
+      groupPatterns.set(m.merchant_group_id, m.normalized_pattern);
+    }
+  });
+
+  // Get group details
+  const { data: groups, error: groupsError } = await supabase
+    .from('merchant_groups')
+    .select('*')
+    .eq('user_id', user.id)
+    .in('id', Array.from(groupPatterns.keys()));
+
+  if (groupsError) throw groupsError;
+
+  const groupsWithPatterns = groups?.map(g => ({
+    id: g.id,
+    display_name: g.display_name,
+    normalized_pattern: groupPatterns.get(g.id) || '',
+  })) || [];
+
+  // Find best match
+  const match = findBestMatch(description, groupsWithPatterns, 0.85);
+
+  if (match) {
+    // Found a similar group - create mapping
+    const confidence = calculateConfidence(match.similarity);
+    await createMerchantMapping(
+      description,
+      normalized,
+      match.groupId,
+      true, // automatic
+      confidence
+    );
+
+    const group = await getMerchantGroup(match.groupId);
+    return { group, isNew: false, confidence };
+  }
+
+  // No match found - create new group
+  const displayName = extractDisplayName(description);
+  const newGroup = await createMerchantGroup(displayName);
+
+  await createMerchantMapping(
+    description,
+    normalized,
+    newGroup.id,
+    true, // automatic
+    1.0 // perfect confidence for new group
+  );
+
+  return { group: newGroup, isNew: true, confidence: 1.0 };
 }
 

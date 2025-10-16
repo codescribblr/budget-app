@@ -26,6 +26,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Loader2, Trash2, Database, Download, Key, ArrowLeft } from 'lucide-react';
+import MerchantGroupsSettings from '@/components/settings/MerchantGroupsSettings';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -163,6 +164,11 @@ export default function SettingsPage() {
       </div>
 
       <Separator className="mb-8" />
+
+      {/* Merchant Grouping Section */}
+      <div className="mb-6">
+        <MerchantGroupsSettings />
+      </div>
 
       {/* Password Section */}
       <Card className="mb-6">
