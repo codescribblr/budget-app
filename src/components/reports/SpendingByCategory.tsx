@@ -7,9 +7,10 @@ import type { TransactionWithSplits, Category } from '@/lib/types';
 interface SpendingByCategoryProps {
   transactions: TransactionWithSplits[];
   categories: Category[];
+  onCategoryClick?: (categoryId: number) => void;
 }
 
-export default function SpendingByCategory({ transactions, categories }: SpendingByCategoryProps) {
+export default function SpendingByCategory({ transactions, categories, onCategoryClick }: SpendingByCategoryProps) {
   // Calculate spending by category
   const categorySpending = new Map<number, number>();
   
@@ -64,9 +65,13 @@ export default function SpendingByCategory({ transactions, categories }: Spendin
             <TableBody>
               {categoriesWithSpending.map((category) => {
                 const percentage = (category.spent / totalSpent) * 100;
-                
+
                 return (
-                  <TableRow key={category.id}>
+                  <TableRow
+                    key={category.id}
+                    className={onCategoryClick ? "cursor-pointer hover:bg-muted/50" : ""}
+                    onClick={() => onCategoryClick?.(category.id)}
+                  >
                     <TableCell>
                       <div>
                         <div className="font-medium">{category.name}</div>
