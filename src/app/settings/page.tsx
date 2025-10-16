@@ -298,13 +298,16 @@ export default function SettingsPage() {
             <AlertDialogDescription>
               This will import:
               <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>25 pre-configured budget categories</li>
-                <li>2 sample accounts (Checking, Savings)</li>
-                <li>2 sample credit cards</li>
-                <li>Default settings</li>
+                <li>41 budget categories (40 regular + 1 system category "Transfer")</li>
+                <li>4 accounts (Wells Main Checking, Cash on Hand, Rental Checking, Rental Savings)</li>
+                <li>5 credit cards (Lowe's, Citi, Gold, Chase, Chase Freedom)</li>
+                <li>3 settings (Annual salary, Tax rate, Pre-tax deductions)</li>
               </ul>
+              <p className="mt-2 text-sm">
+                <strong>Total Monthly Budget:</strong> $8,114.08
+              </p>
               <p className="mt-2">
-                This is helpful for getting started. You can modify or delete any imported data later.
+                This imports your actual budget setup. You can modify or delete any imported data later.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
