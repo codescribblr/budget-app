@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { Loader2, Trash2, Database, Download, Key } from 'lucide-react';
+import { Loader2, Trash2, Database, Download, Key, ArrowLeft } from 'lucide-react';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -152,7 +152,17 @@ export default function SettingsPage() {
 
   return (
     <div className="container mx-auto py-8 max-w-4xl">
-      <h1 className="text-3xl font-bold mb-8">Account Settings</h1>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold">Account Settings</h1>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push('/')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Dashboard
+          </Button>
+        </div>
+      </div>
+
+      <Separator className="mb-8" />
 
       {/* Password Section */}
       <Card className="mb-6">
