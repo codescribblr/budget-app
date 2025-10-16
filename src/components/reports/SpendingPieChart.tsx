@@ -193,48 +193,55 @@ export default function SpendingPieChart({ transactions, categories, selectedCat
     return `${entry.name}: ${(percent * 100).toFixed(0)}%`;
   };
 
+  // Calculate dynamic height based on number of items
+  // Base height for chart (300px) + legend height (roughly 20px per item, minimum 40px)
+  const legendHeight = Math.max(40, chartData.length * 20);
+  const totalHeight = 300 + legendHeight;
+
   return (
-    <Card>
+    <Card className="flex flex-col">
       <CardHeader>
         <CardTitle>{chartTitle}</CardTitle>
         <CardDescription>{chartDescription}</CardDescription>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={400}>
-          <PieChart>
-            <Pie
-              data={chartData}
-              cx="50%"
-              cy="50%"
-              labelLine={false}
-              label={renderLabel}
-              outerRadius={120}
-              fill="#8884d8"
-              dataKey="value"
-              onClick={handlePieClick}
-              style={{ cursor: onCategoryClick && !selectedCategoryId ? 'pointer' : 'default' }}
-            >
-              {chartData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={entry.color}
-                  style={{
-                    cursor: entry.isOther || selectedCategoryId ? 'default' : (onCategoryClick ? 'pointer' : 'default')
-                  }}
-                />
-              ))}
-            </Pie>
-            <Tooltip content={<CustomTooltip />} />
-            <Legend
-              verticalAlign="bottom"
-              height={36}
-              formatter={(value, entry: any) => {
-                const percentage = (entry.payload.value / totalSpent) * 100;
-                return `${value} (${percentage.toFixed(1)}%)`;
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+      <CardContent className="flex-1">
+        <div style={{ width: '100%', height: `${totalHeight}px` }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={renderLabel}
+                outerRadius={120}
+                fill="#8884d8"
+                dataKey="value"
+                onClick={handlePieClick}
+                style={{ cursor: onCategoryClick && !selectedCategoryId ? 'pointer' : 'default' }}
+              >
+                {chartData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={entry.color}
+                    style={{
+                      cursor: entry.isOther || selectedCategoryId ? 'default' : (onCategoryClick ? 'pointer' : 'default')
+                    }}
+                  />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+              <Legend
+                verticalAlign="bottom"
+                wrapperStyle={{ paddingTop: '20px' }}
+                formatter={(value, entry: any) => {
+                  const percentage = (entry.payload.value / totalSpent) * 100;
+                  return `${value} (${percentage.toFixed(1)}%)`;
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   );
