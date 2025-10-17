@@ -120,7 +120,7 @@ export default function MergeMerchantGroupsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Merge Merchant Groups</DialogTitle>
           <DialogDescription>
