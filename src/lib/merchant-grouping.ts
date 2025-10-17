@@ -23,11 +23,12 @@ export function normalizeMerchantName(description: string): string {
     'DEBIT', 'CREDIT', 'PURCHASE', 'POS',
     'ONLINE', 'WEB', 'MOBILE', 'APP',
     'INC', 'LLC', 'LTD', 'CORP', 'CO',
-    '#', '*', '-', '_', '/',
   ];
-  
+
   noiseWords.forEach(word => {
-    const regex = new RegExp(`\\b${word}\\b`, 'g');
+    // Escape special regex characters in the word
+    const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${escapedWord}\\b`, 'g');
     normalized = normalized.replace(regex, '');
   });
 
@@ -144,11 +145,21 @@ export function findBestMatch(
   threshold: number = 0.85
 ): MatchResult | null {
   const normalized = normalizeMerchantName(description);
-  
+
+  // If normalization resulted in empty string, can't match
+  if (!normalized || normalized.trim().length === 0) {
+    return null;
+  }
+
   let bestMatch: MatchResult | null = null;
   let bestScore = 0;
 
   for (const group of existingGroups) {
+    // Skip groups with empty normalized patterns
+    if (!group.normalized_pattern || group.normalized_pattern.trim().length === 0) {
+      continue;
+    }
+
     // Check for exact normalized match first
     if (normalized === group.normalized_pattern) {
       return {
@@ -161,7 +172,7 @@ export function findBestMatch(
 
     // Calculate similarity
     const similarity = jaroWinklerSimilarity(normalized, group.normalized_pattern);
-    
+
     if (similarity > bestScore && similarity >= threshold) {
       bestScore = similarity;
       bestMatch = {
@@ -201,6 +212,13 @@ export function clusterMerchants(
     if (processed.has(description)) continue;
 
     const normalized = normalizeMerchantName(description);
+
+    // Skip if normalization resulted in empty string
+    if (!normalized || normalized.trim().length === 0) {
+      processed.add(description);
+      continue;
+    }
+
     const cluster: MerchantCluster = {
       displayName: extractDisplayName(description),
       normalizedPattern: normalized,
@@ -215,6 +233,12 @@ export function clusterMerchants(
       if (processed.has(otherDescription)) continue;
 
       const otherNormalized = normalizeMerchantName(otherDescription);
+
+      // Skip if normalization resulted in empty string
+      if (!otherNormalized || otherNormalized.trim().length === 0) {
+        continue;
+      }
+
       const similarity = jaroWinklerSimilarity(normalized, otherNormalized);
 
       if (similarity >= threshold) {
