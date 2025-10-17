@@ -1,6 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/utils';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
@@ -10,6 +12,15 @@ interface SpendingPieChartProps {
   categories: Category[];
   selectedCategoryId?: number | null;
   onCategoryClick?: (categoryId: number) => void;
+}
+
+interface MerchantGroupStat {
+  group_id: number;
+  display_name: string;
+  transaction_count: number;
+  total_amount: number;
+  average_amount: number;
+  patterns: string[];
 }
 
 // Color palette for the pie chart
@@ -22,53 +33,131 @@ const COLORS = [
 const OTHER_COLOR = '#9CA3AF'; // Gray color for "Other"
 
 export default function SpendingPieChart({ transactions, categories, selectedCategoryId, onCategoryClick }: SpendingPieChartProps) {
+  const [merchantGroups, setMerchantGroups] = useState<MerchantGroupStat[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+
   let chartData: any[] = [];
   let totalSpent = 0;
   let chartTitle = 'Spending Distribution';
   let chartDescription = '';
+  let isGrouped = false;
+
+  // Fetch merchant groups when showing merchant breakdown
+  useEffect(() => {
+    const fetchMerchantGroups = async () => {
+      if (!selectedCategoryId || transactions.length === 0) {
+        setMerchantGroups([]);
+        return;
+      }
+
+      setLoadingGroups(true);
+      try {
+        // Get transactions for the selected category
+        const categoryTransactionIds = transactions
+          .filter(t => t.splits.some(s => s.category_id === selectedCategoryId))
+          .map(t => t.id);
+
+        if (categoryTransactionIds.length === 0) {
+          setMerchantGroups([]);
+          return;
+        }
+
+        const response = await fetch('/api/merchant-groups/stats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactionIds: categoryTransactionIds }),
+        });
+
+        if (response.ok) {
+          const stats = await response.json();
+          setMerchantGroups(stats);
+        }
+      } catch (error) {
+        console.error('Error fetching merchant groups:', error);
+      } finally {
+        setLoadingGroups(false);
+      }
+    };
+
+    fetchMerchantGroups();
+  }, [selectedCategoryId, transactions]);
 
   if (selectedCategoryId) {
     // Show spending by merchant for the selected category
-    const merchantSpending = new Map<string, number>();
+    if (merchantGroups.length > 0) {
+      // Use merchant groups
+      isGrouped = true;
+      const merchantsArray = merchantGroups.map(group => ({
+        name: group.display_name,
+        value: group.total_amount,
+      }));
 
-    transactions.forEach(transaction => {
-      transaction.splits.forEach(split => {
-        if (split.category_id === selectedCategoryId) {
-          const current = merchantSpending.get(transaction.description) || 0;
-          merchantSpending.set(transaction.description, current + split.amount);
-        }
+      totalSpent = merchantsArray.reduce((sum, m) => sum + m.value, 0);
+
+      // Group items under 4% into "Other"
+      const threshold = totalSpent * 0.04;
+      const mainItems = merchantsArray.filter(m => m.value >= threshold);
+      const otherItems = merchantsArray.filter(m => m.value < threshold);
+
+      chartData = mainItems.map((item, index) => ({
+        ...item,
+        color: COLORS[index % COLORS.length],
+        isOther: false,
+      }));
+
+      if (otherItems.length > 0) {
+        const otherTotal = otherItems.reduce((sum, m) => sum + m.value, 0);
+        chartData.push({
+          name: 'Other',
+          value: otherTotal,
+          color: OTHER_COLOR,
+          isOther: true,
+          otherItems: otherItems,
+        });
+      }
+    } else {
+      // Fallback to ungrouped merchants
+      const merchantSpending = new Map<string, number>();
+
+      transactions.forEach(transaction => {
+        transaction.splits.forEach(split => {
+          if (split.category_id === selectedCategoryId) {
+            const current = merchantSpending.get(transaction.description) || 0;
+            merchantSpending.set(transaction.description, current + split.amount);
+          }
+        });
       });
-    });
 
-    const merchantsArray = Array.from(merchantSpending.entries())
-      .map(([description, amount]) => ({
-        name: description,
-        value: amount,
-      }))
-      .sort((a, b) => b.value - a.value);
+      const merchantsArray = Array.from(merchantSpending.entries())
+        .map(([description, amount]) => ({
+          name: description,
+          value: amount,
+        }))
+        .sort((a, b) => b.value - a.value);
 
-    totalSpent = merchantsArray.reduce((sum, m) => sum + m.value, 0);
+      totalSpent = merchantsArray.reduce((sum, m) => sum + m.value, 0);
 
-    // Group items under 4% into "Other"
-    const threshold = totalSpent * 0.04;
-    const mainItems = merchantsArray.filter(m => m.value >= threshold);
-    const otherItems = merchantsArray.filter(m => m.value < threshold);
+      // Group items under 4% into "Other"
+      const threshold = totalSpent * 0.04;
+      const mainItems = merchantsArray.filter(m => m.value >= threshold);
+      const otherItems = merchantsArray.filter(m => m.value < threshold);
 
-    chartData = mainItems.map((item, index) => ({
-      ...item,
-      color: COLORS[index % COLORS.length],
-      isOther: false,
-    }));
+      chartData = mainItems.map((item, index) => ({
+        ...item,
+        color: COLORS[index % COLORS.length],
+        isOther: false,
+      }));
 
-    if (otherItems.length > 0) {
-      const otherTotal = otherItems.reduce((sum, m) => sum + m.value, 0);
-      chartData.push({
-        name: 'Other',
-        value: otherTotal,
-        color: OTHER_COLOR,
-        isOther: true,
-        otherItems: otherItems,
-      });
+      if (otherItems.length > 0) {
+        const otherTotal = otherItems.reduce((sum, m) => sum + m.value, 0);
+        chartData.push({
+          name: 'Other',
+          value: otherTotal,
+          color: OTHER_COLOR,
+          isOther: true,
+          otherItems: otherItems,
+        });
+      }
     }
 
     const selectedCategory = categories.find(c => c.id === selectedCategoryId);
@@ -202,7 +291,12 @@ export default function SpendingPieChart({ transactions, categories, selectedCat
     <Card className="flex flex-col">
       <CardHeader>
         <CardTitle>{chartTitle}</CardTitle>
-        <CardDescription>{chartDescription}</CardDescription>
+        <CardDescription>
+          {chartDescription}
+          {isGrouped && selectedCategoryId && (
+            <Badge variant="secondary" className="ml-2">Grouped</Badge>
+          )}
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
         <div style={{ width: '100%', height: `${totalHeight}px` }}>

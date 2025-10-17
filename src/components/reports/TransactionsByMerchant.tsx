@@ -1,7 +1,18 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
 import type { TransactionWithSplits, Category } from '@/lib/types';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { ChevronRight } from 'lucide-react';
 
 interface TransactionsByMerchantProps {
   transactions: TransactionWithSplits[];
@@ -9,7 +20,20 @@ interface TransactionsByMerchantProps {
   includeSystemCategories: boolean;
 }
 
+interface MerchantGroupStat {
+  group_id: number;
+  display_name: string;
+  transaction_count: number;
+  total_amount: number;
+  average_amount: number;
+  patterns: string[];
+}
+
 export default function TransactionsByMerchant({ transactions, categories, includeSystemCategories }: TransactionsByMerchantProps) {
+  const [merchantGroups, setMerchantGroups] = useState<MerchantGroupStat[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState<MerchantGroupStat | null>(null);
+  const [showGroupDetails, setShowGroupDetails] = useState(false);
   // Filter transactions based on system category toggle
   const filteredTransactions = includeSystemCategories
     ? transactions
@@ -21,7 +45,38 @@ export default function TransactionsByMerchant({ transactions, categories, inclu
         });
       });
 
-  // Group transactions by description (merchant)
+  // Fetch merchant group stats when filtered transactions change
+  useEffect(() => {
+    const fetchMerchantGroups = async () => {
+      if (filteredTransactions.length === 0) {
+        setMerchantGroups([]);
+        return;
+      }
+
+      setLoadingGroups(true);
+      try {
+        const transactionIds = filteredTransactions.map(t => t.id);
+        const response = await fetch('/api/merchant-groups/stats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactionIds }),
+        });
+
+        if (response.ok) {
+          const stats = await response.json();
+          setMerchantGroups(stats);
+        }
+      } catch (error) {
+        console.error('Error fetching merchant groups:', error);
+      } finally {
+        setLoadingGroups(false);
+      }
+    };
+
+    fetchMerchantGroups();
+  }, [filteredTransactions]);
+
+  // Group transactions by description (merchant) - fallback for ungrouped
   const merchantSpending = new Map<string, { count: number; total: number }>();
 
   filteredTransactions.forEach(transaction => {
@@ -33,19 +88,28 @@ export default function TransactionsByMerchant({ transactions, categories, inclu
   });
 
   // Convert to array and sort by total spending
-  const merchantsArray = Array.from(merchantSpending.entries())
+  const ungroupedMerchants = Array.from(merchantSpending.entries())
     .map(([description, data]) => ({
       description,
       count: data.count,
       total: data.total,
       average: data.total / data.count,
     }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 10); // Top 10
+    .sort((a, b) => b.total - a.total);
+
+  // Get top 10 merchant groups or fall back to ungrouped
+  const displayMerchants = merchantGroups.length > 0
+    ? merchantGroups.slice(0, 10)
+    : ungroupedMerchants.slice(0, 10);
 
   const totalSpent = filteredTransactions.reduce((sum, t) => sum + t.total_amount, 0);
 
-  if (merchantsArray.length === 0) {
+  const handleGroupClick = (group: MerchantGroupStat) => {
+    setSelectedGroup(group);
+    setShowGroupDetails(true);
+  };
+
+  if (displayMerchants.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -56,50 +120,135 @@ export default function TransactionsByMerchant({ transactions, categories, inclu
     );
   }
 
+  const isGrouped = merchantGroups.length > 0;
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Top Merchants</CardTitle>
-        <CardDescription>
-          Top 10 by total spending
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Merchant/Description</TableHead>
-              <TableHead className="text-right">Transactions</TableHead>
-              <TableHead className="text-right">Average</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {merchantsArray.map((merchant, index) => (
-              <TableRow key={index}>
-                <TableCell className="font-medium">
-                  <div className="flex items-center justify-between">
-                    <span>{merchant.description}</span>
-                    <span className="text-muted-foreground ml-2 font-semibold">
-                      {formatCurrency(merchant.total)}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {merchant.count}
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {formatCurrency(merchant.average)}
-                </TableCell>
-                <TableCell className="text-right font-semibold">
-                  {formatCurrency(merchant.total)}
-                </TableCell>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Top Merchants</CardTitle>
+          <CardDescription>
+            {isGrouped ? (
+              <>
+                Top 10 merchant groups by total spending
+                <Badge variant="secondary" className="ml-2">Grouped</Badge>
+              </>
+            ) : (
+              'Top 10 by total spending (ungrouped)'
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Merchant{isGrouped && ' Group'}</TableHead>
+                <TableHead className="text-right">Transactions</TableHead>
+                <TableHead className="text-right">Average</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                {isGrouped && <TableHead className="w-10"></TableHead>}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+            </TableHeader>
+            <TableBody>
+              {isGrouped ? (
+                displayMerchants.map((group: any) => (
+                  <TableRow
+                    key={group.group_id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleGroupClick(group)}
+                  >
+                    <TableCell className="font-medium">
+                      <div className="flex items-center justify-between">
+                        <span>{group.display_name}</span>
+                        <span className="text-muted-foreground ml-2 font-semibold">
+                          {formatCurrency(group.total_amount)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {group.transaction_count}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {formatCurrency(group.average_amount)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {formatCurrency(group.total_amount)}
+                    </TableCell>
+                    <TableCell>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                displayMerchants.map((merchant: any, index) => (
+                  <TableRow key={index}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center justify-between">
+                        <span>{merchant.description}</span>
+                        <span className="text-muted-foreground ml-2 font-semibold">
+                          {formatCurrency(merchant.total)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {merchant.count}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {formatCurrency(merchant.average)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {formatCurrency(merchant.total)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Group Details Dialog */}
+      <Dialog open={showGroupDetails} onOpenChange={setShowGroupDetails}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{selectedGroup?.display_name}</DialogTitle>
+            <DialogDescription>
+              Merchant group details and transaction patterns
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedGroup && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <div className="text-sm text-muted-foreground">Transactions</div>
+                  <div className="text-2xl font-bold">{selectedGroup.transaction_count}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Average</div>
+                  <div className="text-2xl font-bold">{formatCurrency(selectedGroup.average_amount)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Total</div>
+                  <div className="text-2xl font-bold">{formatCurrency(selectedGroup.total_amount)}</div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-2">Transaction Patterns ({selectedGroup.patterns.length})</h4>
+                <div className="space-y-1 max-h-60 overflow-y-auto">
+                  {selectedGroup.patterns.map((pattern, idx) => (
+                    <div key={idx} className="text-sm p-2 bg-muted rounded">
+                      {pattern}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

@@ -76,6 +76,108 @@ export async function getMerchantGroupsWithStats(): Promise<MerchantGroupWithSta
 }
 
 /**
+ * Get merchant group statistics for reporting
+ * Groups transactions by merchant group and returns aggregated data
+ */
+export async function getMerchantGroupStats(
+  transactionIds?: number[]
+): Promise<Array<{
+  group_id: number;
+  display_name: string;
+  transaction_count: number;
+  total_amount: number;
+  average_amount: number;
+  patterns: string[];
+}>> {
+  const supabase = await createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  // Get all merchant mappings
+  const { data: mappings, error: mappingsError } = await supabase
+    .from('merchant_mappings')
+    .select('merchant_group_id, pattern')
+    .eq('user_id', user.id)
+    .not('merchant_group_id', 'is', null);
+
+  if (mappingsError) throw mappingsError;
+  if (!mappings || mappings.length === 0) return [];
+
+  // Build pattern to group mapping
+  const patternToGroup = new Map<string, number>();
+  mappings.forEach(m => {
+    if (m.merchant_group_id) {
+      patternToGroup.set(m.pattern, m.merchant_group_id);
+    }
+  });
+
+  // Get transactions
+  let query = supabase
+    .from('transactions')
+    .select('id, description, total_amount')
+    .eq('user_id', user.id);
+
+  if (transactionIds && transactionIds.length > 0) {
+    query = query.in('id', transactionIds);
+  }
+
+  const { data: transactions, error: transactionsError } = await query;
+  if (transactionsError) throw transactionsError;
+  if (!transactions) return [];
+
+  // Group transactions by merchant group
+  const groupStats = new Map<number, {
+    transaction_count: number;
+    total_amount: number;
+    patterns: Set<string>;
+  }>();
+
+  transactions.forEach(t => {
+    const groupId = patternToGroup.get(t.description);
+    if (groupId) {
+      const current = groupStats.get(groupId) || {
+        transaction_count: 0,
+        total_amount: 0,
+        patterns: new Set<string>(),
+      };
+
+      current.transaction_count++;
+      current.total_amount += t.total_amount;
+      current.patterns.add(t.description);
+
+      groupStats.set(groupId, current);
+    }
+  });
+
+  // Get group details
+  const groupIds = Array.from(groupStats.keys());
+  if (groupIds.length === 0) return [];
+
+  const { data: groups, error: groupsError } = await supabase
+    .from('merchant_groups')
+    .select('id, display_name')
+    .eq('user_id', user.id)
+    .in('id', groupIds);
+
+  if (groupsError) throw groupsError;
+  if (!groups) return [];
+
+  // Combine stats with group details
+  return groups.map(group => {
+    const stats = groupStats.get(group.id)!;
+    return {
+      group_id: group.id,
+      display_name: group.display_name,
+      transaction_count: stats.transaction_count,
+      total_amount: stats.total_amount,
+      average_amount: stats.total_amount / stats.transaction_count,
+      patterns: Array.from(stats.patterns),
+    };
+  }).sort((a, b) => b.total_amount - a.total_amount);
+}
+
+/**
  * Get a single merchant group by ID
  */
 export async function getMerchantGroup(id: number): Promise<MerchantGroup | null> {
