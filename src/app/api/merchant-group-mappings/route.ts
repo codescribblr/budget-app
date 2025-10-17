@@ -80,6 +80,34 @@ export async function PUT(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, merchant_group_id, is_automatic, confidence_score } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'id is required' },
+        { status: 400 }
+      );
+    }
+
+    const updates: any = {};
+    if (merchant_group_id !== undefined) updates.merchant_group_id = merchant_group_id;
+    if (is_automatic !== undefined) updates.is_automatic = is_automatic;
+    if (confidence_score !== undefined) updates.confidence_score = confidence_score;
+
+    const mapping = await updateMerchantMapping(id, updates);
+    return NextResponse.json(mapping);
+  } catch (error) {
+    console.error('Error updating merchant group mapping:', error);
+    return NextResponse.json(
+      { error: 'Failed to update merchant group mapping' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(request: Request) {
   try {
     const { id } = await request.json();
