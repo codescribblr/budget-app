@@ -8,14 +8,20 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { ArrowLeft, DollarSign, TrendingUp, Calculator, Save } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+
+type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly' | 'quarterly' | 'annually';
 
 interface IncomeSettings {
   annual_income: number;
   tax_rate: number;
   pre_tax_deductions_monthly: number;
+  pay_frequency: PayFrequency;
+  include_extra_paychecks: boolean;
 }
 
 interface BudgetSummary {
@@ -34,13 +40,17 @@ export default function IncomePage() {
     annual_income: 0,
     tax_rate: 0,
     pre_tax_deductions_monthly: 0,
+    pay_frequency: 'monthly',
+    include_extra_paychecks: true,
   });
-  
+
   // Scenario settings (for playing with numbers)
   const [scenarioSettings, setScenarioSettings] = useState<IncomeSettings>({
     annual_income: 0,
     tax_rate: 0,
     pre_tax_deductions_monthly: 0,
+    pay_frequency: 'monthly',
+    include_extra_paychecks: true,
   });
   
   const [monthlyBudget, setMonthlyBudget] = useState(0);
@@ -63,6 +73,8 @@ export default function IncomePage() {
         annual_income: parseFloat(settingsData.annual_salary || settingsData.annual_income || '0'),
         tax_rate: parseFloat(settingsData.tax_rate || '0'),
         pre_tax_deductions_monthly: parseFloat(settingsData.pre_tax_deductions_monthly || '0'),
+        pay_frequency: (settingsData.pay_frequency || 'monthly') as PayFrequency,
+        include_extra_paychecks: settingsData.include_extra_paychecks === 'true' || settingsData.include_extra_paychecks === true,
       };
       
       setCurrentSettings(settings);
@@ -86,12 +98,50 @@ export default function IncomePage() {
   };
 
   const calculateBudget = (settings: IncomeSettings): BudgetSummary => {
-    const monthly_gross_income = settings.annual_income / 12;
+    // Calculate monthly gross income based on pay frequency
+    let monthly_gross_income: number;
+
+    switch (settings.pay_frequency) {
+      case 'weekly':
+        // 52 weeks per year
+        monthly_gross_income = (settings.annual_income / 52) * (52 / 12);
+        break;
+      case 'bi-weekly':
+        // 26 pay periods per year
+        if (settings.include_extra_paychecks) {
+          // Include all 26 paychecks in budget (average over 12 months)
+          monthly_gross_income = settings.annual_income / 12;
+        } else {
+          // Only budget for 24 paychecks (2 per month)
+          // The 2 extra paychecks per year are "bonus" money
+          monthly_gross_income = (settings.annual_income / 26) * 2;
+        }
+        break;
+      case 'semi-monthly':
+        // 24 pay periods per year (2 per month)
+        monthly_gross_income = (settings.annual_income / 24) * 2;
+        break;
+      case 'monthly':
+        // 12 pay periods per year
+        monthly_gross_income = settings.annual_income / 12;
+        break;
+      case 'quarterly':
+        // 4 pay periods per year
+        monthly_gross_income = (settings.annual_income / 4) / 3;
+        break;
+      case 'annually':
+        // 1 pay period per year
+        monthly_gross_income = settings.annual_income / 12;
+        break;
+      default:
+        monthly_gross_income = settings.annual_income / 12;
+    }
+
     const annual_taxable_income = settings.annual_income - (settings.pre_tax_deductions_monthly * 12);
     const taxes_per_month = (annual_taxable_income * settings.tax_rate) / 12;
     const monthly_net_income = monthly_gross_income - taxes_per_month - settings.pre_tax_deductions_monthly;
     const excess_deficit = monthly_net_income - monthlyBudget;
-    
+
     return {
       monthly_gross_income,
       taxes_per_month,
@@ -113,6 +163,8 @@ export default function IncomePage() {
         { key: 'annual_salary', value: currentSettings.annual_income.toString() }, // Keep for backwards compatibility
         { key: 'tax_rate', value: currentSettings.tax_rate.toString() },
         { key: 'pre_tax_deductions_monthly', value: currentSettings.pre_tax_deductions_monthly.toString() },
+        { key: 'pay_frequency', value: currentSettings.pay_frequency },
+        { key: 'include_extra_paychecks', value: currentSettings.include_extra_paychecks.toString() },
       ];
       
       const response = await fetch('/api/settings', {
@@ -184,7 +236,7 @@ export default function IncomePage() {
                 Configure your annual income, tax rate, and pre-tax deductions
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="annual_income">Annual Income</Label>
@@ -235,7 +287,71 @@ export default function IncomePage() {
                   />
                 </div>
               </div>
-              
+
+              <Separator />
+
+              {/* Pay Frequency Settings */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium">Pay Frequency</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="pay_frequency">How often are you paid?</Label>
+                    <Select
+                      value={currentSettings.pay_frequency}
+                      onValueChange={(value: PayFrequency) =>
+                        setCurrentSettings({
+                          ...currentSettings,
+                          pay_frequency: value,
+                        })
+                      }
+                    >
+                      <SelectTrigger id="pay_frequency">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="weekly">Weekly (52 paychecks/year)</SelectItem>
+                        <SelectItem value="bi-weekly">Bi-Weekly (26 paychecks/year)</SelectItem>
+                        <SelectItem value="semi-monthly">Semi-Monthly (24 paychecks/year)</SelectItem>
+                        <SelectItem value="monthly">Monthly (12 paychecks/year)</SelectItem>
+                        <SelectItem value="quarterly">Quarterly (4 paychecks/year)</SelectItem>
+                        <SelectItem value="annually">Annually (1 paycheck/year)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {currentSettings.pay_frequency === 'bi-weekly' && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Bi-Weekly Budget Options</Label>
+                      <div className="flex items-start space-x-2 pt-2">
+                        <Checkbox
+                          id="include_extra_paychecks"
+                          checked={currentSettings.include_extra_paychecks}
+                          onCheckedChange={(checked) =>
+                            setCurrentSettings({
+                              ...currentSettings,
+                              include_extra_paychecks: checked === true,
+                            })
+                          }
+                        />
+                        <div className="grid gap-1.5 leading-none">
+                          <label
+                            htmlFor="include_extra_paychecks"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                          >
+                            Include extra paychecks in budget
+                          </label>
+                          <p className="text-xs text-muted-foreground">
+                            {currentSettings.include_extra_paychecks
+                              ? 'Budget includes all 26 paychecks averaged over 12 months'
+                              : 'Budget only includes 24 paychecks (2/month). The 2 extra paychecks per year are bonus money.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="flex justify-end">
                 <Button onClick={handleSaveSettings} disabled={isSaving}>
                   <Save className="mr-2 h-4 w-4" />
@@ -339,7 +455,7 @@ export default function IncomePage() {
                 Adjust the numbers below to see how changes would affect your budget
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="scenario_annual_income">Annual Income</Label>
@@ -387,7 +503,71 @@ export default function IncomePage() {
                   />
                 </div>
               </div>
-              
+
+              <Separator />
+
+              {/* Pay Frequency Settings */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium">Pay Frequency</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="scenario_pay_frequency">How often are you paid?</Label>
+                    <Select
+                      value={scenarioSettings.pay_frequency}
+                      onValueChange={(value: PayFrequency) =>
+                        setScenarioSettings({
+                          ...scenarioSettings,
+                          pay_frequency: value,
+                        })
+                      }
+                    >
+                      <SelectTrigger id="scenario_pay_frequency">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="weekly">Weekly (52 paychecks/year)</SelectItem>
+                        <SelectItem value="bi-weekly">Bi-Weekly (26 paychecks/year)</SelectItem>
+                        <SelectItem value="semi-monthly">Semi-Monthly (24 paychecks/year)</SelectItem>
+                        <SelectItem value="monthly">Monthly (12 paychecks/year)</SelectItem>
+                        <SelectItem value="quarterly">Quarterly (4 paychecks/year)</SelectItem>
+                        <SelectItem value="annually">Annually (1 paycheck/year)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {scenarioSettings.pay_frequency === 'bi-weekly' && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Bi-Weekly Budget Options</Label>
+                      <div className="flex items-start space-x-2 pt-2">
+                        <Checkbox
+                          id="scenario_include_extra_paychecks"
+                          checked={scenarioSettings.include_extra_paychecks}
+                          onCheckedChange={(checked) =>
+                            setScenarioSettings({
+                              ...scenarioSettings,
+                              include_extra_paychecks: checked === true,
+                            })
+                          }
+                        />
+                        <div className="grid gap-1.5 leading-none">
+                          <label
+                            htmlFor="scenario_include_extra_paychecks"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                          >
+                            Include extra paychecks in budget
+                          </label>
+                          <p className="text-xs text-muted-foreground">
+                            {scenarioSettings.include_extra_paychecks
+                              ? 'Budget includes all 26 paychecks averaged over 12 months'
+                              : 'Budget only includes 24 paychecks (2/month). The 2 extra paychecks per year are bonus money.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="flex justify-end">
                 <Button variant="outline" onClick={handleResetScenario}>
                   Reset to Current

@@ -94,9 +94,11 @@ export const DEFAULT_SETTINGS = [
   { key: 'annual_salary', value: '163000.00' }, // Keep for backwards compatibility
   { key: 'tax_rate', value: '0.2122' },
   { key: 'pre_tax_deductions_monthly', value: '2388.13' },
+  { key: 'pay_frequency', value: 'monthly' },
+  { key: 'include_extra_paychecks', value: 'true' },
   // Note: The following are calculated, not stored:
   // - taxes_per_month = ((annual_income - (pre_tax_deductions_monthly * 12)) * tax_rate) / 12
-  // - monthly_gross_income = annual_income / 12
+  // - monthly_gross_income = varies based on pay_frequency and include_extra_paychecks
   // - monthly_net_income = monthly_gross_income - taxes_per_month - pre_tax_deductions_monthly
   // - monthly_budget = sum of all category monthly_amounts
 ];
