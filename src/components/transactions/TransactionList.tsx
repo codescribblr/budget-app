@@ -58,6 +58,7 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Description</TableHead>
+              <TableHead>Merchant</TableHead>
               <TableHead>Categories</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -70,6 +71,15 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
                   {formatDate(transaction.date)}
                 </TableCell>
                 <TableCell className="font-medium">{transaction.description}</TableCell>
+                <TableCell>
+                  {transaction.merchant_name ? (
+                    <Badge variant="outline" className="text-xs">
+                      {transaction.merchant_name}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
                     {transaction.splits.map((split) => (

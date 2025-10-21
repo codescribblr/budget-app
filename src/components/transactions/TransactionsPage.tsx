@@ -78,6 +78,11 @@ export default function TransactionsPage() {
         return true;
       }
 
+      // Search in merchant name
+      if (transaction.merchant_name && fuzzyMatch(transaction.merchant_name, searchQuery)) {
+        return true;
+      }
+
       // Search in category names
       const categoryNames = transaction.splits
         .map(split => {

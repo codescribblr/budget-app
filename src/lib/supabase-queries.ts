@@ -507,10 +507,15 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
   const { supabase } = await getAuthenticatedUser();
 
-  // Get all transactions
+  // Get all transactions with merchant group info
   const { data: transactions, error: txError } = await supabase
     .from('transactions')
-    .select('*')
+    .select(`
+      *,
+      merchant_groups (
+        display_name
+      )
+    `)
     .order('date', { ascending: false })
     .order('created_at', { ascending: false });
 
@@ -519,7 +524,7 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
   // Get all splits with category names
   const transactionsWithSplits: TransactionWithSplits[] = [];
 
-  for (const transaction of transactions as Transaction[]) {
+  for (const transaction of transactions as any[]) {
     const { data: splits, error: splitError } = await supabase
       .from('transaction_splits')
       .select(`
@@ -539,7 +544,14 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
     }));
 
     transactionsWithSplits.push({
-      ...transaction,
+      id: transaction.id,
+      date: transaction.date,
+      description: transaction.description,
+      total_amount: transaction.total_amount,
+      merchant_group_id: transaction.merchant_group_id,
+      created_at: transaction.created_at,
+      updated_at: transaction.updated_at,
+      merchant_name: transaction.merchant_groups?.display_name || null,
       splits: formattedSplits,
     });
   }
@@ -550,10 +562,15 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
 export async function getTransactionById(id: number): Promise<TransactionWithSplits | null> {
   const { supabase } = await getAuthenticatedUser();
 
-  // Get transaction
+  // Get transaction with merchant group info
   const { data: transaction, error: txError } = await supabase
     .from('transactions')
-    .select('*')
+    .select(`
+      *,
+      merchant_groups (
+        display_name
+      )
+    `)
     .eq('id', id)
     .single();
 
@@ -582,7 +599,14 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
   }));
 
   return {
-    ...transaction,
+    id: transaction.id,
+    date: transaction.date,
+    description: transaction.description,
+    total_amount: transaction.total_amount,
+    merchant_group_id: transaction.merchant_group_id,
+    created_at: transaction.created_at,
+    updated_at: transaction.updated_at,
+    merchant_name: (transaction as any).merchant_groups?.display_name || null,
     splits: formattedSplits,
   } as TransactionWithSplits;
 }
@@ -663,6 +687,7 @@ export async function updateTransaction(
   data: {
     date?: string;
     description?: string;
+    merchant_group_id?: number | null;
     splits?: { category_id: number; amount: number }[];
   }
 ): Promise<TransactionWithSplits | null> {
@@ -694,6 +719,7 @@ export async function updateTransaction(
   // Prepare new data
   const newDate = data.date ?? existingTransaction.date;
   const newDescription = data.description ?? existingTransaction.description;
+  const newMerchantGroupId = data.merchant_group_id !== undefined ? data.merchant_group_id : existingTransaction.merchant_group_id;
   const newSplits = data.splits ?? existingTransaction.splits;
   const newTotalAmount = newSplits.reduce((sum, split) => sum + split.amount, 0);
 
@@ -703,6 +729,7 @@ export async function updateTransaction(
     .update({
       date: newDate,
       description: newDescription,
+      merchant_group_id: newMerchantGroupId,
       total_amount: newTotalAmount,
       updated_at: new Date().toISOString(),
     })

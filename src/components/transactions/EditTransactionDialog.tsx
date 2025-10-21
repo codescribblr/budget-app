@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/utils';
-import type { Category, TransactionWithSplits } from '@/lib/types';
+import type { Category, TransactionWithSplits, MerchantGroup } from '@/lib/types';
 
 interface EditTransactionDialogProps {
   isOpen: boolean;
@@ -29,12 +29,15 @@ export default function EditTransactionDialog({
 }: EditTransactionDialogProps) {
   const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
+  const [merchantGroupId, setMerchantGroupId] = useState<number | null>(null);
+  const [merchantGroups, setMerchantGroups] = useState<MerchantGroup[]>([]);
   const [splits, setSplits] = useState<Split[]>([]);
 
   useEffect(() => {
     if (transaction) {
       setDate(transaction.date.split('T')[0]);
       setDescription(transaction.description);
+      setMerchantGroupId(transaction.merchant_group_id || null);
       setSplits(
         transaction.splits.map((split) => ({
           category_id: split.category_id,
@@ -43,6 +46,23 @@ export default function EditTransactionDialog({
       );
     }
   }, [transaction]);
+
+  useEffect(() => {
+    // Fetch merchant groups
+    const fetchMerchantGroups = async () => {
+      try {
+        const response = await fetch('/api/merchant-groups');
+        const data = await response.json();
+        setMerchantGroups(data);
+      } catch (error) {
+        console.error('Error fetching merchant groups:', error);
+      }
+    };
+
+    if (isOpen) {
+      fetchMerchantGroups();
+    }
+  }, [isOpen]);
 
   const handleAddSplit = () => {
     setSplits([...splits, { category_id: 0, amount: '' }]);
@@ -83,6 +103,7 @@ export default function EditTransactionDialog({
         body: JSON.stringify({
           date,
           description,
+          merchant_group_id: merchantGroupId,
           splits: validSplits.map(s => ({
             category_id: s.category_id,
             amount: parseFloat(s.amount),
@@ -125,6 +146,26 @@ export default function EditTransactionDialog({
                 placeholder="e.g., Grocery shopping at Walmart"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="merchant">Merchant (Optional)</Label>
+            <Select
+              value={merchantGroupId?.toString() || 'none'}
+              onValueChange={(value) => setMerchantGroupId(value === 'none' ? null : parseInt(value))}
+            >
+              <SelectTrigger id="merchant">
+                <SelectValue placeholder="Select merchant" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No merchant</SelectItem>
+                {merchantGroups.map((group) => (
+                  <SelectItem key={group.id} value={group.id.toString()}>
+                    {group.display_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-3">

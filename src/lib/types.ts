@@ -39,6 +39,7 @@ export interface Transaction {
   date: string;
   description: string;
   total_amount: number;
+  merchant_group_id?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -157,6 +158,7 @@ export interface CreateTransactionRequest {
 export interface UpdateTransactionRequest {
   date?: string;
   description?: string;
+  merchant_group_id?: number | null;
   splits?: {
     category_id: number;
     amount: number;
@@ -176,6 +178,7 @@ export interface UpdatePendingCheckRequest {
 // View models with joined data
 export interface TransactionWithSplits extends Transaction {
   splits: (TransactionSplit & { category_name: string })[];
+  merchant_name?: string | null;
 }
 
 // Dashboard summary
