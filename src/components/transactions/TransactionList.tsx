@@ -36,7 +36,6 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
@@ -56,24 +55,26 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Merchant</TableHead>
-              <TableHead>Categories</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="w-20">Date</TableHead>
+              <TableHead className="min-w-[200px]">Description</TableHead>
+              <TableHead className="w-32">Merchant</TableHead>
+              <TableHead className="min-w-[150px]">Categories</TableHead>
+              <TableHead className="text-right w-24">Amount</TableHead>
+              <TableHead className="text-right w-32">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {transactions.map((transaction) => (
               <TableRow key={transaction.id}>
-                <TableCell className="whitespace-nowrap">
+                <TableCell className="whitespace-nowrap text-xs">
                   {formatDate(transaction.date)}
                 </TableCell>
-                <TableCell className="font-medium">{transaction.description}</TableCell>
-                <TableCell>
+                <TableCell className="font-medium text-sm max-w-[250px] truncate" title={transaction.description}>
+                  {transaction.description}
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
                   {transaction.merchant_name ? (
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-xs max-w-[120px] truncate" title={transaction.merchant_name}>
                       {transaction.merchant_name}
                     </Badge>
                   ) : (
@@ -83,21 +84,22 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
                     {transaction.splits.map((split) => (
-                      <Badge key={split.id} variant="secondary" className="text-xs">
+                      <Badge key={split.id} variant="secondary" className="text-xs whitespace-nowrap">
                         {split.category_name}: {formatCurrency(split.amount)}
                       </Badge>
                     ))}
                   </div>
                 </TableCell>
-                <TableCell className="text-right font-semibold">
+                <TableCell className="text-right font-semibold text-sm whitespace-nowrap">
                   {formatCurrency(transaction.total_amount)}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-end gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleEdit(transaction)}
+                      className="h-8 px-2 text-xs"
                     >
                       Edit
                     </Button>
@@ -105,6 +107,7 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDelete(transaction.id)}
+                      className="h-8 px-2 text-xs"
                     >
                       Delete
                     </Button>
