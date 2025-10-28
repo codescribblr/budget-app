@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -14,6 +13,8 @@ interface SpendingPieChartProps {
   selectedCategoryId?: number | null;
   onCategoryClick?: (categoryId: number) => void;
   loading?: boolean;
+  merchantStats?: MerchantGroupStat[];
+  loadingMerchantStats?: boolean;
 }
 
 interface MerchantGroupStat {
@@ -34,9 +35,15 @@ const COLORS = [
 
 const OTHER_COLOR = '#9CA3AF'; // Gray color for "Other"
 
-export default function SpendingPieChart({ transactions, categories, selectedCategoryId, onCategoryClick, loading = false }: SpendingPieChartProps) {
-  const [merchantGroups, setMerchantGroups] = useState<MerchantGroupStat[]>([]);
-  const [loadingMerchants, setLoadingMerchants] = useState(false);
+export default function SpendingPieChart({
+  transactions,
+  categories,
+  selectedCategoryId,
+  onCategoryClick,
+  loading = false,
+  merchantStats = [],
+  loadingMerchantStats = false
+}: SpendingPieChartProps) {
 
   let chartData: any[] = [];
   let totalSpent = 0;
@@ -44,54 +51,25 @@ export default function SpendingPieChart({ transactions, categories, selectedCat
   let chartDescription = '';
   let isGrouped = false;
 
-  // Fetch merchant groups when showing merchant breakdown
-  useEffect(() => {
-    const fetchMerchantGroups = async () => {
-      if (!selectedCategoryId || transactions.length === 0) {
-        setMerchantGroups([]);
-        setLoadingMerchants(false);
-        return;
-      }
-
-      setLoadingMerchants(true);
-      try {
-        // Get transactions for the selected category
-        const categoryTransactionIds = transactions
-          .filter(t => t.splits.some(s => s.category_id === selectedCategoryId))
-          .map(t => t.id);
-
-        if (categoryTransactionIds.length === 0) {
-          setMerchantGroups([]);
-          setLoadingMerchants(false);
-          return;
-        }
-
-        const response = await fetch('/api/merchant-groups/stats', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transactionIds: categoryTransactionIds }),
-        });
-
-        if (response.ok) {
-          const stats = await response.json();
-          setMerchantGroups(stats);
-        }
-      } catch (error) {
-        console.error('Error fetching merchant groups:', error);
-      } finally {
-        setLoadingMerchants(false);
-      }
-    };
-
-    fetchMerchantGroups();
-  }, [selectedCategoryId, transactions]);
+  // Filter merchant stats for the selected category if applicable
+  const categoryMerchantStats = selectedCategoryId
+    ? merchantStats.filter(stat => {
+        // Check if any of the stat's patterns match transactions in this category
+        const categoryTransactionDescriptions = new Set(
+          transactions
+            .filter(t => t.splits.some(s => s.category_id === selectedCategoryId))
+            .map(t => t.description)
+        );
+        return stat.patterns.some(pattern => categoryTransactionDescriptions.has(pattern));
+      })
+    : merchantStats;
 
   if (selectedCategoryId) {
     // Show spending by merchant for the selected category
-    if (merchantGroups.length > 0) {
+    if (categoryMerchantStats.length > 0) {
       // Use merchant groups
       isGrouped = true;
-      const merchantsArray = merchantGroups.map(group => ({
+      const merchantsArray = categoryMerchantStats.map(group => ({
         name: group.display_name,
         value: group.total_amount,
       }));
@@ -220,7 +198,7 @@ export default function SpendingPieChart({ transactions, categories, selectedCat
     chartDescription = `Total spent: ${formatCurrency(totalSpent)}`;
   }
 
-  const isLoading = loading || loadingMerchants;
+  const isLoading = loading || loadingMerchantStats;
 
   if (isLoading) {
     return (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,8 @@ interface TransactionsByMerchantProps {
   categories: Category[];
   includeSystemCategories: boolean;
   loading?: boolean;
+  merchantStats?: MerchantGroupStat[];
+  loadingMerchantStats?: boolean;
 }
 
 interface MerchantGroupStat {
@@ -31,9 +33,14 @@ interface MerchantGroupStat {
   patterns: string[];
 }
 
-export default function TransactionsByMerchant({ transactions, categories, includeSystemCategories, loading = false }: TransactionsByMerchantProps) {
-  const [merchantGroups, setMerchantGroups] = useState<MerchantGroupStat[]>([]);
-  const [loadingMerchants, setLoadingMerchants] = useState(false);
+export default function TransactionsByMerchant({
+  transactions,
+  categories,
+  includeSystemCategories,
+  loading = false,
+  merchantStats = [],
+  loadingMerchantStats = false
+}: TransactionsByMerchantProps) {
   const [selectedGroup, setSelectedGroup] = useState<MerchantGroupStat | null>(null);
   const [showGroupDetails, setShowGroupDetails] = useState(false);
   // Filter transactions based on system category toggle
@@ -47,37 +54,7 @@ export default function TransactionsByMerchant({ transactions, categories, inclu
         });
       });
 
-  // Fetch merchant group stats when filtered transactions change
-  useEffect(() => {
-    const fetchMerchantGroups = async () => {
-      if (filteredTransactions.length === 0) {
-        setMerchantGroups([]);
-        setLoadingMerchants(false);
-        return;
-      }
 
-      setLoadingMerchants(true);
-      try {
-        const transactionIds = filteredTransactions.map(t => t.id);
-        const response = await fetch('/api/merchant-groups/stats', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transactionIds }),
-        });
-
-        if (response.ok) {
-          const stats = await response.json();
-          setMerchantGroups(stats);
-        }
-      } catch (error) {
-        console.error('Error fetching merchant groups:', error);
-      } finally {
-        setLoadingMerchants(false);
-      }
-    };
-
-    fetchMerchantGroups();
-  }, [filteredTransactions]);
 
   // Group transactions by description (merchant) - fallback for ungrouped
   const merchantSpending = new Map<string, { count: number; total: number }>();
@@ -101,8 +78,8 @@ export default function TransactionsByMerchant({ transactions, categories, inclu
     .sort((a, b) => b.total - a.total);
 
   // Get top 10 merchant groups or fall back to ungrouped
-  const displayMerchants = merchantGroups.length > 0
-    ? merchantGroups.slice(0, 10)
+  const displayMerchants = merchantStats.length > 0
+    ? merchantStats.slice(0, 10)
     : ungroupedMerchants.slice(0, 10);
 
   const totalSpent = filteredTransactions.reduce((sum, t) => sum + t.total_amount, 0);
@@ -112,7 +89,7 @@ export default function TransactionsByMerchant({ transactions, categories, inclu
     setShowGroupDetails(true);
   };
 
-  const isLoading = loading || loadingMerchants;
+  const isLoading = loading || loadingMerchantStats;
 
   if (isLoading) {
     return (
@@ -139,7 +116,7 @@ export default function TransactionsByMerchant({ transactions, categories, inclu
     );
   }
 
-  const isGrouped = merchantGroups.length > 0;
+  const isGrouped = merchantStats.length > 0;
 
   return (
     <>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,12 +15,25 @@ import SpendingPieChart from './SpendingPieChart';
 import TransactionsByMerchant from './TransactionsByMerchant';
 import { X } from 'lucide-react';
 
+interface MerchantGroupStat {
+  group_id: number;
+  display_name: string;
+  transaction_count: number;
+  total_amount: number;
+  average_amount: number;
+  patterns: string[];
+}
+
 export default function ReportsPage() {
   const router = useRouter();
   const [transactions, setTransactions] = useState<TransactionWithSplits[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(true);
+
+  // Merchant stats state
+  const [merchantStats, setMerchantStats] = useState<MerchantGroupStat[]>([]);
+  const [loadingMerchantStats, setLoadingMerchantStats] = useState(false);
 
   // Date filters
   const [startDate, setStartDate] = useState('');
@@ -114,24 +127,63 @@ export default function ReportsPage() {
     }
   }, [dateRange]);
 
-  const filteredTransactions = transactions.filter(t => {
-    // Date filter
-    if (startDate || endDate) {
-      const transactionDate = new Date(t.date);
-      const start = startDate ? new Date(startDate) : null;
-      const end = endDate ? new Date(endDate) : null;
+  // Memoize filtered transactions to prevent unnecessary re-renders
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      // Date filter
+      if (startDate || endDate) {
+        const transactionDate = new Date(t.date);
+        const start = startDate ? new Date(startDate) : null;
+        const end = endDate ? new Date(endDate) : null;
 
-      if (start && transactionDate < start) return false;
-      if (end && transactionDate > end) return false;
-    }
+        if (start && transactionDate < start) return false;
+        if (end && transactionDate > end) return false;
+      }
 
-    // Category filter
-    if (selectedCategoryId !== null) {
-      return t.splits.some(split => split.category_id === selectedCategoryId);
-    }
+      // Category filter
+      if (selectedCategoryId !== null) {
+        return t.splits.some(split => split.category_id === selectedCategoryId);
+      }
 
-    return true;
-  });
+      return true;
+    });
+  }, [transactions, startDate, endDate, selectedCategoryId]);
+
+  // Memoize transaction IDs to prevent unnecessary API calls
+  const filteredTransactionIds = useMemo(() => {
+    return filteredTransactions.map(t => t.id);
+  }, [filteredTransactions]);
+
+  // Fetch merchant stats for all filtered transactions (single API call)
+  useEffect(() => {
+    const fetchMerchantStats = async () => {
+      if (filteredTransactionIds.length === 0) {
+        setMerchantStats([]);
+        setLoadingMerchantStats(false);
+        return;
+      }
+
+      setLoadingMerchantStats(true);
+      try {
+        const response = await fetch('/api/merchant-groups/stats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactionIds: filteredTransactionIds }),
+        });
+
+        if (response.ok) {
+          const stats = await response.json();
+          setMerchantStats(stats);
+        }
+      } catch (error) {
+        console.error('Error fetching merchant stats:', error);
+      } finally {
+        setLoadingMerchantStats(false);
+      }
+    };
+
+    fetchMerchantStats();
+  }, [filteredTransactionIds]);
 
   const selectedCategory = selectedCategoryId
     ? categories.find(c => c.id === selectedCategoryId)
@@ -285,6 +337,8 @@ export default function ReportsPage() {
           selectedCategoryId={selectedCategoryId}
           onCategoryClick={handleCategoryClick}
           loading={loadingTransactions || loadingCategories}
+          merchantStats={merchantStats}
+          loadingMerchantStats={loadingMerchantStats}
         />
       </div>
 
@@ -294,6 +348,8 @@ export default function ReportsPage() {
           categories={categories}
           includeSystemCategories={includeSystemCategories}
           loading={loadingTransactions || loadingCategories}
+          merchantStats={merchantStats}
+          loadingMerchantStats={loadingMerchantStats}
         />
       </div>
     </div>
