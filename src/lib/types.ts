@@ -188,5 +188,6 @@ export interface DashboardSummary {
   total_credit_card_balances: number;
   total_pending_checks: number;
   current_savings: number;
+  has_negative_envelopes: boolean;
 }
 

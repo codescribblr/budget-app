@@ -27,7 +27,9 @@ export default function SummaryCards({ summary }: SummaryCardsProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{formatCurrency(summary.total_envelopes)}</div>
+          <div className={`text-2xl font-bold ${summary.has_negative_envelopes ? 'text-red-600' : ''}`}>
+            {formatCurrency(summary.total_envelopes)}
+          </div>
         </CardContent>
       </Card>
 

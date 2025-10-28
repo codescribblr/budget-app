@@ -478,9 +478,13 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     .filter(acc => acc.include_in_totals === true)
     .reduce((sum, acc) => sum + Number(acc.balance), 0);
 
-  const totalEnvelopes = (categories as Category[])
-    .filter(cat => !cat.is_system)
+  const envelopeCategories = (categories as Category[]).filter(cat => !cat.is_system);
+
+  const totalEnvelopes = envelopeCategories
     .reduce((sum, cat) => sum + Number(cat.current_balance), 0);
+
+  const hasNegativeEnvelopes = envelopeCategories
+    .some(cat => Number(cat.current_balance) < 0);
 
   const totalCreditCardBalances = (creditCards as CreditCard[])
     .filter(cc => cc.include_in_totals === true)
@@ -497,6 +501,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     total_credit_card_balances: totalCreditCardBalances,
     total_pending_checks: totalPendingChecks,
     current_savings: currentSavings,
+    has_negative_envelopes: hasNegativeEnvelopes,
   };
 }
 

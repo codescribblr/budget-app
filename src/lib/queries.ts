@@ -507,6 +507,10 @@ export function getDashboardSummary(): DashboardSummary {
     .prepare('SELECT COALESCE(SUM(current_balance), 0) as total FROM categories WHERE is_system = 0')
     .get() as { total: number };
 
+  const hasNegativeEnvelopes = db
+    .prepare('SELECT COUNT(*) as count FROM categories WHERE is_system = 0 AND current_balance < 0')
+    .get() as { count: number };
+
   const totalCreditCardBalances = db
     .prepare('SELECT COALESCE(SUM(credit_limit - available_credit), 0) as total FROM credit_cards WHERE include_in_totals = 1')
     .get() as { total: number };
@@ -527,6 +531,7 @@ export function getDashboardSummary(): DashboardSummary {
     total_credit_card_balances: totalCreditCardBalances.total,
     total_pending_checks: totalPendingChecks.total,
     current_savings: currentSavings,
+    has_negative_envelopes: hasNegativeEnvelopes.count > 0,
   };
 }
 

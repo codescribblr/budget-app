@@ -33,6 +33,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
 
   const totalMonthly = envelopeCategories.reduce((sum, cat) => sum + cat.monthly_amount, 0);
   const totalCurrent = envelopeCategories.reduce((sum, cat) => sum + cat.current_balance, 0);
+  const hasNegativeBalance = envelopeCategories.some(cat => cat.current_balance < 0);
 
   const handleUpdateCategory = async () => {
     if (!editingCategory) return;
@@ -229,7 +230,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
                       </div>
                     ) : (
                       <span
-                        className="cursor-pointer hover:bg-muted px-2 py-1 rounded"
+                        className={`cursor-pointer hover:bg-muted px-2 py-1 rounded ${category.current_balance < 0 ? 'text-red-600' : ''}`}
                         onClick={() => startEditingBalance(category)}
                         title="Click to edit balance"
                       >
@@ -268,7 +269,9 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
               <TableRow className="font-bold">
                 <TableCell>Total</TableCell>
                 <TableCell className="text-right">{formatCurrency(totalMonthly)}</TableCell>
-                <TableCell className="text-right">{formatCurrency(totalCurrent)}</TableCell>
+                <TableCell className={`text-right ${hasNegativeBalance ? 'text-red-600' : ''}`}>
+                  {formatCurrency(totalCurrent)}
+                </TableCell>
                 <TableCell></TableCell>
               </TableRow>
             </TableBody>
