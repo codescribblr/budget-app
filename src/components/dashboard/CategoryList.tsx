@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { formatCurrency } from '@/lib/utils';
 import type { Category } from '@/lib/types';
 import { toast } from 'sonner';
-import { Check, X } from 'lucide-react';
+import { Check, X, Settings } from 'lucide-react';
 
 interface CategoryListProps {
   categories: Category[];

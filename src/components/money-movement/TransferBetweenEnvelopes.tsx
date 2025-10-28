@@ -90,7 +90,12 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
               <SelectContent>
                 {categories.map((category) => (
                   <SelectItem key={category.id} value={category.id.toString()}>
-                    {category.name} - {formatCurrency(category.current_balance)}
+                    <div className="flex items-center gap-2">
+                      {category.name} - {formatCurrency(category.current_balance)}
+                      {category.is_system && (
+                        <span className="text-muted-foreground" title="System category">⚙️</span>
+                      )}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -117,7 +122,12 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
               <SelectContent>
                 {categories.map((category) => (
                   <SelectItem key={category.id} value={category.id.toString()}>
-                    {category.name} - {formatCurrency(category.current_balance)}
+                    <div className="flex items-center gap-2">
+                      {category.name} - {formatCurrency(category.current_balance)}
+                      {category.is_system && (
+                        <span className="text-muted-foreground" title="System category">⚙️</span>
+                      )}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>

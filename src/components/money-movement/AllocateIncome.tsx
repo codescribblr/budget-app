@@ -171,7 +171,14 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
 
               return (
                 <TableRow key={category.id}>
-                  <TableCell className="font-medium">{category.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      {category.name}
+                      {category.is_system && (
+                        <span className="text-muted-foreground" title="System category">⚙️</span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right text-muted-foreground">
                     {formatCurrency(category.monthly_amount)}
                   </TableCell>
