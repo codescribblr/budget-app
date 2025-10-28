@@ -276,6 +276,8 @@ export default function ReportsPage() {
           categories={categories}
           onCategoryClick={handleCategoryClick}
           loading={loadingTransactions || loadingCategories}
+          startDate={startDate}
+          endDate={endDate}
         />
         <SpendingPieChart
           transactions={filteredTransactions}

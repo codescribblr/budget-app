@@ -10,12 +10,32 @@ interface SpendingByCategoryProps {
   categories: Category[];
   onCategoryClick?: (categoryId: number) => void;
   loading?: boolean;
+  startDate?: string;
+  endDate?: string;
 }
 
-export default function SpendingByCategory({ transactions, categories, onCategoryClick, loading = false }: SpendingByCategoryProps) {
+export default function SpendingByCategory({ transactions, categories, onCategoryClick, loading = false, startDate, endDate }: SpendingByCategoryProps) {
+  // Calculate the number of days in the selected period for budget proration
+  const calculateProratedBudget = (monthlyAmount: number): number => {
+    if (!startDate || !endDate) {
+      // If no date range, assume full month
+      return monthlyAmount;
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const daysInPeriod = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    // Calculate average days in a month (30.44)
+    const avgDaysPerMonth = 30.44;
+
+    // Prorate the monthly budget based on the number of days
+    return (monthlyAmount / avgDaysPerMonth) * daysInPeriod;
+  };
+
   // Calculate spending by category
   const categorySpending = new Map<number, number>();
-  
+
   transactions.forEach(transaction => {
     transaction.splits.forEach(split => {
       const current = categorySpending.get(split.category_id) || 0;
@@ -26,14 +46,23 @@ export default function SpendingByCategory({ transactions, categories, onCategor
   // Create array of categories with spending (exclude system categories like Transfer)
   const categoriesWithSpending = categories
     .filter(cat => !cat.is_system)
-    .map(category => ({
-      ...category,
-      spent: categorySpending.get(category.id) || 0,
-    }))
+    .map(category => {
+      const spent = categorySpending.get(category.id) || 0;
+      const proratedBudget = calculateProratedBudget(category.monthly_amount);
+      const variance = proratedBudget - spent;
+
+      return {
+        ...category,
+        spent,
+        proratedBudget,
+        variance,
+      };
+    })
     .filter(cat => cat.spent > 0)
     .sort((a, b) => b.spent - a.spent);
 
   const totalSpent = categoriesWithSpending.reduce((sum, cat) => sum + cat.spent, 0);
+  const totalBudget = categoriesWithSpending.reduce((sum, cat) => sum + cat.proratedBudget, 0);
 
   if (loading) {
     return (
@@ -65,7 +94,10 @@ export default function SpendingByCategory({ transactions, categories, onCategor
       <CardHeader>
         <CardTitle>Spending by Category</CardTitle>
         <CardDescription>
-          Total spent: {formatCurrency(totalSpent)}
+          Total spent: {formatCurrency(totalSpent)} | Budget: {formatCurrency(totalBudget)} |
+          <span className={totalSpent > totalBudget ? 'text-red-600' : 'text-green-600'}>
+            {' '}{totalSpent > totalBudget ? 'Over' : 'Under'} by {formatCurrency(Math.abs(totalBudget - totalSpent))}
+          </span>
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -74,13 +106,14 @@ export default function SpendingByCategory({ transactions, categories, onCategor
             <TableHeader>
               <TableRow>
                 <TableHead>Category</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-right">% of Total</TableHead>
+                <TableHead className="text-right">Spent</TableHead>
+                <TableHead className="text-right">Budget</TableHead>
+                <TableHead className="text-right">Variance</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {categoriesWithSpending.map((category) => {
-                const percentage = (category.spent / totalSpent) * 100;
+                const isOverBudget = category.spent > category.proratedBudget;
 
                 return (
                   <TableRow
@@ -89,16 +122,16 @@ export default function SpendingByCategory({ transactions, categories, onCategor
                     onClick={() => onCategoryClick?.(category.id)}
                   >
                     <TableCell>
-                      <div>
-                        <div className="font-medium">{category.name}</div>
-                        <Progress value={percentage} className="h-2 mt-1" />
-                      </div>
+                      <div className="font-medium">{category.name}</div>
                     </TableCell>
                     <TableCell className="text-right font-semibold">
                       {formatCurrency(category.spent)}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">
-                      {percentage.toFixed(1)}%
+                      {formatCurrency(category.proratedBudget)}
+                    </TableCell>
+                    <TableCell className={`text-right font-medium ${isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                      {isOverBudget ? '-' : '+'}{formatCurrency(Math.abs(category.variance))}
                     </TableCell>
                   </TableRow>
                 );
