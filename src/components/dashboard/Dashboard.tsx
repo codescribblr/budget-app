@@ -76,7 +76,7 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Budget Dashboard</h1>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => window.location.href = '/transactions'} size="sm" className="md:size-default">
+          <Button variant="outline" onClick={() => window.location.href = '/transactions'} size="sm" className="md:size-default">
             Transactions
           </Button>
           <Button variant="outline" onClick={() => window.location.href = '/import'} size="sm" className="md:size-default">
