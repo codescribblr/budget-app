@@ -526,40 +526,50 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
 
   if (txError) throw txError;
 
-  // Get all splits with category names
-  const transactionsWithSplits: TransactionWithSplits[] = [];
+  if (!transactions || transactions.length === 0) {
+    return [];
+  }
 
-  for (const transaction of transactions as any[]) {
-    const { data: splits, error: splitError } = await supabase
-      .from('transaction_splits')
-      .select(`
-        *,
-        categories (
-          name
-        )
-      `)
-      .eq('transaction_id', transaction.id);
+  // Get all transaction IDs
+  const transactionIds = transactions.map((t: any) => t.id);
 
-    if (splitError) throw splitError;
+  // Get ALL splits for ALL transactions in a single query (fixes N+1 problem)
+  const { data: allSplits, error: splitError } = await supabase
+    .from('transaction_splits')
+    .select(`
+      *,
+      categories (
+        name
+      )
+    `)
+    .in('transaction_id', transactionIds);
 
-    // Transform the splits to include category_name
-    const formattedSplits = splits.map((split: any) => ({
+  if (splitError) throw splitError;
+
+  // Group splits by transaction_id for fast lookup
+  const splitsByTransaction = new Map<number, any[]>();
+  (allSplits || []).forEach((split: any) => {
+    if (!splitsByTransaction.has(split.transaction_id)) {
+      splitsByTransaction.set(split.transaction_id, []);
+    }
+    splitsByTransaction.get(split.transaction_id)!.push({
       ...split,
       category_name: split.categories?.name || 'Unknown',
-    }));
-
-    transactionsWithSplits.push({
-      id: transaction.id,
-      date: transaction.date,
-      description: transaction.description,
-      total_amount: transaction.total_amount,
-      merchant_group_id: transaction.merchant_group_id,
-      created_at: transaction.created_at,
-      updated_at: transaction.updated_at,
-      merchant_name: transaction.merchant_groups?.display_name || null,
-      splits: formattedSplits,
     });
-  }
+  });
+
+  // Build the final result
+  const transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => ({
+    id: transaction.id,
+    date: transaction.date,
+    description: transaction.description,
+    total_amount: transaction.total_amount,
+    merchant_group_id: transaction.merchant_group_id,
+    created_at: transaction.created_at,
+    updated_at: transaction.updated_at,
+    merchant_name: transaction.merchant_groups?.display_name || null,
+    splits: splitsByTransaction.get(transaction.id) || [],
+  }));
 
   return transactionsWithSplits;
 }
