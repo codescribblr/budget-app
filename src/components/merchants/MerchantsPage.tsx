@@ -213,17 +213,23 @@ export default function MerchantsPage() {
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => router.push(`/transactions?merchant=${encodeURIComponent(group.display_name)}`)}
+                        className="flex items-center gap-2 hover:underline text-left"
+                      >
                         {group.display_name}
                         {group.has_manual_mappings && (
                           <Badge variant="outline" className="text-xs">Manual</Badge>
                         )}
-                      </div>
+                      </button>
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">
                       {group.unique_patterns}
                     </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
+                    <TableCell
+                      className="text-right text-muted-foreground hover:underline cursor-pointer"
+                      onClick={() => router.push(`/transactions?merchant=${encodeURIComponent(group.display_name)}`)}
+                    >
                       {group.transaction_count}
                     </TableCell>
                     <TableCell className="text-right font-semibold">
