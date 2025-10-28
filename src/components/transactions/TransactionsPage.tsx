@@ -76,25 +76,11 @@ export default function TransactionsPage() {
 
     // First apply merchant filter if present
     if (merchantFilter) {
-      console.log('Merchant filter from URL:', merchantFilter);
-      console.log('Sample transaction merchant names:', transactions.slice(0, 3).map(t => t.merchant_name));
-
       filtered = filtered.filter(transaction => {
         // Compare with null check
         if (!transaction.merchant_name) return false;
-        const match = transaction.merchant_name === merchantFilter;
-        if (!match && transaction.merchant_name.includes(merchantFilter.substring(0, 5))) {
-          console.log('Near match found:', {
-            transaction: transaction.merchant_name,
-            filter: merchantFilter,
-            transactionBytes: Array.from(transaction.merchant_name).map(c => c.charCodeAt(0)),
-            filterBytes: Array.from(merchantFilter).map(c => c.charCodeAt(0))
-          });
-        }
-        return match;
+        return transaction.merchant_name === merchantFilter;
       });
-
-      console.log('Filtered transactions count:', filtered.length);
     }
 
     // Then apply search query filter

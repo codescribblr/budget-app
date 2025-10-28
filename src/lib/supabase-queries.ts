@@ -635,6 +635,17 @@ export async function createTransaction(data: {
 
   const totalAmount = data.splits.reduce((sum, split) => sum + split.amount, 0);
 
+  // Auto-assign merchant group first
+  let merchantGroupId: number | null = null;
+  try {
+    const { getOrCreateMerchantGroup } = await import('@/lib/db/merchant-groups');
+    const result = await getOrCreateMerchantGroup(data.description, true);
+    merchantGroupId = result.group?.id || null;
+  } catch (error) {
+    console.error('Error auto-assigning merchant group:', error);
+    // Continue even if merchant grouping fails
+  }
+
   // Create transaction
   const { data: transaction, error: txError } = await supabase
     .from('transactions')
@@ -643,20 +654,12 @@ export async function createTransaction(data: {
       date: data.date,
       description: data.description,
       total_amount: totalAmount,
+      merchant_group_id: merchantGroupId,
     })
     .select()
     .single();
 
   if (txError) throw txError;
-
-  // Auto-assign merchant group (non-blocking)
-  try {
-    const { getOrCreateMerchantGroup } = await import('@/lib/db/merchant-groups');
-    await getOrCreateMerchantGroup(data.description, true);
-  } catch (error) {
-    console.error('Error auto-assigning merchant group:', error);
-    // Continue even if merchant grouping fails
-  }
 
   // Create splits and update category balances
   for (const split of data.splits) {
@@ -983,6 +986,17 @@ export async function importTransactions(transactions: any[]): Promise<number> {
       throw importError;
     }
 
+    // Auto-assign merchant group first (non-blocking - don't fail import if this fails)
+    let merchantGroupId: number | null = null;
+    try {
+      const { getOrCreateMerchantGroup } = await import('@/lib/db/merchant-groups');
+      const result = await getOrCreateMerchantGroup(txn.description, true);
+      merchantGroupId = result.group?.id || null;
+    } catch (error) {
+      console.error('Error auto-assigning merchant group:', error);
+      // Continue with import even if merchant grouping fails
+    }
+
     // Create main transaction
     const { data: transaction, error: txError } = await supabase
       .from('transactions')
@@ -991,20 +1005,12 @@ export async function importTransactions(transactions: any[]): Promise<number> {
         date: txn.date,
         description: txn.description,
         total_amount: totalAmount,
+        merchant_group_id: merchantGroupId,
       })
       .select()
       .single();
 
     if (txError) throw txError;
-
-    // Auto-assign merchant group (non-blocking - don't fail import if this fails)
-    try {
-      const { getOrCreateMerchantGroup } = await import('@/lib/db/merchant-groups');
-      await getOrCreateMerchantGroup(txn.description, true);
-    } catch (error) {
-      console.error('Error auto-assigning merchant group:', error);
-      // Continue with import even if merchant grouping fails
-    }
 
     // Create splits and update category balances
     for (const split of txn.splits) {
