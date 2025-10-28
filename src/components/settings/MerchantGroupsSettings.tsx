@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Loader2, Sparkles, Eye } from 'lucide-react';
+import { Loader2, Sparkles, Eye, Link } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,7 @@ interface AutoGroupResult {
 
 export default function MerchantGroupsSettings() {
   const [isRunning, setIsRunning] = useState(false);
+  const [isBackfilling, setIsBackfilling] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<AutoGroupResult | null>(null);
 
@@ -76,6 +77,35 @@ export default function MerchantGroupsSettings() {
     runAutoGroup(false);
   };
 
+  const handleBackfill = async () => {
+    try {
+      setIsBackfilling(true);
+
+      const response = await fetch('/api/merchant-groups/backfill', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to backfill merchant groups');
+      }
+
+      const result = await response.json();
+
+      if (result.updated > 0) {
+        toast.success(
+          `Successfully linked ${result.updated} transactions to their merchant groups.`
+        );
+      } else {
+        toast.info('All transactions are already linked to merchant groups.');
+      }
+    } catch (error) {
+      console.error('Error backfilling merchant groups:', error);
+      toast.error('Failed to backfill merchant groups. Please try again.');
+    } finally {
+      setIsBackfilling(false);
+    }
+  };
+
   return (
     <>
       <Card>
@@ -113,10 +143,19 @@ export default function MerchantGroupsSettings() {
             </ol>
           </div>
 
-          <div className="flex gap-2 pt-4">
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold">Link Existing Transactions</h4>
+            <p className="text-sm text-muted-foreground">
+              If you have existing transactions that aren't showing merchant names, use the "Link Transactions"
+              button to connect them to their merchant groups. This is useful after importing old data or if
+              merchant names aren't appearing in your transaction list.
+            </p>
+          </div>
+
+          <div className="flex gap-2 pt-4 flex-wrap">
             <Button
               onClick={handlePreview}
-              disabled={isRunning}
+              disabled={isRunning || isBackfilling}
               variant="outline"
             >
               {isRunning ? (
@@ -133,7 +172,7 @@ export default function MerchantGroupsSettings() {
             </Button>
             <Button
               onClick={handleRunAutoGroup}
-              disabled={isRunning}
+              disabled={isRunning || isBackfilling}
             >
               {isRunning ? (
                 <>
@@ -144,6 +183,23 @@ export default function MerchantGroupsSettings() {
                 <>
                   <Sparkles className="mr-2 h-4 w-4" />
                   Run Auto-Grouping
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={handleBackfill}
+              disabled={isRunning || isBackfilling}
+              variant="secondary"
+            >
+              {isBackfilling ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Linking...
+                </>
+              ) : (
+                <>
+                  <Link className="mr-2 h-4 w-4" />
+                  Link Transactions
                 </>
               )}
             </Button>
