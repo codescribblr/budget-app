@@ -25,7 +25,7 @@ export default function ReportsPage() {
   // Date filters
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [dateRange, setDateRange] = useState('all');
+  const [dateRange, setDateRange] = useState('current-month');
 
   // Category filter
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
@@ -75,18 +75,25 @@ export default function ReportsPage() {
     const end = today.toISOString().split('T')[0];
 
     switch (dateRange) {
-      case 'week':
-        const weekAgo = new Date(today);
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        setStartDate(weekAgo.toISOString().split('T')[0]);
-        setEndDate(end);
+      case 'current-month':
+        // Current calendar month
+        const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const currentMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        setStartDate(currentMonthStart.toISOString().split('T')[0]);
+        setEndDate(currentMonthEnd.toISOString().split('T')[0]);
         break;
-      case 'month':
+      case 'last-month':
         // Previous calendar month
         const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
         const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
         setStartDate(lastMonth.toISOString().split('T')[0]);
         setEndDate(lastMonthEnd.toISOString().split('T')[0]);
+        break;
+      case 'week':
+        const weekAgo = new Date(today);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        setStartDate(weekAgo.toISOString().split('T')[0]);
+        setEndDate(end);
         break;
       case 'quarter':
         const quarterAgo = new Date(today);
@@ -170,11 +177,12 @@ export default function ReportsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="current-month">Current Month</SelectItem>
+                    <SelectItem value="last-month">Last Month</SelectItem>
                     <SelectItem value="week">Last 7 Days</SelectItem>
-                    <SelectItem value="month">Last Month</SelectItem>
                     <SelectItem value="quarter">Last Quarter</SelectItem>
                     <SelectItem value="year">Last Year</SelectItem>
+                    <SelectItem value="all">All Time</SelectItem>
                     <SelectItem value="custom">Custom Range</SelectItem>
                   </SelectContent>
                 </Select>
