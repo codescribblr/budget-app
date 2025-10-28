@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency } from '@/lib/utils';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 
@@ -8,9 +9,10 @@ interface SpendingByCategoryProps {
   transactions: TransactionWithSplits[];
   categories: Category[];
   onCategoryClick?: (categoryId: number) => void;
+  loading?: boolean;
 }
 
-export default function SpendingByCategory({ transactions, categories, onCategoryClick }: SpendingByCategoryProps) {
+export default function SpendingByCategory({ transactions, categories, onCategoryClick, loading = false }: SpendingByCategoryProps) {
   // Calculate spending by category
   const categorySpending = new Map<number, number>();
   
@@ -32,6 +34,20 @@ export default function SpendingByCategory({ transactions, categories, onCategor
     .sort((a, b) => b.spent - a.spent);
 
   const totalSpent = categoriesWithSpending.reduce((sum, cat) => sum + cat.spent, 0);
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Spending by Category</CardTitle>
+          <CardDescription>Loading spending data...</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center py-12">
+          <LoadingSpinner />
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (categoriesWithSpending.length === 0) {
     return (

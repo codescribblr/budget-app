@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import SpendingByCategory from './SpendingByCategory';
 import SpendingPieChart from './SpendingPieChart';
@@ -20,7 +19,8 @@ export default function ReportsPage() {
   const router = useRouter();
   const [transactions, setTransactions] = useState<TransactionWithSplits[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingTransactions, setLoadingTransactions] = useState(true);
+  const [loadingCategories, setLoadingCategories] = useState(true);
 
   // Date filters
   const [startDate, setStartDate] = useState('');
@@ -33,30 +33,40 @@ export default function ReportsPage() {
   // System category toggle for merchants
   const [includeSystemCategories, setIncludeSystemCategories] = useState(false);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [transactionsRes, categoriesRes] = await Promise.all([
-        fetch('/api/transactions'),
-        fetch('/api/categories'),
-      ]);
-
-      const [transactionsData, categoriesData] = await Promise.all([
-        transactionsRes.json(),
-        categoriesRes.json(),
-      ]);
-
-      setTransactions(transactionsData);
-      setCategories(categoriesData);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Fetch transactions
   useEffect(() => {
-    fetchData();
+    const fetchTransactions = async () => {
+      try {
+        setLoadingTransactions(true);
+        const response = await fetch('/api/transactions');
+        const data = await response.json();
+        setTransactions(data);
+      } catch (error) {
+        console.error('Error fetching transactions:', error);
+      } finally {
+        setLoadingTransactions(false);
+      }
+    };
+
+    fetchTransactions();
+  }, []);
+
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setLoadingCategories(true);
+        const response = await fetch('/api/categories');
+        const data = await response.json();
+        setCategories(data);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+
+    fetchCategories();
   }, []);
 
   useEffect(() => {
@@ -127,10 +137,6 @@ export default function ReportsPage() {
   const clearCategoryFilter = () => {
     setSelectedCategoryId(null);
   };
-
-  if (loading) {
-    return <LoadingSpinner />;
-  }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -261,12 +267,14 @@ export default function ReportsPage() {
           transactions={filteredTransactions}
           categories={categories}
           onCategoryClick={handleCategoryClick}
+          loading={loadingTransactions || loadingCategories}
         />
         <SpendingPieChart
           transactions={filteredTransactions}
           categories={categories}
           selectedCategoryId={selectedCategoryId}
           onCategoryClick={handleCategoryClick}
+          loading={loadingTransactions || loadingCategories}
         />
       </div>
 
@@ -275,6 +283,7 @@ export default function ReportsPage() {
           transactions={filteredTransactions}
           categories={categories}
           includeSystemCategories={includeSystemCategories}
+          loading={loadingTransactions || loadingCategories}
         />
       </div>
     </div>

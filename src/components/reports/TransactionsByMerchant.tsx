@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency } from '@/lib/utils';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import {
@@ -18,6 +19,7 @@ interface TransactionsByMerchantProps {
   transactions: TransactionWithSplits[];
   categories: Category[];
   includeSystemCategories: boolean;
+  loading?: boolean;
 }
 
 interface MerchantGroupStat {
@@ -29,9 +31,9 @@ interface MerchantGroupStat {
   patterns: string[];
 }
 
-export default function TransactionsByMerchant({ transactions, categories, includeSystemCategories }: TransactionsByMerchantProps) {
+export default function TransactionsByMerchant({ transactions, categories, includeSystemCategories, loading = false }: TransactionsByMerchantProps) {
   const [merchantGroups, setMerchantGroups] = useState<MerchantGroupStat[]>([]);
-  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [loadingMerchants, setLoadingMerchants] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<MerchantGroupStat | null>(null);
   const [showGroupDetails, setShowGroupDetails] = useState(false);
   // Filter transactions based on system category toggle
@@ -50,10 +52,11 @@ export default function TransactionsByMerchant({ transactions, categories, inclu
     const fetchMerchantGroups = async () => {
       if (filteredTransactions.length === 0) {
         setMerchantGroups([]);
+        setLoadingMerchants(false);
         return;
       }
 
-      setLoadingGroups(true);
+      setLoadingMerchants(true);
       try {
         const transactionIds = filteredTransactions.map(t => t.id);
         const response = await fetch('/api/merchant-groups/stats', {
@@ -69,7 +72,7 @@ export default function TransactionsByMerchant({ transactions, categories, inclu
       } catch (error) {
         console.error('Error fetching merchant groups:', error);
       } finally {
-        setLoadingGroups(false);
+        setLoadingMerchants(false);
       }
     };
 
@@ -108,6 +111,22 @@ export default function TransactionsByMerchant({ transactions, categories, inclu
     setSelectedGroup(group);
     setShowGroupDetails(true);
   };
+
+  const isLoading = loading || loadingMerchants;
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Top Merchants</CardTitle>
+          <CardDescription>Loading merchant data...</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center py-12">
+          <LoadingSpinner />
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (displayMerchants.length === 0) {
     return (

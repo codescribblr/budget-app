@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency } from '@/lib/utils';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
@@ -12,6 +13,7 @@ interface SpendingPieChartProps {
   categories: Category[];
   selectedCategoryId?: number | null;
   onCategoryClick?: (categoryId: number) => void;
+  loading?: boolean;
 }
 
 interface MerchantGroupStat {
@@ -32,9 +34,9 @@ const COLORS = [
 
 const OTHER_COLOR = '#9CA3AF'; // Gray color for "Other"
 
-export default function SpendingPieChart({ transactions, categories, selectedCategoryId, onCategoryClick }: SpendingPieChartProps) {
+export default function SpendingPieChart({ transactions, categories, selectedCategoryId, onCategoryClick, loading = false }: SpendingPieChartProps) {
   const [merchantGroups, setMerchantGroups] = useState<MerchantGroupStat[]>([]);
-  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [loadingMerchants, setLoadingMerchants] = useState(false);
 
   let chartData: any[] = [];
   let totalSpent = 0;
@@ -47,10 +49,11 @@ export default function SpendingPieChart({ transactions, categories, selectedCat
     const fetchMerchantGroups = async () => {
       if (!selectedCategoryId || transactions.length === 0) {
         setMerchantGroups([]);
+        setLoadingMerchants(false);
         return;
       }
 
-      setLoadingGroups(true);
+      setLoadingMerchants(true);
       try {
         // Get transactions for the selected category
         const categoryTransactionIds = transactions
@@ -59,6 +62,7 @@ export default function SpendingPieChart({ transactions, categories, selectedCat
 
         if (categoryTransactionIds.length === 0) {
           setMerchantGroups([]);
+          setLoadingMerchants(false);
           return;
         }
 
@@ -75,7 +79,7 @@ export default function SpendingPieChart({ transactions, categories, selectedCat
       } catch (error) {
         console.error('Error fetching merchant groups:', error);
       } finally {
-        setLoadingGroups(false);
+        setLoadingMerchants(false);
       }
     };
 
@@ -214,6 +218,22 @@ export default function SpendingPieChart({ transactions, categories, selectedCat
 
     chartTitle = 'Spending Distribution';
     chartDescription = `Total spent: ${formatCurrency(totalSpent)}`;
+  }
+
+  const isLoading = loading || loadingMerchants;
+
+  if (isLoading) {
+    return (
+      <Card className="flex flex-col">
+        <CardHeader>
+          <CardTitle>{chartTitle}</CardTitle>
+          <CardDescription>Loading chart data...</CardDescription>
+        </CardHeader>
+        <CardContent className="flex-1 flex items-center justify-center py-12">
+          <LoadingSpinner />
+        </CardContent>
+      </Card>
+    );
   }
 
   if (chartData.length === 0) {
