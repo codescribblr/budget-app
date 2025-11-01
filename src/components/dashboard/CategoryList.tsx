@@ -194,7 +194,7 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
                   <TableCell className="font-medium">
                     <a
                       href={`/reports?category=${category.id}`}
-                      className="hover:underline cursor-pointer text-blue-600 dark:text-blue-400"
+                      className="hover:underline cursor-pointer"
                     >
                       {category.name}
                     </a>
