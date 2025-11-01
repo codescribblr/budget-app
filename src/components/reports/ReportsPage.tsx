@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import SpendingByCategory from './SpendingByCategory';
 import SpendingPieChart from './SpendingPieChart';
@@ -26,6 +27,7 @@ interface MerchantGroupStat {
 
 export default function ReportsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [transactions, setTransactions] = useState<TransactionWithSplits[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
@@ -40,11 +42,22 @@ export default function ReportsPage() {
   const [endDate, setEndDate] = useState('');
   const [dateRange, setDateRange] = useState('current-month');
 
-  // Category filter
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  // Category filter - initialize from URL parameter
+  const categoryParam = searchParams.get('category');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
+    categoryParam ? parseInt(categoryParam) : null
+  );
 
   // System category toggle for merchants
   const [includeSystemCategories, setIncludeSystemCategories] = useState(false);
+
+  // Sync category filter from URL parameter
+  useEffect(() => {
+    const categoryParam = searchParams.get('category');
+    if (categoryParam) {
+      setSelectedCategoryId(parseInt(categoryParam));
+    }
+  }, [searchParams]);
 
   // Fetch transactions
   useEffect(() => {
@@ -213,6 +226,27 @@ export default function ReportsPage() {
 
       <Separator />
 
+      {/* Active Category Filter Indicator */}
+      {selectedCategoryId && (
+        <div className="flex items-center gap-2 p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <Badge variant="secondary" className="text-sm">
+            Filtered by: {categories.find(c => c.id === selectedCategoryId)?.name}
+          </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSelectedCategoryId(null);
+              router.push('/reports');
+            }}
+            className="h-7 px-2"
+          >
+            <X className="h-4 w-4 mr-1" />
+            Clear Filter
+          </Button>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Filters</CardTitle>
@@ -273,7 +307,16 @@ export default function ReportsPage() {
                 <Label htmlFor="category-filter">Filter by Category</Label>
                 <Select
                   value={selectedCategoryId?.toString() || 'all'}
-                  onValueChange={(value) => setSelectedCategoryId(value === 'all' ? null : parseInt(value))}
+                  onValueChange={(value) => {
+                    const newCategoryId = value === 'all' ? null : parseInt(value);
+                    setSelectedCategoryId(newCategoryId);
+                    // Update URL
+                    if (newCategoryId) {
+                      router.push(`/reports?category=${newCategoryId}`);
+                    } else {
+                      router.push('/reports');
+                    }
+                  }}
                 >
                   <SelectTrigger id="category-filter">
                     <SelectValue placeholder="All Categories" />

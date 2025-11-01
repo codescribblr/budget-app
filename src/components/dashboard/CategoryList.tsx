@@ -191,7 +191,14 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
             <TableBody>
               {envelopeCategories.map((category) => (
                 <TableRow key={category.id}>
-                  <TableCell className="font-medium">{category.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <a
+                      href={`/reports?category=${category.id}`}
+                      className="hover:underline cursor-pointer text-blue-600 dark:text-blue-400"
+                    >
+                      {category.name}
+                    </a>
+                  </TableCell>
                   <TableCell className="text-right">{formatCurrency(category.monthly_amount)}</TableCell>
                   <TableCell className="text-right font-semibold">
                     {editingBalanceId === category.id ? (
