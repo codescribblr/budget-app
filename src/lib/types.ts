@@ -95,6 +95,13 @@ export interface Setting {
   updated_at: string;
 }
 
+export interface PreTaxDeductionItem {
+  id: string; // UUID for client-side management
+  name: string;
+  type: 'percentage' | 'fixed';
+  value: number; // Percentage (e.g., 10 for 10%) or fixed amount per paycheck
+}
+
 // API request/response types
 export interface CreateCategoryRequest {
   name: string;

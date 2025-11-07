@@ -13,13 +13,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { ArrowLeft, DollarSign, TrendingUp, Calculator, Save } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import PreTaxDeductionsSection from '@/components/income/PreTaxDeductionsSection';
+import type { PreTaxDeductionItem } from '@/lib/types';
 
 type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly' | 'quarterly' | 'annually';
 
 interface IncomeSettings {
   annual_income: number;
   tax_rate: number;
-  pre_tax_deductions_monthly: number;
   pay_frequency: PayFrequency;
   include_extra_paychecks: boolean;
 }
@@ -34,12 +35,11 @@ interface BudgetSummary {
 
 export default function IncomePage() {
   const router = useRouter();
-  
+
   // Current settings
   const [currentSettings, setCurrentSettings] = useState<IncomeSettings>({
     annual_income: 0,
     tax_rate: 0,
-    pre_tax_deductions_monthly: 0,
     pay_frequency: 'monthly',
     include_extra_paychecks: true,
   });
@@ -48,11 +48,13 @@ export default function IncomePage() {
   const [scenarioSettings, setScenarioSettings] = useState<IncomeSettings>({
     annual_income: 0,
     tax_rate: 0,
-    pre_tax_deductions_monthly: 0,
     pay_frequency: 'monthly',
     include_extra_paychecks: true,
   });
-  
+
+  // Pre-tax deduction items
+  const [preTaxDeductionItems, setPreTaxDeductionItems] = useState<PreTaxDeductionItem[]>([]);
+
   const [monthlyBudget, setMonthlyBudget] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,33 +63,104 @@ export default function IncomePage() {
     loadData();
   }, []);
 
+  // Calculate paychecks per month based on pay frequency
+  const getPaychecksPerMonth = (payFrequency: PayFrequency, includeExtra: boolean): number => {
+    switch (payFrequency) {
+      case 'weekly':
+        return 52 / 12;
+      case 'bi-weekly':
+        return includeExtra ? 26 / 12 : 24 / 12;
+      case 'semi-monthly':
+        return 2;
+      case 'monthly':
+        return 1;
+      case 'quarterly':
+        return 4 / 12;
+      case 'annually':
+        return 1 / 12;
+      default:
+        return 1;
+    }
+  };
+
+  // Calculate actual paychecks per year (for percentage calculations)
+  const getActualPaychecksPerYear = (payFrequency: PayFrequency): number => {
+    switch (payFrequency) {
+      case 'weekly':
+        return 52;
+      case 'bi-weekly':
+        return 26;
+      case 'semi-monthly':
+        return 24;
+      case 'monthly':
+        return 12;
+      case 'quarterly':
+        return 4;
+      case 'annually':
+        return 1;
+      default:
+        return 12;
+    }
+  };
+
+  // Calculate total monthly pre-tax deductions from items
+  const calculateTotalPreTaxDeductions = (
+    items: PreTaxDeductionItem[],
+    annualIncome: number,
+    payFrequency: PayFrequency,
+    includeExtra: boolean
+  ): number => {
+    const paychecksPerMonth = getPaychecksPerMonth(payFrequency, includeExtra);
+    const actualPaychecksPerYear = getActualPaychecksPerYear(payFrequency);
+
+    return items.reduce((total, item) => {
+      if (item.type === 'fixed') {
+        return total + (item.value * paychecksPerMonth);
+      } else {
+        const grossPerPaycheck = annualIncome / actualPaychecksPerYear;
+        const deductionPerPaycheck = grossPerPaycheck * (item.value / 100);
+        return total + (deductionPerPaycheck * paychecksPerMonth);
+      }
+    }, 0);
+  };
+
   const loadData = async () => {
     try {
       setIsLoading(true);
-      
+
       // Fetch settings
       const settingsRes = await fetch('/api/settings');
       const settingsData = await settingsRes.json();
-      
+
       const settings: IncomeSettings = {
         annual_income: parseFloat(settingsData.annual_salary || settingsData.annual_income || '0'),
         tax_rate: parseFloat(settingsData.tax_rate || '0'),
-        pre_tax_deductions_monthly: parseFloat(settingsData.pre_tax_deductions_monthly || '0'),
         pay_frequency: (settingsData.pay_frequency || 'monthly') as PayFrequency,
         include_extra_paychecks: settingsData.include_extra_paychecks === 'true' || settingsData.include_extra_paychecks === true,
       };
-      
+
+      // Load pre-tax deduction items
+      let deductionItems: PreTaxDeductionItem[] = [];
+      if (settingsData.pre_tax_deduction_items) {
+        try {
+          deductionItems = JSON.parse(settingsData.pre_tax_deduction_items);
+        } catch (e) {
+          console.error('Error parsing pre_tax_deduction_items:', e);
+        }
+      }
+
       setCurrentSettings(settings);
       setScenarioSettings(settings);
-      
+      setPreTaxDeductionItems(deductionItems);
+
       // Fetch categories to calculate monthly budget
       const categoriesRes = await fetch('/api/categories');
       const categories = await categoriesRes.json();
-      
+
       const totalBudget = categories
         .filter((cat: any) => !cat.is_system)
         .reduce((sum: number, cat: any) => sum + parseFloat(cat.monthly_amount || '0'), 0);
-      
+
       setMonthlyBudget(totalBudget);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -137,9 +210,17 @@ export default function IncomePage() {
         monthly_gross_income = settings.annual_income / 12;
     }
 
-    const annual_taxable_income = settings.annual_income - (settings.pre_tax_deductions_monthly * 12);
+    // Calculate total monthly pre-tax deductions from items
+    const pre_tax_deductions_monthly = calculateTotalPreTaxDeductions(
+      preTaxDeductionItems,
+      settings.annual_income,
+      settings.pay_frequency,
+      settings.include_extra_paychecks
+    );
+
+    const annual_taxable_income = settings.annual_income - (pre_tax_deductions_monthly * 12);
     const taxes_per_month = (annual_taxable_income * settings.tax_rate) / 12;
-    const monthly_net_income = monthly_gross_income - taxes_per_month - settings.pre_tax_deductions_monthly;
+    const monthly_net_income = monthly_gross_income - taxes_per_month - pre_tax_deductions_monthly;
     const excess_deficit = monthly_net_income - monthlyBudget;
 
     return {
@@ -157,26 +238,26 @@ export default function IncomePage() {
   const handleSaveSettings = async () => {
     try {
       setIsSaving(true);
-      
+
       const updates = [
         { key: 'annual_income', value: currentSettings.annual_income.toString() },
         { key: 'annual_salary', value: currentSettings.annual_income.toString() }, // Keep for backwards compatibility
         { key: 'tax_rate', value: currentSettings.tax_rate.toString() },
-        { key: 'pre_tax_deductions_monthly', value: currentSettings.pre_tax_deductions_monthly.toString() },
         { key: 'pay_frequency', value: currentSettings.pay_frequency },
         { key: 'include_extra_paychecks', value: currentSettings.include_extra_paychecks.toString() },
+        { key: 'pre_tax_deduction_items', value: JSON.stringify(preTaxDeductionItems) },
       ];
-      
+
       const response = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings: updates }),
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to save settings');
       }
-      
+
       toast.success('Income settings saved successfully');
       setScenarioSettings(currentSettings);
     } catch (error) {
@@ -233,11 +314,11 @@ export default function IncomePage() {
                 Income Settings
               </CardTitle>
               <CardDescription>
-                Configure your annual income, tax rate, and pre-tax deductions
+                Configure your annual income and tax rate
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="annual_income">Annual Income</Label>
                   <Input
@@ -270,21 +351,6 @@ export default function IncomePage() {
                   <p className="text-xs text-muted-foreground">
                     e.g., 0.2122 for 21.22%
                   </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pre_tax_deductions">Pre-Tax Deductions (Monthly)</Label>
-                  <Input
-                    id="pre_tax_deductions"
-                    type="number"
-                    step="0.01"
-                    value={currentSettings.pre_tax_deductions_monthly}
-                    onChange={(e) =>
-                      setCurrentSettings({
-                        ...currentSettings,
-                        pre_tax_deductions_monthly: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                  />
                 </div>
               </div>
 
@@ -361,6 +427,15 @@ export default function IncomePage() {
             </CardContent>
           </Card>
 
+          {/* Pre-Tax Deductions Section */}
+          <PreTaxDeductionsSection
+            items={preTaxDeductionItems}
+            annualIncome={currentSettings.annual_income}
+            payFrequency={currentSettings.pay_frequency}
+            includeExtraPaychecks={currentSettings.include_extra_paychecks}
+            onChange={setPreTaxDeductionItems}
+          />
+
           {/* Current Budget Summary */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <Card>
@@ -397,7 +472,12 @@ export default function IncomePage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-600">
-                  -{formatCurrency(currentSettings.pre_tax_deductions_monthly)}
+                  -{formatCurrency(calculateTotalPreTaxDeductions(
+                    preTaxDeductionItems,
+                    currentSettings.annual_income,
+                    currentSettings.pay_frequency,
+                    currentSettings.include_extra_paychecks
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -456,7 +536,7 @@ export default function IncomePage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="scenario_annual_income">Annual Income</Label>
                   <Input
@@ -486,23 +566,15 @@ export default function IncomePage() {
                       })
                     }
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="scenario_pre_tax_deductions">Pre-Tax Deductions (Monthly)</Label>
-                  <Input
-                    id="scenario_pre_tax_deductions"
-                    type="number"
-                    step="0.01"
-                    value={scenarioSettings.pre_tax_deductions_monthly}
-                    onChange={(e) =>
-                      setScenarioSettings({
-                        ...scenarioSettings,
-                        pre_tax_deductions_monthly: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                  />
+                  <p className="text-xs text-muted-foreground">
+                    e.g., 0.2122 for 21.22%
+                  </p>
                 </div>
               </div>
+
+              <p className="text-sm text-muted-foreground">
+                Note: Scenario planning uses the same pre-tax deduction items configured in the Current Settings tab.
+              </p>
 
               <Separator />
 
@@ -593,7 +665,12 @@ export default function IncomePage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Pre-Tax Deductions</span>
-                    <span className="font-medium text-red-600">-{formatCurrency(currentSettings.pre_tax_deductions_monthly)}</span>
+                    <span className="font-medium text-red-600">-{formatCurrency(calculateTotalPreTaxDeductions(
+                      preTaxDeductionItems,
+                      currentSettings.annual_income,
+                      currentSettings.pay_frequency,
+                      currentSettings.include_extra_paychecks
+                    ))}</span>
                   </div>
                   <Separator />
                   <div className="flex justify-between">
@@ -633,7 +710,12 @@ export default function IncomePage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Pre-Tax Deductions</span>
-                    <span className="font-medium text-red-600">-{formatCurrency(scenarioSettings.pre_tax_deductions_monthly)}</span>
+                    <span className="font-medium text-red-600">-{formatCurrency(calculateTotalPreTaxDeductions(
+                      preTaxDeductionItems,
+                      scenarioSettings.annual_income,
+                      scenarioSettings.pay_frequency,
+                      scenarioSettings.include_extra_paychecks
+                    ))}</span>
                   </div>
                   <Separator />
                   <div className="flex justify-between">

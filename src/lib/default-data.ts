@@ -93,10 +93,18 @@ export const DEFAULT_SETTINGS = [
   { key: 'annual_income', value: '163000.00' },
   { key: 'annual_salary', value: '163000.00' }, // Keep for backwards compatibility
   { key: 'tax_rate', value: '0.2122' },
-  { key: 'pre_tax_deductions_monthly', value: '2388.13' },
-  { key: 'pay_frequency', value: 'monthly' },
-  { key: 'include_extra_paychecks', value: 'true' },
+  { key: 'pay_frequency', value: 'bi-weekly' },
+  { key: 'include_extra_paychecks', value: 'false' },
+  {
+    key: 'pre_tax_deduction_items',
+    value: JSON.stringify([
+      { id: crypto.randomUUID(), name: '401k', type: 'percentage', value: 10 },
+      { id: crypto.randomUUID(), name: 'Health Insurance', type: 'fixed', value: 125 },
+      { id: crypto.randomUUID(), name: 'Dental', type: 'fixed', value: 25 }
+    ])
+  },
   // Note: The following are calculated, not stored:
+  // - pre_tax_deductions_monthly = calculated from pre_tax_deduction_items based on pay frequency
   // - taxes_per_month = ((annual_income - (pre_tax_deductions_monthly * 12)) * tax_rate) / 12
   // - monthly_gross_income = varies based on pay_frequency and include_extra_paychecks
   // - monthly_net_income = monthly_gross_income - taxes_per_month - pre_tax_deductions_monthly
