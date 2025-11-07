@@ -183,10 +183,10 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
           <Table>
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">Monthly</TableHead>
-                <TableHead className="text-right">Current Balance</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="w-[40%]">Category</TableHead>
+                <TableHead className="text-right w-[20%]">Monthly</TableHead>
+                <TableHead className="text-right w-[20%]">Current Balance</TableHead>
+                <TableHead className="text-right w-[20%]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -275,23 +275,23 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
           <Table>
             <TableBody>
               <TableRow className="font-bold">
-                <TableCell>Total Budget</TableCell>
-                <TableCell className={`text-right ${summary && totalMonthly > summary.monthly_net_income ? 'text-red-600' : ''}`}>
+                <TableCell className="w-[40%]">Total Budget</TableCell>
+                <TableCell className={`text-right w-[20%] ${summary && totalMonthly > summary.monthly_net_income ? 'text-red-600' : ''}`}>
                   {formatCurrency(totalMonthly)}
                 </TableCell>
-                <TableCell className={`text-right ${hasNegativeBalance ? 'text-red-600' : ''}`}>
+                <TableCell className={`text-right w-[20%] ${hasNegativeBalance ? 'text-red-600' : ''}`}>
                   {formatCurrency(totalCurrent)}
                 </TableCell>
-                <TableCell className="text-right"></TableCell>
+                <TableCell className="text-right w-[20%]"></TableCell>
               </TableRow>
               {summary && (
                 <TableRow className="font-medium text-muted-foreground">
-                  <TableCell>Available to be budgeted</TableCell>
-                  <TableCell className={`text-right ${summary.monthly_net_income - totalMonthly < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  <TableCell className="w-[40%]">Available to be budgeted</TableCell>
+                  <TableCell className={`text-right w-[20%] ${summary.monthly_net_income - totalMonthly < 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {formatCurrency(summary.monthly_net_income)}
                   </TableCell>
-                  <TableCell className="text-right"></TableCell>
-                  <TableCell className="text-right"></TableCell>
+                  <TableCell className="text-right w-[20%]"></TableCell>
+                  <TableCell className="text-right w-[20%]"></TableCell>
                 </TableRow>
               )}
             </TableBody>
