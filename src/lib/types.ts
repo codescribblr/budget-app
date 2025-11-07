@@ -196,5 +196,7 @@ export interface DashboardSummary {
   total_pending_checks: number;
   current_savings: number;
   has_negative_envelopes: boolean;
+  monthly_net_income: number;
+  total_monthly_budget: number;
 }
 

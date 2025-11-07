@@ -442,7 +442,7 @@ export async function deletePendingCheck(id: number): Promise<void> {
 // =====================================================
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {
-  const { supabase } = await getAuthenticatedUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   // Get all categories
   const { data: categories, error: catError } = await supabase
@@ -473,6 +473,20 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   if (pcError) throw pcError;
 
+  // Get settings for income calculation
+  const { data: settings, error: settingsError } = await supabase
+    .from('settings')
+    .select('*')
+    .eq('user_id', user.id);
+
+  if (settingsError) throw settingsError;
+
+  // Convert settings array to object
+  const settingsObj: Record<string, string> = {};
+  settings?.forEach((setting: any) => {
+    settingsObj[setting.key] = setting.value;
+  });
+
   // Calculate totals (only include accounts/credit cards with include_in_totals = true)
   const totalMonies = (accounts as Account[])
     .filter(acc => acc.include_in_totals === true)
@@ -495,6 +509,13 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   const currentSavings = totalMonies - totalEnvelopes - totalCreditCardBalances - totalPendingChecks;
 
+  // Calculate total monthly budget
+  const totalMonthlyBudget = envelopeCategories
+    .reduce((sum, cat) => sum + Number(cat.monthly_amount), 0);
+
+  // Calculate monthly net income
+  const monthlyNetIncome = calculateMonthlyNetIncome(settingsObj);
+
   return {
     total_monies: totalMonies,
     total_envelopes: totalEnvelopes,
@@ -502,7 +523,102 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     total_pending_checks: totalPendingChecks,
     current_savings: currentSavings,
     has_negative_envelopes: hasNegativeEnvelopes,
+    monthly_net_income: monthlyNetIncome,
+    total_monthly_budget: totalMonthlyBudget,
   };
+}
+
+// Helper function to calculate monthly net income from settings
+function calculateMonthlyNetIncome(settingsObj: Record<string, string>): number {
+  const annualIncome = parseFloat(settingsObj.annual_income || settingsObj.annual_salary || '0');
+  const taxRate = parseFloat(settingsObj.tax_rate || '0');
+  const payFrequency = (settingsObj.pay_frequency || 'monthly') as 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly' | 'quarterly' | 'annually';
+  const includeExtraPaychecks = settingsObj.include_extra_paychecks === 'true';
+
+  // Parse pre-tax deduction items
+  let preTaxDeductionItems: any[] = [];
+  if (settingsObj.pre_tax_deduction_items) {
+    try {
+      preTaxDeductionItems = JSON.parse(settingsObj.pre_tax_deduction_items);
+    } catch (e) {
+      console.error('Error parsing pre_tax_deduction_items:', e);
+    }
+  }
+
+  // Calculate monthly gross income based on pay frequency
+  let monthlyGrossIncome: number;
+  switch (payFrequency) {
+    case 'weekly':
+      monthlyGrossIncome = (annualIncome / 52) * (52 / 12);
+      break;
+    case 'bi-weekly':
+      if (includeExtraPaychecks) {
+        monthlyGrossIncome = annualIncome / 12;
+      } else {
+        monthlyGrossIncome = (annualIncome / 26) * 2;
+      }
+      break;
+    case 'semi-monthly':
+      monthlyGrossIncome = (annualIncome / 24) * 2;
+      break;
+    case 'monthly':
+      monthlyGrossIncome = annualIncome / 12;
+      break;
+    case 'quarterly':
+      monthlyGrossIncome = (annualIncome / 4) / 3;
+      break;
+    case 'annually':
+      monthlyGrossIncome = annualIncome / 12;
+      break;
+    default:
+      monthlyGrossIncome = annualIncome / 12;
+  }
+
+  // Calculate paychecks per month
+  const getPaychecksPerMonth = (): number => {
+    switch (payFrequency) {
+      case 'weekly': return 52 / 12;
+      case 'bi-weekly': return includeExtraPaychecks ? 26 / 12 : 24 / 12;
+      case 'semi-monthly': return 2;
+      case 'monthly': return 1;
+      case 'quarterly': return 4 / 12;
+      case 'annually': return 1 / 12;
+      default: return 1;
+    }
+  };
+
+  const getActualPaychecksPerYear = (): number => {
+    switch (payFrequency) {
+      case 'weekly': return 52;
+      case 'bi-weekly': return 26;
+      case 'semi-monthly': return 24;
+      case 'monthly': return 12;
+      case 'quarterly': return 4;
+      case 'annually': return 1;
+      default: return 12;
+    }
+  };
+
+  // Calculate total monthly pre-tax deductions
+  const paychecksPerMonth = getPaychecksPerMonth();
+  const actualPaychecksPerYear = getActualPaychecksPerYear();
+
+  const preTaxDeductionsMonthly = preTaxDeductionItems.reduce((total, item) => {
+    if (item.type === 'fixed') {
+      return total + (item.value * paychecksPerMonth);
+    } else {
+      const grossPerPaycheck = annualIncome / actualPaychecksPerYear;
+      const deductionPerPaycheck = grossPerPaycheck * (item.value / 100);
+      return total + (deductionPerPaycheck * paychecksPerMonth);
+    }
+  }, 0);
+
+  // Calculate taxes and net income
+  const annualTaxableIncome = annualIncome - (preTaxDeductionsMonthly * 12);
+  const taxesPerMonth = (annualTaxableIncome * taxRate) / 12;
+  const monthlyNetIncome = monthlyGrossIncome - taxesPerMonth - preTaxDeductionsMonthly;
+
+  return monthlyNetIncome;
 }
 
 // =====================================================

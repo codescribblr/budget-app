@@ -111,7 +111,7 @@ export default function Dashboard() {
             <CardTitle>Budget Categories (Envelopes)</CardTitle>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden">
-            <CategoryList categories={categories} onUpdate={fetchData} />
+            <CategoryList categories={categories} summary={summary} onUpdate={fetchData} />
           </CardContent>
         </Card>
 

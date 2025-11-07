@@ -532,6 +532,8 @@ export function getDashboardSummary(): DashboardSummary {
     total_pending_checks: totalPendingChecks.total,
     current_savings: currentSavings,
     has_negative_envelopes: hasNegativeEnvelopes.count > 0,
+    monthly_net_income: 0, // Not used in SQLite version
+    total_monthly_budget: 0, // Not used in SQLite version
   };
 }
 

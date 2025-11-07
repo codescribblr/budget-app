@@ -5,16 +5,17 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/utils';
-import type { Category } from '@/lib/types';
+import type { Category, DashboardSummary } from '@/lib/types';
 import { toast } from 'sonner';
 import { Check, X, Settings } from 'lucide-react';
 
 interface CategoryListProps {
   categories: Category[];
+  summary: DashboardSummary | null;
   onUpdate: () => void;
 }
 
-export default function CategoryList({ categories, onUpdate }: CategoryListProps) {
+export default function CategoryList({ categories, summary, onUpdate }: CategoryListProps) {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [newName, setNewName] = useState('');
   const [newBalance, setNewBalance] = useState('');
@@ -274,13 +275,25 @@ export default function CategoryList({ categories, onUpdate }: CategoryListProps
           <Table>
             <TableBody>
               <TableRow className="font-bold">
-                <TableCell>Total</TableCell>
-                <TableCell className="text-right">{formatCurrency(totalMonthly)}</TableCell>
+                <TableCell>Total Budget</TableCell>
+                <TableCell className={`text-right ${summary && totalMonthly > summary.monthly_net_income ? 'text-red-600' : ''}`}>
+                  {formatCurrency(totalMonthly)}
+                </TableCell>
                 <TableCell className={`text-right ${hasNegativeBalance ? 'text-red-600' : ''}`}>
                   {formatCurrency(totalCurrent)}
                 </TableCell>
                 <TableCell></TableCell>
               </TableRow>
+              {summary && (
+                <TableRow className="font-medium text-muted-foreground">
+                  <TableCell>Available to be budgeted</TableCell>
+                  <TableCell className={`text-right ${summary.monthly_net_income - totalMonthly < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {formatCurrency(summary.monthly_net_income)}
+                  </TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </div>
