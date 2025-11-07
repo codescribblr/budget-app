@@ -282,7 +282,7 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
                 <TableCell className={`text-right ${hasNegativeBalance ? 'text-red-600' : ''}`}>
                   {formatCurrency(totalCurrent)}
                 </TableCell>
-                <TableCell></TableCell>
+                <TableCell className="text-right"></TableCell>
               </TableRow>
               {summary && (
                 <TableRow className="font-medium text-muted-foreground">
@@ -290,8 +290,8 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
                   <TableCell className={`text-right ${summary.monthly_net_income - totalMonthly < 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {formatCurrency(summary.monthly_net_income)}
                   </TableCell>
-                  <TableCell></TableCell>
-                  <TableCell></TableCell>
+                  <TableCell className="text-right"></TableCell>
+                  <TableCell className="text-right"></TableCell>
                 </TableRow>
               )}
             </TableBody>
