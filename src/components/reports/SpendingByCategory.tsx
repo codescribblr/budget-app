@@ -15,24 +15,6 @@ interface SpendingByCategoryProps {
 }
 
 export default function SpendingByCategory({ transactions, categories, onCategoryClick, loading = false, startDate, endDate }: SpendingByCategoryProps) {
-  // Calculate the number of days in the selected period for budget proration
-  const calculateProratedBudget = (monthlyAmount: number): number => {
-    if (!startDate || !endDate) {
-      // If no date range, assume full month
-      return monthlyAmount;
-    }
-
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const daysInPeriod = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-    // Calculate average days in a month (30.44)
-    const avgDaysPerMonth = 30.44;
-
-    // Prorate the monthly budget based on the number of days
-    return (monthlyAmount / avgDaysPerMonth) * daysInPeriod;
-  };
-
   // Calculate spending by category
   const categorySpending = new Map<number, number>();
 
@@ -48,13 +30,13 @@ export default function SpendingByCategory({ transactions, categories, onCategor
     .filter(cat => !cat.is_system)
     .map(category => {
       const spent = categorySpending.get(category.id) || 0;
-      const proratedBudget = calculateProratedBudget(category.monthly_amount);
-      const variance = proratedBudget - spent;
+      const budget = category.monthly_amount;
+      const variance = budget - spent;
 
       return {
         ...category,
         spent,
-        proratedBudget,
+        budget,
         variance,
       };
     })
@@ -62,7 +44,7 @@ export default function SpendingByCategory({ transactions, categories, onCategor
     .sort((a, b) => b.spent - a.spent);
 
   const totalSpent = categoriesWithSpending.reduce((sum, cat) => sum + cat.spent, 0);
-  const totalBudget = categoriesWithSpending.reduce((sum, cat) => sum + cat.proratedBudget, 0);
+  const totalBudget = categoriesWithSpending.reduce((sum, cat) => sum + cat.budget, 0);
 
   if (loading) {
     return (
@@ -113,7 +95,7 @@ export default function SpendingByCategory({ transactions, categories, onCategor
             </TableHeader>
             <TableBody>
               {categoriesWithSpending.map((category) => {
-                const isOverBudget = category.spent > category.proratedBudget;
+                const isOverBudget = category.spent > category.budget;
 
                 return (
                   <TableRow
@@ -128,7 +110,7 @@ export default function SpendingByCategory({ transactions, categories, onCategor
                       {formatCurrency(category.spent)}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">
-                      {formatCurrency(category.proratedBudget)}
+                      {formatCurrency(category.budget)}
                     </TableCell>
                     <TableCell className={`text-right font-medium ${isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
                       {isOverBudget ? '-' : '+'}{formatCurrency(Math.abs(category.variance))}
