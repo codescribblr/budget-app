@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import type { PreTaxDeductionItem } from '@/lib/types';
+import { toast } from 'sonner';
 
 type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly' | 'quarterly' | 'annually';
 
@@ -125,19 +126,45 @@ export default function PreTaxDeductionsSection({
     });
   };
 
-  const handleSave = () => {
+  const saveToDatabase = async (updatedItems: PreTaxDeductionItem[]) => {
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: [
+            { key: 'pre_tax_deduction_items', value: JSON.stringify(updatedItems) }
+          ]
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save pre-tax deductions');
+      }
+
+      toast.success('Pre-tax deductions saved');
+      return true;
+    } catch (error) {
+      console.error('Error saving pre-tax deductions:', error);
+      toast.error('Failed to save pre-tax deductions');
+      return false;
+    }
+  };
+
+  const handleSave = async () => {
     if (!formData.name || formData.value <= 0) {
       return;
     }
 
+    let updatedItems: PreTaxDeductionItem[];
+
     if (editingItem) {
       // Update existing item
-      const updatedItems = items.map(item =>
+      updatedItems = items.map(item =>
         item.id === editingItem.id
           ? { ...item, name: formData.name, type: formData.type, value: formData.value }
           : item
       );
-      onChange(updatedItems);
     } else {
       // Add new item
       const newItem: PreTaxDeductionItem = {
@@ -146,14 +173,29 @@ export default function PreTaxDeductionsSection({
         type: formData.type,
         value: formData.value,
       };
-      onChange([...items, newItem]);
+      updatedItems = [...items, newItem];
     }
 
-    handleCloseDialog();
+    // Save to database
+    const saved = await saveToDatabase(updatedItems);
+
+    if (saved) {
+      // Update parent state
+      onChange(updatedItems);
+      handleCloseDialog();
+    }
   };
 
-  const handleDelete = (id: string) => {
-    onChange(items.filter(item => item.id !== id));
+  const handleDelete = async (id: string) => {
+    const updatedItems = items.filter(item => item.id !== id);
+
+    // Save to database
+    const saved = await saveToDatabase(updatedItems);
+
+    if (saved) {
+      // Update parent state
+      onChange(updatedItems);
+    }
   };
 
   return (
