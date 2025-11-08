@@ -211,7 +211,7 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
                             </span>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p className="max-w-xs">{category.notes}</p>
+                            <p className="max-w-xs whitespace-pre-wrap">{category.notes}</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
