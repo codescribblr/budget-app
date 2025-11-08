@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatCurrency } from '@/lib/utils';
 import type { Category, DashboardSummary } from '@/lib/types';
 import { toast } from 'sonner';
@@ -200,7 +201,24 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
                       {category.name}
                     </a>
                   </TableCell>
-                  <TableCell className="text-right">{formatCurrency(category.monthly_amount)}</TableCell>
+                  <TableCell className="text-right">
+                    {category.notes ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-help">
+                              {formatCurrency(category.monthly_amount)}*
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-xs">{category.notes}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      formatCurrency(category.monthly_amount)
+                    )}
+                  </TableCell>
                   <TableCell className="text-right font-semibold">
                     {editingBalanceId === category.id ? (
                       <div className="flex items-center justify-end gap-1">
