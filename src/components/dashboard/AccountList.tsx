@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { formatCurrency } from '@/lib/utils';
 import type { Account } from '@/lib/types';
+import { toast } from 'sonner';
+import { Check, X } from 'lucide-react';
 
 interface AccountListProps {
   accounts: Account[];
@@ -19,6 +21,10 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
   const [includeInTotals, setIncludeInTotals] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+
+  // Inline editing state
+  const [editingBalanceId, setEditingBalanceId] = useState<number | null>(null);
+  const [editingBalanceValue, setEditingBalanceValue] = useState('');
 
   const handleUpdateAccount = async () => {
     if (!editingAccount) return;
@@ -101,6 +107,39 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
     setIsAddDialogOpen(true);
   };
 
+  // Inline balance editing handlers
+  const startEditingBalance = (account: Account) => {
+    setEditingBalanceId(account.id);
+    setEditingBalanceValue(account.balance.toString());
+  };
+
+  const cancelEditingBalance = () => {
+    setEditingBalanceId(null);
+    setEditingBalanceValue('');
+  };
+
+  const saveInlineBalance = async (accountId: number) => {
+    try {
+      const response = await fetch(`/api/accounts/${accountId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          balance: parseFloat(editingBalanceValue) || 0,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update balance');
+
+      toast.success('Balance updated');
+      setEditingBalanceId(null);
+      setEditingBalanceValue('');
+      onUpdate();
+    } catch (error) {
+      console.error('Error updating balance:', error);
+      toast.error('Failed to update balance');
+    }
+  };
+
   const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
 
   return (
@@ -124,7 +163,48 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
             <TableRow key={account.id}>
               <TableCell className="font-medium">{account.name}</TableCell>
               <TableCell className="text-right font-semibold">
-                {formatCurrency(account.balance)}
+                {editingBalanceId === account.id ? (
+                  <div className="flex items-center justify-end gap-1">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={editingBalanceValue}
+                      onChange={(e) => setEditingBalanceValue(e.target.value)}
+                      className="w-28 h-8 text-right"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          saveInlineBalance(account.id);
+                        } else if (e.key === 'Escape') {
+                          cancelEditingBalance();
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => saveInlineBalance(account.id)}
+                    >
+                      <Check className="h-4 w-4 text-green-600" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={cancelEditingBalance}
+                    >
+                      <X className="h-4 w-4 text-red-600" />
+                    </Button>
+                  </div>
+                ) : (
+                  <span
+                    className="cursor-pointer hover:bg-muted px-2 py-1 rounded"
+                    onClick={() => startEditingBalance(account)}
+                  >
+                    {formatCurrency(account.balance)}
+                  </span>
+                )}
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">

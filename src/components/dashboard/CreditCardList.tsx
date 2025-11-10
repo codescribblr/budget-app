@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { formatCurrency } from '@/lib/utils';
 import type { CreditCard } from '@/lib/types';
+import { toast } from 'sonner';
+import { Check, X } from 'lucide-react';
 
 interface CreditCardListProps {
   creditCards: CreditCard[];
@@ -20,6 +22,10 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
   const [includeInTotals, setIncludeInTotals] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+
+  // Inline editing state
+  const [editingAvailableId, setEditingAvailableId] = useState<number | null>(null);
+  const [editingAvailableValue, setEditingAvailableValue] = useState('');
 
   const handleUpdateCard = async () => {
     if (!editingCard) return;
@@ -108,6 +114,39 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
     setIsAddDialogOpen(true);
   };
 
+  // Inline available credit editing handlers
+  const startEditingAvailable = (card: CreditCard) => {
+    setEditingAvailableId(card.id);
+    setEditingAvailableValue(card.available_credit.toString());
+  };
+
+  const cancelEditingAvailable = () => {
+    setEditingAvailableId(null);
+    setEditingAvailableValue('');
+  };
+
+  const saveInlineAvailable = async (cardId: number) => {
+    try {
+      const response = await fetch(`/api/credit-cards/${cardId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          available_credit: parseFloat(editingAvailableValue) || 0,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update available credit');
+
+      toast.success('Available credit updated');
+      setEditingAvailableId(null);
+      setEditingAvailableValue('');
+      onUpdate();
+    } catch (error) {
+      console.error('Error updating available credit:', error);
+      toast.error('Failed to update available credit');
+    }
+  };
+
   const totalBalance = creditCards.reduce((sum, card) => sum + card.current_balance, 0);
 
   return (
@@ -132,7 +171,48 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
             <TableRow key={card.id}>
               <TableCell className="font-medium">{card.name}</TableCell>
               <TableCell className="text-right text-muted-foreground">
-                {formatCurrency(card.available_credit)}
+                {editingAvailableId === card.id ? (
+                  <div className="flex items-center justify-end gap-1">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={editingAvailableValue}
+                      onChange={(e) => setEditingAvailableValue(e.target.value)}
+                      className="w-28 h-8 text-right"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          saveInlineAvailable(card.id);
+                        } else if (e.key === 'Escape') {
+                          cancelEditingAvailable();
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => saveInlineAvailable(card.id)}
+                    >
+                      <Check className="h-4 w-4 text-green-600" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={cancelEditingAvailable}
+                    >
+                      <X className="h-4 w-4 text-red-600" />
+                    </Button>
+                  </div>
+                ) : (
+                  <span
+                    className="cursor-pointer hover:bg-muted px-2 py-1 rounded"
+                    onClick={() => startEditingAvailable(card)}
+                  >
+                    {formatCurrency(card.available_credit)}
+                  </span>
+                )}
               </TableCell>
               <TableCell className="text-right font-semibold">
                 {formatCurrency(card.current_balance)}
