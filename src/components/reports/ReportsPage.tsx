@@ -41,23 +41,37 @@ export default function ReportsPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [dateRange, setDateRange] = useState('current-month');
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Category filter - initialize from URL parameter
-  const categoryParam = searchParams.get('category');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
-    categoryParam ? parseInt(categoryParam) : null
-  );
+  // Category filter
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
 
   // System category toggle for merchants
   const [includeSystemCategories, setIncludeSystemCategories] = useState(false);
 
-  // Sync category filter from URL parameter
+  // Initialize from URL parameters on mount
   useEffect(() => {
+    const startDateParam = searchParams.get('startDate');
+    const endDateParam = searchParams.get('endDate');
+    const dateRangeParam = searchParams.get('dateRange');
     const categoryParam = searchParams.get('category');
+
+    if (startDateParam || endDateParam || dateRangeParam) {
+      // Load from URL
+      if (startDateParam) setStartDate(startDateParam);
+      if (endDateParam) setEndDate(endDateParam);
+      if (dateRangeParam) setDateRange(dateRangeParam);
+    } else {
+      // No URL params, use default (current-month)
+      setDateRange('current-month');
+    }
+
     if (categoryParam) {
       setSelectedCategoryId(parseInt(categoryParam));
     }
-  }, [searchParams]);
+
+    setIsInitialized(true);
+  }, []); // Only run on mount
 
   // Fetch transactions
   useEffect(() => {
@@ -95,50 +109,75 @@ export default function ReportsPage() {
     fetchCategories();
   }, []);
 
+  // Update dates when date range preset changes
   useEffect(() => {
+    // Don't run until initialized
+    if (!isInitialized) return;
+
+    // Only update if dateRange is from a preset (not 'custom')
+    if (dateRange === 'custom') return;
+
     // Set date range based on selection
     const today = new Date();
     const end = today.toISOString().split('T')[0];
+    let newStartDate = '';
+    let newEndDate = '';
 
     switch (dateRange) {
       case 'current-month':
         // Current calendar month
         const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
         const currentMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        setStartDate(currentMonthStart.toISOString().split('T')[0]);
-        setEndDate(currentMonthEnd.toISOString().split('T')[0]);
+        newStartDate = currentMonthStart.toISOString().split('T')[0];
+        newEndDate = currentMonthEnd.toISOString().split('T')[0];
         break;
       case 'last-month':
         // Previous calendar month
         const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
         const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-        setStartDate(lastMonth.toISOString().split('T')[0]);
-        setEndDate(lastMonthEnd.toISOString().split('T')[0]);
+        newStartDate = lastMonth.toISOString().split('T')[0];
+        newEndDate = lastMonthEnd.toISOString().split('T')[0];
         break;
       case 'week':
         const weekAgo = new Date(today);
         weekAgo.setDate(weekAgo.getDate() - 7);
-        setStartDate(weekAgo.toISOString().split('T')[0]);
-        setEndDate(end);
+        newStartDate = weekAgo.toISOString().split('T')[0];
+        newEndDate = end;
         break;
       case 'quarter':
         const quarterAgo = new Date(today);
         quarterAgo.setMonth(quarterAgo.getMonth() - 3);
-        setStartDate(quarterAgo.toISOString().split('T')[0]);
-        setEndDate(end);
+        newStartDate = quarterAgo.toISOString().split('T')[0];
+        newEndDate = end;
         break;
       case 'year':
         const yearAgo = new Date(today);
         yearAgo.setFullYear(yearAgo.getFullYear() - 1);
-        setStartDate(yearAgo.toISOString().split('T')[0]);
-        setEndDate(end);
+        newStartDate = yearAgo.toISOString().split('T')[0];
+        newEndDate = end;
         break;
       case 'all':
-        setStartDate('');
-        setEndDate('');
+        newStartDate = '';
+        newEndDate = '';
         break;
     }
-  }, [dateRange]);
+
+    setStartDate(newStartDate);
+    setEndDate(newEndDate);
+    updateURL(newStartDate, newEndDate, dateRange, selectedCategoryId);
+  }, [dateRange, isInitialized]);
+
+  // Update URL when filters change
+  const updateURL = (start: string, end: string, range: string, categoryId: number | null) => {
+    const params = new URLSearchParams();
+
+    if (start) params.set('startDate', start);
+    if (end) params.set('endDate', end);
+    if (range) params.set('dateRange', range);
+    if (categoryId !== null) params.set('category', categoryId.toString());
+
+    router.push(`/reports?${params.toString()}`, { scroll: false });
+  };
 
   // Memoize filtered transactions to prevent unnecessary re-renders
   const filteredTransactions = useMemo(() => {
@@ -240,7 +279,7 @@ export default function ReportsPage() {
             size="sm"
             onClick={() => {
               setSelectedCategoryId(null);
-              router.push('/reports');
+              updateURL(startDate, endDate, dateRange, null);
             }}
             className="h-7 px-2"
           >
@@ -283,8 +322,10 @@ export default function ReportsPage() {
                   type="date"
                   value={startDate}
                   onChange={(e) => {
-                    setStartDate(e.target.value);
+                    const newStartDate = e.target.value;
+                    setStartDate(newStartDate);
                     setDateRange('custom');
+                    updateURL(newStartDate, endDate, 'custom', selectedCategoryId);
                   }}
                 />
               </div>
@@ -295,8 +336,10 @@ export default function ReportsPage() {
                   type="date"
                   value={endDate}
                   onChange={(e) => {
-                    setEndDate(e.target.value);
+                    const newEndDate = e.target.value;
+                    setEndDate(newEndDate);
                     setDateRange('custom');
+                    updateURL(startDate, newEndDate, 'custom', selectedCategoryId);
                   }}
                 />
               </div>
