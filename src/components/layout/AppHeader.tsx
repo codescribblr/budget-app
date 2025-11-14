@@ -84,73 +84,84 @@ export default function AppHeader({
                   <SheetHeader>
                     <SheetTitle>Navigation</SheetTitle>
                   </SheetHeader>
-                  <div className="flex flex-col gap-2 mt-6">
-                    <Button
-                      variant={getButtonVariant('/')}
+                  <nav className="flex flex-col mt-6">
+                    <button
                       onClick={() => handleNavigation('/')}
-                      className="justify-start"
+                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
+                        isActive('/') ? 'bg-gray-800 text-white' : ''
+                      }`}
                     >
                       Dashboard
-                    </Button>
-                    <Button
-                      variant={getButtonVariant('/transactions')}
+                    </button>
+                    <button
                       onClick={() => handleNavigation('/transactions')}
-                      className="justify-start"
+                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
+                        isActive('/transactions') ? 'bg-gray-800 text-white' : ''
+                      }`}
                     >
                       Transactions
-                    </Button>
-                    <Button
-                      variant={getButtonVariant('/import')}
+                    </button>
+                    <button
                       onClick={() => handleNavigation('/import')}
-                      className="justify-start"
+                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
+                        isActive('/import') ? 'bg-gray-800 text-white' : ''
+                      }`}
                     >
                       Import
-                    </Button>
-                    <Button
-                      variant={getButtonVariant('/money-movement')}
+                    </button>
+                    <button
                       onClick={() => handleNavigation('/money-movement')}
-                      className="justify-start"
+                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
+                        isActive('/money-movement') ? 'bg-gray-800 text-white' : ''
+                      }`}
                     >
                       Money Movement
-                    </Button>
-                    <Button
-                      variant={getButtonVariant('/reports')}
+                    </button>
+                    <button
                       onClick={() => handleNavigation('/reports')}
-                      className="justify-start"
+                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
+                        isActive('/reports') && !isActive('/reports/trends') ? 'bg-gray-800 text-white' : ''
+                      }`}
                     >
                       Reports
-                    </Button>
-                    <Button
-                      variant={getButtonVariant('/reports/trends')}
+                    </button>
+                    <button
                       onClick={() => handleNavigation('/reports/trends')}
-                      className="justify-start ml-4"
+                      className={`w-full text-left px-4 py-3 pl-8 hover:bg-accent transition-colors border-b ${
+                        isActive('/reports/trends') ? 'bg-gray-800 text-white' : ''
+                      }`}
                     >
                       Trends
-                    </Button>
-                    <Button
-                      variant={getButtonVariant('/income')}
+                    </button>
+                    <button
                       onClick={() => handleNavigation('/income')}
-                      className="justify-start"
+                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
+                        isActive('/income') ? 'bg-gray-800 text-white' : ''
+                      }`}
                     >
                       Income
-                    </Button>
-                    <Button
-                      variant={getButtonVariant('/merchants')}
+                    </button>
+                    <button
                       onClick={() => handleNavigation('/merchants')}
-                      className="justify-start"
+                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
+                        isActive('/merchants') ? 'bg-gray-800 text-white' : ''
+                      }`}
                     >
                       Merchants
-                    </Button>
-                    <Button
-                      variant={getButtonVariant('/settings')}
+                    </button>
+                    <button
                       onClick={() => handleNavigation('/settings')}
-                      className="justify-start"
+                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
+                        isActive('/settings') ? 'bg-gray-800 text-white' : ''
+                      }`}
                     >
                       Settings
-                    </Button>
-                    <Separator className="my-2" />
-                    <SignOutButton />
-                  </div>
+                    </button>
+
+                    <div className="mt-4 px-4">
+                      <SignOutButton />
+                    </div>
+                  </nav>
                 </SheetContent>
               </Sheet>
             </div>
