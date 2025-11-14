@@ -1,18 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import type { Category } from '@/lib/types';
 import TransferBetweenEnvelopes from './TransferBetweenEnvelopes';
 import AllocateIncome from './AllocateIncome';
+import AppHeader from '@/components/layout/AppHeader';
 
 export default function MoneyMovementPage() {
-  const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [currentSavings, setCurrentSavings] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -49,19 +46,10 @@ export default function MoneyMovementPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Money Movement</h1>
-          <p className="text-muted-foreground mt-1">
-            Transfer funds between envelopes or allocate income
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => router.push('/')}>
-          Back to Dashboard
-        </Button>
-      </div>
-
-      <Separator />
+      <AppHeader
+        title="Money Movement"
+        subtitle="Transfer funds between envelopes or allocate income"
+      />
 
       <Tabs defaultValue="transfer" className="w-full">
         <TabsList className="grid w-full grid-cols-2">

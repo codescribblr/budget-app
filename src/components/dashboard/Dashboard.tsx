@@ -3,16 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { ChevronDown } from 'lucide-react';
 import type {
   Category,
   Account,
@@ -26,7 +18,7 @@ import AccountList from './AccountList';
 import CreditCardList from './CreditCardList';
 import PendingCheckList from './PendingCheckList';
 import SummaryCards from './SummaryCards';
-import SignOutButton from '@/components/auth/SignOutButton';
+import AppHeader from '@/components/layout/AppHeader';
 
 export default function Dashboard() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -80,48 +72,7 @@ export default function Dashboard() {
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold">Budget Dashboard</h1>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => window.location.href = '/transactions'} size="sm" className="md:size-default">
-            Transactions
-          </Button>
-          <Button variant="outline" onClick={() => window.location.href = '/import'} size="sm" className="md:size-default">
-            Import
-          </Button>
-          <Button variant="outline" onClick={() => window.location.href = '/money-movement'} size="sm" className="md:size-default">
-            Money Movement
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="md:size-default">
-                Reports
-                <ChevronDown className="ml-1 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => window.location.href = '/reports'}>
-                Reports
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.location.href = '/reports/trends'}>
-                Trends
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button variant="outline" onClick={() => window.location.href = '/income'} size="sm" className="md:size-default">
-            Income
-          </Button>
-          <Button variant="outline" onClick={() => window.location.href = '/merchants'} size="sm" className="md:size-default">
-            Merchants
-          </Button>
-          <Button variant="outline" onClick={() => window.location.href = '/settings'} size="sm" className="md:size-default">
-            Settings
-          </Button>
-          <SignOutButton />
-        </div>
-      </div>
-
-      <Separator />
+      <AppHeader title="Budget Dashboard" />
 
       {summary && <SummaryCards summary={summary} />}
 

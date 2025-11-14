@@ -5,17 +5,17 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Plus, Edit, Trash2, ArrowLeft, Merge } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Merge } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
 import type { MerchantGroupWithStats } from '@/lib/types';
 import EditMerchantGroupDialog from './EditMerchantGroupDialog';
 import MergeMerchantGroupsDialog from './MergeMerchantGroupsDialog';
 import DeleteMerchantGroupDialog from './DeleteMerchantGroupDialog';
+import AppHeader from '@/components/layout/AppHeader';
 
 export default function MerchantsPage() {
   const router = useRouter();
@@ -95,20 +95,10 @@ export default function MerchantsPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Merchant Groups</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage and organize your merchant groups
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => router.push('/')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Dashboard
-        </Button>
-      </div>
-
-      <Separator />
+      <AppHeader
+        title="Merchant Groups"
+        subtitle="Manage and organize your merchant groups"
+      />
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

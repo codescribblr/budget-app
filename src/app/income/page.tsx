@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,10 +10,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { ArrowLeft, DollarSign, TrendingUp, Calculator, Save } from 'lucide-react';
+import { DollarSign, TrendingUp, Calculator, Save } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import PreTaxDeductionsSection from '@/components/income/PreTaxDeductionsSection';
 import type { PreTaxDeductionItem } from '@/lib/types';
+import AppHeader from '@/components/layout/AppHeader';
 
 type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly' | 'quarterly' | 'annually';
 
@@ -34,7 +34,6 @@ interface BudgetSummary {
 }
 
 export default function IncomePage() {
-  const router = useRouter();
 
   // Current settings
   const [currentSettings, setCurrentSettings] = useState<IncomeSettings>({
@@ -283,21 +282,11 @@ export default function IncomePage() {
   }
 
   return (
-    <div className="container mx-auto py-8 max-w-6xl">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Income Planning</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your income settings and explore budget scenarios
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => router.push('/')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Dashboard
-        </Button>
-      </div>
-
-      <Separator className="mb-8" />
+    <div className="container mx-auto p-6 space-y-6 max-w-6xl">
+      <AppHeader
+        title="Income Planning"
+        subtitle="Manage your income settings and explore budget scenarios"
+      />
 
       <Tabs defaultValue="current" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 max-w-md">

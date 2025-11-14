@@ -1,22 +1,19 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import MonthlySpendingTrend from './trends/MonthlySpendingTrend';
 import CategorySpendingTrends from './trends/CategorySpendingTrends';
 import BudgetVsActualTrend from './trends/BudgetVsActualTrend';
 import SpendingVelocityTrend from './trends/SpendingVelocityTrend';
 import MerchantSpendingTrends from './trends/MerchantSpendingTrends';
+import AppHeader from '@/components/layout/AppHeader';
 
 export default function TrendsPage() {
-  const router = useRouter();
   const [transactions, setTransactions] = useState<TransactionWithSplits[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
@@ -83,24 +80,10 @@ export default function TrendsPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Spending Trends</h1>
-          <p className="text-muted-foreground mt-1">
-            Analyze your spending patterns and trends over time
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push('/reports')}>
-            Back to Reports
-          </Button>
-          <Button variant="outline" onClick={() => router.push('/')}>
-            Back to Dashboard
-          </Button>
-        </div>
-      </div>
-
-      <Separator />
+      <AppHeader
+        title="Spending Trends"
+        subtitle="Analyze your spending patterns and trends over time"
+      />
 
       {/* Filters Section */}
       <Card>

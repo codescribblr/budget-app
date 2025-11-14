@@ -25,9 +25,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { Loader2, Trash2, Database, Download, Key, ArrowLeft } from 'lucide-react';
+import { Loader2, Trash2, Database, Download, Key } from 'lucide-react';
 import MerchantGroupsSettings from '@/components/settings/MerchantGroupsSettings';
 import DuplicateTransactionFinder from '@/components/settings/DuplicateTransactionFinder';
+import AppHeader from '@/components/layout/AppHeader';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -153,18 +154,8 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="container mx-auto py-8 max-w-4xl">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold">Account Settings</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push('/')}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Dashboard
-          </Button>
-        </div>
-      </div>
-
-      <Separator className="mb-8" />
+    <div className="container mx-auto p-6 space-y-6">
+      <AppHeader title="Account Settings" />
 
       {/* Duplicate Transaction Finder */}
       <div className="mb-6">

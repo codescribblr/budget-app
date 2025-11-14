@@ -5,13 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Search, X, ArrowLeft } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import TransactionList from './TransactionList';
 import AddTransactionDialog from './AddTransactionDialog';
+import AppHeader from '@/components/layout/AppHeader';
 
 // Fuzzy search function
 function fuzzyMatch(text: string, search: string): boolean {
@@ -136,41 +136,23 @@ export default function TransactionsPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Transactions</h1>
-          {merchantFilter && (
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-sm text-muted-foreground">Filtered by merchant:</span>
-              <Badge variant="secondary" className="gap-2">
-                {merchantFilter}
-                <button
-                  onClick={handleClearMerchantFilter}
-                  className="ml-1 hover:bg-muted rounded-full"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            </div>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {merchantFilter && (
-            <Button variant="outline" onClick={handleClearMerchantFilter}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to All Transactions
+      <AppHeader
+        title="Transactions"
+        subtitle={merchantFilter ? `Filtered by merchant: ${merchantFilter}` : undefined}
+        actions={
+          <>
+            {merchantFilter && (
+              <Button variant="outline" onClick={handleClearMerchantFilter}>
+                <X className="mr-2 h-4 w-4" />
+                Clear Filter
+              </Button>
+            )}
+            <Button onClick={() => setIsAddDialogOpen(true)}>
+              Add Transaction
             </Button>
-          )}
-          <Button onClick={() => setIsAddDialogOpen(true)}>
-            Add Transaction
-          </Button>
-          <Button variant="outline" onClick={() => router.push('/')}>
-            Back to Dashboard
-          </Button>
-        </div>
-      </div>
-
-      <Separator />
+          </>
+        }
+      />
 
       {/* Search Box */}
       <Card>
