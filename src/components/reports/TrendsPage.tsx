@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import MonthlySpendingTrend from './trends/MonthlySpendingTrend';
 import CategorySpendingTrends from './trends/CategorySpendingTrends';
@@ -89,27 +90,47 @@ export default function TrendsPage() {
             Analyze your spending patterns and trends over time
           </p>
         </div>
-        <div className="flex items-end gap-4">
-          <div className="w-48">
-            <Label htmlFor="time-range">Time Range</Label>
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger id="time-range">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="3">Last 3 Months</SelectItem>
-                <SelectItem value="6">Last 6 Months</SelectItem>
-                <SelectItem value="12">Last 12 Months</SelectItem>
-                <SelectItem value="24">Last 24 Months</SelectItem>
-                <SelectItem value="36">Last 36 Months</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="flex gap-2">
           <Button variant="outline" onClick={() => router.push('/reports')}>
             Back to Reports
           </Button>
+          <Button variant="outline" onClick={() => router.push('/')}>
+            Back to Dashboard
+          </Button>
         </div>
       </div>
+
+      <Separator />
+
+      {/* Filters Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Filters</CardTitle>
+          <CardDescription>Filter your trend data</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Time Range Filter */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="time-range">Time Range</Label>
+                <Select value={timeRange} onValueChange={setTimeRange}>
+                  <SelectTrigger id="time-range">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="3">Last 3 Months</SelectItem>
+                    <SelectItem value="6">Last 6 Months</SelectItem>
+                    <SelectItem value="12">Last 12 Months</SelectItem>
+                    <SelectItem value="24">Last 24 Months</SelectItem>
+                    <SelectItem value="36">Last 36 Months</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Monthly Spending Trend */}
       <MonthlySpendingTrend
