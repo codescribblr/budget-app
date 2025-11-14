@@ -1075,112 +1075,181 @@ export async function importTransactions(transactions: any[], isHistorical: bool
   const { supabase, user } = await getAuthenticatedUser();
 
   const importDate = new Date().toISOString();
-  let importedCount = 0;
 
-  for (const txn of transactions) {
-    // Only import transactions that have splits (are categorized)
-    if (!txn.splits || txn.splits.length === 0) {
-      continue;
-    }
+  // Filter out transactions without splits
+  const validTransactions = transactions.filter(txn => txn.splits && txn.splits.length > 0);
 
-    // Calculate total amount from splits
-    const totalAmount = txn.splits.reduce((sum: number, split: any) => sum + split.amount, 0);
-
-    // Insert into imported_transactions
-    const { data: importedTx, error: importError } = await supabase
-      .from('imported_transactions')
-      .insert({
-        user_id: user.id,
-        import_date: importDate,
-        source_type: 'CSV Import',
-        source_identifier: 'Unknown',
-        transaction_date: txn.date,
-        merchant: txn.merchant || txn.description,
-        description: txn.description,
-        amount: txn.amount,
-        hash: txn.hash,
-      })
-      .select()
-      .single();
-
-    if (importError) {
-      // Skip if duplicate hash
-      if (importError.code === '23505') continue;
-      throw importError;
-    }
-
-    // Auto-assign merchant group first (non-blocking - don't fail import if this fails)
-    let merchantGroupId: number | null = null;
-    try {
-      const { getOrCreateMerchantGroup } = await import('@/lib/db/merchant-groups');
-      const result = await getOrCreateMerchantGroup(txn.description, true);
-      merchantGroupId = result.group?.id || null;
-    } catch (error) {
-      console.error('Error auto-assigning merchant group:', error);
-      // Continue with import even if merchant grouping fails
-    }
-
-    // Create main transaction
-    const { data: transaction, error: txError } = await supabase
-      .from('transactions')
-      .insert({
-        user_id: user.id,
-        date: txn.date,
-        description: txn.description,
-        total_amount: totalAmount,
-        merchant_group_id: merchantGroupId,
-        is_historical: isHistorical,
-      })
-      .select()
-      .single();
-
-    if (txError) throw txError;
-
-    // Create splits and update category balances (skip balance updates for historical transactions)
-    for (const split of txn.splits) {
-      // Insert split
-      const { error: splitError } = await supabase
-        .from('transaction_splits')
-        .insert({
-          transaction_id: transaction.id,
-          category_id: split.categoryId,
-          amount: split.amount,
-        });
-
-      if (splitError) throw splitError;
-
-      // Update category balance (only for non-historical transactions)
-      if (!isHistorical) {
-        const { data: category } = await supabase
-          .from('categories')
-          .select('is_system, current_balance')
-          .eq('id', split.categoryId)
-          .single();
-
-        if (category && !category.is_system) {
-          await supabase
-            .from('categories')
-            .update({
-              current_balance: Number(category.current_balance) - split.amount,
-            })
-            .eq('id', split.categoryId);
-        }
-      }
-    }
-
-    // Link imported transaction to created transaction
-    const { error: linkError } = await supabase
-      .from('imported_transaction_links')
-      .insert({
-        imported_transaction_id: importedTx.id,
-        transaction_id: transaction.id,
-      });
-
-    if (linkError) throw linkError;
-
-    importedCount++;
+  if (validTransactions.length === 0) {
+    return 0;
   }
 
-  return importedCount;
+  // ===== STEP 1: Batch insert imported_transactions =====
+  const importedTransactionsData = validTransactions.map(txn => ({
+    user_id: user.id,
+    import_date: importDate,
+    source_type: 'CSV Import',
+    source_identifier: 'Unknown',
+    transaction_date: txn.date,
+    merchant: txn.merchant || txn.description,
+    description: txn.description,
+    amount: txn.amount,
+    hash: txn.hash,
+  }));
+
+  let { data: importedTxs, error: importError } = await supabase
+    .from('imported_transactions')
+    .insert(importedTransactionsData)
+    .select('id, hash');
+
+  if (importError) {
+    // If there are duplicate hashes, filter them out and retry
+    if (importError.code === '23505') {
+      // Get existing hashes
+      const hashes = validTransactions.map(txn => txn.hash);
+      const { data: existingHashes } = await supabase
+        .from('imported_transactions')
+        .select('hash')
+        .in('hash', hashes);
+
+      const existingHashSet = new Set(existingHashes?.map(h => h.hash) || []);
+
+      // Filter out duplicates
+      const nonDuplicates = validTransactions.filter(txn => !existingHashSet.has(txn.hash));
+      const nonDuplicateData = importedTransactionsData.filter((_, i) =>
+        !existingHashSet.has(validTransactions[i].hash)
+      );
+
+      if (nonDuplicateData.length === 0) {
+        return 0; // All duplicates
+      }
+
+      // Retry with non-duplicates
+      const { data: retryImportedTxs, error: retryError } = await supabase
+        .from('imported_transactions')
+        .insert(nonDuplicateData)
+        .select('id, hash');
+
+      if (retryError) throw retryError;
+
+      // Update validTransactions and importedTxs to only include non-duplicates
+      validTransactions.splice(0, validTransactions.length, ...nonDuplicates);
+      importedTxs = retryImportedTxs;
+    } else {
+      throw importError;
+    }
+  }
+
+  if (!importedTxs || importedTxs.length === 0) {
+    return 0;
+  }
+
+  // Create hash-to-id map for linking later
+  const hashToImportedId = new Map(importedTxs.map(tx => [tx.hash, tx.id]));
+
+  // ===== STEP 2: Batch get/create merchant groups =====
+  const { getOrCreateMerchantGroup } = await import('@/lib/db/merchant-groups');
+  const merchantGroupPromises = validTransactions.map(async (txn) => {
+    try {
+      const result = await getOrCreateMerchantGroup(txn.description, true);
+      return result.group?.id || null;
+    } catch (error) {
+      console.error('Error auto-assigning merchant group:', error);
+      return null;
+    }
+  });
+
+  const merchantGroupIds = await Promise.all(merchantGroupPromises);
+
+  // ===== STEP 3: Batch insert transactions =====
+  const transactionsData = validTransactions.map((txn, index) => {
+    const totalAmount = txn.splits.reduce((sum: number, split: any) => sum + split.amount, 0);
+    return {
+      user_id: user.id,
+      date: txn.date,
+      description: txn.description,
+      total_amount: totalAmount,
+      merchant_group_id: merchantGroupIds[index],
+      is_historical: isHistorical,
+    };
+  });
+
+  const { data: createdTransactions, error: txError } = await supabase
+    .from('transactions')
+    .insert(transactionsData)
+    .select('id');
+
+  if (txError) throw txError;
+  if (!createdTransactions || createdTransactions.length === 0) {
+    throw new Error('Failed to create transactions');
+  }
+
+  // ===== STEP 4: Batch insert transaction splits =====
+  const splitsData: any[] = [];
+  const categoryBalanceUpdates = new Map<number, number>(); // categoryId -> total amount to subtract
+
+  validTransactions.forEach((txn, txnIndex) => {
+    const transactionId = createdTransactions[txnIndex].id;
+
+    txn.splits.forEach((split: any) => {
+      splitsData.push({
+        transaction_id: transactionId,
+        category_id: split.categoryId,
+        amount: split.amount,
+      });
+
+      // Accumulate balance updates (only for non-historical)
+      if (!isHistorical) {
+        const currentTotal = categoryBalanceUpdates.get(split.categoryId) || 0;
+        categoryBalanceUpdates.set(split.categoryId, currentTotal + split.amount);
+      }
+    });
+  });
+
+  const { error: splitsError } = await supabase
+    .from('transaction_splits')
+    .insert(splitsData);
+
+  if (splitsError) throw splitsError;
+
+  // ===== STEP 5: Batch update category balances =====
+  if (!isHistorical && categoryBalanceUpdates.size > 0) {
+    // Get all affected categories
+    const categoryIds = Array.from(categoryBalanceUpdates.keys());
+    const { data: categories, error: catError } = await supabase
+      .from('categories')
+      .select('id, current_balance, is_system')
+      .in('id', categoryIds);
+
+    if (catError) throw catError;
+
+    // Update each category (filter out system categories)
+    const updatePromises = (categories || [])
+      .filter(cat => !cat.is_system)
+      .map(cat => {
+        const amountToSubtract = categoryBalanceUpdates.get(cat.id) || 0;
+        const newBalance = Number(cat.current_balance) - amountToSubtract;
+
+        return supabase
+          .from('categories')
+          .update({ current_balance: newBalance })
+          .eq('id', cat.id);
+      });
+
+    await Promise.all(updatePromises);
+  }
+
+  // ===== STEP 6: Batch insert links =====
+  const linksData = validTransactions.map((txn, index) => ({
+    imported_transaction_id: hashToImportedId.get(txn.hash)!,
+    transaction_id: createdTransactions[index].id,
+  }));
+
+  const { error: linksError } = await supabase
+    .from('imported_transaction_links')
+    .insert(linksData);
+
+  if (linksError) throw linksError;
+
+  return createdTransactions.length;
 }
 
