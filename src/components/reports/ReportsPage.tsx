@@ -219,9 +219,14 @@ export default function ReportsPage() {
             Analyze your spending patterns and trends
           </p>
         </div>
-        <Button variant="outline" onClick={() => router.push('/')}>
-          Back to Dashboard
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push('/reports/trends')}>
+            View Trends
+          </Button>
+          <Button variant="outline" onClick={() => router.push('/')}>
+            Back to Dashboard
+          </Button>
+        </div>
       </div>
 
       <Separator />

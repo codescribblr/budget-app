@@ -1,0 +1,143 @@
+'use client';
+
+import { useMemo } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatCurrency } from '@/lib/utils';
+import type { TransactionWithSplits, Category } from '@/lib/types';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart } from 'recharts';
+
+interface SpendingVelocityTrendProps {
+  transactions: TransactionWithSplits[];
+  categories: Category[];
+}
+
+export default function SpendingVelocityTrend({ transactions, categories }: SpendingVelocityTrendProps) {
+  const chartData = useMemo(() => {
+    // Group transactions by month
+    const monthlyData = new Map<string, { total: number; days: number }>();
+
+    transactions.forEach(transaction => {
+      // Skip system categories
+      const hasSystemCategory = transaction.splits.some(split => {
+        const category = categories.find(c => c.id === split.category_id);
+        return category?.is_system;
+      });
+
+      if (hasSystemCategory) return;
+
+      const date = new Date(transaction.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      const current = monthlyData.get(monthKey) || { total: 0, days: 0 };
+      monthlyData.set(monthKey, {
+        total: current.total + transaction.total_amount,
+        days: new Date(parseInt(monthKey.split('-')[0]), parseInt(monthKey.split('-')[1]), 0).getDate(),
+      });
+    });
+
+    // Convert to array and calculate daily average
+    const data = Array.from(monthlyData.entries())
+      .map(([month, stats]) => {
+        const [year, monthNum] = month.split('-');
+        const date = new Date(parseInt(year), parseInt(monthNum) - 1);
+        const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        
+        const dailyAverage = stats.total / stats.days;
+
+        return {
+          month: monthName,
+          monthKey: month,
+          total: stats.total,
+          dailyAverage,
+          days: stats.days,
+        };
+      })
+      .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+
+    return data;
+  }, [transactions, categories]);
+
+  const overallDailyAverage = chartData.length > 0
+    ? chartData.reduce((sum, d) => sum + d.dailyAverage, 0) / chartData.length
+    : 0;
+
+  const highestVelocity = chartData.reduce(
+    (max, d) => d.dailyAverage > max.dailyAverage ? d : max,
+    chartData[0] || { dailyAverage: 0, month: '' }
+  );
+
+  const lowestVelocity = chartData.reduce(
+    (min, d) => d.dailyAverage < min.dailyAverage ? d : min,
+    chartData[0] || { dailyAverage: Infinity, month: '' }
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Spending Velocity</CardTitle>
+        <CardDescription>
+          Average daily spending rate by month
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="p-4 bg-muted rounded-lg">
+            <div className="text-sm text-muted-foreground">Avg Daily Spending</div>
+            <div className="text-2xl font-bold">{formatCurrency(overallDailyAverage)}</div>
+            <div className="text-xs text-muted-foreground">per day</div>
+          </div>
+          <div className="p-4 bg-muted rounded-lg">
+            <div className="text-sm text-muted-foreground">Highest Velocity</div>
+            <div className="text-2xl font-bold">{formatCurrency(highestVelocity?.dailyAverage || 0)}</div>
+            <div className="text-xs text-muted-foreground">{highestVelocity?.month}</div>
+          </div>
+          <div className="p-4 bg-muted rounded-lg">
+            <div className="text-sm text-muted-foreground">Lowest Velocity</div>
+            <div className="text-2xl font-bold">{formatCurrency(lowestVelocity?.dailyAverage || 0)}</div>
+            <div className="text-xs text-muted-foreground">{lowestVelocity?.month}</div>
+          </div>
+        </div>
+
+        <ResponsiveContainer width="100%" height={300}>
+          <ComposedChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis
+              dataKey="month"
+              tick={{ fontSize: 12 }}
+              angle={-45}
+              textAnchor="end"
+              height={80}
+            />
+            <YAxis
+              tick={{ fontSize: 12 }}
+              tickFormatter={(value) => `$${value.toFixed(0)}`}
+            />
+            <Tooltip
+              formatter={(value: number) => formatCurrency(value)}
+              labelStyle={{ color: '#000' }}
+            />
+            <Legend />
+            <Area
+              type="monotone"
+              dataKey="dailyAverage"
+              fill="#8884d8"
+              stroke="#8884d8"
+              fillOpacity={0.3}
+              name="Daily Average"
+            />
+            <Line
+              type="monotone"
+              dataKey="dailyAverage"
+              stroke="#0088FE"
+              strokeWidth={2}
+              name="Daily Spending Rate"
+              dot={{ r: 4 }}
+              activeDot={{ r: 6 }}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
