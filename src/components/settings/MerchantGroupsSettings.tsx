@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -35,6 +35,33 @@ export default function MerchantGroupsSettings() {
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<AutoGroupResult | null>(null);
+  const [unlinkedCount, setUnlinkedCount] = useState<number | null>(null);
+  const [isLoadingCount, setIsLoadingCount] = useState(true);
+
+  // Fetch unlinked transaction count on mount
+  useEffect(() => {
+    fetchUnlinkedCount();
+  }, []);
+
+  const fetchUnlinkedCount = async () => {
+    try {
+      setIsLoadingCount(true);
+      const response = await fetch('/api/merchant-groups/unlinked-count');
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch unlinked count');
+      }
+
+      const data = await response.json();
+      setUnlinkedCount(data.count);
+    } catch (error) {
+      console.error('Error fetching unlinked count:', error);
+      // Don't show error toast, just set count to null
+      setUnlinkedCount(null);
+    } finally {
+      setIsLoadingCount(false);
+    }
+  };
 
   const runAutoGroup = async (dryRun: boolean = false) => {
     try {
@@ -98,6 +125,9 @@ export default function MerchantGroupsSettings() {
       } else {
         toast.info('All transactions are already linked to merchant groups.');
       }
+
+      // Refresh the unlinked count after backfilling
+      await fetchUnlinkedCount();
     } catch (error) {
       console.error('Error backfilling merchant groups:', error);
       toast.error('Failed to backfill merchant groups. Please try again.');
@@ -186,23 +216,25 @@ export default function MerchantGroupsSettings() {
                 </>
               )}
             </Button>
-            <Button
-              onClick={handleBackfill}
-              disabled={isRunning || isBackfilling}
-              variant="secondary"
-            >
-              {isBackfilling ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Linking...
-                </>
-              ) : (
-                <>
-                  <Link className="mr-2 h-4 w-4" />
-                  Link Transactions
-                </>
-              )}
-            </Button>
+            {!isLoadingCount && unlinkedCount !== null && unlinkedCount > 0 && (
+              <Button
+                onClick={handleBackfill}
+                disabled={isRunning || isBackfilling}
+                variant="secondary"
+              >
+                {isBackfilling ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Linking...
+                  </>
+                ) : (
+                  <>
+                    <Link className="mr-2 h-4 w-4" />
+                    Link {unlinkedCount} {unlinkedCount === 1 ? 'Transaction' : 'Transactions'}
+                  </>
+                )}
+              </Button>
+            )}
           </div>
 
           <p className="text-xs text-muted-foreground">
