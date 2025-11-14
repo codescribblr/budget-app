@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 import { Loader2, Trash2, Database, Download, Key } from 'lucide-react';
 import MerchantGroupsSettings from '@/components/settings/MerchantGroupsSettings';
 import DuplicateTransactionFinder from '@/components/settings/DuplicateTransactionFinder';
+import DataBackup from '@/components/settings/DataBackup';
 import AppHeader from '@/components/layout/AppHeader';
 
 export default function SettingsPage() {
@@ -165,6 +166,11 @@ export default function SettingsPage() {
       {/* Merchant Grouping Section */}
       <div className="mb-6">
         <MerchantGroupsSettings />
+      </div>
+
+      {/* Data Backup Section */}
+      <div className="mb-6">
+        <DataBackup />
       </div>
 
       {/* Password Section */}
