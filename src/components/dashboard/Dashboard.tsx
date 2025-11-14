@@ -6,6 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ChevronDown } from 'lucide-react';
 import type {
   Category,
   Account,
@@ -85,9 +92,22 @@ export default function Dashboard() {
           <Button variant="outline" onClick={() => window.location.href = '/money-movement'} size="sm" className="md:size-default">
             Money Movement
           </Button>
-          <Button variant="outline" onClick={() => window.location.href = '/reports'} size="sm" className="md:size-default">
-            Reports
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="md:size-default">
+                Reports
+                <ChevronDown className="ml-1 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => window.location.href = '/reports'}>
+                Reports
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.location.href = '/reports/trends'}>
+                Trends
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="outline" onClick={() => window.location.href = '/income'} size="sm" className="md:size-default">
             Income
           </Button>
