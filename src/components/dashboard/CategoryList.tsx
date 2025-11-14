@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Progress } from '@/components/ui/progress';
 import { formatCurrency } from '@/lib/utils';
 import type { Category, DashboardSummary } from '@/lib/types';
 import { toast } from 'sonner';
@@ -30,12 +31,51 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
   const [editingBalanceId, setEditingBalanceId] = useState<number | null>(null);
   const [editingBalanceValue, setEditingBalanceValue] = useState('');
 
+  // Monthly spending state
+  const [monthlySpending, setMonthlySpending] = useState<Record<number, number>>({});
+  const [loadingSpending, setLoadingSpending] = useState(true);
+
+  // Fetch monthly spending on mount and when categories change
+  useEffect(() => {
+    const fetchMonthlySpending = async () => {
+      try {
+        setLoadingSpending(true);
+        const response = await fetch('/api/categories/monthly-spending');
+        if (!response.ok) throw new Error('Failed to fetch monthly spending');
+        const data = await response.json();
+        setMonthlySpending(data);
+      } catch (error) {
+        console.error('Error fetching monthly spending:', error);
+      } finally {
+        setLoadingSpending(false);
+      }
+    };
+
+    fetchMonthlySpending();
+  }, [categories]);
+
   // Filter out system categories (like Transfer) from envelope display
   const envelopeCategories = categories.filter(cat => !cat.is_system);
 
   const totalMonthly = envelopeCategories.reduce((sum, cat) => sum + cat.monthly_amount, 0);
   const totalCurrent = envelopeCategories.reduce((sum, cat) => sum + cat.current_balance, 0);
   const hasNegativeBalance = envelopeCategories.some(cat => cat.current_balance < 0);
+
+  // Helper function to get budget status color
+  const getBudgetStatusColor = (percentUsed: number) => {
+    if (percentUsed >= 100) return 'text-red-600'; // Critical (over budget)
+    if (percentUsed >= 90) return 'text-red-500'; // Red (90-100%)
+    if (percentUsed >= 70) return 'text-yellow-600'; // Yellow (70-90%)
+    return 'text-green-600'; // Green (<70%)
+  };
+
+  // Helper function to get progress bar color
+  const getProgressBarColor = (percentUsed: number) => {
+    if (percentUsed >= 100) return 'bg-red-600'; // Critical
+    if (percentUsed >= 90) return 'bg-red-500'; // Red
+    if (percentUsed >= 70) return 'bg-yellow-500'; // Yellow
+    return 'bg-green-600'; // Green
+  };
 
   const handleUpdateCategory = async () => {
     if (!editingCategory) return;
@@ -184,106 +224,140 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
           <Table>
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
-                <TableHead className="w-[40%]">Category</TableHead>
-                <TableHead className="text-right w-[20%]">Monthly</TableHead>
-                <TableHead className="text-right w-[20%]">Current Balance</TableHead>
-                <TableHead className="text-right w-[20%]">Actions</TableHead>
+                <TableHead className="w-[30%]">Category</TableHead>
+                <TableHead className="w-[30%]">Budget Progress</TableHead>
+                <TableHead className="text-right w-[15%]">Monthly</TableHead>
+                <TableHead className="text-right w-[15%]">Balance</TableHead>
+                <TableHead className="text-right w-[10%]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {envelopeCategories.map((category) => (
-                <TableRow key={category.id}>
-                  <TableCell className="font-medium">
-                    <a
-                      href={`/reports?category=${category.id}`}
-                      className="hover:underline cursor-pointer"
-                    >
-                      {category.name}
-                    </a>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {category.notes ? (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="cursor-help">
-                              {formatCurrency(category.monthly_amount)}*
+              {envelopeCategories.map((category) => {
+                const spent = monthlySpending[category.id] || 0;
+                const budget = category.monthly_amount;
+                const remaining = budget - spent;
+                const percentUsed = budget > 0 ? (spent / budget) * 100 : 0;
+
+                return (
+                  <TableRow key={category.id}>
+                    <TableCell className="font-medium">
+                      <a
+                        href={`/reports?category=${category.id}`}
+                        className="hover:underline cursor-pointer"
+                      >
+                        {category.name}
+                      </a>
+                    </TableCell>
+                    <TableCell>
+                      {budget > 0 ? (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className={getBudgetStatusColor(percentUsed)}>
+                              {percentUsed.toFixed(0)}% used
                             </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="max-w-xs whitespace-pre-wrap">{category.notes}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    ) : (
-                      formatCurrency(category.monthly_amount)
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold">
-                    {editingBalanceId === category.id ? (
-                      <div className="flex items-center justify-end gap-1">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={editingBalanceValue}
-                          onChange={(e) => setEditingBalanceValue(e.target.value)}
-                          className="w-28 h-8 text-right"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              saveInlineBalance(category.id);
-                            } else if (e.key === 'Escape') {
-                              cancelEditingBalance();
-                            }
-                          }}
-                        />
+                            <span className="text-muted-foreground">
+                              {formatCurrency(remaining)} left
+                            </span>
+                          </div>
+                          <div className="relative">
+                            <Progress
+                              value={Math.min(percentUsed, 100)}
+                              className="h-2"
+                            />
+                            <div
+                              className={`absolute top-0 left-0 h-2 rounded-full transition-all ${getProgressBarColor(percentUsed)}`}
+                              style={{ width: `${Math.min(percentUsed, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No budget set</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {category.notes ? (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-help">
+                                {formatCurrency(category.monthly_amount)}*
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-xs whitespace-pre-wrap">{category.notes}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ) : (
+                        formatCurrency(category.monthly_amount)
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {editingBalanceId === category.id ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={editingBalanceValue}
+                            onChange={(e) => setEditingBalanceValue(e.target.value)}
+                            className="w-28 h-8 text-right"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                saveInlineBalance(category.id);
+                              } else if (e.key === 'Escape') {
+                                cancelEditingBalance();
+                              }
+                            }}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => saveInlineBalance(category.id)}
+                          >
+                            <Check className="h-4 w-4 text-green-600" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={cancelEditingBalance}
+                          >
+                            <X className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span
+                          className={`cursor-pointer hover:bg-muted px-2 py-1 rounded ${category.current_balance < 0 ? 'text-red-600' : ''}`}
+                          onClick={() => startEditingBalance(category)}
+                          title="Click to edit balance"
+                        >
+                          {formatCurrency(category.current_balance)}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={() => saveInlineBalance(category.id)}
+                          onClick={() => openEditDialog(category)}
                         >
-                          <Check className="h-4 w-4 text-green-600" />
+                          Edit
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={cancelEditingBalance}
+                          onClick={() => handleDeleteCategory(category)}
                         >
-                          <X className="h-4 w-4 text-red-600" />
+                          Delete
                         </Button>
                       </div>
-                    ) : (
-                      <span
-                        className={`cursor-pointer hover:bg-muted px-2 py-1 rounded ${category.current_balance < 0 ? 'text-red-600' : ''}`}
-                        onClick={() => startEditingBalance(category)}
-                        title="Click to edit balance"
-                      >
-                        {formatCurrency(category.current_balance)}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditDialog(category)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteCategory(category)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -293,23 +367,25 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
           <Table>
             <TableBody>
               <TableRow className="font-bold">
-                <TableCell className="w-[40%]">Total Budget</TableCell>
-                <TableCell className={`text-right w-[20%] ${summary && totalMonthly > summary.monthly_net_income ? 'text-red-600' : ''}`}>
+                <TableCell className="w-[30%]">Total Budget</TableCell>
+                <TableCell className="w-[30%]"></TableCell>
+                <TableCell className={`text-right w-[15%] ${summary && totalMonthly > summary.monthly_net_income ? 'text-red-600' : ''}`}>
                   {formatCurrency(totalMonthly)}
                 </TableCell>
-                <TableCell className={`text-right w-[20%] ${hasNegativeBalance ? 'text-red-600' : ''}`}>
+                <TableCell className={`text-right w-[15%] ${hasNegativeBalance ? 'text-red-600' : ''}`}>
                   {formatCurrency(totalCurrent)}
                 </TableCell>
-                <TableCell className="text-right w-[20%]"></TableCell>
+                <TableCell className="text-right w-[10%]"></TableCell>
               </TableRow>
               {summary && (
                 <TableRow className="font-medium text-muted-foreground">
-                  <TableCell className="w-[40%]">Available to be budgeted</TableCell>
-                  <TableCell className={`text-right w-[20%] ${summary.monthly_net_income - totalMonthly < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  <TableCell className="w-[30%]">Available to be budgeted</TableCell>
+                  <TableCell className="w-[30%]"></TableCell>
+                  <TableCell className={`text-right w-[15%] ${summary.monthly_net_income - totalMonthly < 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {formatCurrency(summary.monthly_net_income)}
                   </TableCell>
-                  <TableCell className="text-right w-[20%]"></TableCell>
-                  <TableCell className="text-right w-[20%]"></TableCell>
+                  <TableCell className="text-right w-[15%]"></TableCell>
+                  <TableCell className="text-right w-[10%]"></TableCell>
                 </TableRow>
               )}
             </TableBody>
