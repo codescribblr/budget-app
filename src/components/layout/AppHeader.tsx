@@ -41,34 +41,23 @@ export default function AppHeader({
 
   return (
     <>
-      {/* Title and Subtitle Row */}
-      {(title || subtitle || actions) && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          {/* Title and Subtitle */}
-          {(title || subtitle) && (
-            <div>
-              {title && <h1 className="text-2xl md:text-3xl font-bold">{title}</h1>}
-              {subtitle && (
-                <p className="text-muted-foreground mt-1">
-                  {subtitle}
-                </p>
-              )}
-            </div>
-          )}
+      {/* Title and Navigation Row */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        {/* Title and Subtitle */}
+        {(title || subtitle) && (
+          <div>
+            {title && <h1 className="text-2xl md:text-3xl font-bold">{title}</h1>}
+            {subtitle && (
+              <p className="text-muted-foreground mt-1">
+                {subtitle}
+              </p>
+            )}
+          </div>
+        )}
 
-          {/* Action Buttons */}
-          {actions && (
-            <div className="flex gap-2">
-              {actions}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Navigation Links Row */}
-      {showNavigation && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex flex-wrap gap-2">
+        {/* Navigation Links */}
+        {showNavigation && (
+          <div className="flex flex-wrap gap-2 justify-end">
             <Button
               variant={getButtonVariant('/')}
               onClick={() => window.location.href = '/'}
@@ -147,6 +136,13 @@ export default function AppHeader({
             </Button>
             <SignOutButton />
           </div>
+        )}
+      </div>
+
+      {/* Action Buttons Row */}
+      {actions && (
+        <div className="flex justify-end gap-2">
+          {actions}
         </div>
       )}
 
