@@ -143,14 +143,12 @@ export default function ReportsPage() {
   // Memoize filtered transactions to prevent unnecessary re-renders
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
-      // Date filter
+      // Date filter (inclusive of both start and end dates)
       if (startDate || endDate) {
-        const transactionDate = new Date(t.date);
-        const start = startDate ? new Date(startDate) : null;
-        const end = endDate ? new Date(endDate) : null;
+        const transactionDate = t.date; // Keep as string for comparison (YYYY-MM-DD format)
 
-        if (start && transactionDate < start) return false;
-        if (end && transactionDate > end) return false;
+        if (startDate && transactionDate < startDate) return false;
+        if (endDate && transactionDate > endDate) return false;
       }
 
       // Category filter

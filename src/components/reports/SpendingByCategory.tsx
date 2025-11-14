@@ -47,21 +47,35 @@ export default function SpendingByCategory({ transactions, categories, onCategor
   const totalSpent = categoriesWithSpending.reduce((sum, cat) => sum + cat.spent, 0);
   const totalBudget = categoriesWithSpending.reduce((sum, cat) => sum + cat.budget, 0);
 
-  // Calculate transaction breakdown
-  const totalTransactions = transactions.length;
+  // Calculate transaction breakdown (excluding system-only transactions from total)
   const categorizedTransactions = transactions.filter(t =>
     t.splits.some(split => {
       const category = categories.find(c => c.id === split.category_id);
       return category && !category.is_system;
     })
   ).length;
+
   const systemTransactions = transactions.filter(t =>
     t.splits.every(split => {
       const category = categories.find(c => c.id === split.category_id);
       return category?.is_system;
     })
   ).length;
-  const uncategorizedTransactions = totalTransactions - categorizedTransactions - systemTransactions;
+
+  const uncategorizedTransactions = transactions.filter(t => {
+    const hasCategorizedSplit = t.splits.some(split => {
+      const category = categories.find(c => c.id === split.category_id);
+      return category && !category.is_system;
+    });
+    const isSystemOnly = t.splits.every(split => {
+      const category = categories.find(c => c.id === split.category_id);
+      return category?.is_system;
+    });
+    return !hasCategorizedSplit && !isSystemOnly;
+  }).length;
+
+  // Total excludes system-only transactions
+  const totalTransactions = categorizedTransactions + uncategorizedTransactions;
 
   if (loading) {
     return (

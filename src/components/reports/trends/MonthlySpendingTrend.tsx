@@ -34,11 +34,12 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
       transactionsByMonth.get(monthKey)!.push(transaction);
     });
 
-    // Second pass: calculate totals and breakdowns
+    // Second pass: calculate totals and breakdowns (excluding system-only transactions by default)
     transactionsByMonth.forEach((monthTransactions, monthKey) => {
       let total = 0;
       let categorizedCount = 0;
       let systemCount = 0;
+      let uncategorizedCount = 0;
 
       monthTransactions.forEach(transaction => {
         // Sum only splits that are NOT in system categories
@@ -67,11 +68,13 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
           categorizedCount++;
         } else if (isSystemOnly) {
           systemCount++;
+        } else {
+          uncategorizedCount++;
         }
       });
 
-      const totalTransactions = monthTransactions.length;
-      const uncategorizedCount = totalTransactions - categorizedCount - systemCount;
+      // Total transactions excludes system-only transactions (matching reports page behavior)
+      const totalTransactions = categorizedCount + uncategorizedCount;
 
       monthlyData.set(monthKey, {
         total,
