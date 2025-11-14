@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatCurrency } from '@/lib/utils';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 
@@ -46,6 +47,22 @@ export default function SpendingByCategory({ transactions, categories, onCategor
   const totalSpent = categoriesWithSpending.reduce((sum, cat) => sum + cat.spent, 0);
   const totalBudget = categoriesWithSpending.reduce((sum, cat) => sum + cat.budget, 0);
 
+  // Calculate transaction breakdown
+  const totalTransactions = transactions.length;
+  const categorizedTransactions = transactions.filter(t =>
+    t.splits.some(split => {
+      const category = categories.find(c => c.id === split.category_id);
+      return category && !category.is_system;
+    })
+  ).length;
+  const systemTransactions = transactions.filter(t =>
+    t.splits.every(split => {
+      const category = categories.find(c => c.id === split.category_id);
+      return category?.is_system;
+    })
+  ).length;
+  const uncategorizedTransactions = totalTransactions - categorizedTransactions - systemTransactions;
+
   if (loading) {
     return (
       <Card>
@@ -76,7 +93,29 @@ export default function SpendingByCategory({ transactions, categories, onCategor
       <CardHeader>
         <CardTitle>Spending by Category</CardTitle>
         <CardDescription>
-          Total spent: {formatCurrency(totalSpent)} | Budget: {formatCurrency(totalBudget)} |
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-help border-b border-dotted border-muted-foreground">
+                  Total spent: {formatCurrency(totalSpent)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <div className="space-y-1">
+                  <div className="font-semibold">Transaction Breakdown</div>
+                  <div className="text-sm">
+                    <div>Total Transactions: {totalTransactions}</div>
+                    <div className="ml-2 space-y-0.5 mt-1">
+                      <div>• Categorized: {categorizedTransactions}</div>
+                      <div>• Uncategorized: {uncategorizedTransactions}</div>
+                      <div>• System: {systemTransactions}</div>
+                    </div>
+                  </div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          {' | '}Budget: {formatCurrency(totalBudget)} |
           <span className={totalSpent > totalBudget ? 'text-red-600' : 'text-green-600'}>
             {' '}{totalSpent > totalBudget ? 'Over' : 'Under'} by {formatCurrency(Math.abs(totalBudget - totalSpent))}
           </span>
