@@ -3,13 +3,14 @@
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
-import type { TransactionWithSplits } from '@/lib/types';
+import type { TransactionWithSplits, Category } from '@/lib/types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
 interface MerchantSpendingTrendsProps {
   transactions: TransactionWithSplits[];
+  categories: Category[];
 }
 
 const COLORS = [
@@ -17,22 +18,34 @@ const COLORS = [
   '#82CA9D', '#FFC658', '#FF6B9D', '#C084FC', '#FB923C',
 ];
 
-export default function MerchantSpendingTrends({ transactions }: MerchantSpendingTrendsProps) {
-  // Find top 5 merchants by total spending
+export default function MerchantSpendingTrends({ transactions, categories }: MerchantSpendingTrendsProps) {
+  // Find top 5 merchants by total spending (excluding system categories)
   const topMerchants = useMemo(() => {
     const merchantTotals = new Map<string, number>();
 
     transactions.forEach(transaction => {
       const merchantName = transaction.merchant_name || 'Unknown';
-      const current = merchantTotals.get(merchantName) || 0;
-      merchantTotals.set(merchantName, current + transaction.total_amount);
+
+      // Sum only splits that are NOT in system categories
+      const nonSystemTotal = transaction.splits.reduce((sum, split) => {
+        const category = categories.find(c => c.id === split.category_id);
+        if (category && !category.is_system) {
+          return sum + split.amount;
+        }
+        return sum;
+      }, 0);
+
+      if (nonSystemTotal > 0) {
+        const current = merchantTotals.get(merchantName) || 0;
+        merchantTotals.set(merchantName, current + nonSystemTotal);
+      }
     });
 
     return Array.from(merchantTotals.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([name]) => name);
-  }, [transactions]);
+  }, [transactions, categories]);
 
   const [selectedMerchants, setSelectedMerchants] = useState<string[]>(topMerchants);
 
@@ -42,19 +55,30 @@ export default function MerchantSpendingTrends({ transactions }: MerchantSpendin
 
     transactions.forEach(transaction => {
       const merchantName = transaction.merchant_name || 'Unknown';
-      
+
       if (!selectedMerchants.includes(merchantName)) return;
 
-      const date = new Date(transaction.date);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      // Sum only splits that are NOT in system categories
+      const nonSystemTotal = transaction.splits.reduce((sum, split) => {
+        const category = categories.find(c => c.id === split.category_id);
+        if (category && !category.is_system) {
+          return sum + split.amount;
+        }
+        return sum;
+      }, 0);
 
-      if (!monthlyData.has(monthKey)) {
-        monthlyData.set(monthKey, new Map());
+      if (nonSystemTotal > 0) {
+        const date = new Date(transaction.date);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+        if (!monthlyData.has(monthKey)) {
+          monthlyData.set(monthKey, new Map());
+        }
+
+        const monthMerchants = monthlyData.get(monthKey)!;
+        const current = monthMerchants.get(merchantName) || 0;
+        monthMerchants.set(merchantName, current + nonSystemTotal);
       }
-
-      const monthMerchants = monthlyData.get(monthKey)!;
-      const current = monthMerchants.get(merchantName) || 0;
-      monthMerchants.set(merchantName, current + transaction.total_amount);
     });
 
     // Convert to array format for recharts

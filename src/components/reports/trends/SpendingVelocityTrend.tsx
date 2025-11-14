@@ -17,22 +17,26 @@ export default function SpendingVelocityTrend({ transactions, categories }: Spen
     const monthlyData = new Map<string, { total: number; days: number }>();
 
     transactions.forEach(transaction => {
-      // Skip system categories
-      const hasSystemCategory = transaction.splits.some(split => {
-        const category = categories.find(c => c.id === split.category_id);
-        return category?.is_system;
-      });
-
-      if (hasSystemCategory) return;
-
       const date = new Date(transaction.date);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      
-      const current = monthlyData.get(monthKey) || { total: 0, days: 0 };
-      monthlyData.set(monthKey, {
-        total: current.total + transaction.total_amount,
-        days: new Date(parseInt(monthKey.split('-')[0]), parseInt(monthKey.split('-')[1]), 0).getDate(),
-      });
+
+      // Sum only splits that are NOT in system categories
+      const nonSystemTotal = transaction.splits.reduce((sum, split) => {
+        const category = categories.find(c => c.id === split.category_id);
+        if (category && !category.is_system) {
+          return sum + split.amount;
+        }
+        return sum;
+      }, 0);
+
+      // Add to monthly data
+      if (nonSystemTotal > 0) {
+        const current = monthlyData.get(monthKey) || { total: 0, days: 0 };
+        monthlyData.set(monthKey, {
+          total: current.total + nonSystemTotal,
+          days: new Date(parseInt(monthKey.split('-')[0]), parseInt(monthKey.split('-')[1]), 0).getDate(),
+        });
+      }
     });
 
     // Convert to array and calculate daily average

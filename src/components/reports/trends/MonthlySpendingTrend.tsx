@@ -17,22 +17,26 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
     const monthlyData = new Map<string, { total: number; count: number }>();
 
     transactions.forEach(transaction => {
-      // Skip system categories
-      const hasSystemCategory = transaction.splits.some(split => {
-        const category = categories.find(c => c.id === split.category_id);
-        return category?.is_system;
-      });
-
-      if (hasSystemCategory) return;
-
       const date = new Date(transaction.date);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      
-      const current = monthlyData.get(monthKey) || { total: 0, count: 0 };
-      monthlyData.set(monthKey, {
-        total: current.total + transaction.total_amount,
-        count: current.count + 1,
-      });
+
+      // Sum only splits that are NOT in system categories
+      const nonSystemTotal = transaction.splits.reduce((sum, split) => {
+        const category = categories.find(c => c.id === split.category_id);
+        if (category && !category.is_system) {
+          return sum + split.amount;
+        }
+        return sum;
+      }, 0);
+
+      // Only add to monthly data if there are non-system splits
+      if (nonSystemTotal > 0) {
+        const current = monthlyData.get(monthKey) || { total: 0, count: 0 };
+        monthlyData.set(monthKey, {
+          total: current.total + nonSystemTotal,
+          count: current.count + 1,
+        });
+      }
     });
 
     // Convert to array and sort by date

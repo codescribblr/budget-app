@@ -135,6 +135,7 @@ export default function TrendsPage() {
       {/* Merchant Spending Trends */}
       <MerchantSpendingTrends
         transactions={filteredTransactions}
+        categories={categories}
       />
     </div>
   );
