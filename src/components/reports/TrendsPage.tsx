@@ -63,8 +63,11 @@ export default function TrendsPage() {
     const monthsToShow = parseInt(timeRange);
     const cutoffDate = new Date();
     cutoffDate.setMonth(cutoffDate.getMonth() - monthsToShow);
-    
-    return transactions.filter(t => new Date(t.date) >= cutoffDate);
+
+    // Convert cutoff date to YYYY-MM-DD string for consistent comparison
+    const cutoffDateString = cutoffDate.toISOString().split('T')[0];
+
+    return transactions.filter(t => t.date >= cutoffDateString);
   }, [transactions, timeRange]);
 
   const loading = loadingTransactions || loadingCategories;

@@ -25,8 +25,9 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
     // First pass: count all transactions by month
     const transactionsByMonth = new Map<string, TransactionWithSplits[]>();
     transactions.forEach(transaction => {
-      const date = new Date(transaction.date);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      // Extract month key directly from date string (YYYY-MM-DD format)
+      // This avoids timezone issues with Date constructor
+      const monthKey = transaction.date.substring(0, 7); // Gets "YYYY-MM"
 
       if (!transactionsByMonth.has(monthKey)) {
         transactionsByMonth.set(monthKey, []);
