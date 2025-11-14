@@ -5,7 +5,10 @@ import { importTransactions } from '@/lib/supabase-queries';
 
 export async function POST(request: Request) {
   try {
-    const { transactions } = await request.json() as { transactions: ParsedTransaction[] };
+    const { transactions, isHistorical } = await request.json() as {
+      transactions: ParsedTransaction[];
+      isHistorical?: boolean;
+    };
 
     if (!Array.isArray(transactions) || transactions.length === 0) {
       return NextResponse.json(
@@ -15,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     // Import transactions using Supabase
-    const importedCount = await importTransactions(transactions);
+    const importedCount = await importTransactions(transactions, isHistorical || false);
 
     // Learn from the imported transactions
     const learningData = transactions

@@ -681,6 +681,7 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
     description: transaction.description,
     total_amount: transaction.total_amount,
     merchant_group_id: transaction.merchant_group_id,
+    is_historical: transaction.is_historical || false,
     created_at: transaction.created_at,
     updated_at: transaction.updated_at,
     merchant_name: transaction.merchant_groups?.display_name || null,
@@ -735,6 +736,7 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
     description: transaction.description,
     total_amount: transaction.total_amount,
     merchant_group_id: transaction.merchant_group_id,
+    is_historical: transaction.is_historical || false,
     created_at: transaction.created_at,
     updated_at: transaction.updated_at,
     merchant_name: (transaction as any).merchant_groups?.display_name || null,
@@ -745,11 +747,13 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
 export async function createTransaction(data: {
   date: string;
   description: string;
+  is_historical?: boolean;
   splits: { category_id: number; amount: number }[];
 }): Promise<TransactionWithSplits> {
   const { supabase, user } = await getAuthenticatedUser();
 
   const totalAmount = data.splits.reduce((sum, split) => sum + split.amount, 0);
+  const isHistorical = data.is_historical || false;
 
   // Auto-assign merchant group first
   let merchantGroupId: number | null = null;
@@ -771,13 +775,14 @@ export async function createTransaction(data: {
       description: data.description,
       total_amount: totalAmount,
       merchant_group_id: merchantGroupId,
+      is_historical: isHistorical,
     })
     .select()
     .single();
 
   if (txError) throw txError;
 
-  // Create splits and update category balances
+  // Create splits and update category balances (skip balance updates for historical transactions)
   for (const split of data.splits) {
     // Insert split
     const { error: splitError } = await supabase
@@ -790,23 +795,25 @@ export async function createTransaction(data: {
 
     if (splitError) throw splitError;
 
-    // Update category balance (only for non-system categories)
-    const { data: category } = await supabase
-      .from('categories')
-      .select('is_system, current_balance')
-      .eq('id', split.category_id)
-      .single();
-
-    if (category && !category.is_system) {
-      const { error: balanceError } = await supabase
+    // Update category balance (only for non-system categories and non-historical transactions)
+    if (!isHistorical) {
+      const { data: category } = await supabase
         .from('categories')
-        .update({
-          current_balance: Number(category.current_balance) - split.amount,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', split.category_id);
+        .select('is_system, current_balance')
+        .eq('id', split.category_id)
+        .single();
 
-      if (balanceError) throw balanceError;
+      if (category && !category.is_system) {
+        const { error: balanceError } = await supabase
+          .from('categories')
+          .update({
+            current_balance: Number(category.current_balance) - split.amount,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', split.category_id);
+
+        if (balanceError) throw balanceError;
+      }
     }
   }
 
@@ -1064,7 +1071,7 @@ export async function checkDuplicateHash(hash: string): Promise<boolean> {
   return data !== null;
 }
 
-export async function importTransactions(transactions: any[]): Promise<number> {
+export async function importTransactions(transactions: any[], isHistorical: boolean = false): Promise<number> {
   const { supabase, user } = await getAuthenticatedUser();
 
   const importDate = new Date().toISOString();
@@ -1122,13 +1129,14 @@ export async function importTransactions(transactions: any[]): Promise<number> {
         description: txn.description,
         total_amount: totalAmount,
         merchant_group_id: merchantGroupId,
+        is_historical: isHistorical,
       })
       .select()
       .single();
 
     if (txError) throw txError;
 
-    // Create splits and update category balances
+    // Create splits and update category balances (skip balance updates for historical transactions)
     for (const split of txn.splits) {
       // Insert split
       const { error: splitError } = await supabase
@@ -1141,20 +1149,22 @@ export async function importTransactions(transactions: any[]): Promise<number> {
 
       if (splitError) throw splitError;
 
-      // Update category balance
-      const { data: category } = await supabase
-        .from('categories')
-        .select('is_system, current_balance')
-        .eq('id', split.categoryId)
-        .single();
-
-      if (category && !category.is_system) {
-        await supabase
+      // Update category balance (only for non-historical transactions)
+      if (!isHistorical) {
+        const { data: category } = await supabase
           .from('categories')
-          .update({
-            current_balance: Number(category.current_balance) - split.amount,
-          })
-          .eq('id', split.categoryId);
+          .select('is_system, current_balance')
+          .eq('id', split.categoryId)
+          .single();
+
+        if (category && !category.is_system) {
+          await supabase
+            .from('categories')
+            .update({
+              current_balance: Number(category.current_balance) - split.amount,
+            })
+            .eq('id', split.categoryId);
+        }
       }
     }
 

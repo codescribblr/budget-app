@@ -40,6 +40,7 @@ export interface Transaction {
   description: string;
   total_amount: number;
   merchant_group_id?: number | null;
+  is_historical: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -156,6 +157,7 @@ export interface UpdateCreditCardRequest {
 export interface CreateTransactionRequest {
   date: string;
   description: string;
+  is_historical?: boolean;
   splits: {
     category_id: number;
     amount: number;

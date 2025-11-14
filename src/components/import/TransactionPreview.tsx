@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/utils';
@@ -29,6 +31,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   const [editingField, setEditingField] = useState<EditingField | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [isHistorical, setIsHistorical] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -156,7 +159,10 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
       const response = await fetch('/api/import/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactions: toImport }),
+        body: JSON.stringify({
+          transactions: toImport,
+          isHistorical: isHistorical,
+        }),
       });
 
       if (!response.ok) {
@@ -166,7 +172,11 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
       const result = await response.json();
       const { imported } = result;
 
-      alert(`Successfully imported ${imported} transaction(s)`);
+      const message = isHistorical
+        ? `Successfully imported ${imported} historical transaction(s). These transactions will not affect your current envelope balances.`
+        : `Successfully imported ${imported} transaction(s)`;
+
+      alert(message);
       onImportComplete();
     } catch (error) {
       console.error('Error importing transactions:', error);
@@ -197,24 +207,40 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center p-4 bg-muted rounded-md">
-        <div className="flex gap-6 text-sm">
-          <div>
-            <span className="font-medium">Categorized:</span> {categorizedCount}
+      <div className="p-4 bg-muted rounded-md space-y-4">
+        <div className="flex justify-between items-center">
+          <div className="flex gap-6 text-sm">
+            <div>
+              <span className="font-medium">Categorized:</span> {categorizedCount}
+            </div>
+            <div>
+              <span className="font-medium">Uncategorized:</span> {uncategorizedCount}
+            </div>
+            <div>
+              <span className="font-medium">Duplicates:</span> {duplicateCount}
+            </div>
+            <div>
+              <span className="font-medium">Excluded:</span> {totalExcludedCount}
+            </div>
           </div>
-          <div>
-            <span className="font-medium">Uncategorized:</span> {uncategorizedCount}
-          </div>
-          <div>
-            <span className="font-medium">Duplicates:</span> {duplicateCount}
-          </div>
-          <div>
-            <span className="font-medium">Excluded:</span> {totalExcludedCount}
-          </div>
+          <Button onClick={handleImportClick} disabled={isImporting || categorizedCount === 0}>
+            {isImporting ? 'Importing...' : `Import ${categorizedCount} Transaction${categorizedCount !== 1 ? 's' : ''}`}
+          </Button>
         </div>
-        <Button onClick={handleImportClick} disabled={isImporting || categorizedCount === 0}>
-          {isImporting ? 'Importing...' : `Import ${categorizedCount} Transaction${categorizedCount !== 1 ? 's' : ''}`}
-        </Button>
+
+        <div className="flex items-center space-x-2 pt-2 border-t">
+          <Checkbox
+            id="historical"
+            checked={isHistorical}
+            onCheckedChange={(checked) => setIsHistorical(checked as boolean)}
+          />
+          <Label
+            htmlFor="historical"
+            className="text-sm font-normal cursor-pointer"
+          >
+            Import as historical (won&apos;t affect current envelope balances)
+          </Label>
+        </div>
       </div>
 
       <div className="border rounded-md">
