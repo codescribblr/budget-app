@@ -87,72 +87,93 @@ export default function AppHeader({
                   <nav className="flex flex-col mt-6">
                     <button
                       onClick={() => handleNavigation('/')}
-                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
-                        isActive('/') ? 'bg-gray-800 text-white' : ''
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
                       }`}
                     >
                       Dashboard
                     </button>
                     <button
                       onClick={() => handleNavigation('/transactions')}
-                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
-                        isActive('/transactions') ? 'bg-gray-800 text-white' : ''
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/transactions')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
                       }`}
                     >
                       Transactions
                     </button>
                     <button
                       onClick={() => handleNavigation('/import')}
-                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
-                        isActive('/import') ? 'bg-gray-800 text-white' : ''
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/import')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
                       }`}
                     >
                       Import
                     </button>
                     <button
                       onClick={() => handleNavigation('/money-movement')}
-                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
-                        isActive('/money-movement') ? 'bg-gray-800 text-white' : ''
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/money-movement')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
                       }`}
                     >
                       Money Movement
                     </button>
                     <button
                       onClick={() => handleNavigation('/reports')}
-                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
-                        isActive('/reports') && !isActive('/reports/trends') ? 'bg-gray-800 text-white' : ''
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/reports') && !isActive('/reports/trends')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
                       }`}
                     >
                       Reports
                     </button>
                     <button
                       onClick={() => handleNavigation('/reports/trends')}
-                      className={`w-full text-left px-4 py-3 pl-8 hover:bg-accent transition-colors border-b ${
-                        isActive('/reports/trends') ? 'bg-gray-800 text-white' : ''
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/reports/trends')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
                       }`}
                     >
-                      Trends
+                      <span className="flex items-center">
+                        <span className="mr-2 text-muted-foreground">└</span>
+                        Trends
+                      </span>
                     </button>
                     <button
                       onClick={() => handleNavigation('/income')}
-                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
-                        isActive('/income') ? 'bg-gray-800 text-white' : ''
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/income')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
                       }`}
                     >
                       Income
                     </button>
                     <button
                       onClick={() => handleNavigation('/merchants')}
-                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
-                        isActive('/merchants') ? 'bg-gray-800 text-white' : ''
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/merchants')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
                       }`}
                     >
                       Merchants
                     </button>
                     <button
                       onClick={() => handleNavigation('/settings')}
-                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b ${
-                        isActive('/settings') ? 'bg-gray-800 text-white' : ''
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/settings')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
                       }`}
                     >
                       Settings
