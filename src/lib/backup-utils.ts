@@ -9,11 +9,13 @@ export interface UserBackupData {
   transactions: any[];
   transaction_splits: any[];
   imported_transactions: any[];
+  imported_transaction_links: any[];
   merchant_groups: any[];
   merchant_mappings: any[];
   pending_checks: any[];
   income_settings: any[];
   pre_tax_deductions: any[];
+  settings: any[];
 }
 
 /**
@@ -30,11 +32,13 @@ export async function exportUserData(): Promise<UserBackupData> {
     { data: transactions },
     { data: transaction_splits },
     { data: imported_transactions },
+    { data: imported_transaction_links },
     { data: merchant_groups },
     { data: merchant_mappings },
     { data: pending_checks },
     { data: income_settings },
     { data: pre_tax_deductions },
+    { data: settings },
   ] = await Promise.all([
     supabase.from('accounts').select('*').eq('user_id', user.id),
     supabase.from('categories').select('*').eq('user_id', user.id),
@@ -45,11 +49,16 @@ export async function exportUserData(): Promise<UserBackupData> {
       .select('*, transactions!inner(user_id)')
       .eq('transactions.user_id', user.id),
     supabase.from('imported_transactions').select('*').eq('user_id', user.id),
+    supabase
+      .from('imported_transaction_links')
+      .select('*, imported_transactions!inner(user_id)')
+      .eq('imported_transactions.user_id', user.id),
     supabase.from('merchant_groups').select('*').eq('user_id', user.id),
     supabase.from('merchant_mappings').select('*').eq('user_id', user.id),
     supabase.from('pending_checks').select('*').eq('user_id', user.id),
     supabase.from('income_settings').select('*').eq('user_id', user.id),
     supabase.from('pre_tax_deductions').select('*').eq('user_id', user.id),
+    supabase.from('settings').select('*').eq('user_id', user.id),
   ]);
 
   return {
@@ -61,11 +70,13 @@ export async function exportUserData(): Promise<UserBackupData> {
     transactions: transactions || [],
     transaction_splits: transaction_splits || [],
     imported_transactions: imported_transactions || [],
+    imported_transaction_links: imported_transaction_links || [],
     merchant_groups: merchant_groups || [],
     merchant_mappings: merchant_mappings || [],
     pending_checks: pending_checks || [],
     income_settings: income_settings || [],
     pre_tax_deductions: pre_tax_deductions || [],
+    settings: settings || [],
   };
 }
 
@@ -87,9 +98,23 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
 
   const transactionIds = userTransactions?.map(t => t.id) || [];
 
+  // Get all imported transaction IDs for this user
+  const { data: userImportedTransactions } = await supabase
+    .from('imported_transactions')
+    .select('id')
+    .eq('user_id', user.id);
+
+  const importedTransactionIds = userImportedTransactions?.map(t => t.id) || [];
+
+  // Delete in reverse order of dependencies
   // Delete transaction splits for these transactions
   if (transactionIds.length > 0) {
     await supabase.from('transaction_splits').delete().in('transaction_id', transactionIds);
+  }
+
+  // Delete imported transaction links for these imported transactions
+  if (importedTransactionIds.length > 0) {
+    await supabase.from('imported_transaction_links').delete().in('imported_transaction_id', importedTransactionIds);
   }
 
   await supabase.from('transactions').delete().eq('user_id', user.id);
@@ -99,6 +124,7 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
   await supabase.from('pending_checks').delete().eq('user_id', user.id);
   await supabase.from('pre_tax_deductions').delete().eq('user_id', user.id);
   await supabase.from('income_settings').delete().eq('user_id', user.id);
+  await supabase.from('settings').delete().eq('user_id', user.id);
   await supabase.from('credit_cards').delete().eq('user_id', user.id);
   await supabase.from('categories').delete().eq('user_id', user.id);
   await supabase.from('accounts').delete().eq('user_id', user.id);
@@ -149,6 +175,16 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
 
   if (backupData.imported_transactions && backupData.imported_transactions.length > 0) {
     await supabase.from('imported_transactions').insert(backupData.imported_transactions);
+  }
+
+  if (backupData.imported_transaction_links && backupData.imported_transaction_links.length > 0) {
+    // Remove the joined imported_transactions data before inserting
+    const links = backupData.imported_transaction_links.map(({ imported_transactions, ...link }) => link);
+    await supabase.from('imported_transaction_links').insert(links);
+  }
+
+  if (backupData.settings && backupData.settings.length > 0) {
+    await supabase.from('settings').insert(backupData.settings);
   }
 }
 
