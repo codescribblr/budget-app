@@ -1104,14 +1104,19 @@ export async function importTransactions(transactions: any[], isHistorical: bool
   if (importError) {
     // If there are duplicate hashes, filter them out and retry
     if (importError.code === '23505') {
-      // Get existing hashes
+      console.log('Duplicate hashes detected, filtering and retrying...');
+
+      // Get existing hashes for this user
       const hashes = validTransactions.map(txn => txn.hash);
       const { data: existingHashes } = await supabase
         .from('imported_transactions')
         .select('hash')
+        .eq('user_id', user.id)
         .in('hash', hashes);
 
       const existingHashSet = new Set(existingHashes?.map(h => h.hash) || []);
+
+      console.log(`Found ${existingHashSet.size} existing hashes out of ${hashes.length} total`);
 
       // Filter out duplicates
       const nonDuplicates = validTransactions.filter(txn => !existingHashSet.has(txn.hash));
@@ -1120,8 +1125,11 @@ export async function importTransactions(transactions: any[], isHistorical: bool
       );
 
       if (nonDuplicateData.length === 0) {
+        console.log('All transactions are duplicates, skipping import');
         return 0; // All duplicates
       }
+
+      console.log(`Retrying with ${nonDuplicateData.length} non-duplicate transactions`);
 
       // Retry with non-duplicates
       const { data: retryImportedTxs, error: retryError } = await supabase
@@ -1129,11 +1137,16 @@ export async function importTransactions(transactions: any[], isHistorical: bool
         .insert(nonDuplicateData)
         .select('id, hash');
 
-      if (retryError) throw retryError;
+      if (retryError) {
+        console.error('Retry failed:', retryError);
+        throw retryError;
+      }
 
       // Update validTransactions and importedTxs to only include non-duplicates
       validTransactions.splice(0, validTransactions.length, ...nonDuplicates);
       importedTxs = retryImportedTxs;
+
+      console.log(`Successfully imported ${importedTxs?.length || 0} non-duplicate transactions`);
     } else {
       throw importError;
     }
