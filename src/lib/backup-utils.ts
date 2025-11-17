@@ -8,6 +8,7 @@ export interface UserBackupData {
   credit_cards: any[];
   transactions: any[];
   transaction_splits: any[];
+  imported_transactions: any[];
   merchant_groups: any[];
   merchant_mappings: any[];
   pending_checks: any[];
@@ -28,6 +29,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     { data: credit_cards },
     { data: transactions },
     { data: transaction_splits },
+    { data: imported_transactions },
     { data: merchant_groups },
     { data: merchant_mappings },
     { data: pending_checks },
@@ -42,6 +44,7 @@ export async function exportUserData(): Promise<UserBackupData> {
       .from('transaction_splits')
       .select('*, transactions!inner(user_id)')
       .eq('transactions.user_id', user.id),
+    supabase.from('imported_transactions').select('*').eq('user_id', user.id),
     supabase.from('merchant_groups').select('*').eq('user_id', user.id),
     supabase.from('merchant_mappings').select('*').eq('user_id', user.id),
     supabase.from('pending_checks').select('*').eq('user_id', user.id),
@@ -57,6 +60,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     credit_cards: credit_cards || [],
     transactions: transactions || [],
     transaction_splits: transaction_splits || [],
+    imported_transactions: imported_transactions || [],
     merchant_groups: merchant_groups || [],
     merchant_mappings: merchant_mappings || [],
     pending_checks: pending_checks || [],
@@ -89,6 +93,7 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
   }
 
   await supabase.from('transactions').delete().eq('user_id', user.id);
+  await supabase.from('imported_transactions').delete().eq('user_id', user.id);
   await supabase.from('merchant_mappings').delete().eq('user_id', user.id);
   await supabase.from('merchant_groups').delete().eq('user_id', user.id);
   await supabase.from('pending_checks').delete().eq('user_id', user.id);
@@ -135,11 +140,15 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
   if (backupData.transactions.length > 0) {
     await supabase.from('transactions').insert(backupData.transactions);
   }
-  
+
   if (backupData.transaction_splits.length > 0) {
     // Remove the joined transactions data before inserting
     const splits = backupData.transaction_splits.map(({ transactions, ...split }) => split);
     await supabase.from('transaction_splits').insert(splits);
+  }
+
+  if (backupData.imported_transactions && backupData.imported_transactions.length > 0) {
+    await supabase.from('imported_transactions').insert(backupData.imported_transactions);
   }
 }
 

@@ -117,7 +117,20 @@ export default function FileUpload({ onFileUploaded }: FileUploadProps) {
 }
 
 async function processTransactions(transactions: ParsedTransaction[]): Promise<ParsedTransaction[]> {
-  // Fetch existing transaction hashes for deduplication
+  // Step 1: Check for duplicates within the file itself
+  const seenHashes = new Map<string, number>(); // hash -> first occurrence index
+  const withinFileDuplicates = new Set<number>(); // indices of duplicate transactions
+
+  transactions.forEach((txn, index) => {
+    if (seenHashes.has(txn.hash)) {
+      // This is a duplicate of an earlier transaction in the same file
+      withinFileDuplicates.add(index);
+    } else {
+      seenHashes.set(txn.hash, index);
+    }
+  });
+
+  // Step 2: Fetch existing transaction hashes for deduplication against database
   const response = await fetch('/api/import/check-duplicates', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -127,13 +140,13 @@ async function processTransactions(transactions: ParsedTransaction[]): Promise<P
   });
 
   const { duplicates } = await response.json();
-  const duplicateSet = new Set(duplicates);
+  const databaseDuplicateSet = new Set(duplicates);
 
-  // Fetch categories for auto-categorization
+  // Step 3: Fetch categories for auto-categorization
   const categoriesResponse = await fetch('/api/categories');
   const categories = await categoriesResponse.json();
 
-  // Get smart category suggestions for all merchants
+  // Step 4: Get smart category suggestions for all merchants
   const merchants = transactions.map(t => t.merchant);
   const categorizationResponse = await fetch('/api/categorize', {
     method: 'POST',
@@ -142,8 +155,12 @@ async function processTransactions(transactions: ParsedTransaction[]): Promise<P
   });
   const { suggestions } = await categorizationResponse.json();
 
+  // Step 5: Process each transaction
   return transactions.map((transaction, index) => {
-    const isDuplicate = duplicateSet.has(transaction.hash);
+    const isDatabaseDuplicate = databaseDuplicateSet.has(transaction.hash);
+    const isWithinFileDuplicate = withinFileDuplicates.has(index);
+    const isDuplicate = isDatabaseDuplicate || isWithinFileDuplicate;
+
     const suggestion = suggestions[index];
     const suggestedCategory = suggestion?.categoryId;
     const hasSplits = !!suggestedCategory;
