@@ -8,9 +8,11 @@ export interface ParsedTransaction {
   hash: string; // Unique hash for deduplication
   suggestedCategory?: number; // Category ID
   isDuplicate: boolean;
+  duplicateType?: 'database' | 'within-file' | null; // Type of duplicate
   duplicateOf?: number; // Transaction ID if duplicate
   status: 'pending' | 'confirmed' | 'excluded';
   splits: TransactionSplit[];
+  forceImport?: boolean; // User explicitly clicked "Include" on a duplicate
 }
 
 export interface TransactionSplit {

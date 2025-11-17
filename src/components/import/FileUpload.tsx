@@ -161,6 +161,13 @@ async function processTransactions(transactions: ParsedTransaction[]): Promise<P
     const isWithinFileDuplicate = withinFileDuplicates.has(index);
     const isDuplicate = isDatabaseDuplicate || isWithinFileDuplicate;
 
+    // Determine duplicate type
+    const duplicateType = isDatabaseDuplicate
+      ? 'database' as const
+      : isWithinFileDuplicate
+      ? 'within-file' as const
+      : null;
+
     const suggestion = suggestions[index];
     const suggestedCategory = suggestion?.categoryId;
     const hasSplits = !!suggestedCategory;
@@ -168,6 +175,7 @@ async function processTransactions(transactions: ParsedTransaction[]): Promise<P
     return {
       ...transaction,
       isDuplicate,
+      duplicateType,
       // Auto-exclude duplicates AND uncategorized transactions
       status: isDuplicate || !hasSplits ? 'excluded' : 'pending',
       suggestedCategory,

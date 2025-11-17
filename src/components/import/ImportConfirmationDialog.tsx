@@ -17,7 +17,8 @@ interface ImportConfirmationDialogProps {
   categorizedCount: number;
   uncategorizedCount: number;
   manuallyExcludedCount: number;
-  duplicateCount: number;
+  databaseDuplicateCount: number;
+  withinFileDuplicateCount: number;
 }
 
 export default function ImportConfirmationDialog({
@@ -27,8 +28,10 @@ export default function ImportConfirmationDialog({
   categorizedCount,
   uncategorizedCount,
   manuallyExcludedCount,
-  duplicateCount,
+  databaseDuplicateCount,
+  withinFileDuplicateCount,
 }: ImportConfirmationDialogProps) {
+  const duplicateCount = databaseDuplicateCount + withinFileDuplicateCount;
   const totalExcluded = uncategorizedCount + manuallyExcludedCount + duplicateCount;
 
   return (
@@ -76,10 +79,16 @@ export default function ImportConfirmationDialog({
                       <span className="font-medium">{manuallyExcludedCount}</span>
                     </div>
                   )}
-                  {duplicateCount > 0 && (
+                  {databaseDuplicateCount > 0 && (
                     <div className="flex justify-between">
-                      <span>• Duplicates:</span>
-                      <span className="font-medium">{duplicateCount}</span>
+                      <span>• Duplicates (already imported):</span>
+                      <span className="font-medium">{databaseDuplicateCount}</span>
+                    </div>
+                  )}
+                  {withinFileDuplicateCount > 0 && (
+                    <div className="flex justify-between">
+                      <span>• Potential duplicates (within file):</span>
+                      <span className="font-medium">{withinFileDuplicateCount}</span>
                     </div>
                   )}
                 </div>

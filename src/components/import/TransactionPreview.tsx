@@ -44,11 +44,32 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   };
 
   const handleToggleExclude = (id: string) => {
-    setItems(items.map(item =>
-      item.id === id
-        ? { ...item, status: item.status === 'excluded' ? 'pending' : 'excluded' }
-        : item
-    ));
+    setItems(items.map(item => {
+      if (item.id === id) {
+        const newStatus = item.status === 'excluded' ? 'pending' : 'excluded';
+
+        // If user is including a duplicate, mark it for forced import
+        if (newStatus === 'pending' && item.isDuplicate) {
+          // Modify description to make hash unique
+          const uniqueSuffix = ` [${Date.now()}]`;
+          const newDescription = item.description + uniqueSuffix;
+          const newHash = generateTransactionHash(item.date, newDescription, item.amount, item.originalData);
+
+          return {
+            ...item,
+            description: newDescription,
+            hash: newHash,
+            status: newStatus,
+            forceImport: true,
+            isDuplicate: false, // No longer a duplicate after modification
+            duplicateType: null,
+          };
+        }
+
+        return { ...item, status: newStatus };
+      }
+      return item;
+    }));
   };
 
   const handleEdit = (transaction: ParsedTransaction) => {
@@ -195,7 +216,9 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
 
   const uncategorizedCount = items.filter(item => item.splits.length === 0).length;
 
-  const duplicateCount = items.filter(item => item.isDuplicate).length;
+  const databaseDuplicateCount = items.filter(item => item.duplicateType === 'database').length;
+  const withinFileDuplicateCount = items.filter(item => item.duplicateType === 'within-file').length;
+  const duplicateCount = databaseDuplicateCount + withinFileDuplicateCount;
 
   const manuallyExcludedCount = items.filter(item =>
     item.status === 'excluded' &&
@@ -216,9 +239,16 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
             <div>
               <span className="font-medium">Uncategorized:</span> {uncategorizedCount}
             </div>
-            <div>
-              <span className="font-medium">Duplicates:</span> {duplicateCount}
-            </div>
+            {databaseDuplicateCount > 0 && (
+              <div>
+                <span className="font-medium text-yellow-700 dark:text-yellow-400">Duplicates:</span> {databaseDuplicateCount}
+              </div>
+            )}
+            {withinFileDuplicateCount > 0 && (
+              <div>
+                <span className="font-medium text-orange-700 dark:text-orange-400">Potential Duplicates:</span> {withinFileDuplicateCount}
+              </div>
+            )}
             <div>
               <span className="font-medium">Excluded:</span> {totalExcludedCount}
             </div>
@@ -266,8 +296,10 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                 <TableRow
                   key={transaction.id}
                   className={
-                    transaction.isDuplicate
+                    transaction.duplicateType === 'database'
                       ? 'bg-yellow-50 dark:bg-yellow-950/20'
+                      : transaction.duplicateType === 'within-file'
+                      ? 'bg-orange-50 dark:bg-orange-950/20'
                       : transaction.status === 'excluded'
                       ? 'bg-gray-50 dark:bg-gray-900 opacity-50'
                       : ''
@@ -366,9 +398,13 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                       <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded">
                         Uncategorized
                       </span>
-                    ) : transaction.status === 'excluded' && transaction.isDuplicate ? (
+                    ) : transaction.status === 'excluded' && transaction.duplicateType === 'database' ? (
                       <span className="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded">
                         Duplicate
+                      </span>
+                    ) : transaction.status === 'excluded' && transaction.duplicateType === 'within-file' ? (
+                      <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded">
+                        Potential Duplicate
                       </span>
                     ) : transaction.status === 'excluded' ? (
                       <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded">
@@ -424,7 +460,8 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         categorizedCount={categorizedCount}
         uncategorizedCount={uncategorizedCount}
         manuallyExcludedCount={manuallyExcludedCount}
-        duplicateCount={duplicateCount}
+        databaseDuplicateCount={databaseDuplicateCount}
+        withinFileDuplicateCount={withinFileDuplicateCount}
       />
     </div>
   );
