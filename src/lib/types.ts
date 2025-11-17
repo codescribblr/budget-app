@@ -72,6 +72,20 @@ export interface MerchantGroupWithStats extends MerchantGroup {
   has_manual_mappings: boolean;
 }
 
+export interface MerchantCategoryRule {
+  id: number;
+  user_id: string;
+  merchant_group_id: number | null;
+  category_id: number;
+  confidence_score: number;
+  usage_count: number;
+  last_used: string;
+  pattern: string | null;
+  normalized_pattern: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TransactionSplit {
   id: number;
   transaction_id: number;

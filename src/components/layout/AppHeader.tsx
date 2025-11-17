@@ -169,6 +169,16 @@ export default function AppHeader({
                       Merchants
                     </button>
                     <button
+                      onClick={() => handleNavigation('/category-rules')}
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/category-rules')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
+                      }`}
+                    >
+                      Category Rules
+                    </button>
+                    <button
                       onClick={() => handleNavigation('/settings')}
                       className={`w-full text-left px-4 py-3 transition-colors border-b ${
                         isActive('/settings')
@@ -256,6 +266,14 @@ export default function AppHeader({
                 className="md:size-default"
               >
                 Merchants
+              </Button>
+              <Button
+                variant={getButtonVariant('/category-rules')}
+                onClick={() => window.location.href = '/category-rules'}
+                size="sm"
+                className="md:size-default"
+              >
+                Category Rules
               </Button>
               <Button
                 variant={getButtonVariant('/settings')}

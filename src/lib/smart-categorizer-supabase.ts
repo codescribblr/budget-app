@@ -1,17 +1,16 @@
 import { createClient } from './supabase/server';
+import {
+  findBestCategoryForMerchant,
+  learnFromImportedTransactions as learnFromTransactions,
+  normalizeMerchant as normalizeMerchantName
+} from './merchant-category-rules';
 
 /**
  * Normalize merchant name for consistent matching
  * Removes common variations, special characters, and standardizes format
  */
 export function normalizeMerchant(merchant: string): string {
-  return merchant
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '') // Remove special characters
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .replace(/\b(inc|llc|ltd|corp|co|company)\b/g, '') // Remove company suffixes
-    .replace(/\b(the)\b/g, '') // Remove "the"
-    .trim();
+  return normalizeMerchantName(merchant);
 }
 
 /**
@@ -65,68 +64,19 @@ export function calculateSimilarity(str1: string, str2: string): number {
 /**
  * Find the best matching category for a merchant using learned mappings
  * Only returns categories that currently exist in the database
+ * Now uses the new merchant_category_rules table and merchant groups
  */
 export async function findLearnedCategory(merchant: string): Promise<{ categoryId: number; confidence: number } | null> {
-  const supabase = await createClient();
-  const normalized = normalizeMerchant(merchant);
+  const result = await findBestCategoryForMerchant(merchant);
 
-  // First, try exact match on normalized merchant
-  const { data: exactMatch } = await supabase
-    .from('merchant_mappings')
-    .select(`
-      category_id,
-      confidence_score,
-      categories!inner (id)
-    `)
-    .eq('normalized_merchant', normalized)
-    .order('confidence_score', { ascending: false })
-    .order('last_used', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (exactMatch) {
+  if (result) {
     return {
-      categoryId: exactMatch.category_id,
-      confidence: Math.min(exactMatch.confidence_score / 10, 1.0), // Normalize to 0-1
+      categoryId: result.categoryId,
+      confidence: result.confidence,
     };
   }
 
-  // If no exact match, try fuzzy matching
-  const { data: allMappings } = await supabase
-    .from('merchant_mappings')
-    .select(`
-      category_id,
-      normalized_merchant,
-      confidence_score,
-      categories!inner (id)
-    `)
-    .order('confidence_score', { ascending: false });
-
-  if (!allMappings || allMappings.length === 0) {
-    return null;
-  }
-
-  let bestMatch: { categoryId: number; confidence: number } | null = null;
-  let bestSimilarity = 0;
-
-  for (const mapping of allMappings) {
-    const similarity = calculateSimilarity(normalized, mapping.normalized_merchant);
-
-    // Require at least 70% similarity for fuzzy match
-    if (similarity >= 0.7) {
-      const adjustedConfidence = similarity * Math.min(mapping.confidence_score / 10, 1.0);
-
-      if (adjustedConfidence > bestSimilarity) {
-        bestSimilarity = adjustedConfidence;
-        bestMatch = {
-          categoryId: mapping.category_id,
-          confidence: adjustedConfidence,
-        };
-      }
-    }
-  }
-
-  return bestMatch;
+  return null;
 }
 
 /**
@@ -160,45 +110,12 @@ export function suggestCategoryByKeywords(merchant: string, categories: any[]): 
 
 /**
  * Learn a new merchant-to-category mapping
+ * Now uses the new merchant_category_rules system
  */
 export async function learnMerchantMapping(merchant: string, categoryId: number): Promise<void> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  const normalized = normalizeMerchant(merchant);
-  const now = new Date().toISOString();
-  
-  // Check if mapping already exists
-  const { data: existing } = await supabase
-    .from('merchant_mappings')
-    .select('id, confidence_score')
-    .eq('normalized_merchant', normalized)
-    .eq('category_id', categoryId)
-    .maybeSingle();
-  
-  if (existing) {
-    // Increment confidence score (max 100)
-    await supabase
-      .from('merchant_mappings')
-      .update({
-        confidence_score: Math.min(existing.confidence_score + 1, 100),
-        last_used: now,
-      })
-      .eq('id', existing.id);
-  } else {
-    // Create new mapping
-    await supabase
-      .from('merchant_mappings')
-      .insert({
-        user_id: user.id,
-        merchant_pattern: merchant,
-        normalized_merchant: normalized,
-        category_id: categoryId,
-        confidence_score: 1,
-        last_used: now,
-      });
-  }
+  // Delegate to the new merchant category rules system
+  const { learnFromTransaction } = await import('./merchant-category-rules');
+  await learnFromTransaction(merchant, categoryId);
 }
 
 /**
@@ -246,10 +163,10 @@ export async function getSmartCategorySuggestion(
 
 /**
  * Bulk learn from imported transactions
+ * Now uses the new merchant_category_rules system
  */
 export async function learnFromImportedTransactions(transactions: Array<{ merchant: string; categoryId: number }>): Promise<void> {
-  for (const txn of transactions) {
-    await learnMerchantMapping(txn.merchant, txn.categoryId);
-  }
+  // Delegate to the new merchant category rules system
+  await learnFromTransactions(transactions);
 }
 

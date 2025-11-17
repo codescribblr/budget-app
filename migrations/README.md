@@ -21,6 +21,7 @@ Example: `001_initial_schema.sql`
 | Migration | Description | Date |
 |-----------|-------------|------|
 | `001_initial_schema.sql` | Initial database schema with all tables and RLS policies | 2025-01-15 |
+| `010_add_merchant_category_rules.sql` | Add merchant category rules table for improved auto-categorization | 2025-11-17 |
 
 ## How to Create a New Migration
 
