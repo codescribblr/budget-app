@@ -1,0 +1,20 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#0F172A"/>
+
+  <!-- Envelope body -->
+  <rect x="16" y="22" width="32" height="22" rx="4"
+        stroke="#F9FAFB" stroke-width="2" fill="none"/>
+
+  <!-- Envelope flap -->
+  <path d="M18 24L32 34L46 24"
+        stroke="#F9FAFB" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Bars inside envelope (bottom aligned at y=42) -->
+  <!-- Top 3 spending distribution colors: #0088FE, #00C49F, #FFBB28 -->
+  <rect x="21" y="35" width="6" height="7"  rx="1" fill="#0088FE"/>
+  <rect x="29" y="31" width="6" height="11" rx="1" fill="#00C49F"/>
+  <rect x="37" y="27" width="6" height="15" rx="1" fill="#FFBB28"/>
+</svg>
+
