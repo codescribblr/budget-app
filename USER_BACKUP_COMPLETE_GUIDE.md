@@ -18,11 +18,12 @@ The user backup system (accessed from Settings page) allows users to create, man
 6. **`imported_transactions`** - Import history (prevents duplicate imports)
 7. **`imported_transaction_links`** - Links between imports and transactions
 8. **`merchant_groups`** - Merchant grouping/normalization data
-9. **`merchant_mappings`** - Smart categorization mappings
-10. **`pending_checks`** - Outstanding checks
-11. **`income_settings`** - Income configuration (salary, pay frequency)
-12. **`pre_tax_deductions`** - Pre-tax deduction items
-13. **`settings`** - User settings (pay frequency, annual income, etc.)
+9. **`merchant_mappings`** - Merchant pattern to group mappings
+10. **`merchant_category_rules`** - Auto-categorization rules (learned from your categorization choices)
+11. **`pending_checks`** - Outstanding checks
+12. **`income_settings`** - Income configuration (salary, pay frequency)
+13. **`pre_tax_deductions`** - Pre-tax deduction items
+14. **`settings`** - User settings (pay frequency, annual income, etc.)
 
 ### ❌ **Not Included (Intentionally)**
 
@@ -83,6 +84,7 @@ Everything! Including:
 - All transactions and their category splits
 - All import history (prevents re-importing same transactions)
 - All merchant groupings and smart categorization mappings
+- All auto-categorization rules (learned from your categorization choices)
 - All settings (pay frequency, annual income, pre-tax deductions)
 - All account balances and credit card limits
 - All budget envelope balances

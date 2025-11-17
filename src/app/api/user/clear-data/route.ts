@@ -17,8 +17,12 @@ export async function DELETE() {
     const tables = [
       'transactions',           // This will CASCADE delete transaction_splits
       'imported_transactions',  // This will CASCADE delete imported_transaction_links
+      'merchant_category_rules',
       'merchant_mappings',
+      'merchant_groups',
       'pending_checks',
+      'pre_tax_deductions',
+      'income_settings',
       'credit_cards',
       'accounts',
       'categories',

@@ -12,6 +12,7 @@ export interface UserBackupData {
   imported_transaction_links: any[];
   merchant_groups: any[];
   merchant_mappings: any[];
+  merchant_category_rules: any[];
   pending_checks: any[];
   income_settings: any[];
   pre_tax_deductions: any[];
@@ -35,6 +36,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     { data: imported_transaction_links },
     { data: merchant_groups },
     { data: merchant_mappings },
+    { data: merchant_category_rules },
     { data: pending_checks },
     { data: income_settings },
     { data: pre_tax_deductions },
@@ -55,6 +57,7 @@ export async function exportUserData(): Promise<UserBackupData> {
       .eq('imported_transactions.user_id', user.id),
     supabase.from('merchant_groups').select('*').eq('user_id', user.id),
     supabase.from('merchant_mappings').select('*').eq('user_id', user.id),
+    supabase.from('merchant_category_rules').select('*').eq('user_id', user.id),
     supabase.from('pending_checks').select('*').eq('user_id', user.id),
     supabase.from('income_settings').select('*').eq('user_id', user.id),
     supabase.from('pre_tax_deductions').select('*').eq('user_id', user.id),
@@ -73,6 +76,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     imported_transaction_links: imported_transaction_links || [],
     merchant_groups: merchant_groups || [],
     merchant_mappings: merchant_mappings || [],
+    merchant_category_rules: merchant_category_rules || [],
     pending_checks: pending_checks || [],
     income_settings: income_settings || [],
     pre_tax_deductions: pre_tax_deductions || [],
@@ -119,6 +123,7 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
 
   await supabase.from('transactions').delete().eq('user_id', user.id);
   await supabase.from('imported_transactions').delete().eq('user_id', user.id);
+  await supabase.from('merchant_category_rules').delete().eq('user_id', user.id);
   await supabase.from('merchant_mappings').delete().eq('user_id', user.id);
   await supabase.from('merchant_groups').delete().eq('user_id', user.id);
   await supabase.from('pending_checks').delete().eq('user_id', user.id);
@@ -162,7 +167,11 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
   if (backupData.merchant_mappings.length > 0) {
     await supabase.from('merchant_mappings').insert(backupData.merchant_mappings);
   }
-  
+
+  if (backupData.merchant_category_rules && backupData.merchant_category_rules.length > 0) {
+    await supabase.from('merchant_category_rules').insert(backupData.merchant_category_rules);
+  }
+
   if (backupData.transactions.length > 0) {
     await supabase.from('transactions').insert(backupData.transactions);
   }
