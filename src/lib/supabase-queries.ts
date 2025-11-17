@@ -1077,11 +1077,28 @@ export async function importTransactions(transactions: any[], isHistorical: bool
   const importDate = new Date().toISOString();
 
   // Filter out transactions without splits
-  const validTransactions = transactions.filter(txn => txn.splits && txn.splits.length > 0);
+  let validTransactions = transactions.filter(txn => txn.splits && txn.splits.length > 0);
 
   if (validTransactions.length === 0) {
     return 0;
   }
+
+  // ===== STEP 0: Deduplicate within the import file itself =====
+  const seenHashes = new Set<string>();
+  const uniqueTransactions: any[] = [];
+
+  for (const txn of validTransactions) {
+    if (!seenHashes.has(txn.hash)) {
+      seenHashes.add(txn.hash);
+      uniqueTransactions.push(txn);
+    }
+  }
+
+  if (uniqueTransactions.length < validTransactions.length) {
+    console.log(`Removed ${validTransactions.length - uniqueTransactions.length} duplicate transactions within the import file`);
+  }
+
+  validTransactions = uniqueTransactions;
 
   // ===== STEP 1: Batch insert imported_transactions =====
   const importedTransactionsData = validTransactions.map(txn => ({
