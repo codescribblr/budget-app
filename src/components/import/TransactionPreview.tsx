@@ -12,6 +12,7 @@ import type { ParsedTransaction } from '@/lib/import-types';
 import type { Category } from '@/lib/types';
 import TransactionEditDialog from './TransactionEditDialog';
 import ImportConfirmationDialog from './ImportConfirmationDialog';
+import ImportProgressDialog from './ImportProgressDialog';
 import { generateTransactionHash } from '@/lib/csv-parser';
 
 interface TransactionPreviewProps {
@@ -32,6 +33,10 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   const [isImporting, setIsImporting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [isHistorical, setIsHistorical] = useState(false);
+  const [showProgress, setShowProgress] = useState(false);
+  const [progressStatus, setProgressStatus] = useState<'processing' | 'success' | 'error'>('processing');
+  const [progressMessage, setProgressMessage] = useState('');
+  const [importedCount, setImportedCount] = useState(0);
 
   useEffect(() => {
     fetchCategories();
@@ -170,11 +175,17 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     );
 
     if (toImport.length === 0) {
-      alert('No transactions to import');
+      setProgressStatus('error');
+      setProgressMessage('No transactions to import');
+      setShowProgress(true);
       return;
     }
 
+    // Show progress dialog
     setIsImporting(true);
+    setShowProgress(true);
+    setProgressStatus('processing');
+    setProgressMessage(`Importing ${toImport.length} transaction${toImport.length !== 1 ? 's' : ''}...`);
 
     try {
       const response = await fetch('/api/import/transactions', {
@@ -193,17 +204,23 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
       const result = await response.json();
       const { imported } = result;
 
-      const message = isHistorical
-        ? `Successfully imported ${imported} historical transaction(s). These transactions will not affect your current envelope balances.`
-        : `Successfully imported ${imported} transaction(s)`;
-
-      alert(message);
-      onImportComplete();
+      // Show success
+      setProgressStatus('success');
+      setProgressMessage('All transactions have been processed successfully.');
+      setImportedCount(imported);
     } catch (error) {
       console.error('Error importing transactions:', error);
-      alert('Failed to import transactions');
+      setProgressStatus('error');
+      setProgressMessage(error instanceof Error ? error.message : 'An unexpected error occurred');
     } finally {
       setIsImporting(false);
+    }
+  };
+
+  const handleProgressContinue = () => {
+    setShowProgress(false);
+    if (progressStatus === 'success') {
+      onImportComplete();
     }
   };
 
@@ -462,6 +479,15 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         manuallyExcludedCount={manuallyExcludedCount}
         databaseDuplicateCount={databaseDuplicateCount}
         withinFileDuplicateCount={withinFileDuplicateCount}
+      />
+
+      <ImportProgressDialog
+        open={showProgress}
+        status={progressStatus}
+        message={progressMessage}
+        onContinue={handleProgressContinue}
+        importedCount={importedCount}
+        isHistorical={isHistorical}
       />
     </div>
   );
