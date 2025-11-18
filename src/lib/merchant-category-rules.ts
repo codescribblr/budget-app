@@ -278,11 +278,63 @@ export async function updateRuleCategory(id: number, newCategoryId: number): Pro
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
-  await supabase
+  // First, get the rule we're updating
+  const { data: ruleToUpdate } = await supabase
     .from('merchant_category_rules')
-    .update({ category_id: newCategoryId })
+    .select('*')
     .eq('id', id)
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .single();
+
+  if (!ruleToUpdate) {
+    throw new Error('Rule not found');
+  }
+
+  // Check if there's already a rule for this merchant_group_id/pattern + new category combination
+  let existingRuleQuery = supabase
+    .from('merchant_category_rules')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('category_id', newCategoryId)
+    .neq('id', id); // Don't match the rule we're updating
+
+  if (ruleToUpdate.merchant_group_id) {
+    existingRuleQuery = existingRuleQuery.eq('merchant_group_id', ruleToUpdate.merchant_group_id);
+  } else if (ruleToUpdate.pattern) {
+    existingRuleQuery = existingRuleQuery.eq('pattern', ruleToUpdate.pattern);
+  }
+
+  const { data: existingRule } = await existingRuleQuery.maybeSingle();
+
+  if (existingRule) {
+    // There's already a rule for this merchant/group + category combination
+    // Merge the usage counts and confidence, then delete the rule we're updating
+    await supabase
+      .from('merchant_category_rules')
+      .update({
+        usage_count: existingRule.usage_count + ruleToUpdate.usage_count,
+        confidence_score: Math.min(
+          Math.max(existingRule.confidence_score, ruleToUpdate.confidence_score) + 5,
+          100
+        ),
+        last_used: new Date().toISOString(),
+      })
+      .eq('id', existingRule.id);
+
+    // Delete the rule we were trying to update
+    await supabase
+      .from('merchant_category_rules')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+  } else {
+    // No existing rule, just update the category
+    await supabase
+      .from('merchant_category_rules')
+      .update({ category_id: newCategoryId })
+      .eq('id', id)
+      .eq('user_id', user.id);
+  }
 }
 
 /**
