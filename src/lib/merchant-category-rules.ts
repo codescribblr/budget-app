@@ -271,6 +271,21 @@ export async function getAllCategoryRules(): Promise<MerchantCategoryRule[]> {
 }
 
 /**
+ * Update the category of a rule
+ */
+export async function updateRuleCategory(id: number, newCategoryId: number): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  await supabase
+    .from('merchant_category_rules')
+    .update({ category_id: newCategoryId })
+    .eq('id', id)
+    .eq('user_id', user.id);
+}
+
+/**
  * Delete a category rule
  */
 export async function deleteCategoryRule(id: number): Promise<void> {

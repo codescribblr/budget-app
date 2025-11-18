@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Trash2, TrendingUp, Store } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Trash2, TrendingUp, Store, Edit2 } from 'lucide-react';
 import type { MerchantCategoryRule, Category } from '@/lib/types';
 
 interface CategoryWithRules extends Category {
@@ -18,6 +19,9 @@ export default function CategoryRulesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [rules, setRules] = useState<MerchantCategoryRule[]>([]);
   const [merchantGroups, setMerchantGroups] = useState<Map<number, string>>(new Map());
+  const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
+  const [fadingOutRules, setFadingOutRules] = useState<Set<number>>(new Set());
+  const [fadingInRules, setFadingInRules] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     fetchData();
@@ -52,6 +56,67 @@ export default function CategoryRulesPage() {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateRuleCategory = async (ruleId: number, newCategoryId: number) => {
+    const rule = rules.find(r => r.id === ruleId);
+    if (!rule || rule.category_id === newCategoryId) {
+      setEditingRuleId(null);
+      return;
+    }
+
+    try {
+      // Start fade out animation
+      setFadingOutRules(prev => new Set(prev).add(ruleId));
+
+      // Wait for fade out animation
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Update the rule in the backend
+      const response = await fetch('/api/category-rules', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ruleId, categoryId: newCategoryId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update rule');
+      }
+
+      // Update local state
+      setRules(prevRules =>
+        prevRules.map(r =>
+          r.id === ruleId ? { ...r, category_id: newCategoryId } : r
+        )
+      );
+
+      // Remove from fading out, add to fading in
+      setFadingOutRules(prev => {
+        const next = new Set(prev);
+        next.delete(ruleId);
+        return next;
+      });
+      setFadingInRules(prev => new Set(prev).add(ruleId));
+
+      // Remove from fading in after animation
+      setTimeout(() => {
+        setFadingInRules(prev => {
+          const next = new Set(prev);
+          next.delete(ruleId);
+          return next;
+        });
+      }, 300);
+
+      setEditingRuleId(null);
+    } catch (error) {
+      console.error('Error updating rule:', error);
+      alert('Failed to update rule category');
+      setFadingOutRules(prev => {
+        const next = new Set(prev);
+        next.delete(ruleId);
+        return next;
+      });
     }
   };
 
@@ -134,46 +199,92 @@ export default function CategoryRulesPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {category.rules.map(rule => (
-                <div
-                  key={rule.id}
-                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      {rule.merchant_group_id ? (
-                        <>
-                          <Store className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">
-                            {merchantGroups.get(rule.merchant_group_id) || 'Unknown Group'}
-                          </span>
-                          <Badge variant="secondary">Group</Badge>
-                        </>
+              {category.rules.map(rule => {
+                const isFadingOut = fadingOutRules.has(rule.id);
+                const isFadingIn = fadingInRules.has(rule.id);
+                const isEditing = editingRuleId === rule.id;
+
+                return (
+                  <div
+                    key={rule.id}
+                    className={`flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-all duration-300 ${
+                      isFadingOut ? 'opacity-0 scale-95' : isFadingIn ? 'opacity-100 scale-100 bg-green-50 dark:bg-green-950/20' : 'opacity-100 scale-100'
+                    }`}
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        {rule.merchant_group_id ? (
+                          <>
+                            <Store className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">
+                              {merchantGroups.get(rule.merchant_group_id) || 'Unknown Group'}
+                            </span>
+                            <Badge variant="secondary">Group</Badge>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-medium">{rule.pattern}</span>
+                            <Badge variant="outline">Pattern</Badge>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      {isEditing ? (
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={rule.category_id.toString()}
+                            onValueChange={(value) => handleUpdateRuleCategory(rule.id, parseInt(value))}
+                          >
+                            <SelectTrigger className="w-[200px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categories.map(cat => (
+                                <SelectItem key={cat.id} value={cat.id.toString()}>
+                                  {cat.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingRuleId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
                       ) : (
                         <>
-                          <span className="font-medium">{rule.pattern}</span>
-                          <Badge variant="outline">Pattern</Badge>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <TrendingUp className="h-4 w-4" />
+                            <span>{rule.usage_count}x</span>
+                            <span>•</span>
+                            <span>{rule.confidence_score}% confidence</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingRuleId(rule.id)}
+                            title="Change category"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteRule(rule.id)}
+                            title="Delete rule"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <TrendingUp className="h-4 w-4" />
-                      <span>{rule.usage_count}x</span>
-                      <span>•</span>
-                      <span>{rule.confidence_score}% confidence</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteRule(rule.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
