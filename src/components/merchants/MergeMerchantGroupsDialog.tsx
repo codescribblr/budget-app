@@ -22,7 +22,7 @@ interface MergeMerchantGroupsDialogProps {
   groups: MerchantGroupWithStats[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (targetGroupId: number, mergedGroupIds: number[]) => void;
 }
 
 export default function MergeMerchantGroupsDialog({
@@ -108,7 +108,7 @@ export default function MergeMerchantGroupsDialog({
       }
 
       toast.success(`Merged ${groups.length} groups into "${targetName}"`);
-      onSuccess();
+      onSuccess(targetGroupId, sourceGroupIds);
       onOpenChange(false);
     } catch (error) {
       console.error('Error merging groups:', error);

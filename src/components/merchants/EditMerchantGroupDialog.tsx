@@ -21,7 +21,7 @@ interface EditMerchantGroupDialogProps {
   group: MerchantGroupWithStats;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (newDisplayName: string) => void;
 }
 
 interface MerchantMapping {
@@ -80,7 +80,7 @@ export default function EditMerchantGroupDialog({
 
       if (response.ok) {
         toast.success('Merchant group updated successfully');
-        onSuccess();
+        onSuccess(displayName.trim());
         onOpenChange(false);
       } else {
         toast.error('Failed to update merchant group');
@@ -103,8 +103,8 @@ export default function EditMerchantGroupDialog({
 
       if (response.ok) {
         toast.success('Pattern removed from group');
-        fetchMappings();
-        onSuccess();
+        // Just refresh the mappings list, don't reload the whole page
+        setMappings(prevMappings => prevMappings.filter(m => m.id !== mappingId));
       } else {
         toast.error('Failed to remove pattern');
       }

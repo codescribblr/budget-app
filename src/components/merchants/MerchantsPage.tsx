@@ -82,6 +82,23 @@ export default function MerchantsPage() {
     setSelectedForMerge(new Set());
   };
 
+  const handleUpdateGroup = (groupId: number, newDisplayName: string) => {
+    setMerchantGroups(prevGroups =>
+      prevGroups.map(g =>
+        g.id === groupId ? { ...g, display_name: newDisplayName } : g
+      )
+    );
+  };
+
+  const handleMergeSuccess = (targetGroupId: number, mergedGroupIds: number[]) => {
+    // Remove merged groups and refresh the target group's stats
+    setMerchantGroups(prevGroups =>
+      prevGroups.filter(g => !mergedGroupIds.includes(g.id) || g.id === targetGroupId)
+    );
+    // Fetch fresh data for the target group to get updated stats
+    fetchMerchantGroups();
+  };
+
   const filteredGroups = merchantGroups.filter(group =>
     group.display_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -232,20 +249,35 @@ export default function MerchantsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(group)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(group)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {selectedForMerge.size >= 2 && selectedForMerge.has(group.id) ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleMergeClick}
+                            title="Merge selected groups"
+                          >
+                            <Merge className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(group)}
+                              title="Edit merchant"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(group)}
+                              title="Delete merchant"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -263,7 +295,9 @@ export default function MerchantsPage() {
             group={selectedGroup}
             open={showEditDialog}
             onOpenChange={setShowEditDialog}
-            onSuccess={fetchMerchantGroups}
+            onSuccess={(newDisplayName) => {
+              handleUpdateGroup(selectedGroup.id, newDisplayName);
+            }}
           />
           <DeleteMerchantGroupDialog
             group={selectedGroup}
@@ -278,9 +312,9 @@ export default function MerchantsPage() {
         groups={merchantGroups.filter(g => selectedForMerge.has(g.id))}
         open={showMergeDialog}
         onOpenChange={setShowMergeDialog}
-        onSuccess={() => {
+        onSuccess={(targetGroupId, mergedGroupIds) => {
           setSelectedForMerge(new Set());
-          fetchMerchantGroups();
+          handleMergeSuccess(targetGroupId, mergedGroupIds);
         }}
       />
     </div>
