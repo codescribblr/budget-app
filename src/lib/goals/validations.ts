@@ -36,8 +36,17 @@ export function validateCreateGoal(data: CreateGoalRequest): { valid: boolean; e
   }
   
   if (data.goal_type === 'account-linked') {
-    if (!data.linked_account_id) {
-      return { valid: false, error: 'Account-linked goals must have a linked account' };
+    // Must have either an existing account or create a new one
+    if (!data.linked_account_id && !data.new_account_name) {
+      return { valid: false, error: 'Account-linked goals must have a linked account or create a new account' };
+    }
+    // Cannot have both
+    if (data.linked_account_id && data.new_account_name) {
+      return { valid: false, error: 'Cannot specify both an existing account and create a new account' };
+    }
+    // If creating new account, name is required
+    if (data.new_account_name && !data.new_account_name.trim()) {
+      return { valid: false, error: 'Account name is required when creating a new account' };
     }
     if (data.starting_balance !== undefined) {
       return { valid: false, error: 'Account-linked goals cannot have a starting balance' };
