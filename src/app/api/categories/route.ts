@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAllCategories, createCategory } from '@/lib/supabase-queries';
 import type { CreateCategoryRequest } from '@/lib/types';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const categories = await getAllCategories();
+    // Exclude goal categories from transaction dropdowns
+    const excludeGoals = request.nextUrl.searchParams.get('excludeGoals') === 'true';
+    const categories = await getAllCategories(excludeGoals);
     return NextResponse.json(categories);
   } catch (error: any) {
     console.error('Error fetching categories:', error);

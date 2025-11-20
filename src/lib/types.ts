@@ -6,6 +6,7 @@ export interface Category {
   current_balance: number;
   sort_order: number;
   is_system: boolean;
+  is_goal?: boolean;
   notes?: string | null;
   created_at: string;
   updated_at: string;
@@ -18,6 +19,7 @@ export interface Account {
   account_type: 'checking' | 'savings' | 'cash';
   include_in_totals: boolean;
   sort_order: number;
+  linked_goal_id?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -214,5 +216,67 @@ export interface DashboardSummary {
   has_negative_envelopes: boolean;
   monthly_net_income: number;
   total_monthly_budget: number;
+}
+
+// Goals
+export interface Goal {
+  id: number;
+  user_id: string;
+  name: string;
+  target_amount: number;
+  target_date: string | null; // ISO date string or null
+  goal_type: 'envelope' | 'account-linked';
+  monthly_contribution: number;
+  linked_account_id: number | null;
+  linked_category_id: number | null;
+  status: 'active' | 'completed' | 'overdue' | 'paused';
+  sort_order: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  
+  // Computed fields (not in DB)
+  current_balance?: number;
+  progress_percentage?: number;
+  remaining_amount?: number;
+  months_remaining?: number | null;
+  required_monthly_contribution?: number;
+  projected_completion_date?: string | null;
+  is_on_track?: boolean;
+}
+
+export interface GoalWithDetails extends Goal {
+  linked_account?: Account | null;
+  linked_category?: Category | null;
+}
+
+export interface CreateGoalRequest {
+  name: string;
+  target_amount: number;
+  target_date?: string | null;
+  goal_type: 'envelope' | 'account-linked';
+  monthly_contribution: number;
+  linked_account_id?: number | null;
+  starting_balance?: number; // For envelope goals
+  notes?: string | null;
+}
+
+export interface UpdateGoalRequest {
+  name?: string;
+  target_amount?: number;
+  target_date?: string | null;
+  monthly_contribution?: number;
+  status?: 'active' | 'completed' | 'overdue' | 'paused';
+  notes?: string | null;
+  sort_order?: number;
+}
+
+export interface GoalProgress {
+  progress_percentage: number;
+  remaining_amount: number;
+  months_remaining: number | null;
+  required_monthly_contribution: number;
+  projected_completion_date: string | null;
+  is_on_track: boolean;
 }
 

@@ -8,7 +8,12 @@ import type {
   PendingCheck,
   TransactionWithSplits,
   DashboardSummary,
+  Goal,
+  GoalWithDetails,
+  CreateGoalRequest,
+  UpdateGoalRequest,
 } from './types';
+import { calculateGoalProgress, calculateGoalStatus } from './goals/calculations';
 
 // =====================================================
 // HELPER: Get authenticated user
@@ -28,13 +33,19 @@ export async function getAuthenticatedUser() {
 // CATEGORIES
 // =====================================================
 
-export async function getAllCategories(): Promise<Category[]> {
+export async function getAllCategories(excludeGoals: boolean = false): Promise<Category[]> {
   const { supabase } = await getAuthenticatedUser();
   
-  const { data, error } = await supabase
+  let query = supabase
     .from('categories')
-    .select('*')
-    .order('sort_order');
+    .select('*');
+  
+  // Exclude goal categories when fetching for transactions
+  if (excludeGoals) {
+    query = query.eq('is_goal', false);
+  }
+  
+  const { data, error } = await query.order('sort_order');
   
   if (error) throw error;
   return data as Category[];
@@ -1264,5 +1275,321 @@ export async function importTransactions(transactions: any[], isHistorical: bool
   if (linksError) throw linksError;
 
   return createdTransactions.length;
+}
+
+// =====================================================
+// GOALS
+// =====================================================
+
+export async function getAllGoals(): Promise<GoalWithDetails[]> {
+  const { supabase, user } = await getAuthenticatedUser();
+  
+  const { data: goals, error } = await supabase
+    .from('goals')
+    .select(`
+      *,
+      linked_account:accounts!goals_linked_account_id_fkey(*),
+      linked_category:categories!goals_linked_category_id_fkey(*)
+    `)
+    .eq('user_id', user.id)
+    .order('sort_order')
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  
+  // Calculate current balance and progress for each goal
+  const goalsWithDetails: GoalWithDetails[] = await Promise.all(
+    (goals || []).map(async (goal: any) => {
+      let currentBalance = 0;
+      
+      if (goal.goal_type === 'envelope' && goal.linked_category) {
+        currentBalance = goal.linked_category.current_balance || 0;
+      } else if (goal.goal_type === 'account-linked' && goal.linked_account) {
+        currentBalance = goal.linked_account.balance || 0;
+      }
+      
+      const progress = calculateGoalProgress(goal, currentBalance);
+      const status = calculateGoalStatus(goal, currentBalance);
+      
+      // Update status if it changed
+      if (status !== goal.status) {
+        try {
+          await supabase
+            .from('goals')
+            .update({ status })
+            .eq('id', goal.id);
+        } catch (err) {
+          console.error('Failed to update goal status:', err);
+          // Non-critical update, continue
+        }
+      }
+      
+      return {
+        ...goal,
+        current_balance: currentBalance,
+        progress_percentage: progress.progress_percentage,
+        remaining_amount: progress.remaining_amount,
+        months_remaining: progress.months_remaining,
+        required_monthly_contribution: progress.required_monthly_contribution,
+        projected_completion_date: progress.projected_completion_date,
+        is_on_track: progress.is_on_track,
+        status,
+        linked_account: goal.linked_account || null,
+        linked_category: goal.linked_category || null,
+      };
+    })
+  );
+  
+  return goalsWithDetails;
+}
+
+export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
+  const { supabase, user } = await getAuthenticatedUser();
+  
+  const { data: goal, error } = await supabase
+    .from('goals')
+    .select(`
+      *,
+      linked_account:accounts!goals_linked_account_id_fkey(*),
+      linked_category:categories!goals_linked_category_id_fkey(*)
+    `)
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .single();
+  
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+  
+  if (!goal) return null;
+  
+  let currentBalance = 0;
+  if (goal.goal_type === 'envelope' && goal.linked_category) {
+    currentBalance = goal.linked_category.current_balance || 0;
+  } else if (goal.goal_type === 'account-linked' && goal.linked_account) {
+    currentBalance = goal.linked_account.balance || 0;
+  }
+  
+  const progress = calculateGoalProgress(goal, currentBalance);
+  const status = calculateGoalStatus(goal, currentBalance);
+  
+  return {
+    ...goal,
+    current_balance: currentBalance,
+    progress_percentage: progress.progress_percentage,
+    remaining_amount: progress.remaining_amount,
+    months_remaining: progress.months_remaining,
+    required_monthly_contribution: progress.required_monthly_contribution,
+    projected_completion_date: progress.projected_completion_date,
+    is_on_track: progress.is_on_track,
+    status,
+    linked_account: goal.linked_account || null,
+    linked_category: goal.linked_category || null,
+  };
+}
+
+export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetails> {
+  const { supabase, user } = await getAuthenticatedUser();
+  
+  let linkedCategoryId: number | null = null;
+  let linkedAccountId: number | null = null;
+  
+  // Create category for envelope goals
+  if (data.goal_type === 'envelope') {
+    const { data: category, error: catError } = await supabase
+      .from('categories')
+      .insert({
+        user_id: user.id,
+        name: data.name,
+        monthly_amount: data.monthly_contribution,
+        current_balance: data.starting_balance || 0,
+        is_goal: true,
+        sort_order: 0,
+      })
+      .select()
+      .single();
+    
+    if (catError) throw catError;
+    linkedCategoryId = category.id;
+  }
+  
+  // Link account for account-linked goals
+  if (data.goal_type === 'account-linked' && data.linked_account_id) {
+    // Verify account exists and belongs to user
+    const { data: account, error: accError } = await supabase
+      .from('accounts')
+      .select('*')
+      .eq('id', data.linked_account_id)
+      .eq('user_id', user.id)
+      .single();
+    
+    if (accError || !account) {
+      throw new Error('Account not found or does not belong to user');
+    }
+    
+    // Check if account is already linked to another goal
+    const { data: existingGoal } = await supabase
+      .from('goals')
+      .select('id')
+      .eq('linked_account_id', data.linked_account_id)
+      .eq('user_id', user.id)
+      .single();
+    
+    if (existingGoal) {
+      throw new Error('Account is already linked to another goal');
+    }
+    
+    // Set account to exclude from totals and link to goal
+    const { error: updateError } = await supabase
+      .from('accounts')
+      .update({
+        include_in_totals: false,
+        linked_goal_id: null, // Will be set after goal creation
+      })
+      .eq('id', data.linked_account_id);
+    
+    if (updateError) throw updateError;
+    
+    linkedAccountId = data.linked_account_id;
+  }
+  
+  // Create goal
+  const { data: goal, error: goalError } = await supabase
+    .from('goals')
+    .insert({
+      user_id: user.id,
+      name: data.name,
+      target_amount: data.target_amount,
+      target_date: data.target_date || null,
+      goal_type: data.goal_type,
+      monthly_contribution: data.monthly_contribution,
+      linked_account_id: linkedAccountId,
+      linked_category_id: linkedCategoryId,
+      status: 'active',
+      notes: data.notes || null,
+    })
+    .select()
+    .single();
+  
+  if (goalError) {
+    // Rollback category creation if goal creation failed
+    if (linkedCategoryId) {
+      await supabase.from('categories').delete().eq('id', linkedCategoryId);
+    }
+    throw goalError;
+  }
+  
+  // Update account's linked_goal_id if account-linked
+  if (linkedAccountId) {
+    await supabase
+      .from('accounts')
+      .update({ linked_goal_id: goal.id })
+      .eq('id', linkedAccountId);
+  }
+  
+  // Fetch full goal details
+  const fullGoal = await getGoalById(goal.id);
+  if (!fullGoal) {
+    throw new Error('Failed to fetch created goal');
+  }
+  return fullGoal;
+}
+
+export async function updateGoal(id: number, data: UpdateGoalRequest): Promise<GoalWithDetails> {
+  const { supabase, user } = await getAuthenticatedUser();
+  
+  // Verify goal belongs to user
+  const { data: existingGoal } = await supabase
+    .from('goals')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .single();
+  
+  if (!existingGoal) {
+    throw new Error('Goal not found');
+  }
+  
+  // Update goal
+  const updateData: any = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.target_amount !== undefined) updateData.target_amount = data.target_amount;
+  if (data.target_date !== undefined) updateData.target_date = data.target_date;
+  if (data.monthly_contribution !== undefined) updateData.monthly_contribution = data.monthly_contribution;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.notes !== undefined) updateData.notes = data.notes;
+  if (data.sort_order !== undefined) updateData.sort_order = data.sort_order;
+  
+  updateData.updated_at = new Date().toISOString();
+  
+  const { error } = await supabase
+    .from('goals')
+    .update(updateData)
+    .eq('id', id)
+    .eq('user_id', user.id);
+  
+  if (error) throw error;
+  
+  // Update linked category's monthly_amount if monthly_contribution changed
+  if (data.monthly_contribution !== undefined && existingGoal.linked_category_id) {
+    await supabase
+      .from('categories')
+      .update({ monthly_amount: data.monthly_contribution })
+      .eq('id', existingGoal.linked_category_id);
+  }
+  
+  const updatedGoal = await getGoalById(id);
+  if (!updatedGoal) {
+    throw new Error('Failed to fetch updated goal');
+  }
+  return updatedGoal;
+}
+
+export async function deleteGoal(id: number, deleteCategory: boolean = false): Promise<void> {
+  const { supabase, user } = await getAuthenticatedUser();
+  
+  // Get goal details
+  const goal = await getGoalById(id);
+  if (!goal || goal.user_id !== user.id) {
+    throw new Error('Goal not found');
+  }
+  
+  // Handle account unlinking
+  if (goal.goal_type === 'account-linked' && goal.linked_account_id) {
+    // Reset account's include_in_totals (ask user in UI, default to true)
+    await supabase
+      .from('accounts')
+      .update({
+        include_in_totals: true,
+        linked_goal_id: null,
+      })
+      .eq('id', goal.linked_account_id);
+  }
+  
+  // Handle category deletion for envelope goals
+  if (goal.goal_type === 'envelope' && goal.linked_category_id) {
+    if (deleteCategory) {
+      await supabase
+        .from('categories')
+        .delete()
+        .eq('id', goal.linked_category_id);
+    } else {
+      // Convert goal category to regular category
+      await supabase
+        .from('categories')
+        .update({ is_goal: false })
+        .eq('id', goal.linked_category_id);
+    }
+  }
+  
+  // Delete goal
+  const { error } = await supabase
+    .from('goals')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
+  
+  if (error) throw error;
 }
 

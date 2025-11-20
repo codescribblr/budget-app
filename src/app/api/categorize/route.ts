@@ -14,7 +14,8 @@ export async function POST(request: Request) {
     }
 
     // Fetch all categories
-    const categories = await getAllCategories();
+    // Exclude goal categories from transaction categorization
+    const categories = await getAllCategories(true);
 
     // Get suggestions for each merchant
     const suggestions = await Promise.all(
