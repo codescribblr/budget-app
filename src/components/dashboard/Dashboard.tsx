@@ -88,8 +88,6 @@ export default function Dashboard() {
         </Card>
 
         <div className="space-y-6">
-          <GoalsWidget />
-          
           <Card>
             <CardHeader>
               <CardTitle>Accounts</CardTitle>
@@ -131,6 +129,8 @@ export default function Dashboard() {
               </CollapsibleContent>
             </Card>
           </Collapsible>
+
+          <GoalsWidget />
         </div>
       </div>
 
