@@ -58,7 +58,7 @@ export default function SummaryCards({ summary }: SummaryCardsProps) {
       <Card className={summary.current_savings < 0 ? 'border-red-500' : 'border-green-500'}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Current Savings
+            Available to Save
           </CardTitle>
         </CardHeader>
         <CardContent>
