@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import FileUpload from './FileUpload';
@@ -12,6 +12,25 @@ export default function ImportTransactionsPage() {
   const [fileName, setFileName] = useState<string>('');
   const [isImporting, setIsImporting] = useState(false);
 
+  // Check for parsed transactions from map-columns page
+  useEffect(() => {
+    const storedTransactions = sessionStorage.getItem('parsedTransactions');
+    const storedFileName = sessionStorage.getItem('parsedFileName');
+    
+    if (storedTransactions && storedFileName) {
+      try {
+        const transactions = JSON.parse(storedTransactions);
+        setParsedTransactions(transactions);
+        setFileName(storedFileName);
+        // Clear session storage
+        sessionStorage.removeItem('parsedTransactions');
+        sessionStorage.removeItem('parsedFileName');
+      } catch (err) {
+        console.error('Error loading parsed transactions:', err);
+      }
+    }
+  }, []);
+
   const handleFileUploaded = (transactions: ParsedTransaction[], file: string) => {
     setParsedTransactions(transactions);
     setFileName(file);
@@ -20,6 +39,9 @@ export default function ImportTransactionsPage() {
   const handleClearImport = () => {
     setParsedTransactions([]);
     setFileName('');
+    // Also clear any session storage
+    sessionStorage.removeItem('parsedTransactions');
+    sessionStorage.removeItem('parsedFileName');
   };
 
   const handleImportComplete = () => {
