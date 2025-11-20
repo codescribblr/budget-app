@@ -6,8 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Trash2, TrendingUp, Store, Edit2 } from 'lucide-react';
 import type { MerchantCategoryRule, Category } from '@/lib/types';
+import { toast } from 'sonner';
 
 interface CategoryWithRules extends Category {
   rules: MerchantCategoryRule[];
@@ -22,6 +33,8 @@ export default function CategoryRulesPage() {
   const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
   const [fadingOutRules, setFadingOutRules] = useState<Set<number>>(new Set());
   const [fadingInRules, setFadingInRules] = useState<Set<number>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [ruleToDelete, setRuleToDelete] = useState<MerchantCategoryRule | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -111,7 +124,7 @@ export default function CategoryRulesPage() {
       setEditingRuleId(null);
     } catch (error) {
       console.error('Error updating rule:', error);
-      alert('Failed to update rule category');
+      toast.error('Failed to update rule category');
       setFadingOutRules(prev => {
         const next = new Set(prev);
         next.delete(ruleId);
@@ -120,26 +133,32 @@ export default function CategoryRulesPage() {
     }
   };
 
-  const handleDeleteRule = async (ruleId: number) => {
-    if (!confirm('Are you sure you want to delete this rule?')) {
-      return;
-    }
+  const handleDeleteRule = (rule: MerchantCategoryRule) => {
+    setRuleToDelete(rule);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteRule = async () => {
+    if (!ruleToDelete) return;
 
     try {
       const response = await fetch('/api/category-rules', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: ruleId }),
+        body: JSON.stringify({ id: ruleToDelete.id }),
       });
 
       if (response.ok) {
+        toast.success('Rule deleted');
+        setDeleteDialogOpen(false);
+        setRuleToDelete(null);
         await fetchData();
       } else {
-        alert('Failed to delete rule');
+        throw new Error('Failed to delete rule');
       }
     } catch (error) {
       console.error('Error deleting rule:', error);
-      alert('Failed to delete rule');
+      toast.error('Failed to delete rule');
     }
   };
 
@@ -274,7 +293,7 @@ export default function CategoryRulesPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDeleteRule(rule.id)}
+                            onClick={() => handleDeleteRule(rule)}
                             title="Delete rule"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -289,6 +308,45 @@ export default function CategoryRulesPage() {
           </CardContent>
         </Card>
       ))}
+
+      {/* Delete Rule Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Category Rule?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this rule?
+              {ruleToDelete && (
+                <>
+                  <p className="mt-2 text-sm font-medium">
+                    {ruleToDelete.merchant_group_id ? (merchantGroups.get(ruleToDelete.merchant_group_id) || 'Unknown merchant') : (ruleToDelete.pattern || 'Unknown merchant')} → {categories.find(c => c.id === ruleToDelete.category_id)?.name || 'Unknown category'}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Used {ruleToDelete.usage_count} time{ruleToDelete.usage_count !== 1 ? 's' : ''} • {ruleToDelete.confidence_score}% confidence
+                  </p>
+                </>
+              )}
+              <p className="mt-2 text-destructive font-semibold">
+                This action cannot be undone.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setDeleteDialogOpen(false);
+              setRuleToDelete(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteRule}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Rule
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
