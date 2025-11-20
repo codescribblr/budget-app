@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { GoalWithDetails } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
-import { MoreVertical, Edit, Trash2, Play, Pause, Target, Calendar, TrendingUp } from 'lucide-react';
+import { MoreVertical, Edit, Trash2, Play, Pause, Target, Calendar, TrendingUp, CreditCard } from 'lucide-react';
 
 interface GoalProgressCardProps {
   goal: GoalWithDetails;
@@ -46,10 +46,19 @@ export default function GoalProgressCard({
   };
 
   const getProgressColor = () => {
-    if (goal.status === 'completed') return 'bg-green-500';
-    if (goal.status === 'overdue') return 'bg-red-500';
-    if (!isOnTrack) return 'bg-yellow-500';
-    return 'bg-blue-500';
+    if (goal.goal_type === 'debt-paydown') {
+      // Debt paydown: use red/orange colors
+      if (goal.status === 'completed') return 'bg-green-500';
+      if (goal.status === 'overdue') return 'bg-red-600';
+      if (!isOnTrack) return 'bg-orange-500';
+      return 'bg-red-500';
+    } else {
+      // Savings goals: use green/blue colors
+      if (goal.status === 'completed') return 'bg-green-500';
+      if (goal.status === 'overdue') return 'bg-red-500';
+      if (!isOnTrack) return 'bg-yellow-500';
+      return 'bg-blue-500';
+    }
   };
 
   return (
@@ -103,7 +112,9 @@ export default function GoalProgressCard({
         <div>
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-medium">
-              {formatCurrency(currentBalance)} / {formatCurrency(goal.target_amount)}
+              {goal.goal_type === 'debt-paydown' 
+                ? `Paid Off: ${formatCurrency(goal.target_amount - currentBalance)} / ${formatCurrency(goal.target_amount)}`
+                : `${formatCurrency(currentBalance)} / ${formatCurrency(goal.target_amount)}`}
             </span>
             <span className="text-sm text-muted-foreground">
               {progress.toFixed(1)}%
@@ -119,11 +130,15 @@ export default function GoalProgressCard({
         {/* Key Metrics */}
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <div className="text-muted-foreground">Remaining</div>
+            <div className="text-muted-foreground">
+              {goal.goal_type === 'debt-paydown' ? 'Remaining Debt' : 'Remaining'}
+            </div>
             <div className="font-semibold">{formatCurrency(remaining)}</div>
           </div>
           <div>
-            <div className="text-muted-foreground">Monthly</div>
+            <div className="text-muted-foreground">
+              {goal.goal_type === 'debt-paydown' ? 'Monthly Payment' : 'Monthly'}
+            </div>
             <div className="font-semibold">{formatCurrency(goal.monthly_contribution)}</div>
           </div>
         </div>

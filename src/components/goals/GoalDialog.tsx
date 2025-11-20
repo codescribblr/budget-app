@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import type { GoalWithDetails, CreateGoalRequest, Account } from '@/lib/types';
+import type { GoalWithDetails, CreateGoalRequest, Account, CreditCard } from '@/lib/types';
+import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { AlertCircle, Info } from 'lucide-react';
 
@@ -22,12 +23,14 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
   const [name, setName] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
   const [targetDate, setTargetDate] = useState('');
-  const [goalType, setGoalType] = useState<'envelope' | 'account-linked'>('envelope');
+  const [goalType, setGoalType] = useState<'envelope' | 'account-linked' | 'debt-paydown'>('envelope');
   const [monthlyContribution, setMonthlyContribution] = useState('');
   const [linkedAccountId, setLinkedAccountId] = useState<string>('');
+  const [linkedCreditCardId, setLinkedCreditCardId] = useState<string>('');
   const [startingBalance, setStartingBalance] = useState('');
   const [notes, setNotes] = useState('');
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAccountWarning, setShowAccountWarning] = useState(false);
   const [accountOption, setAccountOption] = useState<'existing' | 'new'>('existing');
@@ -45,6 +48,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         setGoalType(goal.goal_type);
         setMonthlyContribution(goal.monthly_contribution.toString());
         setLinkedAccountId(goal.linked_account_id?.toString() || '');
+        setLinkedCreditCardId(goal.linked_credit_card_id?.toString() || '');
         setStartingBalance(goal.current_balance?.toString() || '');
         setNotes(goal.notes || '');
         // For account-linked goals, always use existing account option in edit mode
@@ -59,6 +63,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         setGoalType('envelope');
         setMonthlyContribution('');
         setLinkedAccountId('');
+        setLinkedCreditCardId('');
         setStartingBalance('');
         setNotes('');
         setAccountOption('existing');
@@ -67,6 +72,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         setNewAccountBalance('');
       }
       fetchAccounts();
+      fetchCreditCards();
     }
   }, [isOpen, goal]);
 
@@ -81,6 +87,17 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
     }
   };
 
+  const fetchCreditCards = async () => {
+    try {
+      const response = await fetch('/api/credit-cards');
+      if (!response.ok) throw new Error('Failed to fetch credit cards');
+      const data = await response.json();
+      setCreditCards(data);
+    } catch (error) {
+      console.error('Error fetching credit cards:', error);
+    }
+  };
+
   const handleSubmit = async () => {
     // Validation
     if (!name.trim()) {
@@ -88,9 +105,12 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
       return;
     }
 
-    if (!targetAmount || parseFloat(targetAmount) <= 0) {
-      toast.error('Please enter a valid target amount');
-      return;
+    // Target amount validation (not required for debt-paydown)
+    if (goalType !== 'debt-paydown') {
+      if (!targetAmount || parseFloat(targetAmount) <= 0) {
+        toast.error('Please enter a valid target amount');
+        return;
+      }
     }
 
     if (targetDate) {
@@ -120,6 +140,17 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
           toast.error('Please enter an account name');
           return;
         }
+      }
+    }
+
+    if (goalType === 'debt-paydown') {
+      if (!linkedCreditCardId) {
+        toast.error('Please select a credit card');
+        return;
+      }
+      if (!monthlyContribution || parseFloat(monthlyContribution) <= 0) {
+        toast.error('Please enter a valid monthly payment amount');
+        return;
       }
     }
 
@@ -154,7 +185,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         // Create new goal
         const requestData: CreateGoalRequest = {
           name,
-          target_amount: parseFloat(targetAmount),
+          target_amount: goalType !== 'debt-paydown' ? parseFloat(targetAmount) : undefined,
           target_date: targetDate || null,
           goal_type: goalType,
           monthly_contribution: parseFloat(monthlyContribution),
@@ -163,6 +194,9 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
             : undefined,
           linked_account_id: goalType === 'account-linked' && accountOption === 'existing' && linkedAccountId
             ? parseInt(linkedAccountId)
+            : null,
+          linked_credit_card_id: goalType === 'debt-paydown' && linkedCreditCardId
+            ? parseInt(linkedCreditCardId)
             : null,
           new_account_name: goalType === 'account-linked' && accountOption === 'new'
             ? newAccountName.trim()
@@ -241,17 +275,19 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
           </div>
 
           {/* Target Amount */}
-          <div>
-            <Label htmlFor="targetAmount">Target Amount *</Label>
-            <Input
-              id="targetAmount"
-              type="number"
-              step="0.01"
-              value={targetAmount}
-              onChange={(e) => setTargetAmount(e.target.value)}
-              placeholder="0.00"
-            />
-          </div>
+          {goalType !== 'debt-paydown' && (
+            <div>
+              <Label htmlFor="targetAmount">Target Amount *</Label>
+              <Input
+                id="targetAmount"
+                type="number"
+                step="0.01"
+                value={targetAmount}
+                onChange={(e) => setTargetAmount(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+          )}
 
           {/* Target Date */}
           <div>
@@ -280,7 +316,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
                     name="goalType"
                     value="envelope"
                     checked={goalType === 'envelope'}
-                    onChange={(e) => setGoalType(e.target.value as 'envelope' | 'account-linked')}
+                    onChange={(e) => setGoalType(e.target.value as 'envelope' | 'account-linked' | 'debt-paydown')}
                     className="h-4 w-4"
                   />
                   <Label htmlFor="envelope" className="cursor-pointer">
@@ -294,11 +330,25 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
                     name="goalType"
                     value="account-linked"
                     checked={goalType === 'account-linked'}
-                    onChange={(e) => setGoalType(e.target.value as 'envelope' | 'account-linked')}
+                    onChange={(e) => setGoalType(e.target.value as 'envelope' | 'account-linked' | 'debt-paydown')}
                     className="h-4 w-4"
                   />
                   <Label htmlFor="account-linked" className="cursor-pointer">
                     Account-Linked (tracks dedicated account balance)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="debt-paydown"
+                    name="goalType"
+                    value="debt-paydown"
+                    checked={goalType === 'debt-paydown'}
+                    onChange={(e) => setGoalType(e.target.value as 'envelope' | 'account-linked' | 'debt-paydown')}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="debt-paydown" className="cursor-pointer">
+                    Debt Paydown (pay off credit card debt)
                   </Label>
                 </div>
               </div>
@@ -308,7 +358,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
           {/* Monthly Contribution */}
           <div>
             <Label htmlFor="monthlyContribution">
-              Monthly Contribution *
+              {goalType === 'debt-paydown' ? 'Monthly Payment' : 'Monthly Contribution'} *
               {goalType === 'account-linked' && (
                 <span className="text-xs text-muted-foreground ml-2">
                   (for tracking/reminders only)
@@ -324,7 +374,9 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
               placeholder="0.00"
             />
             <p className="text-xs text-muted-foreground mt-1">
-              How much you plan to contribute each month
+              {goalType === 'debt-paydown' 
+                ? 'How much you plan to pay toward this debt each month'
+                : 'How much you plan to contribute each month'}
             </p>
           </div>
 
@@ -443,6 +495,50 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
                 <AlertDescription>
                   <strong>Important:</strong> The account will be excluded from totals and should be used only for this goal. 
                   If you use it for other purposes, goal tracking will be inaccurate.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
+          {/* Credit Card Selection (for debt-paydown goals) */}
+          {goalType === 'debt-paydown' && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="linkedCreditCard">Credit Card *</Label>
+                <Select value={linkedCreditCardId || undefined} onValueChange={setLinkedCreditCardId}>
+                  <SelectTrigger id="linkedCreditCard">
+                    <SelectValue placeholder="Select a credit card" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {creditCards.length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        No credit cards available
+                      </div>
+                    ) : (
+                      creditCards.map((card) => (
+                        <SelectItem key={card.id} value={card.id.toString()}>
+                          {card.name} - Balance: {formatCurrency(card.current_balance)}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {linkedCreditCardId && (
+                  <div className="mt-2">
+                    <p className="text-sm text-muted-foreground">
+                      Current balance: <strong>{formatCurrency(creditCards.find(c => c.id.toString() === linkedCreditCardId)?.current_balance || 0)}</strong>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Target amount will be set to this balance when the goal is created.
+                    </p>
+                  </div>
+                )}
+              </div>
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Important:</strong> This goal will track your progress toward paying off this credit card. 
+                  The target amount will be set to the current balance of the selected card.
                 </AlertDescription>
               </Alert>
             </div>

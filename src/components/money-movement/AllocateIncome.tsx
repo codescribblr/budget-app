@@ -24,9 +24,10 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
   // Filter out system categories (like Transfer) from allocation
   const envelopeCategories = categories.filter(cat => !cat.is_system && !cat.is_goal);
   
-  // Separate envelope goals and account-linked goals
+  // Separate envelope goals, account-linked goals, and debt-paydown goals
   const envelopeGoals = allGoals.filter(g => g.goal_type === 'envelope' && g.status === 'active');
   const accountLinkedGoals = allGoals.filter(g => g.goal_type === 'account-linked' && g.status === 'active');
+  const debtPaydownGoals = allGoals.filter(g => g.goal_type === 'debt-paydown' && g.status === 'active');
   
   // Fetch all goals
   useEffect(() => {
@@ -387,6 +388,41 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
                     <div key={goal.id}>
                       <strong>{goal.name}:</strong> Transfer {formatCurrency(goal.monthly_contribution)} to{' '}
                       <strong>{goal.linked_account?.name || 'your linked account'}</strong> to stay on track.
+                    </div>
+                  ))}
+                </div>
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Debt Paydown Goals Reminder */}
+      {debtPaydownGoals.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-red-500" />
+              Debt Paydown Goals
+            </CardTitle>
+            <CardDescription>
+              Make payments to these credit cards to stay on track with paying off your debt
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  {debtPaydownGoals.map(goal => (
+                    <div key={goal.id}>
+                      <strong>{goal.name}:</strong> Make payment of {formatCurrency(goal.monthly_contribution)} to{' '}
+                      <strong>{goal.linked_credit_card?.name || 'your credit card'}</strong> to stay on track.
+                      {goal.current_balance !== undefined && (
+                        <span className="text-muted-foreground ml-2">
+                          (Remaining: {formatCurrency(goal.current_balance)})
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
