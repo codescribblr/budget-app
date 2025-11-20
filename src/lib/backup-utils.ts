@@ -139,7 +139,7 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
   await supabase.from('income_settings').delete().eq('user_id', user.id);
   await supabase.from('settings').delete().eq('user_id', user.id);
   await supabase.from('csv_import_templates').delete().eq('user_id', user.id);
-  await supabase.from('goals').delete().eq('user_id', user.id); // Delete before categories (goals depend on categories)
+  await supabase.from('goals').delete().eq('user_id', user.id); // Delete before categories, accounts, and credit_cards (goals depend on these)
   await supabase.from('credit_cards').delete().eq('user_id', user.id);
   await supabase.from('categories').delete().eq('user_id', user.id);
   await supabase.from('accounts').delete().eq('user_id', user.id);
@@ -154,13 +154,14 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
     await supabase.from('categories').insert(backupData.categories);
   }
   
-  // Insert goals after categories (goals depend on categories)
-  if (backupData.goals && backupData.goals.length > 0) {
-    await supabase.from('goals').insert(backupData.goals);
-  }
-  
   if (backupData.credit_cards.length > 0) {
     await supabase.from('credit_cards').insert(backupData.credit_cards);
+  }
+  
+  // Insert goals after categories, accounts, and credit_cards
+  // Goals depend on: categories (envelope goals), accounts (account-linked goals), credit_cards (debt-paydown goals)
+  if (backupData.goals && backupData.goals.length > 0) {
+    await supabase.from('goals').insert(backupData.goals);
   }
   
   if (backupData.income_settings.length > 0) {
