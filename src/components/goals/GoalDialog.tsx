@@ -30,6 +30,10 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAccountWarning, setShowAccountWarning] = useState(false);
+  const [accountOption, setAccountOption] = useState<'existing' | 'new'>('existing');
+  const [newAccountName, setNewAccountName] = useState('');
+  const [newAccountType, setNewAccountType] = useState<'checking' | 'savings' | 'cash'>('savings');
+  const [newAccountBalance, setNewAccountBalance] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -53,6 +57,10 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         setLinkedAccountId('');
         setStartingBalance('');
         setNotes('');
+        setAccountOption('existing');
+        setNewAccountName('');
+        setNewAccountType('savings');
+        setNewAccountBalance('');
       }
       fetchAccounts();
     }
@@ -98,9 +106,17 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
       }
     }
 
-    if (goalType === 'account-linked' && !linkedAccountId) {
-      toast.error('Please select an account');
-      return;
+    if (goalType === 'account-linked') {
+      if (accountOption === 'existing' && !linkedAccountId) {
+        toast.error('Please select an account');
+        return;
+      }
+      if (accountOption === 'new') {
+        if (!newAccountName.trim()) {
+          toast.error('Please enter an account name');
+          return;
+        }
+      }
     }
 
     setLoading(true);
@@ -141,9 +157,18 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
           starting_balance: goalType === 'envelope' && startingBalance 
             ? parseFloat(startingBalance) 
             : undefined,
-          linked_account_id: goalType === 'account-linked' && linkedAccountId
+          linked_account_id: goalType === 'account-linked' && accountOption === 'existing' && linkedAccountId
             ? parseInt(linkedAccountId)
             : null,
+          new_account_name: goalType === 'account-linked' && accountOption === 'new'
+            ? newAccountName.trim()
+            : undefined,
+          new_account_type: goalType === 'account-linked' && accountOption === 'new'
+            ? newAccountType
+            : undefined,
+          new_account_balance: goalType === 'account-linked' && accountOption === 'new' && newAccountBalance
+            ? parseFloat(newAccountBalance)
+            : undefined,
           notes: notes || null,
         };
 
@@ -159,6 +184,10 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         }
 
         toast.success('Goal created');
+        // Refresh accounts list if we created a new account
+        if (goalType === 'account-linked' && accountOption === 'new') {
+          await fetchAccounts();
+        }
       }
 
       onSuccess();
@@ -297,34 +326,112 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
 
           {/* Account Selection (for account-linked goals) */}
           {goalType === 'account-linked' && (
-            <div>
-              <Label htmlFor="linkedAccount">Linked Account *</Label>
-              <Select value={linkedAccountId} onValueChange={handleAccountChange}>
-                <SelectTrigger id="linkedAccount">
-                  <SelectValue placeholder="Select an account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableAccounts.length === 0 ? (
-                    <SelectItem value="" disabled>
-                      No available accounts
-                    </SelectItem>
-                  ) : (
-                    availableAccounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id.toString()}>
-                        {account.name} ({account.account_type})
-                      </SelectItem>
-                    ))
+            <div className="space-y-4">
+              <div>
+                <Label>Account Option *</Label>
+                <div className="space-y-2 mt-2">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="existing-account"
+                      name="accountOption"
+                      value="existing"
+                      checked={accountOption === 'existing'}
+                      onChange={(e) => setAccountOption(e.target.value as 'existing' | 'new')}
+                      className="h-4 w-4"
+                    />
+                    <Label htmlFor="existing-account" className="cursor-pointer">
+                      Select existing account
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="new-account"
+                      name="accountOption"
+                      value="new"
+                      checked={accountOption === 'new'}
+                      onChange={(e) => setAccountOption(e.target.value as 'existing' | 'new')}
+                      className="h-4 w-4"
+                    />
+                    <Label htmlFor="new-account" className="cursor-pointer">
+                      Create new account
+                    </Label>
+                  </div>
+                </div>
+              </div>
+
+              {accountOption === 'existing' ? (
+                <div>
+                  <Label htmlFor="linkedAccount">Select Account *</Label>
+                  <Select value={linkedAccountId} onValueChange={handleAccountChange}>
+                    <SelectTrigger id="linkedAccount">
+                      <SelectValue placeholder="Select an account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableAccounts.length === 0 ? (
+                        <SelectItem value="" disabled>
+                          No available accounts
+                        </SelectItem>
+                      ) : (
+                        availableAccounts.map((account) => (
+                          <SelectItem key={account.id} value={account.id.toString()}>
+                            {account.name} ({account.account_type})
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {showAccountWarning && (
+                    <Alert className="mt-2">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        This account has an existing balance. Make sure it's dedicated solely to this goal for accurate tracking.
+                      </AlertDescription>
+                    </Alert>
                   )}
-                </SelectContent>
-              </Select>
-              {showAccountWarning && (
-                <Alert className="mt-2">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    This account has an existing balance. Make sure it's dedicated solely to this goal for accurate tracking.
-                  </AlertDescription>
-                </Alert>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="newAccountName">Account Name *</Label>
+                    <Input
+                      id="newAccountName"
+                      value={newAccountName}
+                      onChange={(e) => setNewAccountName(e.target.value)}
+                      placeholder="e.g., Hawaii Vacation Savings"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="newAccountType">Account Type *</Label>
+                    <Select value={newAccountType} onValueChange={(value) => setNewAccountType(value as 'checking' | 'savings' | 'cash')}>
+                      <SelectTrigger id="newAccountType">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="savings">Savings</SelectItem>
+                        <SelectItem value="checking">Checking</SelectItem>
+                        <SelectItem value="cash">Cash</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="newAccountBalance">Starting Balance (Optional)</Label>
+                    <Input
+                      id="newAccountBalance"
+                      type="number"
+                      step="0.01"
+                      value={newAccountBalance}
+                      onChange={(e) => setNewAccountBalance(e.target.value)}
+                      placeholder="0.00"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Initial balance if you've already started saving
+                    </p>
+                  </div>
+                </div>
               )}
+
               <Alert className="mt-2">
                 <Info className="h-4 w-4" />
                 <AlertDescription>

@@ -1414,44 +1414,73 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
     linkedCategoryId = category.id;
   }
   
-  // Link account for account-linked goals
-  if (data.goal_type === 'account-linked' && data.linked_account_id) {
-    // Verify account exists and belongs to user
-    const { data: account, error: accError } = await supabase
-      .from('accounts')
-      .select('*')
-      .eq('id', data.linked_account_id)
-      .eq('user_id', user.id)
-      .single();
-    
-    if (accError || !account) {
-      throw new Error('Account not found or does not belong to user');
+  // Handle account for account-linked goals
+  if (data.goal_type === 'account-linked') {
+    // Option 1: Create a new account
+    if (data.new_account_name) {
+      if (!data.new_account_name.trim()) {
+        throw new Error('Account name is required when creating a new account');
+      }
+      
+      const { data: newAccount, error: createAccError } = await supabase
+        .from('accounts')
+        .insert({
+          user_id: user.id,
+          name: data.new_account_name.trim(),
+          balance: data.new_account_balance || 0,
+          account_type: data.new_account_type || 'savings',
+          include_in_totals: false, // Always exclude from totals for goal accounts
+          sort_order: 0,
+        })
+        .select()
+        .single();
+      
+      if (createAccError) throw createAccError;
+      if (!newAccount) throw new Error('Failed to create account');
+      
+      linkedAccountId = newAccount.id;
     }
-    
-    // Check if account is already linked to another goal
-    const { data: existingGoal } = await supabase
-      .from('goals')
-      .select('id')
-      .eq('linked_account_id', data.linked_account_id)
-      .eq('user_id', user.id)
-      .single();
-    
-    if (existingGoal) {
-      throw new Error('Account is already linked to another goal');
+    // Option 2: Link to existing account
+    else if (data.linked_account_id) {
+      // Verify account exists and belongs to user
+      const { data: account, error: accError } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('id', data.linked_account_id)
+        .eq('user_id', user.id)
+        .single();
+      
+      if (accError || !account) {
+        throw new Error('Account not found or does not belong to user');
+      }
+      
+      // Check if account is already linked to another goal
+      const { data: existingGoal } = await supabase
+        .from('goals')
+        .select('id')
+        .eq('linked_account_id', data.linked_account_id)
+        .eq('user_id', user.id)
+        .single();
+      
+      if (existingGoal) {
+        throw new Error('Account is already linked to another goal');
+      }
+      
+      // Set account to exclude from totals and link to goal
+      const { error: updateError } = await supabase
+        .from('accounts')
+        .update({
+          include_in_totals: false,
+          linked_goal_id: null, // Will be set after goal creation
+        })
+        .eq('id', data.linked_account_id);
+      
+      if (updateError) throw updateError;
+      
+      linkedAccountId = data.linked_account_id;
+    } else {
+      throw new Error('Either select an existing account or create a new account for account-linked goals');
     }
-    
-    // Set account to exclude from totals and link to goal
-    const { error: updateError } = await supabase
-      .from('accounts')
-      .update({
-        include_in_totals: false,
-        linked_goal_id: null, // Will be set after goal creation
-      })
-      .eq('id', data.linked_account_id);
-    
-    if (updateError) throw updateError;
-    
-    linkedAccountId = data.linked_account_id;
   }
   
   // Create goal

@@ -259,6 +259,10 @@ export interface CreateGoalRequest {
   linked_account_id?: number | null;
   starting_balance?: number; // For envelope goals
   notes?: string | null;
+  // Fields for creating a new account (for account-linked goals)
+  new_account_name?: string;
+  new_account_type?: 'checking' | 'savings' | 'cash';
+  new_account_balance?: number;
 }
 
 export interface UpdateGoalRequest {
