@@ -97,16 +97,36 @@ export default function GoalsPage() {
       const response = await fetch(`/api/goals/${goalToDelete.id}?deleteCategory=${shouldDeleteCategory}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete goal');
-      toast.success('Goal deleted');
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Handle partial success (goal deleted but category deletion failed)
+        if (response.status === 207 && errorData.partialSuccess) {
+          toast.success('Goal deleted successfully', {
+            description: `However, the category "${errorData.categoryName}" could not be deleted. You may need to delete it manually from the categories page.`,
+            duration: 8000,
+          });
+          setDeleteDialogOpen(false);
+          setCategoryDeleteDialogOpen(false);
+          setGoalToDelete(null);
+          setDeleteCategory(false);
+          fetchGoals();
+          return;
+        }
+        
+        throw new Error(errorData.error || 'Failed to delete goal');
+      }
+      
+      toast.success('Goal deleted successfully');
       setDeleteDialogOpen(false);
       setCategoryDeleteDialogOpen(false);
       setGoalToDelete(null);
       setDeleteCategory(false);
       fetchGoals();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting goal:', error);
-      toast.error('Failed to delete goal');
+      toast.error(error.message || 'Failed to delete goal');
     }
   };
 

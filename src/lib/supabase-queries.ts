@@ -1680,6 +1680,16 @@ export async function deleteGoal(id: number, deleteCategory: boolean = false): P
   
   // Now delete the category if requested (after goal is deleted)
   if (categoryIdToDelete) {
+    // Get category name for error message
+    const { data: category } = await supabase
+      .from('categories')
+      .select('name')
+      .eq('id', categoryIdToDelete)
+      .eq('user_id', user.id)
+      .single();
+    
+    const categoryName = category?.name || 'the category';
+    
     // Delete the category (transaction_splits will cascade delete due to FK constraint)
     const { error: deleteCategoryError } = await supabase
       .from('categories')
@@ -1688,7 +1698,15 @@ export async function deleteGoal(id: number, deleteCategory: boolean = false): P
       .eq('user_id', user.id); // Ensure user owns the category
     
     if (deleteCategoryError) {
-      throw new Error(`Failed to delete category: ${deleteCategoryError.message}`);
+      // Goal was already deleted, so we can't rollback
+      // Throw a specific error that indicates partial success
+      const partialError: any = new Error(`Goal deleted successfully, but failed to delete category "${categoryName}"`);
+      partialError.partialSuccess = true;
+      partialError.goalDeleted = true;
+      partialError.categoryId = categoryIdToDelete;
+      partialError.categoryName = categoryName;
+      partialError.categoryError = deleteCategoryError.message;
+      throw partialError;
     }
   }
 }

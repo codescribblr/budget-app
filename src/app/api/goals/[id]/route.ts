@@ -142,6 +142,19 @@ export async function DELETE(
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    
+    // Handle partial success (goal deleted but category deletion failed)
+    if (error.partialSuccess) {
+      return NextResponse.json({
+        error: error.message,
+        partialSuccess: true,
+        goalDeleted: true,
+        categoryId: error.categoryId,
+        categoryName: error.categoryName,
+        categoryError: error.categoryError,
+      }, { status: 207 }); // 207 Multi-Status indicates partial success
+    }
+    
     return NextResponse.json(
       { error: 'Failed to delete goal', message: error.message },
       { status: 500 }
