@@ -47,6 +47,10 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         setLinkedAccountId(goal.linked_account_id?.toString() || '');
         setStartingBalance(goal.current_balance?.toString() || '');
         setNotes(goal.notes || '');
+        // For account-linked goals, always use existing account option in edit mode
+        if (goal.goal_type === 'account-linked') {
+          setAccountOption('existing');
+        }
       } else {
         // Create mode
         setName('');
@@ -327,52 +331,54 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
           {/* Account Selection (for account-linked goals) */}
           {goalType === 'account-linked' && (
             <div className="space-y-4">
-              <div>
-                <Label>Account Option *</Label>
-                <div className="space-y-2 mt-2">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      id="existing-account"
-                      name="accountOption"
-                      value="existing"
-                      checked={accountOption === 'existing'}
-                      onChange={(e) => setAccountOption(e.target.value as 'existing' | 'new')}
-                      className="h-4 w-4"
-                    />
-                    <Label htmlFor="existing-account" className="cursor-pointer">
-                      Select existing account
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      id="new-account"
-                      name="accountOption"
-                      value="new"
-                      checked={accountOption === 'new'}
-                      onChange={(e) => setAccountOption(e.target.value as 'existing' | 'new')}
-                      className="h-4 w-4"
-                    />
-                    <Label htmlFor="new-account" className="cursor-pointer">
-                      Create new account
-                    </Label>
+              {!goal && (
+                <div>
+                  <Label>Account Option *</Label>
+                  <div className="space-y-2 mt-2">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id="existing-account"
+                        name="accountOption"
+                        value="existing"
+                        checked={accountOption === 'existing'}
+                        onChange={(e) => setAccountOption(e.target.value as 'existing' | 'new')}
+                        className="h-4 w-4"
+                      />
+                      <Label htmlFor="existing-account" className="cursor-pointer">
+                        Select existing account
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id="new-account"
+                        name="accountOption"
+                        value="new"
+                        checked={accountOption === 'new'}
+                        onChange={(e) => setAccountOption(e.target.value as 'existing' | 'new')}
+                        className="h-4 w-4"
+                      />
+                      <Label htmlFor="new-account" className="cursor-pointer">
+                        Create new account
+                      </Label>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {accountOption === 'existing' ? (
                 <div>
                   <Label htmlFor="linkedAccount">Select Account *</Label>
-                  <Select value={linkedAccountId} onValueChange={handleAccountChange}>
+                  <Select value={linkedAccountId || undefined} onValueChange={handleAccountChange}>
                     <SelectTrigger id="linkedAccount">
                       <SelectValue placeholder="Select an account" />
                     </SelectTrigger>
                     <SelectContent>
                       {availableAccounts.length === 0 ? (
-                        <SelectItem value="" disabled>
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
                           No available accounts
-                        </SelectItem>
+                        </div>
                       ) : (
                         availableAccounts.map((account) => (
                           <SelectItem key={account.id} value={account.id.toString()}>
