@@ -3,9 +3,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { formatCurrency } from '@/lib/utils';
 import type { PendingCheck } from '@/lib/types';
+import { toast } from 'sonner';
 
 interface PendingCheckListProps {
   pendingChecks: PendingCheck[];
@@ -16,15 +27,29 @@ export default function PendingCheckList({ pendingChecks, onUpdate }: PendingChe
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newDescription, setNewDescription] = useState('');
   const [newAmount, setNewAmount] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [checkToDelete, setCheckToDelete] = useState<PendingCheck | null>(null);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = (check: PendingCheck) => {
+    setCheckToDelete(check);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteCheck = async () => {
+    if (!checkToDelete) return;
+
     try {
-      await fetch(`/api/pending-checks/${id}`, {
+      const response = await fetch(`/api/pending-checks/${checkToDelete.id}`, {
         method: 'DELETE',
       });
+      if (!response.ok) throw new Error('Failed to delete pending check');
+      toast.success('Pending check deleted');
+      setDeleteDialogOpen(false);
+      setCheckToDelete(null);
       onUpdate();
     } catch (error) {
       console.error('Error deleting pending check:', error);
+      toast.error('Failed to delete pending check');
     }
   };
 
@@ -79,7 +104,7 @@ export default function PendingCheckList({ pendingChecks, onUpdate }: PendingChe
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDelete(check.id)}
+                      onClick={() => handleDelete(check)}
                     >
                       Delete
                     </Button>
@@ -136,6 +161,38 @@ export default function PendingCheckList({ pendingChecks, onUpdate }: PendingChe
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Pending Check Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Pending Check?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>"{checkToDelete?.description}"</strong>?
+              <p className="mt-2 text-sm text-muted-foreground">
+                Amount: {checkToDelete && formatCurrency(checkToDelete.amount)}
+              </p>
+              <p className="mt-2 text-destructive font-semibold">
+                This action cannot be undone.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setDeleteDialogOpen(false);
+              setCheckToDelete(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteCheck}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Check
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

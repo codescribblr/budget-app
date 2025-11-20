@@ -3,6 +3,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { formatCurrency } from '@/lib/utils';
 import type { Account } from '@/lib/types';
@@ -21,6 +31,8 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
   const [includeInTotals, setIncludeInTotals] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
 
   // Inline editing state
   const [editingBalanceId, setEditingBalanceId] = useState<number | null>(null);
@@ -77,18 +89,26 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
     }
   };
 
-  const handleDeleteAccount = async (account: Account) => {
-    if (!confirm(`Are you sure you want to delete "${account.name}"?`)) {
-      return;
-    }
+  const handleDeleteAccount = (account: Account) => {
+    setAccountToDelete(account);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!accountToDelete) return;
 
     try {
-      await fetch(`/api/accounts/${account.id}`, {
+      const response = await fetch(`/api/accounts/${accountToDelete.id}`, {
         method: 'DELETE',
       });
+      if (!response.ok) throw new Error('Failed to delete account');
+      toast.success('Account deleted');
+      setDeleteDialogOpen(false);
+      setAccountToDelete(null);
       onUpdate();
     } catch (error) {
       console.error('Error deleting account:', error);
+      toast.error('Failed to delete account');
     }
   };
 
@@ -323,6 +343,38 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Account Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>"{accountToDelete?.name}"</strong>?
+              <p className="mt-2 text-sm text-muted-foreground">
+                Current balance: {accountToDelete && formatCurrency(accountToDelete.balance)}
+              </p>
+              <p className="mt-2 text-destructive font-semibold">
+                This action cannot be undone.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setDeleteDialogOpen(false);
+              setAccountToDelete(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteAccount}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Account
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

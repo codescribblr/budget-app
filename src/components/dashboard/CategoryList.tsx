@@ -6,6 +6,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Progress } from '@/components/ui/progress';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { formatCurrency } from '@/lib/utils';
 import type { Category, DashboardSummary } from '@/lib/types';
 import { toast } from 'sonner';
@@ -34,6 +44,10 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
   // Monthly spending state
   const [monthlySpending, setMonthlySpending] = useState<Record<number, number>>({});
   const [loadingSpending, setLoadingSpending] = useState(true);
+
+  // Delete confirmation dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
 
   // Fetch monthly spending on mount and when categories change
   useEffect(() => {
@@ -138,23 +152,30 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
     }
   };
 
-  const handleDeleteCategory = async (category: Category) => {
+  const handleDeleteCategory = (category: Category) => {
     if (category.is_system) {
-      alert('System categories cannot be deleted.');
+      toast.error('System categories cannot be deleted.');
       return;
     }
+    setCategoryToDelete(category);
+    setDeleteDialogOpen(true);
+  };
 
-    if (!confirm(`Are you sure you want to delete "${category.name}"? This will also delete all transactions associated with this category.`)) {
-      return;
-    }
+  const confirmDeleteCategory = async () => {
+    if (!categoryToDelete) return;
 
     try {
-      await fetch(`/api/categories/${category.id}`, {
+      const response = await fetch(`/api/categories/${categoryToDelete.id}`, {
         method: 'DELETE',
       });
+      if (!response.ok) throw new Error('Failed to delete category');
+      toast.success('Category deleted');
+      setDeleteDialogOpen(false);
+      setCategoryToDelete(null);
       onUpdate();
     } catch (error) {
       console.error('Error deleting category:', error);
+      toast.error('Failed to delete category');
     }
   };
 
@@ -541,6 +562,38 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Category Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Category?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>"{categoryToDelete?.name}"</strong>?
+              <p className="mt-2 text-sm text-muted-foreground">
+                This will also delete all transactions associated with this category.
+              </p>
+              <p className="mt-2 text-destructive font-semibold">
+                This action cannot be undone.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setDeleteDialogOpen(false);
+              setCategoryToDelete(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteCategory}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Category
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

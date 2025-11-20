@@ -3,6 +3,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { formatCurrency } from '@/lib/utils';
 import type { CreditCard } from '@/lib/types';
@@ -22,6 +32,8 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
   const [includeInTotals, setIncludeInTotals] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [cardToDelete, setCardToDelete] = useState<CreditCard | null>(null);
 
   // Inline editing state
   const [editingAvailableId, setEditingAvailableId] = useState<number | null>(null);
@@ -82,18 +94,26 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
     }
   };
 
-  const handleDeleteCard = async (card: CreditCard) => {
-    if (!confirm(`Are you sure you want to delete "${card.name}"?`)) {
-      return;
-    }
+  const handleDeleteCard = (card: CreditCard) => {
+    setCardToDelete(card);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteCard = async () => {
+    if (!cardToDelete) return;
 
     try {
-      await fetch(`/api/credit-cards/${card.id}`, {
+      const response = await fetch(`/api/credit-cards/${cardToDelete.id}`, {
         method: 'DELETE',
       });
+      if (!response.ok) throw new Error('Failed to delete credit card');
+      toast.success('Credit card deleted');
+      setDeleteDialogOpen(false);
+      setCardToDelete(null);
       onUpdate();
     } catch (error) {
       console.error('Error deleting credit card:', error);
+      toast.error('Failed to delete credit card');
     }
   };
 
@@ -369,6 +389,38 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Credit Card Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Credit Card?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>"{cardToDelete?.name}"</strong>?
+              <p className="mt-2 text-sm text-muted-foreground">
+                Current balance: {cardToDelete && formatCurrency(cardToDelete.current_balance)}
+              </p>
+              <p className="mt-2 text-destructive font-semibold">
+                This action cannot be undone.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setDeleteDialogOpen(false);
+              setCardToDelete(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteCard}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Credit Card
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
