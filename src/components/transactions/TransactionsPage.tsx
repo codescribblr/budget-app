@@ -49,7 +49,7 @@ export default function TransactionsPage() {
       setLoading(true);
       const [transactionsRes, categoriesRes] = await Promise.all([
         fetch('/api/transactions'),
-        fetch('/api/categories'),
+        fetch('/api/categories?excludeGoals=true'),
       ]);
 
       const [transactionsData, categoriesData] = await Promise.all([

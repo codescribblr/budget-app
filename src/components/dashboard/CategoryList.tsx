@@ -55,6 +55,7 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
   }, [categories]);
 
   // Filter out system categories (like Transfer) from envelope display
+  // Include goal categories in envelope list (they work like envelopes)
   const envelopeCategories = categories.filter(cat => !cat.is_system);
 
   const totalMonthly = envelopeCategories.reduce((sum, cat) => sum + cat.monthly_amount, 0);

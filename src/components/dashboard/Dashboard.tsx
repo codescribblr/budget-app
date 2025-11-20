@@ -18,6 +18,7 @@ import AccountList from './AccountList';
 import CreditCardList from './CreditCardList';
 import PendingCheckList from './PendingCheckList';
 import SummaryCards from './SummaryCards';
+import GoalsWidget from './GoalsWidget';
 import AppHeader from '@/components/layout/AppHeader';
 
 export default function Dashboard() {
@@ -76,8 +77,8 @@ export default function Dashboard() {
 
       {summary && <SummaryCards summary={summary} />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[calc(100vh-400px)]">
-        <Card className="flex flex-col">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[calc(100vh-400px)]">
+        <Card className="flex flex-col lg:col-span-2">
           <CardHeader>
             <CardTitle>Budget Categories (Envelopes)</CardTitle>
           </CardHeader>
@@ -87,6 +88,8 @@ export default function Dashboard() {
         </Card>
 
         <div className="space-y-6">
+          <GoalsWidget />
+          
           <Card>
             <CardHeader>
               <CardTitle>Accounts</CardTitle>

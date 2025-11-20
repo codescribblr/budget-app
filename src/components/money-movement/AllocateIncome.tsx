@@ -3,8 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { formatCurrency } from '@/lib/utils';
-import type { Category } from '@/lib/types';
+import type { Category, GoalWithDetails } from '@/lib/types';
+import { Target, Info } from 'lucide-react';
 
 interface AllocateIncomeProps {
   categories: Category[];
@@ -14,20 +17,49 @@ interface AllocateIncomeProps {
 
 export default function AllocateIncome({ categories, currentSavings, onSuccess }: AllocateIncomeProps) {
   const [allocations, setAllocations] = useState<{ [key: number]: number }>({});
+  const [goalAllocations, setGoalAllocations] = useState<{ [key: number]: number }>({});
+  const [goals, setGoals] = useState<GoalWithDetails[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filter out system categories (like Transfer) from allocation
-  const envelopeCategories = categories.filter(cat => !cat.is_system);
+  const envelopeCategories = categories.filter(cat => !cat.is_system && !cat.is_goal);
+  
+  // Fetch goals
+  useEffect(() => {
+    const fetchGoals = async () => {
+      try {
+        const response = await fetch('/api/goals?status=active');
+        if (response.ok) {
+          const data = await response.json();
+          // Only include envelope-based goals
+          setGoals(data.filter((g: GoalWithDetails) => g.goal_type === 'envelope'));
+        }
+      } catch (error) {
+        console.error('Error fetching goals:', error);
+      }
+    };
+    fetchGoals();
+  }, []);
 
   const totalMonthlyBudget = envelopeCategories.reduce((sum, cat) => sum + cat.monthly_amount, 0);
   const availableToAllocate = currentSavings;
 
   const handleUseMonthlyAmounts = () => {
     const newAllocations: { [key: number]: number } = {};
+    const newGoalAllocations: { [key: number]: number } = {};
+    
     envelopeCategories.forEach(cat => {
       newAllocations[cat.id] = cat.monthly_amount;
     });
+    
+    goals.forEach(goal => {
+      if (goal.linked_category_id) {
+        newGoalAllocations[goal.linked_category_id] = goal.monthly_contribution;
+      }
+    });
+    
     setAllocations(newAllocations);
+    setGoalAllocations(newGoalAllocations);
   };
 
   const handleUseProportional = () => {
@@ -37,13 +69,26 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
     }
 
     const newAllocations: { [key: number]: number } = {};
+    const newGoalAllocations: { [key: number]: number } = {};
+    
+    // Include goal monthly contributions in total budget
+    const goalMonthlyTotal = goals.reduce((sum, g) => sum + g.monthly_contribution, 0);
+    const totalBudget = totalMonthlyBudget + goalMonthlyTotal;
 
     envelopeCategories.forEach(cat => {
-      const proportion = cat.monthly_amount / totalMonthlyBudget;
+      const proportion = cat.monthly_amount / totalBudget;
       newAllocations[cat.id] = parseFloat((availableToAllocate * proportion).toFixed(2));
+    });
+    
+    goals.forEach(goal => {
+      if (goal.linked_category_id) {
+        const proportion = goal.monthly_contribution / totalBudget;
+        newGoalAllocations[goal.linked_category_id] = parseFloat((availableToAllocate * proportion).toFixed(2));
+      }
     });
 
     setAllocations(newAllocations);
+    setGoalAllocations(newGoalAllocations);
   };
 
   const handleAllocateAll = () => {
@@ -53,17 +98,27 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
     }
 
     const newAllocations: { [key: number]: number } = {};
-    const perCategory = parseFloat((availableToAllocate / envelopeCategories.length).toFixed(2));
+    const newGoalAllocations: { [key: number]: number } = {};
+    const totalItems = envelopeCategories.length + goals.length;
+    const perItem = parseFloat((availableToAllocate / totalItems).toFixed(2));
 
     envelopeCategories.forEach(cat => {
-      newAllocations[cat.id] = perCategory;
+      newAllocations[cat.id] = perItem;
+    });
+    
+    goals.forEach(goal => {
+      if (goal.linked_category_id) {
+        newGoalAllocations[goal.linked_category_id] = perItem;
+      }
     });
 
     setAllocations(newAllocations);
+    setGoalAllocations(newGoalAllocations);
   };
 
   const handleClearAllocations = () => {
     setAllocations({});
+    setGoalAllocations({});
   };
 
   const handleAllocationChange = (categoryId: number, value: string) => {
@@ -78,7 +133,20 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
   };
 
   const getTotalAllocated = () => {
-    return Object.values(allocations).reduce((sum, val) => sum + (val || 0), 0);
+    const categoryTotal = Object.values(allocations).reduce((sum, val) => sum + (val || 0), 0);
+    const goalTotal = Object.values(goalAllocations).reduce((sum, val) => sum + (val || 0), 0);
+    return categoryTotal + goalTotal;
+  };
+  
+  const handleGoalAllocationChange = (categoryId: number, value: string) => {
+    const newGoalAllocations = { ...goalAllocations };
+    const numValue = parseFloat(value);
+    if (!isNaN(numValue) && numValue >= 0) {
+      newGoalAllocations[categoryId] = numValue;
+    } else if (value === '') {
+      newGoalAllocations[categoryId] = 0;
+    }
+    setGoalAllocations(newGoalAllocations);
   };
 
   const getRemaining = () => {
@@ -97,7 +165,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
       setIsSubmitting(true);
 
       // Update all categories with allocations
-      const updates = categories
+      const categoryUpdates = categories
         .filter(cat => allocations[cat.id] > 0)
         .map(cat =>
           fetch(`/api/categories/${cat.id}`, {
@@ -108,11 +176,30 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
             }),
           })
         );
+      
+      // Update goal categories with allocations
+      const goalUpdates = goals
+        .filter(goal => goal.linked_category_id !== null && goalAllocations[goal.linked_category_id] > 0)
+        .map(goal => {
+          if (!goal.linked_category_id) return null;
+          const category = categories.find(c => c.id === goal.linked_category_id);
+          if (!category) return null;
+          const allocation = goalAllocations[goal.linked_category_id];
+          return fetch(`/api/categories/${goal.linked_category_id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              current_balance: category.current_balance + allocation,
+            }),
+          });
+        })
+        .filter((update): update is Promise<Response> => update !== null);
 
-      await Promise.all(updates);
+      await Promise.all([...categoryUpdates, ...goalUpdates]);
 
       // Reset form
       setAllocations({});
+      setGoalAllocations({});
       onSuccess();
       alert(`Successfully allocated ${formatCurrency(totalAllocated)} to envelopes!`);
     } catch (error) {
@@ -153,6 +240,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
         </Button>
       </div>
 
+      {/* Regular Envelopes */}
       <div className="border rounded-md">
         <Table>
           <TableHeader>
@@ -204,6 +292,105 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
           </TableBody>
         </Table>
       </div>
+
+      {/* Goals Section */}
+      {goals.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              Goals
+            </CardTitle>
+            <CardDescription>
+              Allocate funds to your savings goals
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Goal</TableHead>
+                    <TableHead className="text-right">Monthly Target</TableHead>
+                    <TableHead className="text-right">Current Balance</TableHead>
+                    <TableHead className="text-right">Allocate</TableHead>
+                    <TableHead className="text-right">New Balance</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {goals.map((goal) => {
+                    if (!goal.linked_category_id) return null;
+                    const category = categories.find(c => c.id === goal.linked_category_id);
+                    if (!category) return null;
+                    
+                    const allocation = goalAllocations[goal.linked_category_id] || 0;
+                    const newBalance = category.current_balance + allocation;
+
+                    return (
+                      <TableRow key={goal.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <Target className="h-4 w-4 text-blue-500" />
+                            {goal.name}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {formatCurrency(goal.monthly_contribution)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(category.current_balance)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={allocation || ''}
+                            onChange={(e) => handleGoalAllocationChange(goal.linked_category_id!, e.target.value)}
+                            placeholder="0.00"
+                            className="w-28 text-right"
+                          />
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
+                          {formatCurrency(newBalance)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Account-Linked Goals Reminder */}
+      {goals.filter(g => g.goal_type === 'account-linked' && g.status === 'active').length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              Account-Linked Goals
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  {goals
+                    .filter(g => g.goal_type === 'account-linked' && g.status === 'active')
+                    .map(goal => (
+                      <div key={goal.id}>
+                        <strong>{goal.name}:</strong> Transfer {formatCurrency(goal.monthly_contribution)} to{' '}
+                        {goal.linked_account?.name || 'your linked account'} to stay on track.
+                      </div>
+                    ))}
+                </div>
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-4 bg-muted rounded-md">

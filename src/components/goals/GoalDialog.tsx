@@ -1,0 +1,381 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import type { GoalWithDetails, CreateGoalRequest, Account } from '@/lib/types';
+import { toast } from 'sonner';
+import { AlertCircle, Info } from 'lucide-react';
+
+interface GoalDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  goal?: GoalWithDetails | null;
+  onSuccess: () => void;
+}
+
+export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDialogProps) {
+  const [name, setName] = useState('');
+  const [targetAmount, setTargetAmount] = useState('');
+  const [targetDate, setTargetDate] = useState('');
+  const [goalType, setGoalType] = useState<'envelope' | 'account-linked'>('envelope');
+  const [monthlyContribution, setMonthlyContribution] = useState('');
+  const [linkedAccountId, setLinkedAccountId] = useState<string>('');
+  const [startingBalance, setStartingBalance] = useState('');
+  const [notes, setNotes] = useState('');
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showAccountWarning, setShowAccountWarning] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (goal) {
+        // Edit mode
+        setName(goal.name);
+        setTargetAmount(goal.target_amount.toString());
+        setTargetDate(goal.target_date || '');
+        setGoalType(goal.goal_type);
+        setMonthlyContribution(goal.monthly_contribution.toString());
+        setLinkedAccountId(goal.linked_account_id?.toString() || '');
+        setStartingBalance(goal.current_balance?.toString() || '');
+        setNotes(goal.notes || '');
+      } else {
+        // Create mode
+        setName('');
+        setTargetAmount('');
+        setTargetDate('');
+        setGoalType('envelope');
+        setMonthlyContribution('');
+        setLinkedAccountId('');
+        setStartingBalance('');
+        setNotes('');
+      }
+      fetchAccounts();
+    }
+  }, [isOpen, goal]);
+
+  const fetchAccounts = async () => {
+    try {
+      const response = await fetch('/api/accounts');
+      if (!response.ok) throw new Error('Failed to fetch accounts');
+      const data = await response.json();
+      setAccounts(data);
+    } catch (error) {
+      console.error('Error fetching accounts:', error);
+    }
+  };
+
+  const handleSubmit = async () => {
+    // Validation
+    if (!name.trim()) {
+      toast.error('Please enter a goal name');
+      return;
+    }
+
+    if (!targetAmount || parseFloat(targetAmount) <= 0) {
+      toast.error('Please enter a valid target amount');
+      return;
+    }
+
+    if (targetDate) {
+      const date = new Date(targetDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (date < today) {
+        toast.error('Target date must be in the future');
+        return;
+      }
+    }
+
+    if (goalType === 'envelope') {
+      if (!monthlyContribution || parseFloat(monthlyContribution) <= 0) {
+        toast.error('Please enter a valid monthly contribution');
+        return;
+      }
+    }
+
+    if (goalType === 'account-linked' && !linkedAccountId) {
+      toast.error('Please select an account');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      if (goal) {
+        // Update existing goal
+        const response = await fetch(`/api/goals/${goal.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            target_amount: parseFloat(targetAmount),
+            target_date: targetDate || null,
+            monthly_contribution: parseFloat(monthlyContribution),
+            notes: notes || null,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to update goal');
+        }
+
+        const result = await response.json();
+        if (result.warning) {
+          toast.warning(result.warning);
+        }
+        toast.success('Goal updated');
+      } else {
+        // Create new goal
+        const requestData: CreateGoalRequest = {
+          name,
+          target_amount: parseFloat(targetAmount),
+          target_date: targetDate || null,
+          goal_type: goalType,
+          monthly_contribution: parseFloat(monthlyContribution),
+          starting_balance: goalType === 'envelope' && startingBalance 
+            ? parseFloat(startingBalance) 
+            : undefined,
+          linked_account_id: goalType === 'account-linked' && linkedAccountId
+            ? parseInt(linkedAccountId)
+            : null,
+          notes: notes || null,
+        };
+
+        const response = await fetch('/api/goals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestData),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to create goal');
+        }
+
+        toast.success('Goal created');
+      }
+
+      onSuccess();
+      onClose();
+    } catch (error: any) {
+      console.error('Error saving goal:', error);
+      toast.error(error.message || 'Failed to save goal');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAccountChange = (accountId: string) => {
+    setLinkedAccountId(accountId);
+    const selectedAccount = accounts.find(a => a.id.toString() === accountId);
+    if (selectedAccount && selectedAccount.balance > 0) {
+      setShowAccountWarning(true);
+    } else {
+      setShowAccountWarning(false);
+    }
+  };
+
+  const availableAccounts = accounts.filter(acc => 
+    !acc.linked_goal_id || acc.linked_goal_id === goal?.id
+  );
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{goal ? 'Edit Goal' : 'Create New Goal'}</DialogTitle>
+          <DialogDescription>
+            Set up a savings goal with a target amount and optional timeline
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Goal Name */}
+          <div>
+            <Label htmlFor="name">Goal Name *</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., Hawaii Vacation"
+            />
+          </div>
+
+          {/* Target Amount */}
+          <div>
+            <Label htmlFor="targetAmount">Target Amount *</Label>
+            <Input
+              id="targetAmount"
+              type="number"
+              step="0.01"
+              value={targetAmount}
+              onChange={(e) => setTargetAmount(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+
+          {/* Target Date */}
+          <div>
+            <Label htmlFor="targetDate">Target Date (Optional)</Label>
+            <Input
+              id="targetDate"
+              type="date"
+              value={targetDate}
+              onChange={(e) => setTargetDate(e.target.value)}
+              min={new Date().toISOString().split('T')[0]}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              When you want to reach this goal
+            </p>
+          </div>
+
+          {/* Goal Type */}
+          {!goal && (
+            <div>
+              <Label>Goal Type *</Label>
+              <div className="space-y-2 mt-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="envelope"
+                    name="goalType"
+                    value="envelope"
+                    checked={goalType === 'envelope'}
+                    onChange={(e) => setGoalType(e.target.value as 'envelope' | 'account-linked')}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="envelope" className="cursor-pointer">
+                    Envelope-Based (works like a budget category)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="account-linked"
+                    name="goalType"
+                    value="account-linked"
+                    checked={goalType === 'account-linked'}
+                    onChange={(e) => setGoalType(e.target.value as 'envelope' | 'account-linked')}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="account-linked" className="cursor-pointer">
+                    Account-Linked (tracks dedicated account balance)
+                  </Label>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Monthly Contribution */}
+          <div>
+            <Label htmlFor="monthlyContribution">
+              Monthly Contribution *
+              {goalType === 'account-linked' && (
+                <span className="text-xs text-muted-foreground ml-2">
+                  (for tracking/reminders only)
+                </span>
+              )}
+            </Label>
+            <Input
+              id="monthlyContribution"
+              type="number"
+              step="0.01"
+              value={monthlyContribution}
+              onChange={(e) => setMonthlyContribution(e.target.value)}
+              placeholder="0.00"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              How much you plan to contribute each month
+            </p>
+          </div>
+
+          {/* Account Selection (for account-linked goals) */}
+          {goalType === 'account-linked' && (
+            <div>
+              <Label htmlFor="linkedAccount">Linked Account *</Label>
+              <Select value={linkedAccountId} onValueChange={handleAccountChange}>
+                <SelectTrigger id="linkedAccount">
+                  <SelectValue placeholder="Select an account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableAccounts.length === 0 ? (
+                    <SelectItem value="" disabled>
+                      No available accounts
+                    </SelectItem>
+                  ) : (
+                    availableAccounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id.toString()}>
+                        {account.name} ({account.account_type})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {showAccountWarning && (
+                <Alert className="mt-2">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    This account has an existing balance. Make sure it's dedicated solely to this goal for accurate tracking.
+                  </AlertDescription>
+                </Alert>
+              )}
+              <Alert className="mt-2">
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Important:</strong> The account will be excluded from totals and should be used only for this goal. 
+                  If you use it for other purposes, goal tracking will be inaccurate.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
+          {/* Starting Balance (for envelope goals) */}
+          {goalType === 'envelope' && !goal && (
+            <div>
+              <Label htmlFor="startingBalance">Starting Balance (Optional)</Label>
+              <Input
+                id="startingBalance"
+                type="number"
+                step="0.01"
+                value={startingBalance}
+                onChange={(e) => setStartingBalance(e.target.value)}
+                placeholder="0.00"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Initial amount already saved toward this goal
+              </p>
+            </div>
+          )}
+
+          {/* Notes */}
+          <div>
+            <Label htmlFor="notes">Notes (Optional)</Label>
+            <Input
+              id="notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Additional notes about this goal"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={onClose} disabled={loading}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit} disabled={loading}>
+              {loading ? 'Saving...' : goal ? 'Update Goal' : 'Create Goal'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+

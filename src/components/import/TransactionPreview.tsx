@@ -43,7 +43,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   }, []);
 
   const fetchCategories = async () => {
-    const response = await fetch('/api/categories');
+    const response = await fetch('/api/categories?excludeGoals=true');
     const data = await response.json();
     setCategories(data);
   };

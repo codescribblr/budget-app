@@ -136,7 +136,7 @@ export default function AddTransactionDialog({
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map((category) => (
+                      {categories.filter(cat => !cat.is_goal).map((category) => (
                         <SelectItem key={category.id} value={category.id.toString()}>
                           <div className="flex items-center gap-2">
                             {category.name}
