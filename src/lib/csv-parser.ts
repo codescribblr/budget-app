@@ -1,85 +1,23 @@
 import Papa from 'papaparse';
 import type { ParsedTransaction } from './import-types';
+import { analyzeCSV, type CSVAnalysisResult } from './column-analyzer';
+import { parseDate, normalizeDate } from './date-parser';
+import { loadTemplate, updateTemplateUsage } from './mapping-templates';
+import type { ColumnMapping } from './mapping-templates';
+import { extractMerchant, generateTransactionHash } from './csv-parser-helpers';
 
-// Detect CSV format based on headers
-export function detectCSVFormat(headers: string[]): string {
-  const headerStr = headers.join(',').toLowerCase();
+// Re-export helper functions for backward compatibility
+export { extractMerchant, generateTransactionHash };
 
-  if (headerStr.includes('cardholder') && headerStr.includes('points')) {
-    return 'citi-rewards';
-  } else if (headerStr.includes('transaction date') && headerStr.includes('post date')) {
-    return 'chase';
-  } else if (headerStr.includes('status') && headerStr.includes('debit') && headerStr.includes('credit')) {
-    return 'citi-statement';
-  } else if (isWellsFargoFormat(headers)) {
-    // Wells Fargo/Bank format has no headers - starts with date
-    return 'wells-fargo';
-  }
-
-  return 'unknown';
-}
-
-// Check if this looks like Wells Fargo format (no headers, starts with date)
-function isWellsFargoFormat(row: string[]): boolean {
-  if (row.length < 5) return false;
-
-  // Check if first column looks like a date (MM/DD/YYYY)
-  const datePattern = /^\d{1,2}\/\d{1,2}\/\d{4}$/;
-  if (!datePattern.test(row[0])) return false;
-
-  // Check if second column looks like an amount (with optional quotes and minus sign)
-  const amountStr = row[1].replace(/"/g, '');
-  const amountPattern = /^-?\d+\.\d{2}$/;
-  if (!amountPattern.test(amountStr)) return false;
-
-  // Check if third column is a status marker (usually "*")
-  if (row[2] !== '*' && row[2] !== '"*"') return false;
-
-  return true;
-}
-
-// Extract merchant name from description
-export function extractMerchant(description: string): string {
-  // Remove common prefixes
-  let merchant = description
-    .replace(/^(SQ \*|TST\*|PAR\*|AMZN MKTP|AMAZON MKTPL\*)/i, '')
-    .replace(/\s+\d{3}-\d{3}-\d{4}.*$/i, '') // Remove phone numbers
-    .replace(/\s+[A-Z]{2}$/i, '') // Remove state codes at end
-    .replace(/\s+null\s+.*$/i, '') // Remove "null" and everything after
-    .trim();
-  
-  // Take first part before location info
-  const parts = merchant.split(/\s{2,}|\s+[A-Z]{2}\s+/);
-  merchant = parts[0].trim();
-  
-  return merchant || description;
-}
-
-// Generate hash for deduplication (simple hash for browser)
-// Includes originalData to distinguish identical transactions that occur separately
-export function generateTransactionHash(date: string, description: string, amount: number, originalData?: string): string {
-  // Include originalData (entire CSV row) to distinguish truly identical transactions
-  // This handles cases like two $1.07 McDonald's purchases 2 minutes apart
-  const data = originalData
-    ? `${date}|${description}|${amount}|${originalData}`
-    : `${date}|${description}|${amount}`;
-
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    const char = data.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return Math.abs(hash).toString(16);
-}
-
-// Parse CSV file
+/**
+ * Parse CSV file with intelligent column detection
+ */
 export async function parseCSVFile(file: File): Promise<ParsedTransaction[]> {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
-      complete: (results) => {
+      complete: async (results) => {
         try {
-          const transactions = processCSVData(results.data as string[][], file.name);
+          const transactions = await processCSVData(results.data as string[][], file.name);
           resolve(transactions);
         } catch (error) {
           reject(error);
@@ -92,18 +30,48 @@ export async function parseCSVFile(file: File): Promise<ParsedTransaction[]> {
   });
 }
 
-function processCSVData(data: string[][], fileName: string): ParsedTransaction[] {
+/**
+ * Process CSV data with intelligent detection
+ */
+async function processCSVData(data: string[][], fileName: string): Promise<ParsedTransaction[]> {
   if (data.length === 0) {
     throw new Error('CSV file is empty');
   }
 
-  const headers = data[0];
-  const format = detectCSVFormat(headers);
-  const transactions: ParsedTransaction[] = [];
+  // Analyze CSV structure
+  const analysis = analyzeCSV(data);
 
-  // Determine if first row is headers or data
-  const hasHeaders = format !== 'wells-fargo';
-  const startRow = hasHeaders ? 1 : 0;
+  // Check for saved template
+  let mapping: ColumnMapping | null = null;
+  try {
+    const template = await loadTemplate(analysis.fingerprint);
+    if (template) {
+      mapping = template.mapping;
+      // Update template usage
+      if (template.id) {
+        await updateTemplateUsage(template.id).catch(console.warn);
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to load template:', error);
+  }
+
+  // If no template found, use analysis results
+  if (!mapping) {
+    mapping = {
+      dateColumn: analysis.dateColumn,
+      amountColumn: analysis.amountColumn,
+      descriptionColumn: analysis.descriptionColumn,
+      debitColumn: analysis.debitColumn,
+      creditColumn: analysis.creditColumn,
+      dateFormat: analysis.dateFormat,
+      hasHeaders: analysis.hasHeaders,
+    };
+  }
+
+  // Determine start row (skip headers if present)
+  const startRow = mapping.hasHeaders ? 1 : 0;
+  const transactions: ParsedTransaction[] = [];
 
   // Process rows
   for (let i = startRow; i < data.length; i++) {
@@ -115,7 +83,7 @@ function processCSVData(data: string[][], fileName: string): ParsedTransaction[]
     }
 
     try {
-      const transaction = parseRow(row, headers, format, fileName);
+      const transaction = parseRowWithMapping(row, mapping, fileName);
       if (transaction) {
         transactions.push(transaction);
       }
@@ -127,74 +95,53 @@ function processCSVData(data: string[][], fileName: string): ParsedTransaction[]
   return transactions;
 }
 
-function parseRow(
+/**
+ * Parse a single row using column mapping
+ */
+function parseRowWithMapping(
   row: string[],
-  headers: string[],
-  format: string,
+  mapping: ColumnMapping,
   fileName: string
 ): ParsedTransaction | null {
-  let date = '';
-  let description = '';
+  // Extract values based on mapping
+  const dateValue = mapping.dateColumn !== null ? row[mapping.dateColumn] : null;
+  const descriptionValue = mapping.descriptionColumn !== null ? row[mapping.descriptionColumn] : null;
+  
   let amount = 0;
 
-  switch (format) {
-    case 'citi-rewards':
-      // Date,Time,Cardholder,Amount,Points,Balance,Status,Type,Merchant,Description
-      date = row[0];
-      description = row[9] || row[8] || 'Unknown';
-      amount = parseFloat(row[3]);
-      break;
-
-    case 'chase':
-      // Transaction Date,Post Date,Description,Category,Type,Amount,Memo
-      date = row[0];
-      description = row[2];
-      amount = Math.abs(parseFloat(row[5]));
-      // Chase uses negative for purchases
-      if (row[4] !== 'Payment') {
-        amount = Math.abs(amount);
-      }
-      break;
-
-    case 'wells-fargo':
-      // "10/10/2025","-250.00","*","","Description"
-      date = row[0].replace(/"/g, '');
-      description = row[4].replace(/"/g, '');
-      amount = Math.abs(parseFloat(row[1].replace(/"/g, '')));
-      break;
-
-    case 'citi-statement':
-      // Status,Date,Description,Debit,Credit
-      date = row[1];
-      description = row[2];
-      const debit = row[3] ? parseFloat(row[3]) : 0;
-      const credit = row[4] ? parseFloat(row[4]) : 0;
-      amount = debit || credit;
-      break;
-
-    default:
-      // Try to auto-detect
-      date = row[0];
-      description = row[1] || row[2] || 'Unknown';
-      amount = Math.abs(parseFloat(row[row.length - 1]));
-      break;
+  // Handle amount extraction (can be from amount column, or debit/credit columns)
+  if (mapping.amountColumn !== null) {
+    amount = parseAmount(row[mapping.amountColumn]);
+  } else if (mapping.debitColumn !== null && mapping.creditColumn !== null) {
+    const debit = parseAmount(row[mapping.debitColumn] || '0');
+    const credit = parseAmount(row[mapping.creditColumn] || '0');
+    amount = debit || credit; // Use whichever is non-zero
+  } else if (mapping.debitColumn !== null) {
+    amount = parseAmount(row[mapping.debitColumn]);
+  } else if (mapping.creditColumn !== null) {
+    amount = parseAmount(row[mapping.creditColumn]);
   }
 
-  // Skip if we couldn't parse essential data
-  if (!date || !amount || isNaN(amount)) {
+  // Validate required fields
+  if (!dateValue || !descriptionValue || !amount || isNaN(amount)) {
     return null;
   }
 
+  // Parse date
+  const dateResult = parseDate(dateValue, mapping.dateFormat || undefined);
+  const date = dateResult.date ? normalizeDate(dateResult.date) : dateValue;
+
+  const description = descriptionValue.trim();
   const merchant = extractMerchant(description);
   const originalData = JSON.stringify(row);
   const hash = generateTransactionHash(date, description, amount, originalData);
 
   return {
     id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    date: normalizeDate(date),
+    date,
     description,
     merchant,
-    amount,
+    amount: Math.abs(amount),
     originalData,
     hash,
     isDuplicate: false,
@@ -203,17 +150,68 @@ function parseRow(
   };
 }
 
-function normalizeDate(dateStr: string): string {
-  // Try to parse various date formats and return YYYY-MM-DD
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) {
-    return dateStr; // Return as-is if can't parse
+/**
+ * Parse amount string to number
+ * Handles various formats: $1,234.56, (123.45), -123.45, 1.234,56 (European)
+ */
+function parseAmount(amountStr: string): number {
+  if (!amountStr) return 0;
+
+  let cleaned = amountStr.trim();
+
+  // Handle negative amounts in parentheses: (123.45)
+  if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
+    cleaned = '-' + cleaned.slice(1, -1);
   }
-  
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  
-  return `${year}-${month}-${day}`;
+
+  // Remove currency symbols and spaces
+  cleaned = cleaned.replace(/[$,\s]/g, '');
+
+  // Handle European format (comma as decimal separator)
+  // Check if it looks like European format (has dots as thousands separators and comma as decimal)
+  if (/^\d{1,3}(\.\d{3})+(,\d{2})?$/.test(cleaned)) {
+    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+  }
+
+  const amount = parseFloat(cleaned);
+  return isNaN(amount) ? 0 : amount;
 }
 
+/**
+ * Legacy format detection (kept for backward compatibility)
+ * @deprecated Use intelligent detection instead
+ */
+export function detectCSVFormat(headers: string[]): string {
+  const headerStr = headers.join(',').toLowerCase();
+
+  if (headerStr.includes('cardholder') && headerStr.includes('points')) {
+    return 'citi-rewards';
+  } else if (headerStr.includes('transaction date') && headerStr.includes('post date')) {
+    return 'chase';
+  } else if (headerStr.includes('status') && headerStr.includes('debit') && headerStr.includes('credit')) {
+    return 'citi-statement';
+  } else if (isWellsFargoFormat(headers)) {
+    return 'wells-fargo';
+  }
+
+  return 'unknown';
+}
+
+/**
+ * Legacy Wells Fargo format detection
+ * @deprecated Use intelligent detection instead
+ */
+function isWellsFargoFormat(row: string[]): boolean {
+  if (row.length < 5) return false;
+
+  const datePattern = /^\d{1,2}\/\d{1,2}\/\d{4}$/;
+  if (!datePattern.test(row[0])) return false;
+
+  const amountStr = row[1].replace(/"/g, '');
+  const amountPattern = /^-?\d+\.\d{2}$/;
+  if (!amountPattern.test(amountStr)) return false;
+
+  if (row[2] !== '*' && row[2] !== '"*"') return false;
+
+  return true;
+}
