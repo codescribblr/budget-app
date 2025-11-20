@@ -66,8 +66,10 @@ export function analyzeCSV(data: string[][]): CSVAnalysisResult {
     dateFormat = detectDateFormat(dateValues);
   }
 
-  // Generate fingerprint
-  const fingerprint = generateFingerprint(headers);
+  // Generate fingerprint - always use actual first row for consistency
+  // This ensures the same CSV file always generates the same fingerprint
+  // regardless of header detection results
+  const fingerprint = generateFingerprint(data[0]);
 
   return {
     columns,
@@ -197,15 +199,22 @@ function detectHeaders(data: string[][]): boolean {
 /**
  * Generate fingerprint for CSV format
  * Used to match against saved templates
+ * 
+ * IMPORTANT: This uses the actual first row data, not detected headers.
+ * This ensures consistent fingerprinting regardless of header detection results.
+ * 
+ * @param firstRow - The first row of the CSV (actual data, not normalized headers)
  */
-function generateFingerprint(headers: string[]): string {
-  const str = headers.join('|').toLowerCase();
+function generateFingerprint(firstRow: string[]): string {
+  // Normalize the first row: lowercase, trim, and handle empty values
+  const normalized = firstRow.map(cell => (cell || '').trim().toLowerCase());
+  const str = normalized.join('|');
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash; // Convert to 32bit integer
   }
-  return `${headers.length}-${Math.abs(hash).toString(16)}`;
+  return `${firstRow.length}-${Math.abs(hash).toString(16)}`;
 }
 
