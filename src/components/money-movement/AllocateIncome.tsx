@@ -18,21 +18,24 @@ interface AllocateIncomeProps {
 export default function AllocateIncome({ categories, currentSavings, onSuccess }: AllocateIncomeProps) {
   const [allocations, setAllocations] = useState<{ [key: number]: number }>({});
   const [goalAllocations, setGoalAllocations] = useState<{ [key: number]: number }>({});
-  const [goals, setGoals] = useState<GoalWithDetails[]>([]);
+  const [allGoals, setAllGoals] = useState<GoalWithDetails[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filter out system categories (like Transfer) from allocation
   const envelopeCategories = categories.filter(cat => !cat.is_system && !cat.is_goal);
   
-  // Fetch goals
+  // Separate envelope goals and account-linked goals
+  const envelopeGoals = allGoals.filter(g => g.goal_type === 'envelope' && g.status === 'active');
+  const accountLinkedGoals = allGoals.filter(g => g.goal_type === 'account-linked' && g.status === 'active');
+  
+  // Fetch all goals
   useEffect(() => {
     const fetchGoals = async () => {
       try {
         const response = await fetch('/api/goals?status=active');
         if (response.ok) {
           const data = await response.json();
-          // Only include envelope-based goals
-          setGoals(data.filter((g: GoalWithDetails) => g.goal_type === 'envelope'));
+          setAllGoals(data);
         }
       } catch (error) {
         console.error('Error fetching goals:', error);
@@ -52,7 +55,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
       newAllocations[cat.id] = cat.monthly_amount;
     });
     
-    goals.forEach(goal => {
+    envelopeGoals.forEach(goal => {
       if (goal.linked_category_id) {
         newGoalAllocations[goal.linked_category_id] = goal.monthly_contribution;
       }
@@ -72,7 +75,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
     const newGoalAllocations: { [key: number]: number } = {};
     
     // Include goal monthly contributions in total budget
-    const goalMonthlyTotal = goals.reduce((sum, g) => sum + g.monthly_contribution, 0);
+    const goalMonthlyTotal = envelopeGoals.reduce((sum, g) => sum + g.monthly_contribution, 0);
     const totalBudget = totalMonthlyBudget + goalMonthlyTotal;
 
     envelopeCategories.forEach(cat => {
@@ -80,7 +83,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
       newAllocations[cat.id] = parseFloat((availableToAllocate * proportion).toFixed(2));
     });
     
-    goals.forEach(goal => {
+    envelopeGoals.forEach(goal => {
       if (goal.linked_category_id) {
         const proportion = goal.monthly_contribution / totalBudget;
         newGoalAllocations[goal.linked_category_id] = parseFloat((availableToAllocate * proportion).toFixed(2));
@@ -99,14 +102,14 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
 
     const newAllocations: { [key: number]: number } = {};
     const newGoalAllocations: { [key: number]: number } = {};
-    const totalItems = envelopeCategories.length + goals.length;
+    const totalItems = envelopeCategories.length + envelopeGoals.length;
     const perItem = parseFloat((availableToAllocate / totalItems).toFixed(2));
 
     envelopeCategories.forEach(cat => {
       newAllocations[cat.id] = perItem;
     });
     
-    goals.forEach(goal => {
+    envelopeGoals.forEach(goal => {
       if (goal.linked_category_id) {
         newGoalAllocations[goal.linked_category_id] = perItem;
       }
@@ -178,7 +181,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
         );
       
       // Update goal categories with allocations
-      const goalUpdates = goals
+      const goalUpdates = envelopeGoals
         .filter(goal => goal.linked_category_id !== null && goalAllocations[goal.linked_category_id] > 0)
         .map(goal => {
           if (!goal.linked_category_id) return null;
@@ -294,7 +297,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
       </div>
 
       {/* Goals Section */}
-      {goals.length > 0 && (
+      {envelopeGoals.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -318,7 +321,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {goals.map((goal) => {
+                  {envelopeGoals.map((goal) => {
                     if (!goal.linked_category_id) return null;
                     const category = categories.find(c => c.id === goal.linked_category_id);
                     if (!category) return null;
@@ -364,27 +367,28 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
       )}
 
       {/* Account-Linked Goals Reminder */}
-      {goals.filter(g => g.goal_type === 'account-linked' && g.status === 'active').length > 0 && (
+      {accountLinkedGoals.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Target className="h-5 w-5" />
               Account-Linked Goals
             </CardTitle>
+            <CardDescription>
+              Transfer funds to these dedicated accounts to stay on track with your goals
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
                 <div className="space-y-2">
-                  {goals
-                    .filter(g => g.goal_type === 'account-linked' && g.status === 'active')
-                    .map(goal => (
-                      <div key={goal.id}>
-                        <strong>{goal.name}:</strong> Transfer {formatCurrency(goal.monthly_contribution)} to{' '}
-                        {goal.linked_account?.name || 'your linked account'} to stay on track.
-                      </div>
-                    ))}
+                  {accountLinkedGoals.map(goal => (
+                    <div key={goal.id}>
+                      <strong>{goal.name}:</strong> Transfer {formatCurrency(goal.monthly_contribution)} to{' '}
+                      <strong>{goal.linked_account?.name || 'your linked account'}</strong> to stay on track.
+                    </div>
+                  ))}
                 </div>
               </AlertDescription>
             </Alert>

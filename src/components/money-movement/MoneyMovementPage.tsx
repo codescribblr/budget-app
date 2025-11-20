@@ -18,7 +18,7 @@ export default function MoneyMovementPage() {
     try {
       setLoading(true);
       const [categoriesRes, dashboardRes] = await Promise.all([
-        fetch('/api/categories'),
+        fetch('/api/categories?excludeGoals=false'), // Include goal categories for allocation
         fetch('/api/dashboard'),
       ]);
 
