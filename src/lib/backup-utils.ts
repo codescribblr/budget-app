@@ -17,6 +17,8 @@ export interface UserBackupData {
   income_settings: any[];
   pre_tax_deductions: any[];
   settings: any[];
+  goals?: any[]; // Added in version 1.1
+  csv_import_templates?: any[]; // Added in version 1.1
 }
 
 /**
@@ -41,6 +43,8 @@ export async function exportUserData(): Promise<UserBackupData> {
     { data: income_settings },
     { data: pre_tax_deductions },
     { data: settings },
+    { data: goals },
+    { data: csv_import_templates },
   ] = await Promise.all([
     supabase.from('accounts').select('*').eq('user_id', user.id),
     supabase.from('categories').select('*').eq('user_id', user.id),
@@ -62,10 +66,12 @@ export async function exportUserData(): Promise<UserBackupData> {
     supabase.from('income_settings').select('*').eq('user_id', user.id),
     supabase.from('pre_tax_deductions').select('*').eq('user_id', user.id),
     supabase.from('settings').select('*').eq('user_id', user.id),
+    supabase.from('goals').select('*').eq('user_id', user.id),
+    supabase.from('csv_import_templates').select('*').eq('user_id', user.id),
   ]);
 
   return {
-    version: '1.0',
+    version: '1.1',
     created_at: new Date().toISOString(),
     accounts: accounts || [],
     categories: categories || [],
@@ -81,6 +87,8 @@ export async function exportUserData(): Promise<UserBackupData> {
     income_settings: income_settings || [],
     pre_tax_deductions: pre_tax_deductions || [],
     settings: settings || [],
+    goals: goals || [],
+    csv_import_templates: csv_import_templates || [],
   };
 }
 
@@ -130,6 +138,8 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
   await supabase.from('pre_tax_deductions').delete().eq('user_id', user.id);
   await supabase.from('income_settings').delete().eq('user_id', user.id);
   await supabase.from('settings').delete().eq('user_id', user.id);
+  await supabase.from('csv_import_templates').delete().eq('user_id', user.id);
+  await supabase.from('goals').delete().eq('user_id', user.id); // Delete before categories (goals depend on categories)
   await supabase.from('credit_cards').delete().eq('user_id', user.id);
   await supabase.from('categories').delete().eq('user_id', user.id);
   await supabase.from('accounts').delete().eq('user_id', user.id);
@@ -142,6 +152,11 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
   
   if (backupData.categories.length > 0) {
     await supabase.from('categories').insert(backupData.categories);
+  }
+  
+  // Insert goals after categories (goals depend on categories)
+  if (backupData.goals && backupData.goals.length > 0) {
+    await supabase.from('goals').insert(backupData.goals);
   }
   
   if (backupData.credit_cards.length > 0) {
@@ -194,6 +209,11 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
 
   if (backupData.settings && backupData.settings.length > 0) {
     await supabase.from('settings').insert(backupData.settings);
+  }
+
+  // Insert CSV import templates (if present in backup)
+  if (backupData.csv_import_templates && backupData.csv_import_templates.length > 0) {
+    await supabase.from('csv_import_templates').insert(backupData.csv_import_templates);
   }
 }
 
