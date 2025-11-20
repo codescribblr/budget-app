@@ -1652,16 +1652,27 @@ export async function deleteGoal(id: number, deleteCategory: boolean = false): P
   // Handle category deletion for envelope goals
   if (goal.goal_type === 'envelope' && goal.linked_category_id) {
     if (deleteCategory) {
-      await supabase
+      // Delete the category (transaction_splits will cascade delete due to FK constraint)
+      const { error: deleteCategoryError } = await supabase
         .from('categories')
         .delete()
-        .eq('id', goal.linked_category_id);
+        .eq('id', goal.linked_category_id)
+        .eq('user_id', user.id); // Ensure user owns the category
+      
+      if (deleteCategoryError) {
+        throw new Error(`Failed to delete category: ${deleteCategoryError.message}`);
+      }
     } else {
       // Convert goal category to regular category
-      await supabase
+      const { error: updateCategoryError } = await supabase
         .from('categories')
         .update({ is_goal: false })
-        .eq('id', goal.linked_category_id);
+        .eq('id', goal.linked_category_id)
+        .eq('user_id', user.id); // Ensure user owns the category
+      
+      if (updateCategoryError) {
+        throw new Error(`Failed to update category: ${updateCategoryError.message}`);
+      }
     }
   }
   
