@@ -20,6 +20,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function GoalsPage() {
   const [goals, setGoals] = useState<GoalWithDetails[]>([]);
@@ -27,6 +37,10 @@ export default function GoalsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalWithDetails | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [goalToDelete, setGoalToDelete] = useState<GoalWithDetails | null>(null);
+  const [categoryDeleteDialogOpen, setCategoryDeleteDialogOpen] = useState(false);
+  const [deleteCategory, setDeleteCategory] = useState(false);
 
   const fetchGoals = async () => {
     try {
@@ -57,30 +71,47 @@ export default function GoalsPage() {
     setIsDialogOpen(true);
   };
 
-  const handleDeleteGoal = async (goal: GoalWithDetails) => {
-    if (!confirm(`Are you sure you want to delete "${goal.name}"?`)) {
+  const handleDeleteGoal = (goal: GoalWithDetails) => {
+    setGoalToDelete(goal);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteGoal = async () => {
+    if (!goalToDelete) return;
+
+    // If it's an envelope goal with a linked category, ask about category deletion
+    if (goalToDelete.goal_type === 'envelope' && goalToDelete.linked_category_id) {
+      setDeleteDialogOpen(false);
+      setCategoryDeleteDialogOpen(true);
       return;
     }
 
-    // Ask about category deletion for envelope goals
-    let deleteCategory = false;
-    if (goal.goal_type === 'envelope' && goal.linked_category_id) {
-      deleteCategory = confirm(
-        'Do you want to delete the linked category as well? If not, it will be converted to a regular category.'
-      );
-    }
+    // For non-envelope goals or envelope goals without categories, proceed with deletion
+    await performDeleteGoal(false);
+  };
+
+  const performDeleteGoal = async (shouldDeleteCategory: boolean) => {
+    if (!goalToDelete) return;
 
     try {
-      const response = await fetch(`/api/goals/${goal.id}?deleteCategory=${deleteCategory}`, {
+      const response = await fetch(`/api/goals/${goalToDelete.id}?deleteCategory=${shouldDeleteCategory}`, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Failed to delete goal');
       toast.success('Goal deleted');
+      setDeleteDialogOpen(false);
+      setCategoryDeleteDialogOpen(false);
+      setGoalToDelete(null);
+      setDeleteCategory(false);
       fetchGoals();
     } catch (error) {
       console.error('Error deleting goal:', error);
       toast.error('Failed to delete goal');
     }
+  };
+
+  const handleCategoryDeleteChoice = async () => {
+    await performDeleteGoal(deleteCategory);
   };
 
   const handleStatusChange = async (goal: GoalWithDetails, newStatus: GoalWithDetails['status']) => {
@@ -222,6 +253,100 @@ export default function GoalsPage() {
         goal={editingGoal}
         onSuccess={fetchGoals}
       />
+
+      {/* Delete Goal Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Goal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>"{goalToDelete?.name}"</strong>?
+              {goalToDelete?.goal_type === 'debt-paydown' && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  This will remove the goal but will not affect the linked credit card.
+                </p>
+              )}
+              {goalToDelete?.goal_type === 'account-linked' && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  This will unlink the goal from the account. The account will be included in totals again.
+                </p>
+              )}
+              <p className="mt-2 text-destructive font-semibold">
+                This action cannot be undone.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setDeleteDialogOpen(false);
+              setGoalToDelete(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteGoal}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Goal
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Category Deletion Confirmation Dialog (for envelope goals) */}
+      <AlertDialog open={categoryDeleteDialogOpen} onOpenChange={setCategoryDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Linked Category?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <p className="mb-4">
+                This goal is linked to a category. What would you like to do with the linked category?
+              </p>
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="categoryAction"
+                    checked={deleteCategory}
+                    onChange={() => setDeleteCategory(true)}
+                    className="h-4 w-4"
+                  />
+                  <span>
+                    <strong>Delete the category</strong> - This will permanently delete the category and all its data.
+                  </span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="categoryAction"
+                    checked={!deleteCategory}
+                    onChange={() => setDeleteCategory(false)}
+                    className="h-4 w-4"
+                  />
+                  <span>
+                    <strong>Keep the category</strong> - Convert it to a regular category (recommended).
+                  </span>
+                </label>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setCategoryDeleteDialogOpen(false);
+              setGoalToDelete(null);
+              setDeleteCategory(false);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCategoryDeleteChoice}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Goal
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
