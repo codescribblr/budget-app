@@ -134,7 +134,8 @@ function parseRowWithMapping(
   const description = descriptionValue.trim();
   const merchant = extractMerchant(description);
   const originalData = JSON.stringify(row);
-  const hash = generateTransactionHash(date, description, amount, originalData);
+  // Use absolute amount in hash for consistency (we store abs amount)
+  const hash = generateTransactionHash(date, description, Math.abs(amount), originalData);
 
   return {
     id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

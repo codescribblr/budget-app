@@ -6,6 +6,7 @@
 import type { ParsedTransaction } from './import-types';
 import type { ColumnMapping } from './mapping-templates';
 import { parseDate, normalizeDate } from './date-parser';
+import { format } from 'date-fns';
 
 /**
  * Extract merchant name from description
@@ -30,17 +31,53 @@ export function extractMerchant(description: string): string {
  * Generate hash for deduplication
  * Includes originalData to distinguish identical transactions that occur separately
  */
+/**
+ * Generate hash for deduplication
+ * Normalizes all inputs to ensure consistent hashing regardless of parsing method
+ */
 export function generateTransactionHash(
   date: string,
   description: string,
   amount: number,
   originalData?: string
 ): string {
+  // Normalize inputs for consistent hashing:
+  // - Date: normalize to YYYY-MM-DD format
+  // - Description: trim and normalize whitespace
+  // - Amount: use absolute value (consistent with how we store it)
+  // - OriginalData: the full CSV row as JSON string (already normalized by JSON.stringify)
+  
+  // Normalize date to YYYY-MM-DD format
+  let normalizedDate = date.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+    // Date is not in YYYY-MM-DD format, try to normalize it
+    try {
+      const parsed = parseDate(date);
+      if (parsed.date) {
+        normalizedDate = normalizeDate(parsed.date);
+      }
+    } catch {
+      // If normalization fails, try JavaScript Date as fallback
+      const dateObj = new Date(date.trim());
+      if (!isNaN(dateObj.getTime())) {
+        normalizedDate = format(dateObj, 'yyyy-MM-dd');
+      }
+      // If all parsing fails, use as-is
+    }
+  }
+  
+  // Normalize description (trim and normalize whitespace)
+  const normalizedDescription = description.trim().replace(/\s+/g, ' ');
+  
+  // Use absolute amount for hash (consistent with how we store it)
+  // This ensures -250.00 and 250.00 produce the same hash
+  const normalizedAmount = Math.abs(amount);
+  
   // Include originalData (entire CSV row) to distinguish truly identical transactions
   // This handles cases like two $1.07 McDonald's purchases 2 minutes apart
   const data = originalData
-    ? `${date}|${description}|${amount}|${originalData}`
-    : `${date}|${description}|${amount}`;
+    ? `${normalizedDate}|${normalizedDescription}|${normalizedAmount}|${originalData}`
+    : `${normalizedDate}|${normalizedDescription}|${normalizedAmount}`;
 
   let hash = 0;
   for (let i = 0; i < data.length; i++) {
@@ -102,7 +139,8 @@ export async function parseCSVWithMapping(
       const description = descriptionValue.trim();
       const merchant = extractMerchant(description);
       const originalData = JSON.stringify(row);
-      const hash = generateTransactionHash(date, description, amount, originalData);
+      // Use absolute amount in hash for consistency (we store abs amount)
+      const hash = generateTransactionHash(date, description, Math.abs(amount), originalData);
 
       transactions.push({
         id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -166,11 +204,18 @@ export async function processTransactions(transactions: ParsedTransaction[]): Pr
   });
 
   // Step 2: Fetch existing transaction hashes for deduplication against database
+  // Also send transaction data for fallback duplicate detection (by date + description + amount)
   const response = await fetch('/api/import/check-duplicates', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       hashes: transactions.map(t => t.hash),
+      transactions: transactions.map(t => ({
+        hash: t.hash,
+        date: t.date,
+        description: t.description,
+        amount: t.amount,
+      })),
     }),
   });
 

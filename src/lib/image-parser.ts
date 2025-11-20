@@ -26,7 +26,8 @@ export async function parseImageFile(file: File): Promise<ParsedTransaction[]> {
   return transactions.map((txn) => {
     const merchant = extractMerchant(txn.description);
     const originalData = JSON.stringify(txn);
-    const hash = generateTransactionHash(txn.date, txn.description, txn.amount, originalData);
+    // Use absolute amount in hash for consistency
+    const hash = generateTransactionHash(txn.date, txn.description, Math.abs(txn.amount), originalData);
 
     return {
       id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
