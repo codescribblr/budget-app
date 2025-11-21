@@ -7,6 +7,7 @@ import type { ParsedTransaction } from './import-types';
 import type { ColumnMapping } from './mapping-templates';
 import { parseDate, normalizeDate } from './date-parser';
 import { format } from 'date-fns';
+import { parseLocalDate, formatLocalDate } from './date-utils';
 
 /**
  * Extract merchant name from description
@@ -57,10 +58,10 @@ export function generateTransactionHash(
         normalizedDate = normalizeDate(parsed.date);
       }
     } catch {
-      // If normalization fails, try JavaScript Date as fallback
-      const dateObj = new Date(date.trim());
-      if (!isNaN(dateObj.getTime())) {
-        normalizedDate = format(dateObj, 'yyyy-MM-dd');
+      // If normalization fails, try timezone-safe parsing as fallback
+      const dateObj = parseLocalDate(date.trim());
+      if (dateObj) {
+        normalizedDate = formatLocalDate(dateObj);
       }
       // If all parsing fails, use as-is
     }

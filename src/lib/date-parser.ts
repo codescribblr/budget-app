@@ -4,6 +4,7 @@
  */
 
 import { parse, isValid, format } from 'date-fns';
+import { parseLocalDate as parseLocalDateUtil } from './date-utils';
 
 export interface DateParseResult {
   date: Date | null;
@@ -73,20 +74,23 @@ export function parseDate(dateStr: string, detectedFormat?: string): DateParseRe
     }
   }
 
-  // Fallback to JavaScript Date parsing
-  const jsDate = new Date(trimmed);
-  if (isValid(jsDate)) {
-    const year = jsDate.getFullYear();
-    if (year >= 1900 && year <= 2100) {
-      return { date: jsDate, format: 'auto', confidence: 0.7 };
+  // Fallback: Try to parse as 'yyyy-MM-dd' format using timezone-safe utility
+  // This handles dates that are already in the correct format but weren't caught above
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const localDate = parseLocalDateUtil(trimmed);
+    if (localDate) {
+      return { date: localDate, format: 'yyyy-MM-dd', confidence: 0.8 };
     }
   }
 
+  // If all else fails, return null rather than using new Date() which interprets as UTC
+  // This prevents timezone-related date shifts
   return { date: null, format: null, confidence: 0 };
 }
 
 /**
  * Normalize date to YYYY-MM-DD format
+ * Uses timezone-safe formatting to prevent date shifts
  */
 export function normalizeDate(date: Date | string): string {
   let dateObj: Date;
@@ -101,7 +105,13 @@ export function normalizeDate(date: Date | string): string {
     dateObj = date;
   }
 
-  return format(dateObj, 'yyyy-MM-dd');
+  // Use timezone-safe formatting from date-utils
+  // This ensures the date is formatted using local timezone methods
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
 }
 
 /**
