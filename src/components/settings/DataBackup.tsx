@@ -126,16 +126,22 @@ export default function DataBackup() {
     if (!restoreBackupId) return;
 
     setIsRestoring(true);
+    setShowRestoreDialog(false);
+    setShowProgressDialog(true);
+    setImportProgress('Preparing to restore backup...');
+
     try {
+      setImportProgress('Deleting existing data...');
+      await new Promise(resolve => setTimeout(resolve, 100)); // Small delay for UI update
+
       const response = await fetch(`/api/backups/${restoreBackupId}/restore`, {
         method: 'POST',
       });
 
       if (!response.ok) throw new Error('Failed to restore backup');
 
-      toast.success('Backup restored successfully! Refreshing page...');
-      setShowRestoreDialog(false);
-      
+      setImportProgress('Restore complete! Refreshing page...');
+
       // Refresh the page after a short delay
       setTimeout(() => {
         window.location.href = '/';
@@ -144,6 +150,7 @@ export default function DataBackup() {
       console.error('Error restoring backup:', error);
       toast.error('Failed to restore backup');
       setIsRestoring(false);
+      setShowProgressDialog(false);
     }
   };
 
@@ -450,11 +457,11 @@ export default function DataBackup() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Loader2 className="h-5 w-5 animate-spin" />
-              Importing Backup...
+              Processing Backup...
             </AlertDialogTitle>
             <AlertDialogDescription>
               <p className="mb-4">
-                Please wait while we import your data. This may take a few moments.
+                Please wait while we process your data. This may take a few moments.
               </p>
               <p className="text-sm font-medium text-foreground">
                 {importProgress}
