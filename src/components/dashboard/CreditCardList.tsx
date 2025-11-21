@@ -402,14 +402,16 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Credit Card?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>"{cardToDelete?.name}"</strong>?
-              <p className="mt-2 text-sm text-muted-foreground">
-                Current balance: {cardToDelete && formatCurrency(cardToDelete.current_balance)}
-              </p>
-              <p className="mt-2 text-destructive font-semibold">
-                This action cannot be undone.
-              </p>
+            <AlertDialogDescription asChild>
+              <div>
+                Are you sure you want to delete <strong>"{cardToDelete?.name}"</strong>?
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Current balance: {cardToDelete && formatCurrency(cardToDelete.current_balance)}
+                </div>
+                <div className="mt-2 text-destructive font-semibold">
+                  This action cannot be undone.
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

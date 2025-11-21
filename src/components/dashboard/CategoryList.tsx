@@ -792,14 +792,16 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Category?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>"{categoryToDelete?.name}"</strong>?
-              <p className="mt-2 text-sm text-muted-foreground">
-                This will also delete all transactions associated with this category.
-              </p>
-              <p className="mt-2 text-destructive font-semibold">
-                This action cannot be undone.
-              </p>
+            <AlertDialogDescription asChild>
+              <div>
+                Are you sure you want to delete <strong>"{categoryToDelete?.name}"</strong>?
+                <div className="mt-2 text-sm text-muted-foreground">
+                  This will also delete all transactions associated with this category.
+                </div>
+                <div className="mt-2 text-destructive font-semibold">
+                  This action cannot be undone.
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

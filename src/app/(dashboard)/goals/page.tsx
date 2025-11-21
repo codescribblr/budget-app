@@ -278,21 +278,23 @@ export default function GoalsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Goal?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>"{goalToDelete?.name}"</strong>?
-              {goalToDelete?.goal_type === 'debt-paydown' && (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  This will remove the goal but will not affect the linked credit card.
-                </p>
-              )}
-              {goalToDelete?.goal_type === 'account-linked' && (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  This will unlink the goal from the account. The account will be included in totals again.
-                </p>
-              )}
-              <p className="mt-2 text-destructive font-semibold">
-                This action cannot be undone.
-              </p>
+            <AlertDialogDescription asChild>
+              <div>
+                Are you sure you want to delete <strong>"{goalToDelete?.name}"</strong>?
+                {goalToDelete?.goal_type === 'debt-paydown' && (
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    This will remove the goal but will not affect the linked credit card.
+                  </div>
+                )}
+                {goalToDelete?.goal_type === 'account-linked' && (
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    This will unlink the goal from the account. The account will be included in totals again.
+                  </div>
+                )}
+                <div className="mt-2 text-destructive font-semibold">
+                  This action cannot be undone.
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -317,35 +319,37 @@ export default function GoalsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Linked Category?</AlertDialogTitle>
-            <AlertDialogDescription>
-              <p className="mb-4">
-                This goal is linked to a category. What would you like to do with the linked category?
-              </p>
-              <div className="space-y-2">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="categoryAction"
-                    checked={deleteCategory}
-                    onChange={() => setDeleteCategory(true)}
-                    className="h-4 w-4"
-                  />
-                  <span>
-                    <strong>Delete the category</strong> - This will permanently delete the category and all its data.
-                  </span>
-                </label>
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="categoryAction"
-                    checked={!deleteCategory}
-                    onChange={() => setDeleteCategory(false)}
-                    className="h-4 w-4"
-                  />
-                  <span>
-                    <strong>Keep the category</strong> - Convert it to a regular category (recommended).
-                  </span>
-                </label>
+            <AlertDialogDescription asChild>
+              <div>
+                <div className="mb-4">
+                  This goal is linked to a category. What would you like to do with the linked category?
+                </div>
+                <div className="space-y-2">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="categoryAction"
+                      checked={deleteCategory}
+                      onChange={() => setDeleteCategory(true)}
+                      className="h-4 w-4"
+                    />
+                    <span>
+                      <strong>Delete the category</strong> - This will permanently delete the category and all its data.
+                    </span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="categoryAction"
+                      checked={!deleteCategory}
+                      onChange={() => setDeleteCategory(false)}
+                      className="h-4 w-4"
+                    />
+                    <span>
+                      <strong>Keep the category</strong> - Convert it to a regular category (recommended).
+                    </span>
+                  </label>
+                </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

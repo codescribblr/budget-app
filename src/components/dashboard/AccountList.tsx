@@ -356,14 +356,16 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Account?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>"{accountToDelete?.name}"</strong>?
-              <p className="mt-2 text-sm text-muted-foreground">
-                Current balance: {accountToDelete && formatCurrency(accountToDelete.balance)}
-              </p>
-              <p className="mt-2 text-destructive font-semibold">
-                This action cannot be undone.
-              </p>
+            <AlertDialogDescription asChild>
+              <div>
+                Are you sure you want to delete <strong>"{accountToDelete?.name}"</strong>?
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Current balance: {accountToDelete && formatCurrency(accountToDelete.balance)}
+                </div>
+                <div className="mt-2 text-destructive font-semibold">
+                  This action cannot be undone.
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -367,22 +367,24 @@ export default function DataBackup() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Restore Backup?</AlertDialogTitle>
-            <AlertDialogDescription>
-              <p className="mb-4">
-                This will <strong>permanently delete all your current data</strong> and replace it with the backup data.
-              </p>
-              <p className="mb-4 text-destructive font-semibold">
-                This action cannot be undone!
-              </p>
-              <p className="mb-2">
-                To confirm, please type <strong>restore</strong> below:
-              </p>
-              <Input
-                value={restoreConfirmText}
-                onChange={(e) => setRestoreConfirmText(e.target.value)}
-                placeholder="Type 'restore' to confirm"
-                className="mt-2"
-              />
+            <AlertDialogDescription asChild>
+              <div>
+                <div className="mb-4">
+                  This will <strong>permanently delete all your current data</strong> and replace it with the backup data.
+                </div>
+                <div className="mb-4 text-destructive font-semibold">
+                  This action cannot be undone!
+                </div>
+                <div className="mb-2">
+                  To confirm, please type <strong>restore</strong> below:
+                </div>
+                <Input
+                  value={restoreConfirmText}
+                  onChange={(e) => setRestoreConfirmText(e.target.value)}
+                  placeholder="Type 'restore' to confirm"
+                  className="mt-2"
+                />
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -404,37 +406,39 @@ export default function DataBackup() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Import Backup from File?</AlertDialogTitle>
-            <AlertDialogDescription>
-              <p className="mb-4">
-                This will <strong>permanently delete all your current data</strong> and replace it with the data from the imported file.
-              </p>
-              <p className="mb-4 text-destructive font-semibold">
-                This action cannot be undone!
-              </p>
-              <div className="mb-4">
-                <Label htmlFor="backup-file">Select Backup File (JSON)</Label>
+            <AlertDialogDescription asChild>
+              <div>
+                <div className="mb-4">
+                  This will <strong>permanently delete all your current data</strong> and replace it with the data from the imported file.
+                </div>
+                <div className="mb-4 text-destructive font-semibold">
+                  This action cannot be undone!
+                </div>
+                <div className="mb-4">
+                  <Label htmlFor="backup-file">Select Backup File (JSON)</Label>
+                  <Input
+                    id="backup-file"
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileChange}
+                    className="mt-2"
+                  />
+                  {importFile && (
+                    <div className="text-sm text-muted-foreground mt-2">
+                      Selected: {importFile.name}
+                    </div>
+                  )}
+                </div>
+                <div className="mb-2">
+                  To confirm, please type <strong>restore</strong> below:
+                </div>
                 <Input
-                  id="backup-file"
-                  type="file"
-                  accept=".json"
-                  onChange={handleFileChange}
+                  value={importConfirmText}
+                  onChange={(e) => setImportConfirmText(e.target.value)}
+                  placeholder="Type 'restore' to confirm"
                   className="mt-2"
                 />
-                {importFile && (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Selected: {importFile.name}
-                  </p>
-                )}
               </div>
-              <p className="mb-2">
-                To confirm, please type <strong>restore</strong> below:
-              </p>
-              <Input
-                value={importConfirmText}
-                onChange={(e) => setImportConfirmText(e.target.value)}
-                placeholder="Type 'restore' to confirm"
-                className="mt-2"
-              />
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -459,16 +463,18 @@ export default function DataBackup() {
               <Loader2 className="h-5 w-5 animate-spin" />
               Processing Backup...
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              <p className="mb-4">
-                Please wait while we process your data. This may take a few moments.
-              </p>
-              <p className="text-sm font-medium text-foreground">
-                {importProgress}
-              </p>
-              <p className="mt-4 text-sm text-muted-foreground">
-                Do not close this window or navigate away from this page.
-              </p>
+            <AlertDialogDescription asChild>
+              <div>
+                <div className="mb-4">
+                  Please wait while we process your data. This may take a few moments.
+                </div>
+                <div className="text-sm font-medium text-foreground">
+                  {importProgress}
+                </div>
+                <div className="mt-4 text-sm text-muted-foreground">
+                  Do not close this window or navigate away from this page.
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
         </AlertDialogContent>

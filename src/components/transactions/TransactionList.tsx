@@ -182,21 +182,23 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Transaction?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this transaction?
-              {transactionToDelete && (
-                <>
-                  <p className="mt-2 text-sm font-medium">
-                    {transactionToDelete.description}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Date: {parseLocalDate(transactionToDelete.date)?.toLocaleDateString()} • Amount: {formatCurrency(transactionToDelete.total_amount)}
-                  </p>
-                </>
-              )}
-              <p className="mt-2 text-destructive font-semibold">
-                This action cannot be undone.
-              </p>
+            <AlertDialogDescription asChild>
+              <div>
+                Are you sure you want to delete this transaction?
+                {transactionToDelete && (
+                  <>
+                    <div className="mt-2 text-sm font-medium">
+                      {transactionToDelete.description}
+                    </div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      Date: {parseLocalDate(transactionToDelete.date)?.toLocaleDateString()} • Amount: {formatCurrency(transactionToDelete.total_amount)}
+                    </div>
+                  </>
+                )}
+                <div className="mt-2 text-destructive font-semibold">
+                  This action cannot be undone.
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

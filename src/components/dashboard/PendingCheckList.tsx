@@ -180,14 +180,16 @@ export default function PendingCheckList({ pendingChecks, onUpdate }: PendingChe
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Pending Check?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>"{checkToDelete?.description}"</strong>?
-              <p className="mt-2 text-sm text-muted-foreground">
-                Amount: {checkToDelete && formatCurrency(checkToDelete.amount)}
-              </p>
-              <p className="mt-2 text-destructive font-semibold">
-                This action cannot be undone.
-              </p>
+            <AlertDialogDescription asChild>
+              <div>
+                Are you sure you want to delete <strong>"{checkToDelete?.description}"</strong>?
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Amount: {checkToDelete && formatCurrency(checkToDelete.amount)}
+                </div>
+                <div className="mt-2 text-destructive font-semibold">
+                  This action cannot be undone.
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

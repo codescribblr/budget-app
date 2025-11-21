@@ -282,16 +282,18 @@ export default function SettingsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete all your data including:
-              <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>All categories and budgets</li>
-                <li>All accounts and balances</li>
-                <li>All credit cards</li>
-                <li>All transactions</li>
-                <li>All settings</li>
-              </ul>
-              <p className="mt-2 font-semibold">This action cannot be undone.</p>
+            <AlertDialogDescription asChild>
+              <div>
+                This will permanently delete all your data including:
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>All categories and budgets</li>
+                  <li>All accounts and balances</li>
+                  <li>All credit cards</li>
+                  <li>All transactions</li>
+                  <li>All settings</li>
+                </ul>
+                <div className="mt-2 font-semibold">This action cannot be undone.</div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -313,20 +315,22 @@ export default function SettingsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Import Default Data?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will import:
-              <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>41 budget categories (40 regular + 1 system category "Transfer")</li>
-                <li>4 accounts (Wells Main Checking, Cash on Hand, Rental Checking, Rental Savings)</li>
-                <li>5 credit cards (Lowe's, Citi, Gold, Chase, Chase Freedom)</li>
-                <li>3 settings (Annual salary, Tax rate, Pre-tax deductions)</li>
-              </ul>
-              <p className="mt-2 text-sm">
-                <strong>Total Monthly Budget:</strong> $8,114.08
-              </p>
-              <p className="mt-2">
-                This imports your actual budget setup. You can modify or delete any imported data later.
-              </p>
+            <AlertDialogDescription asChild>
+              <div>
+                This will import:
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>41 budget categories (40 regular + 1 system category "Transfer")</li>
+                  <li>4 accounts (Wells Main Checking, Cash on Hand, Rental Checking, Rental Savings)</li>
+                  <li>5 credit cards (Lowe's, Citi, Gold, Chase, Chase Freedom)</li>
+                  <li>3 settings (Annual salary, Tax rate, Pre-tax deductions)</li>
+                </ul>
+                <div className="mt-2 text-sm">
+                  <strong>Total Monthly Budget:</strong> $8,114.08
+                </div>
+                <div className="mt-2">
+                  This imports your actual budget setup. You can modify or delete any imported data later.
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -344,11 +348,13 @@ export default function SettingsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Account Permanently?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete your account and all associated data.
-              <p className="mt-2 font-semibold text-destructive">
-                This action cannot be undone. You will be logged out immediately.
-              </p>
+            <AlertDialogDescription asChild>
+              <div>
+                This will permanently delete your account and all associated data.
+                <div className="mt-2 font-semibold text-destructive">
+                  This action cannot be undone. You will be logged out immediately.
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -314,21 +314,23 @@ export default function CategoryRulesPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Category Rule?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this rule?
-              {ruleToDelete && (
-                <>
-                  <p className="mt-2 text-sm font-medium">
-                    {ruleToDelete.merchant_group_id ? (merchantGroups.get(ruleToDelete.merchant_group_id) || 'Unknown merchant') : (ruleToDelete.pattern || 'Unknown merchant')} → {categories.find(c => c.id === ruleToDelete.category_id)?.name || 'Unknown category'}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Used {ruleToDelete.usage_count} time{ruleToDelete.usage_count !== 1 ? 's' : ''} • {ruleToDelete.confidence_score}% confidence
-                  </p>
-                </>
-              )}
-              <p className="mt-2 text-destructive font-semibold">
-                This action cannot be undone.
-              </p>
+            <AlertDialogDescription asChild>
+              <div>
+                Are you sure you want to delete this rule?
+                {ruleToDelete && (
+                  <>
+                    <div className="mt-2 text-sm font-medium">
+                      {ruleToDelete.merchant_group_id ? (merchantGroups.get(ruleToDelete.merchant_group_id) || 'Unknown merchant') : (ruleToDelete.pattern || 'Unknown merchant')} → {categories.find(c => c.id === ruleToDelete.category_id)?.name || 'Unknown category'}
+                    </div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      Used {ruleToDelete.usage_count} time{ruleToDelete.usage_count !== 1 ? 's' : ''} • {ruleToDelete.confidence_score}% confidence
+                    </div>
+                  </>
+                )}
+                <div className="mt-2 text-destructive font-semibold">
+                  This action cannot be undone.
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
