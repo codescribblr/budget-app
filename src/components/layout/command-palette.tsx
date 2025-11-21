@@ -29,7 +29,27 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command"
-import type { Category, Account, CreditCard, Loan } from "@/lib/types"
+import type { Category, Account, CreditCard, Loan, TransactionWithSplits } from "@/lib/types"
+
+// Simple debounce hook
+function useDebounce<T extends (...args: any[]) => any>(
+  callback: T,
+  delay: number
+): (...args: Parameters<T>) => void {
+  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+
+  return React.useCallback(
+    (...args: Parameters<T>) => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+      timeoutRef.current = setTimeout(() => {
+        callback(...args)
+      }, delay)
+    },
+    [callback, delay]
+  )
+}
 
 const navigationItems = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
@@ -47,11 +67,14 @@ const navigationItems = [
 
 export function CommandPalette() {
   const [open, setOpen] = React.useState(false)
+  const [query, setQuery] = React.useState("")
   const [categories, setCategories] = React.useState<Category[]>([])
   const [accounts, setAccounts] = React.useState<Account[]>([])
   const [creditCards, setCreditCards] = React.useState<CreditCard[]>([])
   const [loans, setLoans] = React.useState<Loan[]>([])
+  const [transactions, setTransactions] = React.useState<TransactionWithSplits[]>([])
   const [isLoading, setIsLoading] = React.useState(false)
+  const [transactionsLoading, setTransactionsLoading] = React.useState(false)
   const router = useRouter()
 
   React.useEffect(() => {
@@ -66,12 +89,12 @@ export function CommandPalette() {
     return () => document.removeEventListener("keydown", down)
   }, [])
 
-  // Load all data when dialog opens
+  // Load static data when dialog opens
   React.useEffect(() => {
     if (open && categories.length === 0 && !isLoading) {
       setIsLoading(true)
 
-      // Fetch all data in parallel
+      // Fetch all static data in parallel
       Promise.all([
         fetch('/api/categories').then(res => res.json()),
         fetch('/api/accounts').then(res => res.json()),
@@ -91,6 +114,37 @@ export function CommandPalette() {
     }
   }, [open, categories.length, isLoading])
 
+  // Debounced transaction search
+  const searchTransactionsDebounced = useDebounce(
+    async (searchQuery: string) => {
+      if (searchQuery.length >= 3) {
+        setTransactionsLoading(true)
+        try {
+          const response = await fetch(
+            `/api/search/transactions?q=${encodeURIComponent(searchQuery)}&limit=10`
+          )
+          const data = await response.json()
+          setTransactions(data)
+        } catch (err) {
+          console.error('Error searching transactions:', err)
+          setTransactions([])
+        } finally {
+          setTransactionsLoading(false)
+        }
+      } else {
+        setTransactions([])
+      }
+    },
+    300
+  )
+
+  // Search transactions when query changes
+  React.useEffect(() => {
+    if (open) {
+      searchTransactionsDebounced(query)
+    }
+  }, [query, open, searchTransactionsDebounced])
+
   const runCommand = React.useCallback((command: () => void) => {
     setOpen(false)
     command()
@@ -99,7 +153,11 @@ export function CommandPalette() {
   return (
     <>
       <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput placeholder="Type a command or search..." />
+        <CommandInput
+          placeholder="Type a command or search..."
+          value={query}
+          onValueChange={setQuery}
+        />
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
           <CommandGroup heading="Navigation">
@@ -214,6 +272,42 @@ export function CommandPalette() {
                   </span>
                 </CommandItem>
               ))}
+            </CommandGroup>
+          )}
+          {transactions.length > 0 && (
+            <CommandGroup heading="Recent Transactions">
+              {transactions.map((transaction) => {
+                const displayName = transaction.merchant_name || transaction.description
+                const date = new Date(transaction.date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                })
+                return (
+                  <CommandItem
+                    key={transaction.id}
+                    value={`${displayName} ${transaction.total_amount}`}
+                    onSelect={() => {
+                      runCommand(() => router.push('/transactions'))
+                    }}
+                  >
+                    <Receipt className="mr-2 h-4 w-4" />
+                    <span className="truncate">{displayName}</span>
+                    <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{date}</span>
+                      <span className={transaction.total_amount < 0 ? 'text-red-500' : ''}>
+                        ${Math.abs(transaction.total_amount).toFixed(2)}
+                      </span>
+                    </span>
+                  </CommandItem>
+                )
+              })}
+            </CommandGroup>
+          )}
+          {transactionsLoading && query.length >= 3 && (
+            <CommandGroup heading="Recent Transactions">
+              <CommandItem disabled>
+                <span className="text-muted-foreground">Searching...</span>
+              </CommandItem>
             </CommandGroup>
           )}
         </CommandList>

@@ -858,6 +858,87 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
   return transactionsWithSplits;
 }
 
+export async function searchTransactions(
+  query: string,
+  limit: number = 10
+): Promise<TransactionWithSplits[]> {
+  const { supabase } = await getAuthenticatedUser();
+
+  // Search transactions by description or merchant name
+  const { data: transactions, error: txError } = await supabase
+    .from('transactions')
+    .select(`
+      *,
+      merchant_groups (
+        display_name
+      ),
+      accounts (
+        name
+      ),
+      credit_cards (
+        name
+      )
+    `)
+    .or(`description.ilike.%${query}%,merchant_groups.display_name.ilike.%${query}%`)
+    .order('date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (txError) throw txError;
+
+  if (!transactions || transactions.length === 0) {
+    return [];
+  }
+
+  // Get all transaction IDs
+  const transactionIds = transactions.map((t: any) => t.id);
+
+  // Get splits for these transactions
+  const { data: allSplits, error: splitError } = await supabase
+    .from('transaction_splits')
+    .select(`
+      *,
+      categories (
+        name
+      )
+    `)
+    .in('transaction_id', transactionIds);
+
+  if (splitError) throw splitError;
+
+  // Group splits by transaction_id
+  const splitsByTransaction = new Map<number, any[]>();
+  (allSplits || []).forEach((split: any) => {
+    if (!splitsByTransaction.has(split.transaction_id)) {
+      splitsByTransaction.set(split.transaction_id, []);
+    }
+    splitsByTransaction.get(split.transaction_id)!.push({
+      ...split,
+      category_name: split.categories?.name || 'Unknown',
+    });
+  });
+
+  // Build the final result
+  const transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => ({
+    id: transaction.id,
+    date: transaction.date,
+    description: transaction.description,
+    total_amount: transaction.total_amount,
+    merchant_group_id: transaction.merchant_group_id,
+    account_id: transaction.account_id,
+    credit_card_id: transaction.credit_card_id,
+    is_historical: transaction.is_historical || false,
+    created_at: transaction.created_at,
+    updated_at: transaction.updated_at,
+    merchant_name: transaction.merchant_groups?.display_name || null,
+    account_name: transaction.accounts?.name || null,
+    credit_card_name: transaction.credit_cards?.name || null,
+    splits: splitsByTransaction.get(transaction.id) || [],
+  }));
+
+  return transactionsWithSplits;
+}
+
 export async function getTransactionById(id: number): Promise<TransactionWithSplits | null> {
   const { supabase } = await getAuthenticatedUser();
 
