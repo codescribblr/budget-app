@@ -230,10 +230,13 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
 /**
  * Import user data from an uploaded file backup
  * This remaps all user_id fields to the current authenticated user
+ * Uses service role client to bypass RLS for cross-user imports
  * WARNING: This will DELETE all existing user data and replace it with the backup
  */
 export async function importUserDataFromFile(backupData: UserBackupData): Promise<void> {
-  const { supabase, user } = await getAuthenticatedUser();
+  const { user } = await getAuthenticatedUser();
+  const { createServiceRoleClient } = await import('@/lib/supabase/server');
+  const supabase = createServiceRoleClient();
 
   // Remap all user_id fields to the current user
   const remapUserId = (items: any[]) => {
@@ -265,7 +268,117 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     csv_import_templates: remapUserId(backupData.csv_import_templates || []),
   };
 
-  // Use the existing importUserData function with the remapped data
-  await importUserData(remappedBackupData);
+  // Delete all existing user data first
+  // Get all transaction IDs for this user
+  const { data: userTransactions } = await supabase
+    .from('transactions')
+    .select('id')
+    .eq('user_id', user.id);
+
+  const transactionIds = userTransactions?.map(t => t.id) || [];
+
+  // Get all imported transaction IDs for this user
+  const { data: userImportedTransactions } = await supabase
+    .from('imported_transactions')
+    .select('id')
+    .eq('user_id', user.id);
+
+  const importedTransactionIds = userImportedTransactions?.map(t => t.id) || [];
+
+  // Delete in reverse order of dependencies
+  if (transactionIds.length > 0) {
+    await supabase.from('transaction_splits').delete().in('transaction_id', transactionIds);
+  }
+
+  if (importedTransactionIds.length > 0) {
+    await supabase.from('imported_transaction_links').delete().in('imported_transaction_id', importedTransactionIds);
+  }
+
+  await supabase.from('transactions').delete().eq('user_id', user.id);
+  await supabase.from('imported_transactions').delete().eq('user_id', user.id);
+  await supabase.from('merchant_category_rules').delete().eq('user_id', user.id);
+  await supabase.from('merchant_mappings').delete().eq('user_id', user.id);
+  await supabase.from('merchant_groups').delete().eq('user_id', user.id);
+  await supabase.from('pending_checks').delete().eq('user_id', user.id);
+  await supabase.from('pre_tax_deductions').delete().eq('user_id', user.id);
+  await supabase.from('income_settings').delete().eq('user_id', user.id);
+  await supabase.from('settings').delete().eq('user_id', user.id);
+  await supabase.from('csv_import_templates').delete().eq('user_id', user.id);
+  await supabase.from('goals').delete().eq('user_id', user.id);
+  await supabase.from('loans').delete().eq('user_id', user.id);
+  await supabase.from('credit_cards').delete().eq('user_id', user.id);
+  await supabase.from('categories').delete().eq('user_id', user.id);
+  await supabase.from('accounts').delete().eq('user_id', user.id);
+
+  // Insert remapped backup data using service role client (bypasses RLS)
+  if (remappedBackupData.accounts.length > 0) {
+    await supabase.from('accounts').insert(remappedBackupData.accounts);
+  }
+
+  if (remappedBackupData.categories.length > 0) {
+    await supabase.from('categories').insert(remappedBackupData.categories);
+  }
+
+  if (remappedBackupData.credit_cards.length > 0) {
+    await supabase.from('credit_cards').insert(remappedBackupData.credit_cards);
+  }
+
+  if (remappedBackupData.loans && remappedBackupData.loans.length > 0) {
+    await supabase.from('loans').insert(remappedBackupData.loans);
+  }
+
+  if (remappedBackupData.goals && remappedBackupData.goals.length > 0) {
+    await supabase.from('goals').insert(remappedBackupData.goals);
+  }
+
+  if (remappedBackupData.income_settings.length > 0) {
+    await supabase.from('income_settings').insert(remappedBackupData.income_settings);
+  }
+
+  if (remappedBackupData.pre_tax_deductions.length > 0) {
+    await supabase.from('pre_tax_deductions').insert(remappedBackupData.pre_tax_deductions);
+  }
+
+  if (remappedBackupData.pending_checks.length > 0) {
+    await supabase.from('pending_checks').insert(remappedBackupData.pending_checks);
+  }
+
+  if (remappedBackupData.merchant_groups.length > 0) {
+    await supabase.from('merchant_groups').insert(remappedBackupData.merchant_groups);
+  }
+
+  if (remappedBackupData.merchant_mappings.length > 0) {
+    await supabase.from('merchant_mappings').insert(remappedBackupData.merchant_mappings);
+  }
+
+  if (remappedBackupData.merchant_category_rules && remappedBackupData.merchant_category_rules.length > 0) {
+    await supabase.from('merchant_category_rules').insert(remappedBackupData.merchant_category_rules);
+  }
+
+  if (remappedBackupData.transactions.length > 0) {
+    await supabase.from('transactions').insert(remappedBackupData.transactions);
+  }
+
+  if (remappedBackupData.transaction_splits.length > 0) {
+    const splits = remappedBackupData.transaction_splits.map(({ transactions, ...split }: any) => split);
+    await supabase.from('transaction_splits').insert(splits);
+  }
+
+  if (remappedBackupData.imported_transactions && remappedBackupData.imported_transactions.length > 0) {
+    await supabase.from('imported_transactions').insert(remappedBackupData.imported_transactions);
+  }
+
+  if (remappedBackupData.imported_transaction_links && remappedBackupData.imported_transaction_links.length > 0) {
+    const links = remappedBackupData.imported_transaction_links.map(({ imported_transactions, ...link }: any) => link);
+    await supabase.from('imported_transaction_links').insert(links);
+  }
+
+  if (remappedBackupData.settings && remappedBackupData.settings.length > 0) {
+    await supabase.from('settings').insert(remappedBackupData.settings);
+  }
+
+  if (remappedBackupData.csv_import_templates && remappedBackupData.csv_import_templates.length > 0) {
+    await supabase.from('csv_import_templates').insert(remappedBackupData.csv_import_templates);
+  }
 }
 
