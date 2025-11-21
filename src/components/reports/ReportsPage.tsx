@@ -425,6 +425,7 @@ export default function ReportsPage() {
           loading={loadingTransactions || loadingCategories}
           merchantStats={merchantStats}
           loadingMerchantStats={loadingMerchantStats}
+          selectedCategoryId={selectedCategoryId}
         />
       </div>
     </div>

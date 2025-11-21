@@ -22,6 +22,7 @@ interface TransactionsByMerchantProps {
   loading?: boolean;
   merchantStats?: MerchantGroupStat[];
   loadingMerchantStats?: boolean;
+  selectedCategoryId?: number | null;
 }
 
 interface MerchantGroupStat {
@@ -39,10 +40,25 @@ export default function TransactionsByMerchant({
   includeSystemCategories,
   loading = false,
   merchantStats = [],
-  loadingMerchantStats = false
+  loadingMerchantStats = false,
+  selectedCategoryId = null
 }: TransactionsByMerchantProps) {
   const [selectedGroup, setSelectedGroup] = useState<MerchantGroupStat | null>(null);
   const [showGroupDetails, setShowGroupDetails] = useState(false);
+
+  // Filter merchant stats for the selected category if applicable
+  const categoryMerchantStats = selectedCategoryId
+    ? merchantStats.filter(stat => {
+        // Check if any of the stat's patterns match transactions in this category
+        const categoryTransactionDescriptions = new Set(
+          transactions
+            .filter(t => t.splits.some(s => s.category_id === selectedCategoryId))
+            .map(t => t.description)
+        );
+        return stat.patterns.some(pattern => categoryTransactionDescriptions.has(pattern));
+      })
+    : merchantStats;
+
   // Filter transactions based on system category toggle
   const filteredTransactions = includeSystemCategories
     ? transactions
@@ -78,8 +94,8 @@ export default function TransactionsByMerchant({
     .sort((a, b) => b.total - a.total);
 
   // Get top 20 merchant groups or fall back to ungrouped
-  const displayMerchants = merchantStats.length > 0
-    ? merchantStats.slice(0, 20)
+  const displayMerchants = categoryMerchantStats.length > 0
+    ? categoryMerchantStats.slice(0, 20)
     : ungroupedMerchants.slice(0, 20);
 
   const totalSpent = filteredTransactions.reduce((sum, t) => sum + t.total_amount, 0);
@@ -116,7 +132,7 @@ export default function TransactionsByMerchant({
     );
   }
 
-  const isGrouped = merchantStats.length > 0;
+  const isGrouped = categoryMerchantStats.length > 0;
 
   return (
     <>
