@@ -297,36 +297,6 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
             />
           </div>
 
-          {/* Target Amount */}
-          {goalType !== 'debt-paydown' && (
-            <div>
-              <Label htmlFor="targetAmount">Target Amount *</Label>
-              <Input
-                id="targetAmount"
-                type="number"
-                step="0.01"
-                value={targetAmount}
-                onChange={(e) => setTargetAmount(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-          )}
-
-          {/* Target Date */}
-          <div>
-            <Label htmlFor="targetDate">Target Date (Optional)</Label>
-            <Input
-              id="targetDate"
-              type="date"
-              value={targetDate}
-              onChange={(e) => setTargetDate(e.target.value)}
-              min={new Date().toISOString().split('T')[0]}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              When you want to reach this goal
-            </p>
-          </div>
-
           {/* Goal Type */}
           {!goal && (
             <div>
@@ -377,6 +347,36 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
               </div>
             </div>
           )}
+
+          {/* Target Amount */}
+          {goalType !== 'debt-paydown' && (
+            <div>
+              <Label htmlFor="targetAmount">Target Amount *</Label>
+              <Input
+                id="targetAmount"
+                type="number"
+                step="0.01"
+                value={targetAmount}
+                onChange={(e) => setTargetAmount(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+          )}
+
+          {/* Target Date */}
+          <div>
+            <Label htmlFor="targetDate">Target Date (Optional)</Label>
+            <Input
+              id="targetDate"
+              type="date"
+              value={targetDate}
+              onChange={(e) => setTargetDate(e.target.value)}
+              min={new Date().toISOString().split('T')[0]}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              When you want to reach this goal
+            </p>
+          </div>
 
           {/* Monthly Contribution */}
           <div>
