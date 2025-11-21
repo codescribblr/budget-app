@@ -230,43 +230,398 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
 /**
  * Import user data from an uploaded file backup
  * This remaps all user_id fields to the current authenticated user
+ * and remaps all IDs and foreign key references to avoid conflicts
  * WARNING: This will DELETE all existing user data and replace it with the backup
  */
 export async function importUserDataFromFile(backupData: UserBackupData): Promise<void> {
-  const { user } = await getAuthenticatedUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
-  // Remap all user_id fields to the current user
-  const remapUserId = (items: any[]) => {
-    return items.map(item => ({
-      ...item,
-      user_id: user.id
-    }));
-  };
+  console.log('[Import] Starting import for user:', user.id);
 
-  // Create a new backup data object with remapped user_ids
-  const remappedBackupData: UserBackupData = {
-    ...backupData,
-    accounts: remapUserId(backupData.accounts || []),
-    categories: remapUserId(backupData.categories || []),
-    credit_cards: remapUserId(backupData.credit_cards || []),
-    loans: remapUserId(backupData.loans || []),
-    transactions: remapUserId(backupData.transactions || []),
-    transaction_splits: backupData.transaction_splits || [],
-    imported_transactions: remapUserId(backupData.imported_transactions || []),
-    imported_transaction_links: backupData.imported_transaction_links || [],
-    merchant_groups: remapUserId(backupData.merchant_groups || []),
-    merchant_mappings: remapUserId(backupData.merchant_mappings || []),
-    merchant_category_rules: remapUserId(backupData.merchant_category_rules || []),
-    pending_checks: remapUserId(backupData.pending_checks || []),
-    income_settings: remapUserId(backupData.income_settings || []),
-    pre_tax_deductions: remapUserId(backupData.pre_tax_deductions || []),
-    settings: remapUserId(backupData.settings || []),
-    goals: remapUserId(backupData.goals || []),
-    csv_import_templates: remapUserId(backupData.csv_import_templates || []),
-  };
+  // Step 1: Delete all existing user data
+  const { data: userTransactions } = await supabase
+    .from('transactions')
+    .select('id')
+    .eq('user_id', user.id);
 
-  // Use the existing importUserData function with the remapped data
-  // Since all user_id fields are now set to the current user, RLS will allow the inserts
-  await importUserData(remappedBackupData);
+  const transactionIds = userTransactions?.map(t => t.id) || [];
+
+  const { data: userImportedTransactions } = await supabase
+    .from('imported_transactions')
+    .select('id')
+    .eq('user_id', user.id);
+
+  const importedTransactionIds = userImportedTransactions?.map(t => t.id) || [];
+
+  if (transactionIds.length > 0) {
+    await supabase.from('transaction_splits').delete().in('transaction_id', transactionIds);
+  }
+
+  if (importedTransactionIds.length > 0) {
+    await supabase.from('imported_transaction_links').delete().in('imported_transaction_id', importedTransactionIds);
+  }
+
+  await supabase.from('transactions').delete().eq('user_id', user.id);
+  await supabase.from('imported_transactions').delete().eq('user_id', user.id);
+  await supabase.from('merchant_category_rules').delete().eq('user_id', user.id);
+  await supabase.from('merchant_mappings').delete().eq('user_id', user.id);
+  await supabase.from('merchant_groups').delete().eq('user_id', user.id);
+  await supabase.from('pending_checks').delete().eq('user_id', user.id);
+  await supabase.from('pre_tax_deductions').delete().eq('user_id', user.id);
+  await supabase.from('income_settings').delete().eq('user_id', user.id);
+  await supabase.from('settings').delete().eq('user_id', user.id);
+  await supabase.from('csv_import_templates').delete().eq('user_id', user.id);
+  await supabase.from('goals').delete().eq('user_id', user.id);
+  await supabase.from('loans').delete().eq('user_id', user.id);
+  await supabase.from('credit_cards').delete().eq('user_id', user.id);
+  await supabase.from('categories').delete().eq('user_id', user.id);
+  await supabase.from('accounts').delete().eq('user_id', user.id);
+
+  console.log('[Import] Deleted existing user data');
+
+  // Step 2: Insert data and build ID mappings
+  const accountIdMap = new Map<number, number>();
+  const categoryIdMap = new Map<number, number>();
+  const creditCardIdMap = new Map<number, number>();
+  const loanIdMap = new Map<number, number>();
+  const transactionIdMap = new Map<number, number>();
+  const merchantGroupIdMap = new Map<number, number>();
+  const importedTransactionIdMap = new Map<number, number>();
+
+  // Insert accounts
+  if (backupData.accounts && backupData.accounts.length > 0) {
+    for (const account of backupData.accounts) {
+      const oldId = account.id;
+      const { id, ...accountData } = account;
+      const { data, error } = await supabase
+        .from('accounts')
+        .insert({ ...accountData, user_id: user.id })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[Import] Error inserting account:', error);
+        throw error;
+      }
+      accountIdMap.set(oldId, data.id);
+    }
+    console.log('[Import] Inserted accounts, ID map:', Object.fromEntries(accountIdMap));
+  }
+
+  // Insert categories
+  if (backupData.categories && backupData.categories.length > 0) {
+    for (const category of backupData.categories) {
+      const oldId = category.id;
+      const { id, ...categoryData } = category;
+      const { data, error } = await supabase
+        .from('categories')
+        .insert({ ...categoryData, user_id: user.id })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[Import] Error inserting category:', error);
+        throw error;
+      }
+      categoryIdMap.set(oldId, data.id);
+    }
+    console.log('[Import] Inserted categories, ID map:', Object.fromEntries(categoryIdMap));
+  }
+
+  // Insert credit cards
+  if (backupData.credit_cards && backupData.credit_cards.length > 0) {
+    for (const creditCard of backupData.credit_cards) {
+      const oldId = creditCard.id;
+      const { id, ...creditCardData } = creditCard;
+      const { data, error } = await supabase
+        .from('credit_cards')
+        .insert({ ...creditCardData, user_id: user.id })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[Import] Error inserting credit card:', error);
+        throw error;
+      }
+      creditCardIdMap.set(oldId, data.id);
+    }
+    console.log('[Import] Inserted credit cards, ID map:', Object.fromEntries(creditCardIdMap));
+  }
+
+  // Insert loans
+  if (backupData.loans && backupData.loans.length > 0) {
+    for (const loan of backupData.loans) {
+      const oldId = loan.id;
+      const { id, ...loanData } = loan;
+      const { data, error } = await supabase
+        .from('loans')
+        .insert({ ...loanData, user_id: user.id })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[Import] Error inserting loan:', error);
+        throw error;
+      }
+      loanIdMap.set(oldId, data.id);
+    }
+    console.log('[Import] Inserted loans, ID map:', Object.fromEntries(loanIdMap));
+  }
+
+  // Insert goals (with remapped foreign keys)
+  if (backupData.goals && backupData.goals.length > 0) {
+    for (const goal of backupData.goals) {
+      const { id, linked_account_id, linked_category_id, linked_credit_card_id, linked_loan_id, ...goalData } = goal;
+
+      const remappedGoal: any = {
+        ...goalData,
+        user_id: user.id,
+        linked_account_id: linked_account_id ? (accountIdMap.get(linked_account_id) || null) : null,
+        linked_category_id: linked_category_id ? (categoryIdMap.get(linked_category_id) || null) : null,
+        linked_credit_card_id: linked_credit_card_id ? (creditCardIdMap.get(linked_credit_card_id) || null) : null,
+        linked_loan_id: linked_loan_id ? (loanIdMap.get(linked_loan_id) || null) : null,
+      };
+
+      const { error } = await supabase
+        .from('goals')
+        .insert(remappedGoal);
+
+      if (error) {
+        console.error('[Import] Error inserting goal:', error);
+        throw error;
+      }
+    }
+    console.log('[Import] Inserted goals');
+  }
+
+  // Insert merchant groups
+  if (backupData.merchant_groups && backupData.merchant_groups.length > 0) {
+    for (const group of backupData.merchant_groups) {
+      const oldId = group.id;
+      const { id, ...groupData } = group;
+      const { data, error } = await supabase
+        .from('merchant_groups')
+        .insert({ ...groupData, user_id: user.id })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[Import] Error inserting merchant group:', error);
+        throw error;
+      }
+      merchantGroupIdMap.set(oldId, data.id);
+    }
+    console.log('[Import] Inserted merchant groups');
+  }
+
+  // Insert merchant mappings (with remapped category_id)
+  if (backupData.merchant_mappings && backupData.merchant_mappings.length > 0) {
+    for (const mapping of backupData.merchant_mappings) {
+      const { id, category_id, ...mappingData } = mapping;
+      const { error } = await supabase
+        .from('merchant_mappings')
+        .insert({
+          ...mappingData,
+          user_id: user.id,
+          category_id: category_id ? (categoryIdMap.get(category_id) || null) : null,
+        });
+
+      if (error) {
+        console.error('[Import] Error inserting merchant mapping:', error);
+        throw error;
+      }
+    }
+    console.log('[Import] Inserted merchant mappings');
+  }
+
+  // Insert merchant category rules (with remapped merchant_group_id and category_id)
+  if (backupData.merchant_category_rules && backupData.merchant_category_rules.length > 0) {
+    for (const rule of backupData.merchant_category_rules) {
+      const { id, merchant_group_id, category_id, ...ruleData } = rule;
+      const { error } = await supabase
+        .from('merchant_category_rules')
+        .insert({
+          ...ruleData,
+          user_id: user.id,
+          merchant_group_id: merchant_group_id ? (merchantGroupIdMap.get(merchant_group_id) || null) : null,
+          category_id: category_id ? (categoryIdMap.get(category_id) || null) : null,
+        });
+
+      if (error) {
+        console.error('[Import] Error inserting merchant category rule:', error);
+        throw error;
+      }
+    }
+    console.log('[Import] Inserted merchant category rules');
+  }
+
+  // Insert transactions (with remapped foreign keys)
+  if (backupData.transactions && backupData.transactions.length > 0) {
+    for (const transaction of backupData.transactions) {
+      const oldId = transaction.id;
+      const { id, merchant_group_id, account_id, credit_card_id, ...transactionData } = transaction;
+
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert({
+          ...transactionData,
+          user_id: user.id,
+          merchant_group_id: merchant_group_id ? (merchantGroupIdMap.get(merchant_group_id) || null) : null,
+          account_id: account_id ? (accountIdMap.get(account_id) || null) : null,
+          credit_card_id: credit_card_id ? (creditCardIdMap.get(credit_card_id) || null) : null,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[Import] Error inserting transaction:', error);
+        throw error;
+      }
+      transactionIdMap.set(oldId, data.id);
+    }
+    console.log('[Import] Inserted transactions');
+  }
+
+  // Insert transaction splits (with remapped transaction_id and category_id)
+  if (backupData.transaction_splits && backupData.transaction_splits.length > 0) {
+    for (const split of backupData.transaction_splits) {
+      const { id, transaction_id, category_id, transactions, ...splitData } = split;
+      const { error } = await supabase
+        .from('transaction_splits')
+        .insert({
+          ...splitData,
+          transaction_id: transaction_id ? (transactionIdMap.get(transaction_id) || null) : null,
+          category_id: category_id ? (categoryIdMap.get(category_id) || null) : null,
+        });
+
+      if (error) {
+        console.error('[Import] Error inserting transaction split:', error);
+        throw error;
+      }
+    }
+    console.log('[Import] Inserted transaction splits');
+  }
+
+  // Insert imported transactions
+  if (backupData.imported_transactions && backupData.imported_transactions.length > 0) {
+    for (const importedTx of backupData.imported_transactions) {
+      const oldId = importedTx.id;
+      const { id, ...importedTxData } = importedTx;
+      const { data, error } = await supabase
+        .from('imported_transactions')
+        .insert({ ...importedTxData, user_id: user.id })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[Import] Error inserting imported transaction:', error);
+        throw error;
+      }
+      importedTransactionIdMap.set(oldId, data.id);
+    }
+    console.log('[Import] Inserted imported transactions');
+  }
+
+  // Insert imported transaction links (with remapped IDs)
+  if (backupData.imported_transaction_links && backupData.imported_transaction_links.length > 0) {
+    for (const link of backupData.imported_transaction_links) {
+      const { id, imported_transaction_id, transaction_id, imported_transactions, ...linkData } = link;
+      const { error } = await supabase
+        .from('imported_transaction_links')
+        .insert({
+          ...linkData,
+          imported_transaction_id: imported_transaction_id ? (importedTransactionIdMap.get(imported_transaction_id) || null) : null,
+          transaction_id: transaction_id ? (transactionIdMap.get(transaction_id) || null) : null,
+        });
+
+      if (error) {
+        console.error('[Import] Error inserting imported transaction link:', error);
+        throw error;
+      }
+    }
+    console.log('[Import] Inserted imported transaction links');
+  }
+
+  // Insert pending checks
+  if (backupData.pending_checks && backupData.pending_checks.length > 0) {
+    for (const check of backupData.pending_checks) {
+      const { id, ...checkData } = check;
+      const { error } = await supabase
+        .from('pending_checks')
+        .insert({ ...checkData, user_id: user.id });
+
+      if (error) {
+        console.error('[Import] Error inserting pending check:', error);
+        throw error;
+      }
+    }
+    console.log('[Import] Inserted pending checks');
+  }
+
+  // Insert income settings
+  if (backupData.income_settings && backupData.income_settings.length > 0) {
+    for (const income of backupData.income_settings) {
+      const { id, ...incomeData } = income;
+      const { error } = await supabase
+        .from('income_settings')
+        .insert({ ...incomeData, user_id: user.id });
+
+      if (error) {
+        console.error('[Import] Error inserting income setting:', error);
+        throw error;
+      }
+    }
+    console.log('[Import] Inserted income settings');
+  }
+
+  // Insert pre-tax deductions
+  if (backupData.pre_tax_deductions && backupData.pre_tax_deductions.length > 0) {
+    for (const deduction of backupData.pre_tax_deductions) {
+      const { id, ...deductionData } = deduction;
+      const { error } = await supabase
+        .from('pre_tax_deductions')
+        .insert({ ...deductionData, user_id: user.id });
+
+      if (error) {
+        console.error('[Import] Error inserting pre-tax deduction:', error);
+        throw error;
+      }
+    }
+    console.log('[Import] Inserted pre-tax deductions');
+  }
+
+  // Insert settings
+  if (backupData.settings && backupData.settings.length > 0) {
+    for (const setting of backupData.settings) {
+      const { id, ...settingData } = setting;
+      const { error } = await supabase
+        .from('settings')
+        .insert({ ...settingData, user_id: user.id });
+
+      if (error) {
+        console.error('[Import] Error inserting setting:', error);
+        throw error;
+      }
+    }
+    console.log('[Import] Inserted settings');
+  }
+
+  // Insert CSV import templates
+  if (backupData.csv_import_templates && backupData.csv_import_templates.length > 0) {
+    for (const template of backupData.csv_import_templates) {
+      const { id, ...templateData } = template;
+      const { error } = await supabase
+        .from('csv_import_templates')
+        .insert({ ...templateData, user_id: user.id });
+
+      if (error) {
+        console.error('[Import] Error inserting CSV import template:', error);
+        throw error;
+      }
+    }
+    console.log('[Import] Inserted CSV import templates');
+  }
+
+  console.log('[Import] Import completed successfully');
 }
 
