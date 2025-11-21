@@ -3,6 +3,7 @@
 import * as React from "react"
 import { usePathname, useRouter } from "next/navigation"
 import Image from "next/image"
+import { useTheme } from "next-themes"
 import {
   LayoutDashboard,
   Receipt,
@@ -67,6 +68,9 @@ export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { state } = useSidebar()
+  const { resolvedTheme } = useTheme()
+
+  const logoSrc = resolvedTheme === "dark" ? "/icon-darkmode.svg" : "/icon.svg"
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -81,7 +85,7 @@ export function AppSidebar() {
         <div className="flex items-center gap-2 px-2 py-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden">
             <Image
-              src="/icon.svg"
+              src={logoSrc}
               alt="Budget App"
               width={32}
               height={32}

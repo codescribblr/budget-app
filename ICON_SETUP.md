@@ -12,16 +12,24 @@ The Budget App icon features an **envelope with ascending bars** inside, symboli
 ## Icon Files
 
 ### Source
-- **`public/icon.svg`** - Master SVG icon (64×64 viewBox)
+- **`public/icon.svg`** - Master dark-mode-friendly SVG icon (64×64 viewBox, dark gradient background, light envelope)
+- **`public/icon-darkmode.svg`** - Master light-background SVG icon (64×64 viewBox, light gradient background, dark envelope)
 - **`src/app/icon.svg`** - Copy for Next.js file-based metadata
 
-### Generated Sizes
+### Generated Sizes (dark background variant)
 - **`public/favicon.ico`** - Multi-size ICO (16×16, 32×32, 48×48) for legacy browsers
-- **`public/favicon-16x16.png`** - Small favicon
-- **`public/favicon-32x32.png`** - Standard favicon
-- **`public/apple-icon.png`** - iOS home screen icon (180×180)
-- **`public/icon-192.png`** - Android home screen icon (192×192)
-- **`public/icon-512.png`** - High-res Android icon (512×512)
+- **`public/favicon-16x16.png`** - Small favicon (dark background)
+- **`public/favicon-32x32.png`** - Standard favicon (dark background)
+- **`public/apple-icon.png`** - iOS home screen icon (180×180, dark background)
+- **`public/icon-192.png`** - Android home screen icon (192×192, dark background)
+- **`public/icon-512.png`** - High-res Android icon (512×512, dark background)
+
+### Generated Sizes (light background variant)
+- **`public/favicon-light-16x16.png`** - Small favicon (light background)
+- **`public/favicon-light-32x32.png`** - Standard favicon (light background)
+- **`public/apple-icon-light.png`** - iOS home screen icon (180×180, light background)
+- **`public/icon-light-192.png`** - Android home screen icon (192×192, light background)
+- **`public/icon-light-512.png`** - High-res Android icon (512×512, light background)
 
 ### Manifest
 - **`public/manifest.json`** - PWA manifest for "Add to Home Screen" functionality
@@ -99,19 +107,58 @@ export const viewport: Viewport = {
 
 ## Regenerating Icons
 
-If you need to regenerate the PNG icons from the SVG source:
+If you need to regenerate the PNG icons from the SVG sources:
+
+### Prerequisites
 
 ```bash
-# Install ImageMagick (if not already installed)
-brew install imagemagick
+# Install rsvg-convert (required for PNG generation)
+brew install librsvg
 
-# Generate all sizes
-magick public/icon.svg -resize 192x192 public/icon-192.png
-magick public/icon.svg -resize 512x512 public/icon-512.png
-magick public/icon.svg -resize 180x180 public/apple-icon.png
-magick public/icon.svg -resize 32x32 public/favicon-32x32.png
-magick public/icon.svg -resize 16x16 public/favicon-16x16.png
-magick public/icon.svg -define icon:auto-resize=16,32,48 public/favicon.ico
+# Install ImageMagick (only needed for favicon.ico)
+brew install imagemagick
+```
+
+### Why rsvg-convert?
+
+**IMPORTANT:** Use `rsvg-convert` for PNG generation, NOT ImageMagick's `magick` command.
+
+- `rsvg-convert` properly renders SVG gradients, strokes, and all SVG features
+- ImageMagick often fails to render gradients correctly, resulting in white backgrounds
+- `rsvg-convert` is specifically designed for SVG-to-PNG conversion using librsvg
+
+### Generation Commands
+
+```bash
+# Navigate to the budget-app directory
+cd budget-app
+
+# Generate dark-background icons (for light theme) from icon.svg
+rsvg-convert -w 192 -h 192 public/icon.svg -o public/icon-192.png
+rsvg-convert -w 512 -h 512 public/icon.svg -o public/icon-512.png
+rsvg-convert -w 180 -h 180 public/icon.svg -o public/apple-icon.png
+rsvg-convert -w 32 -h 32 public/icon.svg -o public/favicon-32x32.png
+rsvg-convert -w 16 -h 16 public/icon.svg -o public/favicon-16x16.png
+
+# Generate light-background icons (for dark theme) from icon-darkmode.svg
+rsvg-convert -w 192 -h 192 public/icon-darkmode.svg -o public/icon-light-192.png
+rsvg-convert -w 512 -h 512 public/icon-darkmode.svg -o public/icon-light-512.png
+rsvg-convert -w 180 -h 180 public/icon-darkmode.svg -o public/apple-icon-light.png
+rsvg-convert -w 32 -h 32 public/icon-darkmode.svg -o public/favicon-light-32x32.png
+rsvg-convert -w 16 -h 16 public/icon-darkmode.svg -o public/favicon-light-16x16.png
+
+# Generate favicon.ico (multi-size ICO file - ImageMagick is fine for this)
+magick public/icon.svg -background none -define icon:auto-resize=16,32,48 public/favicon.ico
+```
+
+### One-Liner Commands
+
+```bash
+# All dark-background icons
+cd budget-app && rsvg-convert -w 192 -h 192 public/icon.svg -o public/icon-192.png && rsvg-convert -w 512 -h 512 public/icon.svg -o public/icon-512.png && rsvg-convert -w 180 -h 180 public/icon.svg -o public/apple-icon.png && rsvg-convert -w 32 -h 32 public/icon.svg -o public/favicon-32x32.png && rsvg-convert -w 16 -h 16 public/icon.svg -o public/favicon-16x16.png && magick public/icon.svg -background none -define icon:auto-resize=16,32,48 public/favicon.ico
+
+# All light-background icons
+cd budget-app && rsvg-convert -w 192 -h 192 public/icon-darkmode.svg -o public/icon-light-192.png && rsvg-convert -w 512 -h 512 public/icon-darkmode.svg -o public/icon-light-512.png && rsvg-convert -w 180 -h 180 public/icon-darkmode.svg -o public/apple-icon-light.png && rsvg-convert -w 32 -h 32 public/icon-darkmode.svg -o public/favicon-light-32x32.png && rsvg-convert -w 16 -h 16 public/icon-darkmode.svg -o public/favicon-light-16x16.png
 ```
 
 ---
