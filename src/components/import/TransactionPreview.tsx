@@ -7,6 +7,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { ParsedTransaction } from '@/lib/import-types';
@@ -16,6 +22,7 @@ import ImportConfirmationDialog from './ImportConfirmationDialog';
 import ImportProgressDialog from './ImportProgressDialog';
 import { generateTransactionHash } from '@/lib/csv-parser';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
+import { MoreVertical, Edit, X, Check } from 'lucide-react';
 
 interface TransactionPreviewProps {
   transactions: ParsedTransaction[];
@@ -603,24 +610,33 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                   </TableCell>
 
                   {/* Actions Cell */}
-                  <TableCell className="text-right min-w-[160px]">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(transaction)}
-                        title="Advanced edit (splits, etc.)"
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleExclude(transaction.id)}
-                      >
-                        {transaction.status === 'excluded' ? 'Include' : 'Exclude'}
-                      </Button>
-                    </div>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEdit(transaction)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleToggleExclude(transaction.id)}>
+                          {transaction.status === 'excluded' ? (
+                            <>
+                              <Check className="mr-2 h-4 w-4" />
+                              Include
+                            </>
+                          ) : (
+                            <>
+                              <X className="mr-2 h-4 w-4" />
+                              Exclude
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               );

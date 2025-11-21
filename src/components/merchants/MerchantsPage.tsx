@@ -8,7 +8,13 @@ import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Plus, Edit, Trash2, Merge } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Search, Plus, Edit, Trash2, Merge, MoreVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
 import type { MerchantGroupWithStats } from '@/lib/types';
@@ -263,37 +269,34 @@ export default function MerchantsPage() {
                         : '-'}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
-                        {selectedForMerge.size >= 2 && selectedForMerge.has(group.id) ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleMergeClick}
-                            title="Merge selected groups"
-                          >
-                            <Merge className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(group)}
-                              title="Edit merchant"
-                            >
-                              <Edit className="h-4 w-4" />
+                      {selectedForMerge.size >= 2 && selectedForMerge.has(group.id) ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleMergeClick}
+                          title="Merge selected groups"
+                        >
+                          <Merge className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreVertical className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(group)}
-                              title="Delete merchant"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEdit(group)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDelete(group)} className="text-red-600">
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

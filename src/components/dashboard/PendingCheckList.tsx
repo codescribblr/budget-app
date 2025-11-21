@@ -4,6 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -17,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { formatCurrency } from '@/lib/utils';
 import type { PendingCheck } from '@/lib/types';
 import { toast } from 'sonner';
+import { MoreVertical, Trash2 } from 'lucide-react';
 
 interface PendingCheckListProps {
   pendingChecks: PendingCheck[];
@@ -101,13 +108,19 @@ export default function PendingCheckList({ pendingChecks, onUpdate }: PendingChe
                     {formatCurrency(check.amount)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(check)}
-                    >
-                      Delete
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleDelete(check)} className="text-red-600">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}

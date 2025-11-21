@@ -3,6 +3,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -17,6 +23,7 @@ import type { TransactionWithSplits, Category } from '@/lib/types';
 import EditTransactionDialog from './EditTransactionDialog';
 import { toast } from 'sonner';
 import { parseLocalDate } from '@/lib/date-utils';
+import { MoreVertical, Edit, Trash2 } from 'lucide-react';
 
 interface TransactionListProps {
   transactions: TransactionWithSplits[];
@@ -133,24 +140,23 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
                   {formatCurrency(transaction.total_amount)}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEdit(transaction)}
-                      className="h-8 px-2 text-xs"
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(transaction)}
-                      className="h-8 px-2 text-xs"
-                    >
-                      Delete
-                    </Button>
-                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleEdit(transaction)}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleDelete(transaction)} className="text-red-600">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
             ))}

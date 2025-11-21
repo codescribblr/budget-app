@@ -7,6 +7,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Progress } from '@/components/ui/progress';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -19,7 +25,7 @@ import {
 import { formatCurrency } from '@/lib/utils';
 import type { Category, DashboardSummary } from '@/lib/types';
 import { toast } from 'sonner';
-import { Check, X, Settings, GripVertical, Save } from 'lucide-react';
+import { Check, X, Settings, GripVertical, Save, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -207,22 +213,23 @@ function SortableRow({
       </TableCell>
       <TableCell className="text-right">
         {!isReorderMode && (
-          <div className="flex justify-end gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => openEditDialog(category)}
-            >
-              Edit
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleDeleteCategory(category)}
-            >
-              Delete
-            </Button>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => openEditDialog(category)}>
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDeleteCategory(category)} className="text-red-600">
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </TableCell>
     </TableRow>
