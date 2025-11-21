@@ -111,22 +111,48 @@ function analyzeColumn(
   const descriptionContent = isDescriptionColumn(values);
   const balanceContent = isBalanceColumn(values);
 
-  // Combine scores (60% header, 40% content)
-  // If no headers, rely entirely on content (100%)
-  const headerWeight = hasHeaders ? 0.6 : 0;
-  const contentWeight = hasHeaders ? 0.4 : 1.0;
-  
+  // Dynamic weighting: Give more weight to content when it's very clear
+  // If content score is high (>0.8), trust it more than headers
+  // This handles cases where headers are non-standard but data is obvious
+  const maxContentScore = Math.max(
+    dateContent.score,
+    amountContent,
+    descriptionContent,
+    balanceContent
+  );
+
+  let headerWeight: number;
+  let contentWeight: number;
+
+  if (!hasHeaders) {
+    // No headers: rely entirely on content
+    headerWeight = 0;
+    contentWeight = 1.0;
+  } else if (maxContentScore >= 0.9) {
+    // Very clear content (90%+ match): heavily favor content
+    headerWeight = 0.2;
+    contentWeight = 0.8;
+  } else if (maxContentScore >= 0.7) {
+    // Clear content (70%+ match): favor content
+    headerWeight = 0.3;
+    contentWeight = 0.7;
+  } else {
+    // Unclear content: favor headers
+    headerWeight = 0.6;
+    contentWeight = 0.4;
+  }
+
   // Prefer "amount" over "debit"/"credit" when header doesn't clearly indicate debit/credit
   // Only use debit/credit if header strongly suggests it
   const debitCreditHeaderScore = Math.max(headerScores.debit, headerScores.credit);
   const useDebitCredit = debitCreditHeaderScore > 0.5;
-  
+
   const combinedScores = {
     date: headerScores.date * headerWeight + dateContent.score * contentWeight,
     amount: headerScores.amount * headerWeight + amountContent * contentWeight,
     description: headerScores.description * headerWeight + descriptionContent * contentWeight,
-    debit: useDebitCredit && headerScores.debit > headerScores.credit 
-      ? headerScores.debit * headerWeight + amountContent * contentWeight 
+    debit: useDebitCredit && headerScores.debit > headerScores.credit
+      ? headerScores.debit * headerWeight + amountContent * contentWeight
       : 0,
     credit: useDebitCredit && headerScores.credit > headerScores.debit
       ? headerScores.credit * headerWeight + amountContent * contentWeight
