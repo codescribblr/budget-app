@@ -36,6 +36,23 @@ export interface CreditCard {
   updated_at: string;
 }
 
+export interface Loan {
+  id: number;
+  user_id: string;
+  name: string;
+  balance: number;
+  interest_rate: number | null;
+  minimum_payment: number | null;
+  payment_due_date: number | null;
+  open_date: string | null;
+  starting_balance: number | null;
+  institution: string | null;
+  include_in_net_worth: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Transaction {
   id: number;
   date: string;
@@ -204,6 +221,30 @@ export interface CreatePendingCheckRequest {
 export interface UpdatePendingCheckRequest {
   description?: string;
   amount?: number;
+}
+
+export interface CreateLoanRequest {
+  name: string;
+  balance: number;
+  interest_rate?: number;
+  minimum_payment?: number;
+  payment_due_date?: number;
+  open_date?: string;
+  starting_balance?: number;
+  institution?: string;
+  include_in_net_worth?: boolean;
+}
+
+export interface UpdateLoanRequest {
+  name?: string;
+  balance?: number;
+  interest_rate?: number;
+  minimum_payment?: number;
+  payment_due_date?: number;
+  open_date?: string;
+  starting_balance?: number;
+  institution?: string;
+  include_in_net_worth?: boolean;
 }
 
 // View models with joined data

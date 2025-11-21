@@ -3,6 +3,7 @@ import type {
   Category,
   Account,
   CreditCard,
+  Loan,
   Transaction,
   TransactionSplit,
   PendingCheck,
@@ -354,6 +355,123 @@ export async function deleteCreditCard(id: number): Promise<void> {
 
   const { error } = await supabase
     .from('credit_cards')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+// =====================================================
+// LOANS
+// =====================================================
+
+export async function getAllLoans(): Promise<Loan[]> {
+  const { supabase } = await getAuthenticatedUser();
+
+  const { data, error } = await supabase
+    .from('loans')
+    .select('*')
+    .order('sort_order');
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getLoanById(id: number): Promise<Loan> {
+  const { supabase } = await getAuthenticatedUser();
+
+  const { data, error } = await supabase
+    .from('loans')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function createLoan(loan: {
+  name: string;
+  balance: number;
+  interest_rate?: number;
+  minimum_payment?: number;
+  payment_due_date?: number;
+  open_date?: string;
+  starting_balance?: number;
+  institution?: string;
+  include_in_net_worth?: boolean;
+}): Promise<Loan> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  // Get the max sort_order
+  const { data: maxData } = await supabase
+    .from('loans')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1);
+
+  const nextSortOrder = maxData && maxData.length > 0 ? maxData[0].sort_order + 1 : 0;
+
+  const { data, error } = await supabase
+    .from('loans')
+    .insert({
+      user_id: user.id,
+      ...loan,
+      sort_order: nextSortOrder,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateLoan(
+  id: number,
+  updates: {
+    name?: string;
+    balance?: number;
+    interest_rate?: number;
+    minimum_payment?: number;
+    payment_due_date?: number;
+    open_date?: string;
+    starting_balance?: number;
+    institution?: string;
+    include_in_net_worth?: boolean;
+  }
+): Promise<Loan> {
+  const { supabase } = await getAuthenticatedUser();
+
+  const { data, error } = await supabase
+    .from('loans')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateLoansSortOrder(loanIds: number[]): Promise<void> {
+  const { supabase } = await getAuthenticatedUser();
+
+  // Update each loan's sort_order based on its position in the array
+  const updates = loanIds.map((id, index) =>
+    supabase
+      .from('loans')
+      .update({ sort_order: index })
+      .eq('id', id)
+  );
+
+  await Promise.all(updates);
+}
+
+export async function deleteLoan(id: number): Promise<void> {
+  const { supabase } = await getAuthenticatedUser();
+
+  const { error } = await supabase
+    .from('loans')
     .delete()
     .eq('id', id);
 
