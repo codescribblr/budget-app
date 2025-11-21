@@ -15,7 +15,7 @@ import TransactionEditDialog from './TransactionEditDialog';
 import ImportConfirmationDialog from './ImportConfirmationDialog';
 import ImportProgressDialog from './ImportProgressDialog';
 import { generateTransactionHash } from '@/lib/csv-parser';
-import { format, parse } from 'date-fns';
+import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 
 interface TransactionPreviewProps {
   transactions: ParsedTransaction[];
@@ -443,10 +443,10 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                     {isEditingDate ? (
                       <div onBlur={() => setEditingField(null)}>
                         <DatePicker
-                          date={parse(transaction.date, 'yyyy-MM-dd', new Date())}
+                          date={parseLocalDate(transaction.date)}
                           onDateChange={(date) => {
                             if (date) {
-                              handleInlineDateChange(transaction.id, format(date, 'yyyy-MM-dd'));
+                              handleInlineDateChange(transaction.id, formatLocalDate(date));
                             }
                             setEditingField(null);
                           }}

@@ -16,7 +16,7 @@ import SpendingByCategory from './SpendingByCategory';
 import SpendingPieChart from './SpendingPieChart';
 import TransactionsByMerchant from './TransactionsByMerchant';
 import { X } from 'lucide-react';
-import { format, parse } from 'date-fns';
+import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 
 interface MerchantGroupStat {
   group_id: number;
@@ -307,9 +307,9 @@ export default function ReportsPage() {
                 <Label htmlFor="start-date">Start Date</Label>
                 <DatePicker
                   id="start-date"
-                  date={startDate ? parse(startDate, 'yyyy-MM-dd', new Date()) : undefined}
+                  date={parseLocalDate(startDate)}
                   onDateChange={(date) => {
-                    const newStartDate = date ? format(date, 'yyyy-MM-dd') : '';
+                    const newStartDate = formatLocalDate(date);
                     setStartDate(newStartDate);
                     setDateRange('custom');
                     updateURL(newStartDate, endDate, 'custom', selectedCategoryId);
@@ -321,9 +321,9 @@ export default function ReportsPage() {
                 <Label htmlFor="end-date">End Date</Label>
                 <DatePicker
                   id="end-date"
-                  date={endDate ? parse(endDate, 'yyyy-MM-dd', new Date()) : undefined}
+                  date={parseLocalDate(endDate)}
                   onDateChange={(date) => {
-                    const newEndDate = date ? format(date, 'yyyy-MM-dd') : '';
+                    const newEndDate = formatLocalDate(date);
                     setEndDate(newEndDate);
                     setDateRange('custom');
                     updateURL(startDate, newEndDate, 'custom', selectedCategoryId);

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { Category, Account, CreditCard } from '@/lib/types';
-import { format } from 'date-fns';
+import { formatLocalDate, getTodayLocal } from '@/lib/date-utils';
 
 interface AddTransactionDialogProps {
   isOpen: boolean;
@@ -27,7 +27,7 @@ export default function AddTransactionDialog({
   categories,
   onSuccess,
 }: AddTransactionDialogProps) {
-  const [date, setDate] = useState<Date>(new Date());
+  const [date, setDate] = useState<Date>(getTodayLocal());
   const [description, setDescription] = useState('');
   const [splits, setSplits] = useState<Split[]>([{ category_id: 0, amount: '' }]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -110,7 +110,7 @@ export default function AddTransactionDialog({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date: format(date, 'yyyy-MM-dd'),
+          date: formatLocalDate(date),
           description,
           account_id: selectedAccountId || null,
           credit_card_id: selectedCreditCardId || null,
@@ -122,7 +122,7 @@ export default function AddTransactionDialog({
       });
 
       // Reset form
-      setDate(new Date());
+      setDate(getTodayLocal());
       setDescription('');
       setSplits([{ category_id: 0, amount: '' }]);
       setSelectedAccountId(null);

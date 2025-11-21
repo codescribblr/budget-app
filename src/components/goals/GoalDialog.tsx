@@ -12,7 +12,7 @@ import type { GoalWithDetails, CreateGoalRequest, Account, CreditCard, Loan } fr
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { AlertCircle, Info } from 'lucide-react';
-import { format } from 'date-fns';
+import { parseLocalDate, formatLocalDate, getTodayLocal } from '@/lib/date-utils';
 
 interface GoalDialogProps {
   isOpen: boolean;
@@ -48,7 +48,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         // Edit mode
         setName(goal.name);
         setTargetAmount(goal.target_amount.toString());
-        setTargetDate(goal.target_date ? new Date(goal.target_date) : undefined);
+        setTargetDate(parseLocalDate(goal.target_date));
         setGoalType(goal.goal_type);
         setMonthlyContribution(goal.monthly_contribution.toString());
         setLinkedAccountId(goal.linked_account_id?.toString() || '');
@@ -132,11 +132,8 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
     }
 
     if (targetDate) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const targetDateCopy = new Date(targetDate);
-      targetDateCopy.setHours(0, 0, 0, 0);
-      if (targetDateCopy < today) {
+      const today = getTodayLocal();
+      if (targetDate < today) {
         toast.error('Target date must be in the future');
         return;
       }
@@ -188,7 +185,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
           body: JSON.stringify({
             name,
             target_amount: parseFloat(targetAmount),
-            target_date: targetDate || null,
+            target_date: targetDate ? formatLocalDate(targetDate) : null,
             monthly_contribution: parseFloat(monthlyContribution),
             notes: notes || null,
           }),
@@ -209,7 +206,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         const requestData: CreateGoalRequest = {
           name,
           target_amount: goalType !== 'debt-paydown' ? parseFloat(targetAmount) : undefined,
-          target_date: targetDate ? format(targetDate, 'yyyy-MM-dd') : null,
+          target_date: targetDate ? formatLocalDate(targetDate) : null,
           goal_type: goalType,
           monthly_contribution: parseFloat(monthlyContribution),
           starting_balance: goalType === 'envelope' && startingBalance
@@ -373,7 +370,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
               id="targetDate"
               date={targetDate}
               onDateChange={setTargetDate}
-              minDate={new Date()}
+              minDate={getTodayLocal()}
               placeholder="Select target date"
             />
             <p className="text-xs text-muted-foreground mt-1">

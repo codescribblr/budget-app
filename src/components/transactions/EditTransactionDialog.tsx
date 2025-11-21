@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { Category, TransactionWithSplits, MerchantGroup, Account, CreditCard } from '@/lib/types';
-import { format } from 'date-fns';
+import { parseLocalDate, formatLocalDate, getTodayLocal } from '@/lib/date-utils';
 
 interface EditTransactionDialogProps {
   isOpen: boolean;
@@ -29,7 +29,7 @@ export default function EditTransactionDialog({
   categories,
   onSuccess,
 }: EditTransactionDialogProps) {
-  const [date, setDate] = useState<Date>(new Date());
+  const [date, setDate] = useState<Date>(getTodayLocal());
   const [description, setDescription] = useState('');
   const [merchantGroupId, setMerchantGroupId] = useState<number | null>(null);
   const [merchantGroups, setMerchantGroups] = useState<MerchantGroup[]>([]);
@@ -41,7 +41,7 @@ export default function EditTransactionDialog({
 
   useEffect(() => {
     if (transaction) {
-      setDate(new Date(transaction.date));
+      setDate(parseLocalDate(transaction.date) || getTodayLocal());
       setDescription(transaction.description);
       setMerchantGroupId(transaction.merchant_group_id || null);
       setSelectedAccountId(transaction.account_id || null);
@@ -142,7 +142,7 @@ export default function EditTransactionDialog({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date: format(date, 'yyyy-MM-dd'),
+          date: formatLocalDate(date),
           description,
           merchant_group_id: merchantGroupId,
           account_id: selectedAccountId || null,

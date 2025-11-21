@@ -20,7 +20,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { Loan } from '@/lib/types';
 import { toast } from 'sonner';
 import { Check, X } from 'lucide-react';
-import { format } from 'date-fns';
+import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 
 interface LoanListProps {
   loans: Loan[];
@@ -72,7 +72,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
           interest_rate: interestRate ? parseFloat(interestRate) : null,
           minimum_payment: minimumPayment ? parseFloat(minimumPayment) : null,
           payment_due_date: paymentDueDate ? parseInt(paymentDueDate) : null,
-          open_date: openDate ? format(openDate, 'yyyy-MM-dd') : null,
+          open_date: openDate ? formatLocalDate(openDate) : null,
           starting_balance: startingBalance ? parseFloat(startingBalance) : null,
           institution: institution || null,
           include_in_net_worth: includeInNetWorth,
@@ -106,7 +106,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
           interest_rate: interestRate ? parseFloat(interestRate) : undefined,
           minimum_payment: minimumPayment ? parseFloat(minimumPayment) : undefined,
           payment_due_date: paymentDueDate ? parseInt(paymentDueDate) : undefined,
-          open_date: openDate ? format(openDate, 'yyyy-MM-dd') : undefined,
+          open_date: openDate ? formatLocalDate(openDate) : undefined,
           starting_balance: startingBalance ? parseFloat(startingBalance) : undefined,
           institution: institution || undefined,
           include_in_net_worth: includeInNetWorth,
@@ -153,7 +153,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
     setInterestRate(loan.interest_rate?.toString() || '');
     setMinimumPayment(loan.minimum_payment?.toString() || '');
     setPaymentDueDate(loan.payment_due_date?.toString() || '');
-    setOpenDate(loan.open_date ? new Date(loan.open_date) : undefined);
+    setOpenDate(parseLocalDate(loan.open_date));
     setStartingBalance(loan.starting_balance?.toString() || '');
     setInstitution(loan.institution || '');
     setIncludeInNetWorth(loan.include_in_net_worth);

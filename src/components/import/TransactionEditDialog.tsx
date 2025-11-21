@@ -10,7 +10,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { ParsedTransaction, TransactionSplit } from '@/lib/import-types';
 import type { Category, Account, CreditCard } from '@/lib/types';
-import { format } from 'date-fns';
+import { parseLocalDate, formatLocalDate, getTodayLocal } from '@/lib/date-utils';
 
 interface TransactionEditDialogProps {
   transaction: ParsedTransaction;
@@ -25,7 +25,7 @@ export default function TransactionEditDialog({
   onSave,
   onClose,
 }: TransactionEditDialogProps) {
-  const [date, setDate] = useState<Date>(new Date(transaction.date));
+  const [date, setDate] = useState<Date>(parseLocalDate(transaction.date) || getTodayLocal());
   const [merchant, setMerchant] = useState(transaction.merchant);
   const [description, setDescription] = useState(transaction.description);
   const [splits, setSplits] = useState<TransactionSplit[]>(
@@ -125,7 +125,7 @@ export default function TransactionEditDialog({
 
     const updated: ParsedTransaction = {
       ...transaction,
-      date: format(date, 'yyyy-MM-dd'),
+      date: formatLocalDate(date),
       merchant,
       description,
       account_id: selectedAccountId || null,
