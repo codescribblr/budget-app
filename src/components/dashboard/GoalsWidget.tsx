@@ -9,6 +9,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { GoalWithDetails } from '@/lib/types';
 import { Target, Calendar, TrendingUp, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import { parseLocalDate } from '@/lib/date-utils';
 
 export default function GoalsWidget() {
   const [goals, setGoals] = useState<GoalWithDetails[]>([]);
@@ -126,7 +127,7 @@ export default function GoalsWidget() {
                       {goal.target_date && (
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(goal.target_date).toLocaleDateString()}
+                          {parseLocalDate(goal.target_date)?.toLocaleDateString()}
                         </span>
                       )}
                     </div>
@@ -147,7 +148,7 @@ export default function GoalsWidget() {
               <span className="text-muted-foreground">Next deadline:</span>
               <span className="font-medium">{nextDeadline.name}</span>
               <span className="text-muted-foreground">
-                ({new Date(nextDeadline.target_date!).toLocaleDateString()})
+                ({parseLocalDate(nextDeadline.target_date!)?.toLocaleDateString()})
               </span>
             </div>
           </div>

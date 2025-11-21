@@ -13,6 +13,7 @@ import {
 import type { GoalWithDetails } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 import { MoreVertical, Edit, Trash2, Play, Pause, Target, Calendar, TrendingUp, CreditCard } from 'lucide-react';
+import { parseLocalDate } from '@/lib/date-utils';
 
 interface GoalProgressCardProps {
   goal: GoalWithDetails;
@@ -149,7 +150,7 @@ export default function GoalProgressCard({
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <span className="text-muted-foreground">Target:</span>
             <span className="font-medium">
-              {new Date(goal.target_date).toLocaleDateString()}
+              {parseLocalDate(goal.target_date)?.toLocaleDateString()}
             </span>
             {goal.months_remaining !== null && goal.months_remaining !== undefined && goal.months_remaining > 0 && (
               <span className="text-muted-foreground ml-auto">
@@ -183,7 +184,7 @@ export default function GoalProgressCard({
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Target className="h-4 w-4" />
             <span>
-              Projected: {new Date(goal.projected_completion_date).toLocaleDateString()}
+              Projected: {parseLocalDate(goal.projected_completion_date)?.toLocaleDateString()}
             </span>
           </div>
         )}
