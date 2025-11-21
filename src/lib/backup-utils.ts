@@ -414,16 +414,16 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     console.log('[Import] Inserted merchant groups');
   }
 
-  // Insert merchant mappings (with remapped category_id)
+  // Insert merchant mappings (with remapped merchant_group_id)
   if (backupData.merchant_mappings && backupData.merchant_mappings.length > 0) {
     for (const mapping of backupData.merchant_mappings) {
-      const { id, category_id, ...mappingData } = mapping;
+      const { id, merchant_group_id, category_id, ...mappingData } = mapping;
       const { error } = await supabase
         .from('merchant_mappings')
         .insert({
           ...mappingData,
           user_id: user.id,
-          category_id: category_id ? (categoryIdMap.get(category_id) || null) : null,
+          merchant_group_id: merchant_group_id ? (merchantGroupIdMap.get(merchant_group_id) || null) : null,
         });
 
       if (error) {
