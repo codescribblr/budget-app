@@ -865,6 +865,8 @@ export async function searchTransactions(
   const { supabase } = await getAuthenticatedUser();
 
   // Search transactions by description or merchant name
+  // Note: We search description directly, but merchant name requires a workaround
+  // since we can't use .or() with nested relations in PostgREST
   const { data: transactions, error: txError } = await supabase
     .from('transactions')
     .select(`
@@ -879,7 +881,7 @@ export async function searchTransactions(
         name
       )
     `)
-    .or(`description.ilike.%${query}%,merchant_groups.display_name.ilike.%${query}%`)
+    .ilike('description', `%${query}%`)
     .order('date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(limit);

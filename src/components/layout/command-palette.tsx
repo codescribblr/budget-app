@@ -127,34 +127,39 @@ export function CommandPalette() {
     }
   }, [open, categories.length, isLoading])
 
-  // Debounced transaction search
-  const searchTransactionsDebounced = useDebounce(
-    async (searchQuery: string) => {
-      if (searchQuery.length >= 3) {
-        setTransactionsLoading(true)
-        try {
-          const response = await fetch(
-            `/api/search/transactions?q=${encodeURIComponent(searchQuery)}&limit=10`
-          )
-          const data = await response.json()
-          setTransactions(data)
-        } catch (err) {
-          console.error('Error searching transactions:', err)
-          setTransactions([])
-        } finally {
-          setTransactionsLoading(false)
-        }
-      } else {
+  // Search transactions function (stable reference with useCallback)
+  const searchTransactions = React.useCallback(async (searchQuery: string) => {
+    if (searchQuery.length >= 3) {
+      setTransactionsLoading(true)
+      try {
+        const response = await fetch(
+          `/api/search/transactions?q=${encodeURIComponent(searchQuery)}&limit=10`
+        )
+        const data = await response.json()
+        setTransactions(data)
+      } catch (err) {
+        console.error('Error searching transactions:', err)
         setTransactions([])
+      } finally {
+        setTransactionsLoading(false)
       }
-    },
-    300
-  )
+    } else {
+      setTransactions([])
+      setTransactionsLoading(false)
+    }
+  }, [])
+
+  // Debounced version
+  const searchTransactionsDebounced = useDebounce(searchTransactions, 300)
 
   // Search transactions when query changes
   React.useEffect(() => {
     if (open) {
       searchTransactionsDebounced(query)
+    } else {
+      // Clear transactions when dialog closes
+      setTransactions([])
+      setTransactionsLoading(false)
     }
   }, [query, open, searchTransactionsDebounced])
 
