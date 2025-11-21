@@ -178,7 +178,7 @@ export function CommandPalette() {
         />
         <CommandList>
           <CommandEmpty>
-            {isLoading ? 'Loading...' : 'No results found.'}
+            {isLoading || transactionsLoading ? 'Loading...' : 'No results found.'}
           </CommandEmpty>
           <CommandGroup heading="Navigation">
             {navigationItems.map((item) => {
