@@ -77,10 +77,10 @@ export default function TransactionsByMerchant({
     }))
     .sort((a, b) => b.total - a.total);
 
-  // Get top 10 merchant groups or fall back to ungrouped
+  // Get top 20 merchant groups or fall back to ungrouped
   const displayMerchants = merchantStats.length > 0
-    ? merchantStats.slice(0, 10)
-    : ungroupedMerchants.slice(0, 10);
+    ? merchantStats.slice(0, 20)
+    : ungroupedMerchants.slice(0, 20);
 
   const totalSpent = filteredTransactions.reduce((sum, t) => sum + t.total_amount, 0);
 
