@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, ExternalLink } from 'lucide-react';
 
 interface TransactionsByMerchantProps {
   transactions: TransactionWithSplits[];
@@ -23,6 +24,8 @@ interface TransactionsByMerchantProps {
   merchantStats?: MerchantGroupStat[];
   loadingMerchantStats?: boolean;
   selectedCategoryId?: number | null;
+  startDate?: string;
+  endDate?: string;
 }
 
 interface MerchantGroupStat {
@@ -41,7 +44,9 @@ export default function TransactionsByMerchant({
   loading = false,
   merchantStats = [],
   loadingMerchantStats = false,
-  selectedCategoryId = null
+  selectedCategoryId = null,
+  startDate = '',
+  endDate = ''
 }: TransactionsByMerchantProps) {
   const [selectedGroup, setSelectedGroup] = useState<MerchantGroupStat | null>(null);
   const [showGroupDetails, setShowGroupDetails] = useState(false);
@@ -255,6 +260,17 @@ export default function TransactionsByMerchant({
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t">
+                <Button asChild>
+                  <Link
+                    href={`/transactions?merchantGroupId=${selectedGroup.group_id}${selectedCategoryId ? `&categoryId=${selectedCategoryId}` : ''}${startDate ? `&startDate=${startDate}` : ''}${endDate ? `&endDate=${endDate}` : ''}`}
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    View Transactions
+                  </Link>
+                </Button>
               </div>
             </div>
           )}

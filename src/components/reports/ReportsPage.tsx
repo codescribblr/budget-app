@@ -426,6 +426,8 @@ export default function ReportsPage() {
           merchantStats={merchantStats}
           loadingMerchantStats={loadingMerchantStats}
           selectedCategoryId={selectedCategoryId}
+          startDate={startDate}
+          endDate={endDate}
         />
       </div>
     </div>

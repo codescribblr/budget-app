@@ -37,12 +37,17 @@ export default function TransactionsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const merchantFilter = searchParams.get('merchant');
+  const merchantGroupIdParam = searchParams.get('merchantGroupId');
+  const categoryIdParam = searchParams.get('categoryId');
+  const startDateParam = searchParams.get('startDate');
+  const endDateParam = searchParams.get('endDate');
 
   const [transactions, setTransactions] = useState<TransactionWithSplits[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [merchantGroupName, setMerchantGroupName] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -70,16 +75,63 @@ export default function TransactionsPage() {
     fetchData();
   }, []);
 
-  // Filter transactions based on merchant filter and search query
+  // Fetch merchant group name if merchantGroupId is provided
+  useEffect(() => {
+    const fetchMerchantGroupName = async () => {
+      if (merchantGroupIdParam) {
+        try {
+          const response = await fetch(`/api/merchant-groups/${merchantGroupIdParam}`);
+          if (response.ok) {
+            const group = await response.json();
+            setMerchantGroupName(group.display_name);
+          }
+        } catch (error) {
+          console.error('Error fetching merchant group:', error);
+        }
+      } else {
+        setMerchantGroupName(null);
+      }
+    };
+
+    fetchMerchantGroupName();
+  }, [merchantGroupIdParam]);
+
+  // Filter transactions based on all filters and search query
   const filteredTransactions = useMemo(() => {
     let filtered = transactions;
 
-    // First apply merchant filter if present
+    // Apply merchant filter if present
     if (merchantFilter) {
       filtered = filtered.filter(transaction => {
         // Compare with null check
         if (!transaction.merchant_name) return false;
         return transaction.merchant_name === merchantFilter;
+      });
+    }
+
+    // Apply merchant group filter if present
+    if (merchantGroupIdParam) {
+      const merchantGroupId = parseInt(merchantGroupIdParam);
+      filtered = filtered.filter(transaction => {
+        return transaction.merchant_group_id === merchantGroupId;
+      });
+    }
+
+    // Apply category filter if present
+    if (categoryIdParam) {
+      const categoryId = parseInt(categoryIdParam);
+      filtered = filtered.filter(transaction => {
+        return transaction.splits.some(split => split.category_id === categoryId);
+      });
+    }
+
+    // Apply date range filter if present (inclusive of both start and end dates)
+    if (startDateParam || endDateParam) {
+      filtered = filtered.filter(transaction => {
+        const transactionDate = transaction.date; // YYYY-MM-DD format
+        if (startDateParam && transactionDate < startDateParam) return false;
+        if (endDateParam && transactionDate > endDateParam) return false;
+        return true;
       });
     }
 
@@ -124,7 +176,7 @@ export default function TransactionsPage() {
 
       return false;
     });
-  }, [transactions, categories, searchQuery, merchantFilter]);
+  }, [transactions, categories, searchQuery, merchantFilter, merchantGroupIdParam, categoryIdParam, startDateParam, endDateParam]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -134,22 +186,48 @@ export default function TransactionsPage() {
     router.push('/transactions');
   };
 
+  const handleClearFilters = () => {
+    router.push('/transactions');
+  };
+
+  const hasFilters = merchantFilter || merchantGroupIdParam || categoryIdParam || startDateParam || endDateParam;
+  const selectedCategory = categoryIdParam ? categories.find(c => c.id === parseInt(categoryIdParam)) : null;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Transactions</h1>
-          {merchantFilter && (
-            <p className="text-muted-foreground mt-1">
-              Filtered by merchant: {merchantFilter}
-            </p>
+          {hasFilters && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {merchantFilter && (
+                <Badge variant="secondary">
+                  Merchant: {merchantFilter}
+                </Badge>
+              )}
+              {merchantGroupName && (
+                <Badge variant="secondary">
+                  Merchant Group: {merchantGroupName}
+                </Badge>
+              )}
+              {selectedCategory && (
+                <Badge variant="secondary">
+                  Category: {selectedCategory.name}
+                </Badge>
+              )}
+              {(startDateParam || endDateParam) && (
+                <Badge variant="secondary">
+                  Date: {startDateParam || '...'} to {endDateParam || '...'}
+                </Badge>
+              )}
+            </div>
           )}
         </div>
         <div className="flex gap-2">
-          {merchantFilter && (
-            <Button variant="outline" onClick={handleClearMerchantFilter}>
+          {hasFilters && (
+            <Button variant="outline" onClick={handleClearFilters}>
               <X className="mr-2 h-4 w-4" />
-              Clear Filter
+              Clear Filters
             </Button>
           )}
           <Button variant="outline" asChild>
