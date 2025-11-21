@@ -44,6 +44,8 @@ export default function DataBackup() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importConfirmText, setImportConfirmText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState('');
+  const [showProgressDialog, setShowProgressDialog] = useState(false);
 
   // Fetch backups
   const fetchBackups = async () => {
@@ -208,10 +210,17 @@ export default function DataBackup() {
     }
 
     setIsImporting(true);
+    setShowImportDialog(false);
+    setShowProgressDialog(true);
+    setImportProgress('Reading backup file...');
+
     try {
       // Read the file
       const fileContent = await importFile.text();
       const backupData = JSON.parse(fileContent);
+
+      setImportProgress('Deleting existing data...');
+      await new Promise(resolve => setTimeout(resolve, 100)); // Small delay for UI update
 
       // Send to API
       const response = await fetch('/api/backups/import', {
@@ -224,8 +233,7 @@ export default function DataBackup() {
 
       if (!response.ok) throw new Error('Failed to import backup');
 
-      toast.success('Backup imported successfully! Refreshing page...');
-      setShowImportDialog(false);
+      setImportProgress('Import complete! Refreshing page...');
 
       // Refresh the page after a short delay
       setTimeout(() => {
@@ -235,6 +243,7 @@ export default function DataBackup() {
       console.error('Error importing backup:', error);
       toast.error('Failed to import backup. Please check the file format.');
       setIsImporting(false);
+      setShowProgressDialog(false);
     }
   };
 
@@ -432,6 +441,29 @@ export default function DataBackup() {
               Import Backup
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Progress Dialog - Cannot be dismissed */}
+      <AlertDialog open={showProgressDialog}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Importing Backup...
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <p className="mb-4">
+                Please wait while we import your data. This may take a few moments.
+              </p>
+              <p className="text-sm font-medium text-foreground">
+                {importProgress}
+              </p>
+              <p className="mt-4 text-sm text-muted-foreground">
+                Do not close this window or navigate away from this page.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
         </AlertDialogContent>
       </AlertDialog>
     </>
