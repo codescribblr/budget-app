@@ -33,17 +33,32 @@ import {
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import SignOutButton from "@/components/auth/SignOutButton"
 
-const navigationItems = [
-  { label: "Dashboard", path: "/", icon: LayoutDashboard },
-  { label: "Transactions", path: "/transactions", icon: Receipt },
-  { label: "Import", path: "/import", icon: Upload },
-  { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
-  { label: "Reports", path: "/reports", icon: FileText },
-  { label: "Trends", path: "/reports/trends", icon: TrendingUp },
-  { label: "Income", path: "/income", icon: DollarSign },
-  { label: "Merchants", path: "/merchants", icon: Store },
-  { label: "Category Rules", path: "/category-rules", icon: FolderTree },
-  { label: "Settings", path: "/settings", icon: Settings },
+const navigationSections = [
+  {
+    label: "General",
+    items: [
+      { label: "Dashboard", path: "/", icon: LayoutDashboard },
+      { label: "Transactions", path: "/transactions", icon: Receipt },
+      { label: "Import", path: "/import", icon: Upload },
+      { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
+      { label: "Income", path: "/income", icon: DollarSign },
+    ],
+  },
+  {
+    label: "Reports",
+    items: [
+      { label: "Overview", path: "/reports", icon: FileText },
+      { label: "Trends", path: "/reports/trends", icon: TrendingUp },
+    ],
+  },
+  {
+    label: "Other",
+    items: [
+      { label: "Merchants", path: "/merchants", icon: Store },
+      { label: "Category Rules", path: "/category-rules", icon: FolderTree },
+      { label: "Settings", path: "/settings", icon: Settings },
+    ],
+  },
 ]
 
 export function AppSidebar() {
@@ -81,29 +96,31 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navigationItems.map((item) => {
-                const Icon = item.icon
-                const active = isActive(item.path)
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      onClick={() => router.push(item.path)}
-                      isActive={active}
-                      tooltip={item.label}
-                    >
-                      <Icon />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {navigationSections.map((section) => (
+          <SidebarGroup key={section.label}>
+            <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {section.items.map((item) => {
+                  const Icon = item.icon
+                  const active = isActive(item.path)
+                  return (
+                    <SidebarMenuItem key={item.path}>
+                      <SidebarMenuButton
+                        onClick={() => router.push(item.path)}
+                        isActive={active}
+                        tooltip={item.label}
+                      >
+                        <Icon />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
