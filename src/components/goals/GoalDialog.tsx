@@ -6,11 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { GoalWithDetails, CreateGoalRequest, Account, CreditCard, Loan } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { AlertCircle, Info } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface GoalDialogProps {
   isOpen: boolean;
@@ -22,7 +24,7 @@ interface GoalDialogProps {
 export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDialogProps) {
   const [name, setName] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
-  const [targetDate, setTargetDate] = useState('');
+  const [targetDate, setTargetDate] = useState<Date | undefined>(undefined);
   const [goalType, setGoalType] = useState<'envelope' | 'account-linked' | 'debt-paydown'>('envelope');
   const [monthlyContribution, setMonthlyContribution] = useState('');
   const [linkedAccountId, setLinkedAccountId] = useState<string>('');
@@ -46,7 +48,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         // Edit mode
         setName(goal.name);
         setTargetAmount(goal.target_amount.toString());
-        setTargetDate(goal.target_date || '');
+        setTargetDate(goal.target_date ? new Date(goal.target_date) : undefined);
         setGoalType(goal.goal_type);
         setMonthlyContribution(goal.monthly_contribution.toString());
         setLinkedAccountId(goal.linked_account_id?.toString() || '');
@@ -62,7 +64,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         // Create mode
         setName('');
         setTargetAmount('');
-        setTargetDate('');
+        setTargetDate(undefined);
         setGoalType('envelope');
         setMonthlyContribution('');
         setLinkedAccountId('');
@@ -130,10 +132,11 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
     }
 
     if (targetDate) {
-      const date = new Date(targetDate);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      if (date < today) {
+      const targetDateCopy = new Date(targetDate);
+      targetDateCopy.setHours(0, 0, 0, 0);
+      if (targetDateCopy < today) {
         toast.error('Target date must be in the future');
         return;
       }
@@ -206,11 +209,11 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         const requestData: CreateGoalRequest = {
           name,
           target_amount: goalType !== 'debt-paydown' ? parseFloat(targetAmount) : undefined,
-          target_date: targetDate || null,
+          target_date: targetDate ? format(targetDate, 'yyyy-MM-dd') : null,
           goal_type: goalType,
           monthly_contribution: parseFloat(monthlyContribution),
-          starting_balance: goalType === 'envelope' && startingBalance 
-            ? parseFloat(startingBalance) 
+          starting_balance: goalType === 'envelope' && startingBalance
+            ? parseFloat(startingBalance)
             : undefined,
           linked_account_id: goalType === 'account-linked' && accountOption === 'existing' && linkedAccountId
             ? parseInt(linkedAccountId)
@@ -366,12 +369,12 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
           {/* Target Date */}
           <div>
             <Label htmlFor="targetDate">Target Date (Optional)</Label>
-            <Input
+            <DatePicker
               id="targetDate"
-              type="date"
-              value={targetDate}
-              onChange={(e) => setTargetDate(e.target.value)}
-              min={new Date().toISOString().split('T')[0]}
+              date={targetDate}
+              onDateChange={setTargetDate}
+              minDate={new Date()}
+              placeholder="Select target date"
             />
             <p className="text-xs text-muted-foreground mt-1">
               When you want to reach this goal

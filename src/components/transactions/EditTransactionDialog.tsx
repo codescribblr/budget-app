@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { Category, TransactionWithSplits, MerchantGroup, Account, CreditCard } from '@/lib/types';
+import { format } from 'date-fns';
 
 interface EditTransactionDialogProps {
   isOpen: boolean;
@@ -27,7 +29,7 @@ export default function EditTransactionDialog({
   categories,
   onSuccess,
 }: EditTransactionDialogProps) {
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState<Date>(new Date());
   const [description, setDescription] = useState('');
   const [merchantGroupId, setMerchantGroupId] = useState<number | null>(null);
   const [merchantGroups, setMerchantGroups] = useState<MerchantGroup[]>([]);
@@ -39,7 +41,7 @@ export default function EditTransactionDialog({
 
   useEffect(() => {
     if (transaction) {
-      setDate(transaction.date.split('T')[0]);
+      setDate(new Date(transaction.date));
       setDescription(transaction.description);
       setMerchantGroupId(transaction.merchant_group_id || null);
       setSelectedAccountId(transaction.account_id || null);
@@ -140,7 +142,7 @@ export default function EditTransactionDialog({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date,
+          date: format(date, 'yyyy-MM-dd'),
           description,
           merchant_group_id: merchantGroupId,
           account_id: selectedAccountId || null,
@@ -170,11 +172,10 @@ export default function EditTransactionDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="date">Date</Label>
-              <Input
+              <DatePicker
                 id="date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+                date={date}
+                onDateChange={(newDate) => setDate(newDate || new Date())}
               />
             </div>
             <div>

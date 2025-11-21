@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { ParsedTransaction, TransactionSplit } from '@/lib/import-types';
 import type { Category, Account, CreditCard } from '@/lib/types';
+import { format } from 'date-fns';
 
 interface TransactionEditDialogProps {
   transaction: ParsedTransaction;
@@ -23,7 +25,7 @@ export default function TransactionEditDialog({
   onSave,
   onClose,
 }: TransactionEditDialogProps) {
-  const [date, setDate] = useState(transaction.date);
+  const [date, setDate] = useState<Date>(new Date(transaction.date));
   const [merchant, setMerchant] = useState(transaction.merchant);
   const [description, setDescription] = useState(transaction.description);
   const [splits, setSplits] = useState<TransactionSplit[]>(
@@ -123,7 +125,7 @@ export default function TransactionEditDialog({
 
     const updated: ParsedTransaction = {
       ...transaction,
-      date,
+      date: format(date, 'yyyy-MM-dd'),
       merchant,
       description,
       account_id: selectedAccountId || null,
@@ -145,11 +147,10 @@ export default function TransactionEditDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="date">Date</Label>
-              <Input
+              <DatePicker
                 id="date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+                date={date}
+                onDateChange={(newDate) => setDate(newDate || new Date())}
               />
             </div>
             <div>

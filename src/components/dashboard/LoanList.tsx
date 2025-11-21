@@ -15,10 +15,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { Loan } from '@/lib/types';
 import { toast } from 'sonner';
 import { Check, X } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface LoanListProps {
   loans: Loan[];
@@ -32,7 +34,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
   const [interestRate, setInterestRate] = useState('');
   const [minimumPayment, setMinimumPayment] = useState('');
   const [paymentDueDate, setPaymentDueDate] = useState('');
-  const [openDate, setOpenDate] = useState('');
+  const [openDate, setOpenDate] = useState<Date | undefined>(undefined);
   const [startingBalance, setStartingBalance] = useState('');
   const [institution, setInstitution] = useState('');
   const [includeInNetWorth, setIncludeInNetWorth] = useState(true);
@@ -51,7 +53,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
     setInterestRate('');
     setMinimumPayment('');
     setPaymentDueDate('');
-    setOpenDate('');
+    setOpenDate(undefined);
     setStartingBalance('');
     setInstitution('');
     setIncludeInNetWorth(true);
@@ -70,7 +72,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
           interest_rate: interestRate ? parseFloat(interestRate) : null,
           minimum_payment: minimumPayment ? parseFloat(minimumPayment) : null,
           payment_due_date: paymentDueDate ? parseInt(paymentDueDate) : null,
-          open_date: openDate || null,
+          open_date: openDate ? format(openDate, 'yyyy-MM-dd') : null,
           starting_balance: startingBalance ? parseFloat(startingBalance) : null,
           institution: institution || null,
           include_in_net_worth: includeInNetWorth,
@@ -104,7 +106,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
           interest_rate: interestRate ? parseFloat(interestRate) : undefined,
           minimum_payment: minimumPayment ? parseFloat(minimumPayment) : undefined,
           payment_due_date: paymentDueDate ? parseInt(paymentDueDate) : undefined,
-          open_date: openDate || undefined,
+          open_date: openDate ? format(openDate, 'yyyy-MM-dd') : undefined,
           starting_balance: startingBalance ? parseFloat(startingBalance) : undefined,
           institution: institution || undefined,
           include_in_net_worth: includeInNetWorth,
@@ -151,7 +153,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
     setInterestRate(loan.interest_rate?.toString() || '');
     setMinimumPayment(loan.minimum_payment?.toString() || '');
     setPaymentDueDate(loan.payment_due_date?.toString() || '');
-    setOpenDate(loan.open_date || '');
+    setOpenDate(loan.open_date ? new Date(loan.open_date) : undefined);
     setStartingBalance(loan.starting_balance?.toString() || '');
     setInstitution(loan.institution || '');
     setIncludeInNetWorth(loan.include_in_net_worth);
@@ -354,11 +356,11 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
             </div>
             <div>
               <Label htmlFor="edit-open-date">Open Date</Label>
-              <Input
+              <DatePicker
                 id="edit-open-date"
-                type="date"
-                value={openDate}
-                onChange={(e) => setOpenDate(e.target.value)}
+                date={openDate}
+                onDateChange={setOpenDate}
+                placeholder="Select open date"
               />
             </div>
             <div>
@@ -464,11 +466,11 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
             </div>
             <div>
               <Label htmlFor="add-open-date">Open Date</Label>
-              <Input
+              <DatePicker
                 id="add-open-date"
-                type="date"
-                value={openDate}
-                onChange={(e) => setOpenDate(e.target.value)}
+                date={openDate}
+                onDateChange={setOpenDate}
+                placeholder="Select open date"
               />
             </div>
             <div>

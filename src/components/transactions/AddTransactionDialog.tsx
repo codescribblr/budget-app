@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { Category, Account, CreditCard } from '@/lib/types';
+import { format } from 'date-fns';
 
 interface AddTransactionDialogProps {
   isOpen: boolean;
@@ -25,7 +27,7 @@ export default function AddTransactionDialog({
   categories,
   onSuccess,
 }: AddTransactionDialogProps) {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<Date>(new Date());
   const [description, setDescription] = useState('');
   const [splits, setSplits] = useState<Split[]>([{ category_id: 0, amount: '' }]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -108,7 +110,7 @@ export default function AddTransactionDialog({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date,
+          date: format(date, 'yyyy-MM-dd'),
           description,
           account_id: selectedAccountId || null,
           credit_card_id: selectedCreditCardId || null,
@@ -120,7 +122,7 @@ export default function AddTransactionDialog({
       });
 
       // Reset form
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(new Date());
       setDescription('');
       setSplits([{ category_id: 0, amount: '' }]);
       setSelectedAccountId(null);
@@ -143,11 +145,10 @@ export default function AddTransactionDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="date">Date</Label>
-              <Input
+              <DatePicker
                 id="date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+                date={date}
+                onDateChange={(newDate) => setDate(newDate || new Date())}
               />
             </div>
             <div>
