@@ -11,6 +11,7 @@ import {
   FileText,
   TrendingUp,
   DollarSign,
+  Target,
   Store,
   FolderTree,
   Settings,
@@ -42,6 +43,7 @@ const navigationSections = [
       { label: "Import", path: "/import", icon: Upload },
       { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
       { label: "Income", path: "/income", icon: DollarSign },
+      { label: "Goals", path: "/goals", icon: Target },
     ],
   },
   {
