@@ -92,7 +92,7 @@ export default function Dashboard() {
         </Card>
 
         <div className="space-y-6">
-          <Card>
+          <Card id="accounts-section">
             <CardHeader>
               <CardTitle>Accounts</CardTitle>
             </CardHeader>
@@ -101,7 +101,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="credit-cards-section">
             <CardHeader>
               <CardTitle>Credit Cards</CardTitle>
             </CardHeader>
@@ -134,7 +134,7 @@ export default function Dashboard() {
             </Card>
           </Collapsible>
 
-          <Card>
+          <Card id="loans-section">
             <CardHeader>
               <CardTitle>Loans</CardTitle>
             </CardHeader>
