@@ -294,47 +294,50 @@ export function CommandPalette() {
               ))}
             </CommandGroup>
           )}
-          {transactions.length > 0 && (
-            <CommandGroup heading="Recent Transactions">
-              {transactions.map((transaction) => {
-                const displayName = transaction.merchant_name || transaction.description
-                const date = new Date(transaction.date).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                })
-                return (
-                  <CommandItem
-                    key={transaction.id}
-                    value={`${displayName} ${transaction.total_amount}`}
-                    onSelect={() => {
-                      runCommand(() => {
-                        // Navigate to transactions page with search query and transaction to edit
-                        const params = new URLSearchParams()
-                        params.set('q', query)
-                        params.set('editId', transaction.id.toString())
-                        router.push(`/transactions?${params.toString()}`)
-                      })
-                    }}
-                  >
-                    <Receipt className="mr-2 h-4 w-4" />
-                    <span className="truncate">{displayName}</span>
-                    <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{date}</span>
-                      <span className={transaction.total_amount < 0 ? 'text-red-500' : ''}>
-                        ${Math.abs(transaction.total_amount).toFixed(2)}
-                      </span>
-                    </span>
+          {query.length >= 3 && (
+            <>
+              {transactionsLoading ? (
+                <CommandGroup heading="Recent Transactions">
+                  <CommandItem disabled>
+                    <span className="text-muted-foreground">Searching...</span>
                   </CommandItem>
-                )
-              })}
-            </CommandGroup>
-          )}
-          {transactionsLoading && query.length >= 3 && (
-            <CommandGroup heading="Recent Transactions">
-              <CommandItem disabled>
-                <span className="text-muted-foreground">Searching...</span>
-              </CommandItem>
-            </CommandGroup>
+                </CommandGroup>
+              ) : transactions.length > 0 ? (
+                <CommandGroup heading="Recent Transactions">
+                  {transactions.map((transaction) => {
+                    const displayName = transaction.merchant_name || transaction.description
+                    const date = new Date(transaction.date).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })
+                    return (
+                      <CommandItem
+                        key={transaction.id}
+                        value={`${displayName} ${transaction.total_amount}`}
+                        onSelect={() => {
+                          runCommand(() => {
+                            // Navigate to transactions page with search query and transaction to edit
+                            const params = new URLSearchParams()
+                            params.set('q', query)
+                            params.set('editId', transaction.id.toString())
+                            router.push(`/transactions?${params.toString()}`)
+                          })
+                        }}
+                      >
+                        <Receipt className="mr-2 h-4 w-4" />
+                        <span className="truncate">{displayName}</span>
+                        <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{date}</span>
+                          <span className={transaction.total_amount < 0 ? 'text-red-500' : ''}>
+                            ${Math.abs(transaction.total_amount).toFixed(2)}
+                          </span>
+                        </span>
+                      </CommandItem>
+                    )
+                  })}
+                </CommandGroup>
+              ) : null}
+            </>
           )}
           {goals.length > 0 && (
             <CommandGroup heading="Goals">
