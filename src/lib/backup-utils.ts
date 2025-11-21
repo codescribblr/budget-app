@@ -6,6 +6,7 @@ export interface UserBackupData {
   accounts: any[];
   categories: any[];
   credit_cards: any[];
+  loans?: any[]; // Added in version 1.2
   transactions: any[];
   transaction_splits: any[];
   imported_transactions: any[];
@@ -32,6 +33,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     { data: accounts },
     { data: categories },
     { data: credit_cards },
+    { data: loans },
     { data: transactions },
     { data: transaction_splits },
     { data: imported_transactions },
@@ -49,6 +51,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     supabase.from('accounts').select('*').eq('user_id', user.id),
     supabase.from('categories').select('*').eq('user_id', user.id),
     supabase.from('credit_cards').select('*').eq('user_id', user.id),
+    supabase.from('loans').select('*').eq('user_id', user.id),
     supabase.from('transactions').select('*').eq('user_id', user.id),
     supabase
       .from('transaction_splits')
@@ -71,11 +74,12 @@ export async function exportUserData(): Promise<UserBackupData> {
   ]);
 
   return {
-    version: '1.1',
+    version: '1.2',
     created_at: new Date().toISOString(),
     accounts: accounts || [],
     categories: categories || [],
     credit_cards: credit_cards || [],
+    loans: loans || [],
     transactions: transactions || [],
     transaction_splits: transaction_splits || [],
     imported_transactions: imported_transactions || [],
@@ -139,7 +143,8 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
   await supabase.from('income_settings').delete().eq('user_id', user.id);
   await supabase.from('settings').delete().eq('user_id', user.id);
   await supabase.from('csv_import_templates').delete().eq('user_id', user.id);
-  await supabase.from('goals').delete().eq('user_id', user.id); // Delete before categories, accounts, and credit_cards (goals depend on these)
+  await supabase.from('goals').delete().eq('user_id', user.id); // Delete before categories, accounts, credit_cards, and loans (goals depend on these)
+  await supabase.from('loans').delete().eq('user_id', user.id);
   await supabase.from('credit_cards').delete().eq('user_id', user.id);
   await supabase.from('categories').delete().eq('user_id', user.id);
   await supabase.from('accounts').delete().eq('user_id', user.id);
@@ -157,9 +162,13 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
   if (backupData.credit_cards.length > 0) {
     await supabase.from('credit_cards').insert(backupData.credit_cards);
   }
-  
-  // Insert goals after categories, accounts, and credit_cards
-  // Goals depend on: categories (envelope goals), accounts (account-linked goals), credit_cards (debt-paydown goals)
+
+  if (backupData.loans && backupData.loans.length > 0) {
+    await supabase.from('loans').insert(backupData.loans);
+  }
+
+  // Insert goals after categories, accounts, credit_cards, and loans
+  // Goals depend on: categories (envelope goals), accounts (account-linked goals), credit_cards (debt-paydown goals), loans (loan-paydown goals)
   if (backupData.goals && backupData.goals.length > 0) {
     await supabase.from('goals').insert(backupData.goals);
   }
