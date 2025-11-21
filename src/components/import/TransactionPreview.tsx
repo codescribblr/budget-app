@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/utils';
 import type { ParsedTransaction } from '@/lib/import-types';
-import type { Category } from '@/lib/types';
+import type { Category, Account, CreditCard } from '@/lib/types';
 import TransactionEditDialog from './TransactionEditDialog';
 import ImportConfirmationDialog from './ImportConfirmationDialog';
 import ImportProgressDialog from './ImportProgressDialog';
@@ -22,12 +22,16 @@ interface TransactionPreviewProps {
 
 interface EditingField {
   transactionId: string;
-  field: 'date' | 'amount' | 'category';
+  field: 'date' | 'amount' | 'category' | 'account';
 }
 
 export default function TransactionPreview({ transactions, onImportComplete }: TransactionPreviewProps) {
   const [items, setItems] = useState<ParsedTransaction[]>(transactions);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
+  const [defaultAccountId, setDefaultAccountId] = useState<number | null>(null);
+  const [defaultCreditCardId, setDefaultCreditCardId] = useState<number | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<ParsedTransaction | null>(null);
   const [editingField, setEditingField] = useState<EditingField | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -40,12 +44,83 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
 
   useEffect(() => {
     fetchCategories();
+    fetchAccounts();
+    fetchCreditCards();
   }, []);
+
+  // Update transactions when default account/card changes
+  useEffect(() => {
+    setItems(prevItems => prevItems.map(item => ({
+      ...item,
+      // Only set default if transaction doesn't already have an account/card set
+      account_id: item.account_id !== undefined ? item.account_id : (defaultAccountId || null),
+      credit_card_id: item.credit_card_id !== undefined ? item.credit_card_id : (defaultCreditCardId || null),
+    })));
+  }, [defaultAccountId, defaultCreditCardId]);
 
   const fetchCategories = async () => {
     const response = await fetch('/api/categories?excludeGoals=true');
     const data = await response.json();
     setCategories(data);
+  };
+
+  const fetchAccounts = async () => {
+    const response = await fetch('/api/accounts');
+    const data = await response.json();
+    setAccounts(data);
+  };
+
+  const fetchCreditCards = async () => {
+    const response = await fetch('/api/credit-cards');
+    const data = await response.json();
+    setCreditCards(data);
+  };
+
+  const handleDefaultAccountChange = (value: string) => {
+    if (value === 'none') {
+      setDefaultAccountId(null);
+      setDefaultCreditCardId(null);
+    } else if (value.startsWith('account-')) {
+      setDefaultAccountId(parseInt(value.replace('account-', '')));
+      setDefaultCreditCardId(null);
+    } else if (value.startsWith('card-')) {
+      setDefaultCreditCardId(parseInt(value.replace('card-', '')));
+      setDefaultAccountId(null);
+    }
+  };
+
+  const getDefaultAccountValue = (): string => {
+    if (defaultAccountId) return `account-${defaultAccountId}`;
+    if (defaultCreditCardId) return `card-${defaultCreditCardId}`;
+    return 'none';
+  };
+
+  const handleInlineAccountChange = (transactionId: string, value: string) => {
+    setItems(items.map(item => {
+      if (item.id === transactionId) {
+        if (value === 'none') {
+          return { ...item, account_id: null, credit_card_id: null };
+        } else if (value.startsWith('account-')) {
+          return { ...item, account_id: parseInt(value.replace('account-', '')), credit_card_id: null };
+        } else if (value.startsWith('card-')) {
+          return { ...item, account_id: null, credit_card_id: parseInt(value.replace('card-', '')) };
+        }
+      }
+      return item;
+    }));
+    setEditingField(null);
+  };
+
+  const getAccountDisplayName = (transaction: ParsedTransaction): string => {
+    if (transaction.account_id) {
+      const account = accounts.find(a => a.id === transaction.account_id);
+      return account ? account.name : '—';
+    }
+    if (transaction.credit_card_id) {
+      const card = creditCards.find(c => c.id === transaction.credit_card_id);
+      return card ? card.name : '—';
+    }
+    return '—';
   };
 
   const handleToggleExclude = (id: string) => {
@@ -288,6 +363,40 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
             Import as historical (won&apos;t affect current envelope balances)
           </Label>
         </div>
+
+        <div className="flex items-center space-x-2 pt-2 border-t">
+          <Label htmlFor="default-account" className="text-sm font-medium min-w-[120px]">
+            Default Account/Card:
+          </Label>
+          <Select value={getDefaultAccountValue()} onValueChange={handleDefaultAccountChange}>
+            <SelectTrigger id="default-account" className="w-[250px]">
+              <SelectValue placeholder="None" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              {accounts.length > 0 && (
+                <>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Accounts</div>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={`account-${account.id}`}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </>
+              )}
+              {creditCards.length > 0 && (
+                <>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Credit Cards</div>
+                  {creditCards.map((card) => (
+                    <SelectItem key={card.id} value={`card-${card.id}`}>
+                      {card.name}
+                    </SelectItem>
+                  ))}
+                </>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="border rounded-md">
@@ -299,6 +408,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
               <TableHead>Description</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead>Category</TableHead>
+              <TableHead>Account</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -308,6 +418,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
               const isEditingDate = editingField?.transactionId === transaction.id && editingField?.field === 'date';
               const isEditingAmount = editingField?.transactionId === transaction.id && editingField?.field === 'amount';
               const isEditingCategory = editingField?.transactionId === transaction.id && editingField?.field === 'category';
+              const isEditingAccount = editingField?.transactionId === transaction.id && editingField?.field === 'account';
 
               return (
                 <TableRow
@@ -405,6 +516,58 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                         ) : (
                           <span className="text-muted-foreground">Uncategorized</span>
                         )}
+                      </div>
+                    )}
+                  </TableCell>
+
+                  {/* Account Cell - Inline Editable */}
+                  <TableCell
+                    onClick={() => setEditingField({ transactionId: transaction.id, field: 'account' })}
+                    className="cursor-pointer hover:bg-muted/50"
+                  >
+                    {isEditingAccount ? (
+                      <Select
+                        value={
+                          transaction.account_id
+                            ? `account-${transaction.account_id}`
+                            : transaction.credit_card_id
+                            ? `card-${transaction.credit_card_id}`
+                            : 'none'
+                        }
+                        onValueChange={(value) => handleInlineAccountChange(transaction.id, value)}
+                        onOpenChange={(open) => !open && setEditingField(null)}
+                        open={true}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {accounts.length > 0 && (
+                            <>
+                              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Accounts</div>
+                              {accounts.map((account) => (
+                                <SelectItem key={account.id} value={`account-${account.id}`}>
+                                  {account.name}
+                                </SelectItem>
+                              ))}
+                            </>
+                          )}
+                          {creditCards.length > 0 && (
+                            <>
+                              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Credit Cards</div>
+                              {creditCards.map((card) => (
+                                <SelectItem key={card.id} value={`card-${card.id}`}>
+                                  {card.name}
+                                </SelectItem>
+                              ))}
+                            </>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="text-sm">
+                        {getAccountDisplayName(transaction)}
                       </div>
                     )}
                   </TableCell>

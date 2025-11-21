@@ -42,6 +42,8 @@ export interface Transaction {
   description: string;
   total_amount: number;
   merchant_group_id?: number | null;
+  account_id?: number | null;
+  credit_card_id?: number | null;
   is_historical: boolean;
   created_at: string;
   updated_at: string;
@@ -174,6 +176,8 @@ export interface CreateTransactionRequest {
   date: string;
   description: string;
   is_historical?: boolean;
+  account_id?: number | null;
+  credit_card_id?: number | null;
   splits: {
     category_id: number;
     amount: number;
@@ -184,6 +188,8 @@ export interface UpdateTransactionRequest {
   date?: string;
   description?: string;
   merchant_group_id?: number | null;
+  account_id?: number | null;
+  credit_card_id?: number | null;
   splits?: {
     category_id: number;
     amount: number;
@@ -204,6 +210,8 @@ export interface UpdatePendingCheckRequest {
 export interface TransactionWithSplits extends Transaction {
   splits: (TransactionSplit & { category_name: string })[];
   merchant_name?: string | null;
+  account_name?: string | null;
+  credit_card_name?: string | null;
 }
 
 // Dashboard summary

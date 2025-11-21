@@ -82,6 +82,7 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
               <TableHead className="min-w-[200px]">Description</TableHead>
               <TableHead className="w-32">Merchant</TableHead>
               <TableHead className="min-w-[150px]">Categories</TableHead>
+              <TableHead className="w-32">Account</TableHead>
               <TableHead className="text-right w-24">Amount</TableHead>
               <TableHead className="text-right w-32">Actions</TableHead>
             </TableRow>
@@ -112,6 +113,19 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
                       </Badge>
                     ))}
                   </div>
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-xs">
+                  {transaction.account_name ? (
+                    <Badge variant="outline" className="text-xs">
+                      {transaction.account_name}
+                    </Badge>
+                  ) : transaction.credit_card_name ? (
+                    <Badge variant="outline" className="text-xs">
+                      {transaction.credit_card_name}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-right font-semibold text-sm whitespace-nowrap">
                   {formatCurrency(transaction.total_amount)}

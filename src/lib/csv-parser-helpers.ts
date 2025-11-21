@@ -190,7 +190,11 @@ function parseAmount(amountStr: string): number {
 /**
  * Process transactions: check duplicates and auto-categorize
  */
-export async function processTransactions(transactions: ParsedTransaction[]): Promise<ParsedTransaction[]> {
+export async function processTransactions(
+  transactions: ParsedTransaction[],
+  defaultAccountId?: number | null,
+  defaultCreditCardId?: number | null
+): Promise<ParsedTransaction[]> {
   // Step 1: Check for duplicates within the file itself
   const seenHashes = new Map<string, number>();
   const withinFileDuplicates = new Set<number>();
@@ -253,6 +257,8 @@ export async function processTransactions(transactions: ParsedTransaction[]): Pr
 
     return {
       ...transaction,
+      account_id: transaction.account_id !== undefined ? transaction.account_id : (defaultAccountId || null),
+      credit_card_id: transaction.credit_card_id !== undefined ? transaction.credit_card_id : (defaultCreditCardId || null),
       isDuplicate,
       duplicateType,
       status: isDuplicate || !hasSplits ? 'excluded' : 'pending',

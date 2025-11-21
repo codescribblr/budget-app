@@ -7,6 +7,8 @@ export interface ParsedTransaction {
   originalData: string; // JSON string of original CSV row
   hash: string; // Unique hash for deduplication
   suggestedCategory?: number; // Category ID
+  account_id?: number | null;
+  credit_card_id?: number | null;
   isDuplicate: boolean;
   duplicateType?: 'database' | 'within-file' | null; // Type of duplicate
   duplicateOf?: number; // Transaction ID if duplicate

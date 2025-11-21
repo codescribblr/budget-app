@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/utils';
-import type { Category, TransactionWithSplits, MerchantGroup } from '@/lib/types';
+import type { Category, TransactionWithSplits, MerchantGroup, Account, CreditCard } from '@/lib/types';
 
 interface EditTransactionDialogProps {
   isOpen: boolean;
@@ -32,12 +32,18 @@ export default function EditTransactionDialog({
   const [merchantGroupId, setMerchantGroupId] = useState<number | null>(null);
   const [merchantGroups, setMerchantGroups] = useState<MerchantGroup[]>([]);
   const [splits, setSplits] = useState<Split[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const [selectedCreditCardId, setSelectedCreditCardId] = useState<number | null>(null);
 
   useEffect(() => {
     if (transaction) {
       setDate(transaction.date.split('T')[0]);
       setDescription(transaction.description);
       setMerchantGroupId(transaction.merchant_group_id || null);
+      setSelectedAccountId(transaction.account_id || null);
+      setSelectedCreditCardId(transaction.credit_card_id || null);
       setSplits(
         transaction.splits.map((split) => ({
           category_id: split.category_id,
@@ -61,8 +67,41 @@ export default function EditTransactionDialog({
 
     if (isOpen) {
       fetchMerchantGroups();
+      fetchAccounts();
+      fetchCreditCards();
     }
   }, [isOpen]);
+
+  const fetchAccounts = async () => {
+    const response = await fetch('/api/accounts');
+    const data = await response.json();
+    setAccounts(data);
+  };
+
+  const fetchCreditCards = async () => {
+    const response = await fetch('/api/credit-cards');
+    const data = await response.json();
+    setCreditCards(data);
+  };
+
+  const handleAccountChange = (value: string) => {
+    if (value === 'none') {
+      setSelectedAccountId(null);
+      setSelectedCreditCardId(null);
+    } else if (value.startsWith('account-')) {
+      setSelectedAccountId(parseInt(value.replace('account-', '')));
+      setSelectedCreditCardId(null);
+    } else if (value.startsWith('card-')) {
+      setSelectedCreditCardId(parseInt(value.replace('card-', '')));
+      setSelectedAccountId(null);
+    }
+  };
+
+  const getAccountValue = (): string => {
+    if (selectedAccountId) return `account-${selectedAccountId}`;
+    if (selectedCreditCardId) return `card-${selectedCreditCardId}`;
+    return 'none';
+  };
 
   const handleAddSplit = () => {
     setSplits([...splits, { category_id: 0, amount: '' }]);
@@ -104,6 +143,8 @@ export default function EditTransactionDialog({
           date,
           description,
           merchant_group_id: merchantGroupId,
+          account_id: selectedAccountId || null,
+          credit_card_id: selectedCreditCardId || null,
           splits: validSplits.map(s => ({
             category_id: s.category_id,
             amount: parseFloat(s.amount),
@@ -164,6 +205,38 @@ export default function EditTransactionDialog({
                     {group.display_name}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="account">Account/Card (Optional)</Label>
+            <Select value={getAccountValue()} onValueChange={handleAccountChange}>
+              <SelectTrigger id="account">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {accounts.length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Accounts</div>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={`account-${account.id}`}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
+                {creditCards.length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Credit Cards</div>
+                    {creditCards.map((card) => (
+                      <SelectItem key={card.id} value={`card-${card.id}`}>
+                        {card.name}
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>

@@ -639,13 +639,19 @@ function calculateMonthlyNetIncome(settingsObj: Record<string, string>): number 
 export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
   const { supabase } = await getAuthenticatedUser();
 
-  // Get all transactions with merchant group info
+  // Get all transactions with merchant group, account, and credit card info
   const { data: transactions, error: txError } = await supabase
     .from('transactions')
     .select(`
       *,
       merchant_groups (
         display_name
+      ),
+      accounts (
+        name
+      ),
+      credit_cards (
+        name
       )
     `)
     .order('date', { ascending: false })
@@ -692,10 +698,14 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
     description: transaction.description,
     total_amount: transaction.total_amount,
     merchant_group_id: transaction.merchant_group_id,
+    account_id: transaction.account_id,
+    credit_card_id: transaction.credit_card_id,
     is_historical: transaction.is_historical || false,
     created_at: transaction.created_at,
     updated_at: transaction.updated_at,
     merchant_name: transaction.merchant_groups?.display_name || null,
+    account_name: transaction.accounts?.name || null,
+    credit_card_name: transaction.credit_cards?.name || null,
     splits: splitsByTransaction.get(transaction.id) || [],
   }));
 
@@ -705,13 +715,19 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
 export async function getTransactionById(id: number): Promise<TransactionWithSplits | null> {
   const { supabase } = await getAuthenticatedUser();
 
-  // Get transaction with merchant group info
+  // Get transaction with merchant group, account, and credit card info
   const { data: transaction, error: txError } = await supabase
     .from('transactions')
     .select(`
       *,
       merchant_groups (
         display_name
+      ),
+      accounts (
+        name
+      ),
+      credit_cards (
+        name
       )
     `)
     .eq('id', id)
@@ -747,10 +763,14 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
     description: transaction.description,
     total_amount: transaction.total_amount,
     merchant_group_id: transaction.merchant_group_id,
+    account_id: transaction.account_id,
+    credit_card_id: transaction.credit_card_id,
     is_historical: transaction.is_historical || false,
     created_at: transaction.created_at,
     updated_at: transaction.updated_at,
     merchant_name: (transaction as any).merchant_groups?.display_name || null,
+    account_name: (transaction as any).accounts?.name || null,
+    credit_card_name: (transaction as any).credit_cards?.name || null,
     splits: formattedSplits,
   } as TransactionWithSplits;
 }
@@ -759,9 +779,17 @@ export async function createTransaction(data: {
   date: string;
   description: string;
   is_historical?: boolean;
+  account_id?: number | null;
+  credit_card_id?: number | null;
   splits: { category_id: number; amount: number }[];
 }): Promise<TransactionWithSplits> {
   const { supabase, user } = await getAuthenticatedUser();
+
+  // Validate that only one of account_id or credit_card_id is set
+  if (data.account_id !== null && data.account_id !== undefined && 
+      data.credit_card_id !== null && data.credit_card_id !== undefined) {
+    throw new Error('Transaction cannot be linked to both an account and a credit card');
+  }
 
   const totalAmount = data.splits.reduce((sum, split) => sum + split.amount, 0);
   const isHistorical = data.is_historical || false;
@@ -787,6 +815,8 @@ export async function createTransaction(data: {
       total_amount: totalAmount,
       merchant_group_id: merchantGroupId,
       is_historical: isHistorical,
+      account_id: data.account_id || null,
+      credit_card_id: data.credit_card_id || null,
     })
     .select()
     .single();
@@ -840,6 +870,8 @@ export async function updateTransaction(
     date?: string;
     description?: string;
     merchant_group_id?: number | null;
+    account_id?: number | null;
+    credit_card_id?: number | null;
     splits?: { category_id: number; amount: number }[];
   }
 ): Promise<TransactionWithSplits | null> {
@@ -848,6 +880,15 @@ export async function updateTransaction(
   // Get existing transaction
   const existingTransaction = await getTransactionById(id);
   if (!existingTransaction) return null;
+
+  // Validate that only one of account_id or credit_card_id is set
+  const newAccountId = data.account_id !== undefined ? data.account_id : existingTransaction.account_id;
+  const newCreditCardId = data.credit_card_id !== undefined ? data.credit_card_id : existingTransaction.credit_card_id;
+  
+  if (newAccountId !== null && newAccountId !== undefined && 
+      newCreditCardId !== null && newCreditCardId !== undefined) {
+    throw new Error('Transaction cannot be linked to both an account and a credit card');
+  }
 
   // Reverse old splits (add back to category balances)
   for (const split of existingTransaction.splits) {
@@ -882,6 +923,8 @@ export async function updateTransaction(
       date: newDate,
       description: newDescription,
       merchant_group_id: newMerchantGroupId,
+      account_id: newAccountId || null,
+      credit_card_id: newCreditCardId || null,
       total_amount: newTotalAmount,
       updated_at: new Date().toISOString(),
     })
@@ -1193,6 +1236,8 @@ export async function importTransactions(transactions: any[], isHistorical: bool
       description: txn.description,
       total_amount: totalAmount,
       merchant_group_id: merchantGroupIds[index],
+      account_id: txn.account_id || null,
+      credit_card_id: txn.credit_card_id || null,
       is_historical: isHistorical,
     };
   });
