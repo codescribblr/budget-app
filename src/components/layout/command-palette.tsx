@@ -177,7 +177,9 @@ export function CommandPalette() {
           onValueChange={setQuery}
         />
         <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
+          <CommandEmpty>
+            {isLoading ? 'Loading...' : 'No results found.'}
+          </CommandEmpty>
           <CommandGroup heading="Navigation">
             {navigationItems.map((item) => {
               const Icon = item.icon
@@ -305,7 +307,13 @@ export function CommandPalette() {
                     key={transaction.id}
                     value={`${displayName} ${transaction.total_amount}`}
                     onSelect={() => {
-                      runCommand(() => router.push('/transactions'))
+                      runCommand(() => {
+                        // Navigate to transactions page with search query and transaction to edit
+                        const params = new URLSearchParams()
+                        params.set('q', query)
+                        params.set('editId', transaction.id.toString())
+                        router.push(`/transactions?${params.toString()}`)
+                      })
                     }}
                   >
                     <Receipt className="mr-2 h-4 w-4" />

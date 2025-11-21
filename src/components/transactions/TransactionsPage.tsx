@@ -22,6 +22,7 @@ import { Calendar } from '@/components/ui/calendar';
 import type { TransactionWithSplits, Category, MerchantGroup } from '@/lib/types';
 import TransactionList from './TransactionList';
 import AddTransactionDialog from './AddTransactionDialog';
+import EditTransactionDialog from './EditTransactionDialog';
 import { format } from 'date-fns';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 
@@ -53,6 +54,8 @@ export default function TransactionsPage() {
   const categoryIdParam = searchParams.get('categoryId');
   const startDateParam = searchParams.get('startDate');
   const endDateParam = searchParams.get('endDate');
+  const searchQueryParam = searchParams.get('q');
+  const editIdParam = searchParams.get('editId');
 
   const [transactions, setTransactions] = useState<TransactionWithSplits[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -63,6 +66,8 @@ export default function TransactionsPage() {
   const [merchantGroupName, setMerchantGroupName] = useState<string | null>(null);
   const [startDateObj, setStartDateObj] = useState<Date | undefined>(undefined);
   const [endDateObj, setEndDateObj] = useState<Date | undefined>(undefined);
+  const [editingTransaction, setEditingTransaction] = useState<TransactionWithSplits | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -92,6 +97,31 @@ export default function TransactionsPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Initialize search query from URL parameter
+  useEffect(() => {
+    if (searchQueryParam) {
+      setSearchQuery(searchQueryParam);
+    }
+  }, [searchQueryParam]);
+
+  // Open edit dialog if editId is in URL
+  useEffect(() => {
+    if (editIdParam && transactions.length > 0 && !isEditDialogOpen) {
+      const transactionId = parseInt(editIdParam);
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (transaction) {
+        setEditingTransaction(transaction);
+        setIsEditDialogOpen(true);
+
+        // Remove editId from URL after opening dialog
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('editId');
+        const newUrl = params.toString() ? `/transactions?${params.toString()}` : '/transactions';
+        router.replace(newUrl);
+      }
+    }
+  }, [editIdParam, transactions, isEditDialogOpen, searchParams, router]);
 
   // Initialize date objects from URL parameters
   useEffect(() => {
@@ -459,6 +489,19 @@ export default function TransactionsPage() {
         categories={categories}
         onSuccess={fetchData}
       />
+
+      {editingTransaction && (
+        <EditTransactionDialog
+          isOpen={isEditDialogOpen}
+          onClose={() => {
+            setIsEditDialogOpen(false);
+            setEditingTransaction(null);
+          }}
+          transaction={editingTransaction}
+          categories={categories}
+          onSuccess={fetchData}
+        />
+      )}
     </div>
   );
 }
