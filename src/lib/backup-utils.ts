@@ -227,3 +227,45 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
   }
 }
 
+/**
+ * Import user data from an uploaded file backup
+ * This remaps all user_id fields to the current authenticated user
+ * WARNING: This will DELETE all existing user data and replace it with the backup
+ */
+export async function importUserDataFromFile(backupData: UserBackupData): Promise<void> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  // Remap all user_id fields to the current user
+  const remapUserId = (items: any[]) => {
+    return items.map(item => ({
+      ...item,
+      user_id: user.id
+    }));
+  };
+
+  // Create a new backup data object with remapped user_ids
+  const remappedBackupData: UserBackupData = {
+    ...backupData,
+    accounts: remapUserId(backupData.accounts || []),
+    categories: remapUserId(backupData.categories || []),
+    credit_cards: remapUserId(backupData.credit_cards || []),
+    loans: remapUserId(backupData.loans || []),
+    transactions: remapUserId(backupData.transactions || []),
+    transaction_splits: backupData.transaction_splits || [],
+    imported_transactions: remapUserId(backupData.imported_transactions || []),
+    imported_transaction_links: backupData.imported_transaction_links || [],
+    merchant_groups: remapUserId(backupData.merchant_groups || []),
+    merchant_mappings: remapUserId(backupData.merchant_mappings || []),
+    merchant_category_rules: remapUserId(backupData.merchant_category_rules || []),
+    pending_checks: remapUserId(backupData.pending_checks || []),
+    income_settings: remapUserId(backupData.income_settings || []),
+    pre_tax_deductions: remapUserId(backupData.pre_tax_deductions || []),
+    settings: remapUserId(backupData.settings || []),
+    goals: remapUserId(backupData.goals || []),
+    csv_import_templates: remapUserId(backupData.csv_import_templates || []),
+  };
+
+  // Use the existing importUserData function with the remapped data
+  await importUserData(remappedBackupData);
+}
+

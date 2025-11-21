@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
-import { importUserData, UserBackupData } from '@/lib/backup-utils';
+import { importUserDataFromFile, UserBackupData } from '@/lib/backup-utils';
 
 /**
  * POST /api/backups/import
@@ -20,8 +20,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Import the data
-    await importUserData(backupData);
+    // Import the data (remaps user_id to current user)
+    await importUserDataFromFile(backupData);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
