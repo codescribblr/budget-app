@@ -9,6 +9,7 @@ import type {
   Category,
   Account,
   CreditCard,
+  Loan,
   PendingCheck,
   DashboardSummary,
 } from '@/lib/types';
@@ -16,6 +17,7 @@ import { formatCurrency } from '@/lib/utils';
 import CategoryList from './CategoryList';
 import AccountList from './AccountList';
 import CreditCardList from './CreditCardList';
+import LoanList from './LoanList';
 import PendingCheckList from './PendingCheckList';
 import SummaryCards from './SummaryCards';
 import GoalsWidget from './GoalsWidget';
@@ -24,6 +26,7 @@ export default function Dashboard() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
+  const [loans, setLoans] = useState<Loan[]>([]);
   const [pendingChecks, setPendingChecks] = useState<PendingCheck[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,20 +35,22 @@ export default function Dashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [categoriesRes, accountsRes, creditCardsRes, pendingChecksRes, summaryRes] =
+      const [categoriesRes, accountsRes, creditCardsRes, loansRes, pendingChecksRes, summaryRes] =
         await Promise.all([
           fetch('/api/categories'),
           fetch('/api/accounts'),
           fetch('/api/credit-cards'),
+          fetch('/api/loans'),
           fetch('/api/pending-checks'),
           fetch('/api/dashboard'),
         ]);
 
-      const [categoriesData, accountsData, creditCardsData, pendingChecksData, summaryData] =
+      const [categoriesData, accountsData, creditCardsData, loansData, pendingChecksData, summaryData] =
         await Promise.all([
           categoriesRes.json(),
           accountsRes.json(),
           creditCardsRes.json(),
+          loansRes.json(),
           pendingChecksRes.json(),
           summaryRes.json(),
         ]);
@@ -53,6 +58,7 @@ export default function Dashboard() {
       setCategories(categoriesData);
       setAccounts(accountsData);
       setCreditCards(creditCardsData);
+      setLoans(loansData);
       setPendingChecks(pendingChecksData);
       setSummary(summaryData);
     } catch (error) {
@@ -127,6 +133,15 @@ export default function Dashboard() {
               </CollapsibleContent>
             </Card>
           </Collapsible>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Loans</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LoanList loans={loans} onUpdate={fetchData} />
+            </CardContent>
+          </Card>
 
           <GoalsWidget />
         </div>
