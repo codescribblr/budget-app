@@ -529,7 +529,11 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
               <div>
                 <Label htmlFor="debtSelection">Select Debt to Pay Down *</Label>
                 <Select
-                  value={linkedCreditCardId || linkedLoanId || undefined}
+                  value={
+                    linkedCreditCardId ? `cc-${linkedCreditCardId}` :
+                    linkedLoanId ? `loan-${linkedLoanId}` :
+                    undefined
+                  }
                   onValueChange={(value) => {
                     if (value.startsWith('cc-')) {
                       setLinkedCreditCardId(value.replace('cc-', ''));
