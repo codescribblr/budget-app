@@ -32,6 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Loader2, Search, Trash2, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { parseLocalDate } from '@/lib/date-utils';
 
 interface DuplicateGroup {
   amount: number;
@@ -144,12 +145,12 @@ export default function DuplicateTransactionFinder() {
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
-    });
+    const date = parseLocalDate(dateStr);
+    return date?.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    }) || dateStr;
   };
 
   const isGroupFullySelected = (group: DuplicateGroup) => {

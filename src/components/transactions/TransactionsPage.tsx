@@ -23,6 +23,7 @@ import type { TransactionWithSplits, Category, MerchantGroup } from '@/lib/types
 import TransactionList from './TransactionList';
 import AddTransactionDialog from './AddTransactionDialog';
 import { format } from 'date-fns';
+import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 
 // Fuzzy search function
 function fuzzyMatch(text: string, search: string): boolean {
@@ -95,12 +96,12 @@ export default function TransactionsPage() {
   // Initialize date objects from URL parameters
   useEffect(() => {
     if (startDateParam) {
-      setStartDateObj(new Date(startDateParam));
+      setStartDateObj(parseLocalDate(startDateParam));
     } else {
       setStartDateObj(undefined);
     }
     if (endDateParam) {
-      setEndDateObj(new Date(endDateParam));
+      setEndDateObj(parseLocalDate(endDateParam));
     } else {
       setEndDateObj(undefined);
     }

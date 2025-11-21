@@ -16,6 +16,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import EditTransactionDialog from './EditTransactionDialog';
 import { toast } from 'sonner';
+import { parseLocalDate } from '@/lib/date-utils';
 
 interface TransactionListProps {
   transactions: TransactionWithSplits[];
@@ -58,10 +59,11 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    const date = parseLocalDate(dateString);
+    return date?.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-    });
+    }) || dateString;
   };
 
   if (transactions.length === 0) {
@@ -182,7 +184,7 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
                     {transactionToDelete.description}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Date: {new Date(transactionToDelete.date).toLocaleDateString()} • Amount: {formatCurrency(transactionToDelete.total_amount)}
+                    Date: {parseLocalDate(transactionToDelete.date)?.toLocaleDateString()} • Amount: {formatCurrency(transactionToDelete.total_amount)}
                   </p>
                 </>
               )}
