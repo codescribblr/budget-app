@@ -29,7 +29,17 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command"
-import type { Category, Account, CreditCard, Loan, TransactionWithSplits } from "@/lib/types"
+import type { Category, Account, CreditCard, Loan, TransactionWithSplits, GoalWithDetails } from "@/lib/types"
+
+// Settings items for search
+const settingsItems = [
+  { label: "Data Backup & Restore", path: "/settings", section: "backup", keywords: "backup restore export import data" },
+  { label: "Merchant Groups", path: "/merchants", section: null, keywords: "merchant groups manage" },
+  { label: "Category Rules", path: "/category-rules", section: null, keywords: "category rules auto categorize" },
+  { label: "Duplicate Transactions", path: "/settings", section: "duplicates", keywords: "duplicate transactions find delete" },
+  { label: "Clear All Data", path: "/settings", section: "clear-data", keywords: "clear delete all data reset" },
+  { label: "Delete Account", path: "/settings", section: "delete-account", keywords: "delete account close" },
+]
 
 // Simple debounce hook
 function useDebounce<T extends (...args: any[]) => any>(
@@ -72,6 +82,7 @@ export function CommandPalette() {
   const [accounts, setAccounts] = React.useState<Account[]>([])
   const [creditCards, setCreditCards] = React.useState<CreditCard[]>([])
   const [loans, setLoans] = React.useState<Loan[]>([])
+  const [goals, setGoals] = React.useState<GoalWithDetails[]>([])
   const [transactions, setTransactions] = React.useState<TransactionWithSplits[]>([])
   const [isLoading, setIsLoading] = React.useState(false)
   const [transactionsLoading, setTransactionsLoading] = React.useState(false)
@@ -100,14 +111,16 @@ export function CommandPalette() {
         fetch('/api/accounts').then(res => res.json()),
         fetch('/api/credit-cards').then(res => res.json()),
         fetch('/api/loans').then(res => res.json()),
+        fetch('/api/goals').then(res => res.json()),
       ])
-        .then(([categoriesData, accountsData, creditCardsData, loansData]) => {
+        .then(([categoriesData, accountsData, creditCardsData, loansData, goalsData]) => {
           // Filter out system categories
           const nonSystemCategories = categoriesData.filter((cat: Category) => !cat.is_system)
           setCategories(nonSystemCategories)
           setAccounts(accountsData)
           setCreditCards(creditCardsData)
           setLoans(loansData)
+          setGoals(goalsData)
         })
         .catch(err => console.error('Error loading search data:', err))
         .finally(() => setIsLoading(false))
@@ -308,6 +321,53 @@ export function CommandPalette() {
               <CommandItem disabled>
                 <span className="text-muted-foreground">Searching...</span>
               </CommandItem>
+            </CommandGroup>
+          )}
+          {goals.length > 0 && (
+            <CommandGroup heading="Goals">
+              {goals.map((goal) => {
+                const progress = goal.progress_percentage || 0
+                return (
+                  <CommandItem
+                    key={goal.id}
+                    value={goal.name}
+                    onSelect={() => {
+                      runCommand(() => router.push('/goals'))
+                    }}
+                  >
+                    <Target className="mr-2 h-4 w-4" />
+                    <span>{goal.name}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {progress.toFixed(0)}% complete
+                    </span>
+                  </CommandItem>
+                )
+              })}
+            </CommandGroup>
+          )}
+          {settingsItems.length > 0 && (
+            <CommandGroup heading="Settings">
+              {settingsItems.map((item) => (
+                <CommandItem
+                  key={item.path + item.section}
+                  value={`${item.label} ${item.keywords}`}
+                  onSelect={() => {
+                    runCommand(() => {
+                      router.push(item.path)
+                      // Scroll to section if specified
+                      if (item.section) {
+                        setTimeout(() => {
+                          const element = document.getElementById(item.section)
+                          element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                        }, 100)
+                      }
+                    })
+                  }}
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>{item.label}</span>
+                </CommandItem>
+              ))}
             </CommandGroup>
           )}
         </CommandList>

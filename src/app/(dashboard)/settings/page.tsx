@@ -158,7 +158,7 @@ export default function SettingsPage() {
       <h1 className="text-2xl md:text-3xl font-bold">Account Settings</h1>
 
       {/* Duplicate Transaction Finder */}
-      <div className="mb-6">
+      <div id="duplicates" className="mb-6">
         <DuplicateTransactionFinder />
       </div>
 
@@ -168,7 +168,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Data Backup Section */}
-      <div className="mb-6">
+      <div id="backup" className="mb-6">
         <DataBackup />
       </div>
 
@@ -238,7 +238,7 @@ export default function SettingsPage() {
 
           <Separator />
 
-          <div>
+          <div id="clear-data">
             <h3 className="font-semibold mb-2 text-destructive">Clear All Data</h3>
             <p className="text-sm text-muted-foreground mb-3">
               Delete all your categories, accounts, transactions, and other data. This cannot be undone.
@@ -255,7 +255,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Danger Zone */}
-      <Card className="border-destructive">
+      <Card id="delete-account" className="border-destructive">
         <CardHeader>
           <CardTitle className="text-destructive">Danger Zone</CardTitle>
           <CardDescription>Irreversible account actions</CardDescription>
