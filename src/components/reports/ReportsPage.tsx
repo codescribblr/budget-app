@@ -10,11 +10,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { DatePicker } from '@/components/ui/date-picker';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import SpendingByCategory from './SpendingByCategory';
 import SpendingPieChart from './SpendingPieChart';
 import TransactionsByMerchant from './TransactionsByMerchant';
 import { X } from 'lucide-react';
+import { format, parse } from 'date-fns';
 
 interface MerchantGroupStat {
   group_id: number;
@@ -303,30 +305,30 @@ export default function ReportsPage() {
               </div>
               <div>
                 <Label htmlFor="start-date">Start Date</Label>
-                <Input
+                <DatePicker
                   id="start-date"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => {
-                    const newStartDate = e.target.value;
+                  date={startDate ? parse(startDate, 'yyyy-MM-dd', new Date()) : undefined}
+                  onDateChange={(date) => {
+                    const newStartDate = date ? format(date, 'yyyy-MM-dd') : '';
                     setStartDate(newStartDate);
                     setDateRange('custom');
                     updateURL(newStartDate, endDate, 'custom', selectedCategoryId);
                   }}
+                  placeholder="Select start date"
                 />
               </div>
               <div>
                 <Label htmlFor="end-date">End Date</Label>
-                <Input
+                <DatePicker
                   id="end-date"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => {
-                    const newEndDate = e.target.value;
+                  date={endDate ? parse(endDate, 'yyyy-MM-dd', new Date()) : undefined}
+                  onDateChange={(date) => {
+                    const newEndDate = date ? format(date, 'yyyy-MM-dd') : '';
                     setEndDate(newEndDate);
                     setDateRange('custom');
                     updateURL(startDate, newEndDate, 'custom', selectedCategoryId);
                   }}
+                  placeholder="Select end date"
                 />
               </div>
             </div>

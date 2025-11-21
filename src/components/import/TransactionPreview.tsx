@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { ParsedTransaction } from '@/lib/import-types';
 import type { Category, Account, CreditCard } from '@/lib/types';
@@ -14,6 +15,7 @@ import TransactionEditDialog from './TransactionEditDialog';
 import ImportConfirmationDialog from './ImportConfirmationDialog';
 import ImportProgressDialog from './ImportProgressDialog';
 import { generateTransactionHash } from '@/lib/csv-parser';
+import { format, parse } from 'date-fns';
 
 interface TransactionPreviewProps {
   transactions: ParsedTransaction[];
@@ -435,18 +437,21 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                 >
                   {/* Date Cell - Inline Editable */}
                   <TableCell
-                    onClick={() => setEditingField({ transactionId: transaction.id, field: 'date' })}
+                    onClick={() => !isEditingDate && setEditingField({ transactionId: transaction.id, field: 'date' })}
                     className="cursor-pointer hover:bg-muted/50 min-w-[120px]"
                   >
                     {isEditingDate ? (
-                      <Input
-                        type="date"
-                        value={transaction.date}
-                        onChange={(e) => handleInlineDateChange(transaction.id, e.target.value)}
-                        onBlur={() => setEditingField(null)}
-                        autoFocus
-                        className="h-8"
-                      />
+                      <div onBlur={() => setEditingField(null)}>
+                        <DatePicker
+                          date={parse(transaction.date, 'yyyy-MM-dd', new Date())}
+                          onDateChange={(date) => {
+                            if (date) {
+                              handleInlineDateChange(transaction.id, format(date, 'yyyy-MM-dd'));
+                            }
+                            setEditingField(null);
+                          }}
+                        />
+                      </div>
                     ) : (
                       transaction.date
                     )}
