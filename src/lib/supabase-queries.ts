@@ -136,13 +136,41 @@ export async function updateCategory(
 
 export async function deleteCategory(id: number): Promise<void> {
   const { supabase } = await getAuthenticatedUser();
-  
+
   const { error } = await supabase
     .from('categories')
     .delete()
     .eq('id', id);
-  
+
   if (error) throw error;
+}
+
+export async function updateCategoriesOrder(
+  categoryOrders: Array<{ id: number; sort_order: number }>
+): Promise<void> {
+  const { supabase } = await getAuthenticatedUser();
+
+  // Update each category's sort_order
+  // Note: Supabase doesn't support batch updates in a single query,
+  // so we'll update them individually
+  const updatePromises = categoryOrders.map(({ id, sort_order }) =>
+    supabase
+      .from('categories')
+      .update({
+        sort_order,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+  );
+
+  const results = await Promise.all(updatePromises);
+
+  // Check if any updates failed
+  const errors = results.filter(result => result.error);
+  if (errors.length > 0) {
+    console.error('Failed to update some categories:', errors);
+    throw new Error('Failed to update category order');
+  }
 }
 
 // =====================================================

@@ -19,12 +19,214 @@ import {
 import { formatCurrency } from '@/lib/utils';
 import type { Category, DashboardSummary } from '@/lib/types';
 import { toast } from 'sonner';
-import { Check, X, Settings } from 'lucide-react';
+import { Check, X, Settings, GripVertical, Save } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface CategoryListProps {
   categories: Category[];
   summary: DashboardSummary | null;
   onUpdate: () => void;
+}
+
+interface SortableRowProps {
+  category: Category;
+  spent: number;
+  budget: number;
+  remaining: number;
+  percentUsed: number;
+  isReorderMode: boolean;
+  editingBalanceId: number | null;
+  editingBalanceValue: string;
+  setEditingBalanceValue: (value: string) => void;
+  startEditingBalance: (category: Category) => void;
+  saveInlineBalance: (categoryId: number) => void;
+  cancelEditingBalance: () => void;
+  openEditDialog: (category: Category) => void;
+  handleDeleteCategory: (category: Category) => void;
+  getBudgetStatusColor: (percentUsed: number) => string;
+  getProgressBarColor: (percentUsed: number) => string;
+}
+
+function SortableRow({
+  category,
+  spent,
+  budget,
+  remaining,
+  percentUsed,
+  isReorderMode,
+  editingBalanceId,
+  editingBalanceValue,
+  setEditingBalanceValue,
+  startEditingBalance,
+  saveInlineBalance,
+  cancelEditingBalance,
+  openEditDialog,
+  handleDeleteCategory,
+  getBudgetStatusColor,
+  getProgressBarColor,
+}: SortableRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: category.id, disabled: !isReorderMode });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <TableRow ref={setNodeRef} style={style} {...attributes}>
+      {isReorderMode && (
+        <TableCell className="w-[10%]">
+          <div
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+          >
+            <GripVertical className="h-5 w-5" />
+          </div>
+        </TableCell>
+      )}
+      <TableCell className="font-medium">
+        <a
+          href={`/reports?category=${category.id}`}
+          className="hover:underline cursor-pointer"
+        >
+          {category.name}
+        </a>
+      </TableCell>
+      <TableCell>
+        {budget > 0 ? (
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs">
+              <span className={getBudgetStatusColor(percentUsed)}>
+                {percentUsed.toFixed(0)}% used
+              </span>
+              <span className="text-muted-foreground">
+                {formatCurrency(remaining)} left
+              </span>
+            </div>
+            <div className="relative">
+              <Progress
+                value={Math.min(percentUsed, 100)}
+                className="h-2"
+              />
+              <div
+                className={`absolute top-0 left-0 h-2 rounded-full transition-all ${getProgressBarColor(percentUsed)}`}
+                style={{ width: `${Math.min(percentUsed, 100)}%` }}
+              />
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">No budget set</span>
+        )}
+      </TableCell>
+      <TableCell className="text-right">
+        {category.notes ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-help">
+                  {formatCurrency(category.monthly_amount)}*
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="max-w-xs whitespace-pre-wrap">{category.notes}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          formatCurrency(category.monthly_amount)
+        )}
+      </TableCell>
+      <TableCell className="text-right font-semibold">
+        {editingBalanceId === category.id ? (
+          <div className="flex items-center justify-end gap-1">
+            <Input
+              type="number"
+              step="0.01"
+              value={editingBalanceValue}
+              onChange={(e) => setEditingBalanceValue(e.target.value)}
+              className="w-28 h-8 text-right"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  saveInlineBalance(category.id);
+                } else if (e.key === 'Escape') {
+                  cancelEditingBalance();
+                }
+              }}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => saveInlineBalance(category.id)}
+            >
+              <Check className="h-4 w-4 text-green-600" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={cancelEditingBalance}
+            >
+              <X className="h-4 w-4 text-red-600" />
+            </Button>
+          </div>
+        ) : (
+          <span
+            className={`cursor-pointer hover:bg-muted px-2 py-1 rounded ${category.current_balance < 0 ? 'text-red-600' : ''}`}
+            onClick={() => startEditingBalance(category)}
+            title="Click to edit balance"
+          >
+            {formatCurrency(category.current_balance)}
+          </span>
+        )}
+      </TableCell>
+      <TableCell className="text-right">
+        {!isReorderMode && (
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => openEditDialog(category)}
+            >
+              Edit
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDeleteCategory(category)}
+            >
+              Delete
+            </Button>
+          </div>
+        )}
+      </TableCell>
+    </TableRow>
+  );
 }
 
 export default function CategoryList({ categories, summary, onUpdate }: CategoryListProps) {
@@ -48,6 +250,11 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
   // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+
+  // Reorder mode state
+  const [isReorderMode, setIsReorderMode] = useState(false);
+  const [reorderedCategories, setReorderedCategories] = useState<Category[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Fetch monthly spending on mount and when categories change
   useEffect(() => {
@@ -231,157 +438,165 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
     }
   };
 
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle reorder mode
+  const handleEnterReorderMode = () => {
+    setIsReorderMode(true);
+    setReorderedCategories([...envelopeCategories]);
+  };
+
+  const handleCancelReorder = () => {
+    setIsReorderMode(false);
+    setReorderedCategories([]);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setReorderedCategories((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
+  const handleSaveReorder = async () => {
+    try {
+      setIsSaving(true);
+
+      // Create array of category IDs with new sort_order
+      const categoryOrders = reorderedCategories.map((category, index) => ({
+        id: category.id,
+        sort_order: index,
+      }));
+
+      const response = await fetch('/api/categories/reorder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryOrders }),
+      });
+
+      if (!response.ok) throw new Error('Failed to save category order');
+
+      toast.success('Category order saved');
+      setIsReorderMode(false);
+      setReorderedCategories([]);
+      onUpdate();
+    } catch (error) {
+      console.error('Error saving category order:', error);
+      toast.error('Failed to save category order');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <>
       <div className="flex flex-col h-full">
-        {/* Add Category Button */}
-        <div className="mb-3">
-          <Button onClick={openAddDialog} size="sm">
+        {/* Action Buttons */}
+        <div className="mb-3 flex gap-2 justify-between">
+          <Button onClick={openAddDialog} size="sm" disabled={isReorderMode}>
             Add Category
           </Button>
+
+          {!isReorderMode ? (
+            <Button
+              onClick={handleEnterReorderMode}
+              size="sm"
+              variant="outline"
+              disabled={envelopeCategories.length <= 1}
+            >
+              <GripVertical className="mr-2 h-4 w-4" />
+              Reorder
+            </Button>
+          ) : (
+            <div className="flex gap-2">
+              <Button
+                onClick={handleSaveReorder}
+                size="sm"
+                disabled={isSaving}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {isSaving ? 'Saving...' : 'Save'}
+              </Button>
+              <Button
+                onClick={handleCancelReorder}
+                size="sm"
+                variant="outline"
+                disabled={isSaving}
+              >
+                <X className="mr-2 h-4 w-4" />
+                Cancel
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Scrollable categories section */}
         <div className="flex-1 overflow-y-auto">
-          <Table>
-            <TableHeader className="sticky top-0 bg-background z-10">
-              <TableRow>
-                <TableHead className="w-[30%]">Category</TableHead>
-                <TableHead className="w-[30%]">Budget Progress</TableHead>
-                <TableHead className="text-right w-[15%]">Monthly</TableHead>
-                <TableHead className="text-right w-[15%]">Balance</TableHead>
-                <TableHead className="text-right w-[10%]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {envelopeCategories.map((category) => {
-                const spent = monthlySpending[category.id] || 0;
-                const budget = category.monthly_amount;
-                const remaining = budget - spent;
-                const percentUsed = budget > 0 ? (spent / budget) * 100 : 0;
-
-                return (
-                  <TableRow key={category.id}>
-                    <TableCell className="font-medium">
-                      <a
-                        href={`/reports?category=${category.id}`}
-                        className="hover:underline cursor-pointer"
-                      >
-                        {category.name}
-                      </a>
-                    </TableCell>
-                    <TableCell>
-                      {budget > 0 ? (
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span className={getBudgetStatusColor(percentUsed)}>
-                              {percentUsed.toFixed(0)}% used
-                            </span>
-                            <span className="text-muted-foreground">
-                              {formatCurrency(remaining)} left
-                            </span>
-                          </div>
-                          <div className="relative">
-                            <Progress
-                              value={Math.min(percentUsed, 100)}
-                              className="h-2"
-                            />
-                            <div
-                              className={`absolute top-0 left-0 h-2 rounded-full transition-all ${getProgressBarColor(percentUsed)}`}
-                              style={{ width: `${Math.min(percentUsed, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">No budget set</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {category.notes ? (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="cursor-help">
-                                {formatCurrency(category.monthly_amount)}*
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="max-w-xs whitespace-pre-wrap">{category.notes}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ) : (
-                        formatCurrency(category.monthly_amount)
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold">
-                      {editingBalanceId === category.id ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={editingBalanceValue}
-                            onChange={(e) => setEditingBalanceValue(e.target.value)}
-                            className="w-28 h-8 text-right"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                saveInlineBalance(category.id);
-                              } else if (e.key === 'Escape') {
-                                cancelEditingBalance();
-                              }
-                            }}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            onClick={() => saveInlineBalance(category.id)}
-                          >
-                            <Check className="h-4 w-4 text-green-600" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            onClick={cancelEditingBalance}
-                          >
-                            <X className="h-4 w-4 text-red-600" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <span
-                          className={`cursor-pointer hover:bg-muted px-2 py-1 rounded ${category.current_balance < 0 ? 'text-red-600' : ''}`}
-                          onClick={() => startEditingBalance(category)}
-                          title="Click to edit balance"
-                        >
-                          {formatCurrency(category.current_balance)}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(category)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteCategory(category)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </TableCell>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={(isReorderMode ? reorderedCategories : envelopeCategories).map(c => c.id)}
+              strategy={verticalListSortingStrategy}
+              disabled={!isReorderMode}
+            >
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableRow>
+                    {isReorderMode && <TableHead className="w-[10%]"></TableHead>}
+                    <TableHead className={isReorderMode ? "w-[25%]" : "w-[30%]"}>Category</TableHead>
+                    <TableHead className={isReorderMode ? "w-[25%]" : "w-[30%]"}>Budget Progress</TableHead>
+                    <TableHead className="text-right w-[15%]">Monthly</TableHead>
+                    <TableHead className="text-right w-[15%]">Balance</TableHead>
+                    <TableHead className="text-right w-[10%]">Actions</TableHead>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                </TableHeader>
+                <TableBody>
+                  {(isReorderMode ? reorderedCategories : envelopeCategories).map((category) => {
+                    const spent = monthlySpending[category.id] || 0;
+                    const budget = category.monthly_amount;
+                    const remaining = budget - spent;
+                    const percentUsed = budget > 0 ? (spent / budget) * 100 : 0;
+
+                    return (
+                      <SortableRow
+                        key={category.id}
+                        category={category}
+                        spent={spent}
+                        budget={budget}
+                        remaining={remaining}
+                        percentUsed={percentUsed}
+                        isReorderMode={isReorderMode}
+                        editingBalanceId={editingBalanceId}
+                        editingBalanceValue={editingBalanceValue}
+                        setEditingBalanceValue={setEditingBalanceValue}
+                        startEditingBalance={startEditingBalance}
+                        saveInlineBalance={saveInlineBalance}
+                        cancelEditingBalance={cancelEditingBalance}
+                        openEditDialog={openEditDialog}
+                        handleDeleteCategory={handleDeleteCategory}
+                        getBudgetStatusColor={getBudgetStatusColor}
+                        getProgressBarColor={getProgressBarColor}
+                      />
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </SortableContext>
+          </DndContext>
         </div>
 
         {/* Fixed totals row at bottom */}
@@ -389,8 +604,9 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
           <Table>
             <TableBody>
               <TableRow className="font-bold">
-                <TableCell className="w-[30%]">Total Budget</TableCell>
-                <TableCell className="w-[30%]"></TableCell>
+                {isReorderMode && <TableCell className="w-[10%]"></TableCell>}
+                <TableCell className={isReorderMode ? "w-[25%]" : "w-[30%]"}>Total Budget</TableCell>
+                <TableCell className={isReorderMode ? "w-[25%]" : "w-[30%]"}></TableCell>
                 <TableCell className={`text-right w-[15%] ${summary && totalMonthly > summary.monthly_net_income ? 'text-red-600' : ''}`}>
                   {formatCurrency(totalMonthly)}
                 </TableCell>
@@ -401,8 +617,9 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
               </TableRow>
               {summary && (
                 <TableRow className="font-medium text-muted-foreground">
-                  <TableCell className="w-[30%]">Available to be budgeted</TableCell>
-                  <TableCell className="w-[30%]"></TableCell>
+                  {isReorderMode && <TableCell className="w-[10%]"></TableCell>}
+                  <TableCell className={isReorderMode ? "w-[25%]" : "w-[30%]"}>Available to be budgeted</TableCell>
+                  <TableCell className={isReorderMode ? "w-[25%]" : "w-[30%]"}></TableCell>
                   <TableCell className={`text-right w-[15%] ${summary.monthly_net_income - totalMonthly < 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {formatCurrency(summary.monthly_net_income)}
                   </TableCell>
