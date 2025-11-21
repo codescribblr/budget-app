@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Loader2, Trash2, HardDrive, RotateCcw } from 'lucide-react';
+import { Loader2, Trash2, HardDrive, RotateCcw, Download, Upload } from 'lucide-react';
 
 interface Backup {
   id: number;
@@ -39,6 +39,11 @@ export default function DataBackup() {
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [restoreBackupId, setRestoreBackupId] = useState<number | null>(null);
   const [restoreConfirmText, setRestoreConfirmText] = useState('');
+
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importConfirmText, setImportConfirmText] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
 
   // Fetch backups
   const fetchBackups = async () => {
@@ -140,6 +145,99 @@ export default function DataBackup() {
     }
   };
 
+  // Download backup as JSON file
+  const handleDownloadBackup = async (id: number) => {
+    try {
+      const response = await fetch(`/api/backups/${id}/export`);
+
+      if (!response.ok) throw new Error('Failed to download backup');
+
+      const backupData = await response.json();
+
+      // Create a blob from the JSON data
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+
+      // Create a download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `budget-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success('Backup downloaded successfully');
+    } catch (error) {
+      console.error('Error downloading backup:', error);
+      toast.error('Failed to download backup');
+    }
+  };
+
+  // Open import dialog
+  const openImportDialog = () => {
+    setImportFile(null);
+    setImportConfirmText('');
+    setShowImportDialog(true);
+  };
+
+  // Handle file selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== 'application/json') {
+        toast.error('Please select a JSON file');
+        return;
+      }
+      setImportFile(file);
+    }
+  };
+
+  // Import backup from file
+  const handleImportFromFile = async () => {
+    if (importConfirmText.toLowerCase() !== 'restore') {
+      toast.error('Please type "restore" to confirm');
+      return;
+    }
+
+    if (!importFile) {
+      toast.error('Please select a file to import');
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      // Read the file
+      const fileContent = await importFile.text();
+      const backupData = JSON.parse(fileContent);
+
+      // Send to API
+      const response = await fetch('/api/backups/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(backupData),
+      });
+
+      if (!response.ok) throw new Error('Failed to import backup');
+
+      toast.success('Backup imported successfully! Refreshing page...');
+      setShowImportDialog(false);
+
+      // Refresh the page after a short delay
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1500);
+    } catch (error) {
+      console.error('Error importing backup:', error);
+      toast.error('Failed to import backup. Please check the file format.');
+      setIsImporting(false);
+    }
+  };
+
   // Format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -166,8 +264,8 @@ export default function DataBackup() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Create Backup Button */}
-          <div>
+          {/* Create Backup and Import Buttons */}
+          <div className="flex gap-2">
             <Button
               onClick={handleCreateBackup}
               disabled={isCreating || isLoading}
@@ -175,10 +273,18 @@ export default function DataBackup() {
               {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Backup
             </Button>
-            <p className="text-sm text-muted-foreground mt-2">
-              {backups.length}/3 backups used
-            </p>
+            <Button
+              variant="outline"
+              onClick={openImportDialog}
+              disabled={isLoading}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Import from File
+            </Button>
           </div>
+          <p className="text-sm text-muted-foreground">
+            {backups.length}/3 backups used
+          </p>
 
           {/* Backups List */}
           {isLoading ? (
@@ -203,6 +309,14 @@ export default function DataBackup() {
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDownloadBackup(backup.id)}
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Download
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -264,6 +378,58 @@ export default function DataBackup() {
             >
               {isRestoring && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Restore Backup
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Import from File Dialog */}
+      <AlertDialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Import Backup from File?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <p className="mb-4">
+                This will <strong>permanently delete all your current data</strong> and replace it with the data from the imported file.
+              </p>
+              <p className="mb-4 text-destructive font-semibold">
+                This action cannot be undone!
+              </p>
+              <div className="mb-4">
+                <Label htmlFor="backup-file">Select Backup File (JSON)</Label>
+                <Input
+                  id="backup-file"
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileChange}
+                  className="mt-2"
+                />
+                {importFile && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Selected: {importFile.name}
+                  </p>
+                )}
+              </div>
+              <p className="mb-2">
+                To confirm, please type <strong>restore</strong> below:
+              </p>
+              <Input
+                value={importConfirmText}
+                onChange={(e) => setImportConfirmText(e.target.value)}
+                placeholder="Type 'restore' to confirm"
+                className="mt-2"
+              />
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isImporting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleImportFromFile}
+              disabled={isImporting || !importFile || importConfirmText.toLowerCase() !== 'restore'}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Import Backup
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
