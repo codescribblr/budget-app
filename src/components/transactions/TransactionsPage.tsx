@@ -312,10 +312,13 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Search and Filter Toolbar */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-2">
+        <CardHeader>
+          <CardTitle>Transaction History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* Search and Filter Toolbar */}
+          <div className="flex items-center gap-2 mb-4">
             {/* Search Input */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -436,18 +439,11 @@ export default function TransactionsPage() {
           </div>
 
           {(searchQuery || hasFilters) && (
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="text-sm text-muted-foreground mb-4">
               Found {filteredTransactions.length} of {transactions.length} transactions
             </p>
           )}
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Transaction History</CardTitle>
-        </CardHeader>
-        <CardContent>
           <TransactionList
             transactions={filteredTransactions}
             categories={categories}
