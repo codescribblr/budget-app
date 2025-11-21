@@ -98,133 +98,14 @@ export async function exportUserData(): Promise<UserBackupData> {
 
 /**
  * Import user data from a JSON backup
+ * This now uses the same ID remapping logic as importUserDataFromFile
+ * to avoid ID conflicts when restoring backups
  * WARNING: This will DELETE all existing user data and replace it with the backup
  */
 export async function importUserData(backupData: UserBackupData): Promise<void> {
-  const { supabase, user } = await getAuthenticatedUser();
-
-  // Start a transaction-like operation by deleting all data first
-  // Delete in reverse order of dependencies
-
-  // First, get all transaction IDs for this user
-  const { data: userTransactions } = await supabase
-    .from('transactions')
-    .select('id')
-    .eq('user_id', user.id);
-
-  const transactionIds = userTransactions?.map(t => t.id) || [];
-
-  // Get all imported transaction IDs for this user
-  const { data: userImportedTransactions } = await supabase
-    .from('imported_transactions')
-    .select('id')
-    .eq('user_id', user.id);
-
-  const importedTransactionIds = userImportedTransactions?.map(t => t.id) || [];
-
-  // Delete in reverse order of dependencies
-  // Delete transaction splits for these transactions
-  if (transactionIds.length > 0) {
-    await supabase.from('transaction_splits').delete().in('transaction_id', transactionIds);
-  }
-
-  // Delete imported transaction links for these imported transactions
-  if (importedTransactionIds.length > 0) {
-    await supabase.from('imported_transaction_links').delete().in('imported_transaction_id', importedTransactionIds);
-  }
-
-  await supabase.from('transactions').delete().eq('user_id', user.id);
-  await supabase.from('imported_transactions').delete().eq('user_id', user.id);
-  await supabase.from('merchant_category_rules').delete().eq('user_id', user.id);
-  await supabase.from('merchant_mappings').delete().eq('user_id', user.id);
-  await supabase.from('merchant_groups').delete().eq('user_id', user.id);
-  await supabase.from('pending_checks').delete().eq('user_id', user.id);
-  await supabase.from('pre_tax_deductions').delete().eq('user_id', user.id);
-  await supabase.from('income_settings').delete().eq('user_id', user.id);
-  await supabase.from('settings').delete().eq('user_id', user.id);
-  await supabase.from('csv_import_templates').delete().eq('user_id', user.id);
-  await supabase.from('goals').delete().eq('user_id', user.id); // Delete before categories, accounts, credit_cards, and loans (goals depend on these)
-  await supabase.from('loans').delete().eq('user_id', user.id);
-  await supabase.from('credit_cards').delete().eq('user_id', user.id);
-  await supabase.from('categories').delete().eq('user_id', user.id);
-  await supabase.from('accounts').delete().eq('user_id', user.id);
-
-  // Insert backup data
-  // Insert in order of dependencies
-  if (backupData.accounts.length > 0) {
-    await supabase.from('accounts').insert(backupData.accounts);
-  }
-  
-  if (backupData.categories.length > 0) {
-    await supabase.from('categories').insert(backupData.categories);
-  }
-  
-  if (backupData.credit_cards.length > 0) {
-    await supabase.from('credit_cards').insert(backupData.credit_cards);
-  }
-
-  if (backupData.loans && backupData.loans.length > 0) {
-    await supabase.from('loans').insert(backupData.loans);
-  }
-
-  // Insert goals after categories, accounts, credit_cards, and loans
-  // Goals depend on: categories (envelope goals), accounts (account-linked goals), credit_cards (debt-paydown goals), loans (loan-paydown goals)
-  if (backupData.goals && backupData.goals.length > 0) {
-    await supabase.from('goals').insert(backupData.goals);
-  }
-  
-  if (backupData.income_settings.length > 0) {
-    await supabase.from('income_settings').insert(backupData.income_settings);
-  }
-  
-  if (backupData.pre_tax_deductions.length > 0) {
-    await supabase.from('pre_tax_deductions').insert(backupData.pre_tax_deductions);
-  }
-  
-  if (backupData.pending_checks.length > 0) {
-    await supabase.from('pending_checks').insert(backupData.pending_checks);
-  }
-  
-  if (backupData.merchant_groups.length > 0) {
-    await supabase.from('merchant_groups').insert(backupData.merchant_groups);
-  }
-  
-  if (backupData.merchant_mappings.length > 0) {
-    await supabase.from('merchant_mappings').insert(backupData.merchant_mappings);
-  }
-
-  if (backupData.merchant_category_rules && backupData.merchant_category_rules.length > 0) {
-    await supabase.from('merchant_category_rules').insert(backupData.merchant_category_rules);
-  }
-
-  if (backupData.transactions.length > 0) {
-    await supabase.from('transactions').insert(backupData.transactions);
-  }
-
-  if (backupData.transaction_splits.length > 0) {
-    // Remove the joined transactions data before inserting
-    const splits = backupData.transaction_splits.map(({ transactions, ...split }) => split);
-    await supabase.from('transaction_splits').insert(splits);
-  }
-
-  if (backupData.imported_transactions && backupData.imported_transactions.length > 0) {
-    await supabase.from('imported_transactions').insert(backupData.imported_transactions);
-  }
-
-  if (backupData.imported_transaction_links && backupData.imported_transaction_links.length > 0) {
-    // Remove the joined imported_transactions data before inserting
-    const links = backupData.imported_transaction_links.map(({ imported_transactions, ...link }) => link);
-    await supabase.from('imported_transaction_links').insert(links);
-  }
-
-  if (backupData.settings && backupData.settings.length > 0) {
-    await supabase.from('settings').insert(backupData.settings);
-  }
-
-  // Insert CSV import templates (if present in backup)
-  if (backupData.csv_import_templates && backupData.csv_import_templates.length > 0) {
-    await supabase.from('csv_import_templates').insert(backupData.csv_import_templates);
-  }
+  // Use the same logic as file import to handle ID remapping
+  // This prevents ID conflicts when restoring older backups
+  await importUserDataFromFile(backupData);
 }
 
 /**
