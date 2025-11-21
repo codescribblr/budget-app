@@ -11,7 +11,6 @@ import CategorySpendingTrends from './trends/CategorySpendingTrends';
 import BudgetVsActualTrend from './trends/BudgetVsActualTrend';
 import SpendingVelocityTrend from './trends/SpendingVelocityTrend';
 import MerchantSpendingTrends from './trends/MerchantSpendingTrends';
-import AppHeader from '@/components/layout/AppHeader';
 
 export default function TrendsPage() {
   const [transactions, setTransactions] = useState<TransactionWithSplits[]>([]);
@@ -79,11 +78,13 @@ export default function TrendsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <AppHeader
-        title="Spending Trends"
-        subtitle="Analyze your spending patterns and trends over time"
-      />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold">Spending Trends</h1>
+        <p className="text-muted-foreground mt-1">
+          Analyze your spending patterns and trends over time
+        </p>
+      </div>
 
       {/* Filters Section */}
       <Card>

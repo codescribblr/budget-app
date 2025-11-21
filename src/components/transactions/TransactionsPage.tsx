@@ -2,16 +2,16 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Search, X } from 'lucide-react';
+import { Search, X, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import TransactionList from './TransactionList';
 import AddTransactionDialog from './AddTransactionDialog';
-import AppHeader from '@/components/layout/AppHeader';
 
 // Fuzzy search function
 function fuzzyMatch(text: string, search: string): boolean {
@@ -135,24 +135,34 @@ export default function TransactionsPage() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <AppHeader
-        title="Transactions"
-        subtitle={merchantFilter ? `Filtered by merchant: ${merchantFilter}` : undefined}
-        actions={
-          <>
-            {merchantFilter && (
-              <Button variant="outline" onClick={handleClearMerchantFilter}>
-                <X className="mr-2 h-4 w-4" />
-                Clear Filter
-              </Button>
-            )}
-            <Button onClick={() => setIsAddDialogOpen(true)}>
-              Add Transaction
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">Transactions</h1>
+          {merchantFilter && (
+            <p className="text-muted-foreground mt-1">
+              Filtered by merchant: {merchantFilter}
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          {merchantFilter && (
+            <Button variant="outline" onClick={handleClearMerchantFilter}>
+              <X className="mr-2 h-4 w-4" />
+              Clear Filter
             </Button>
-          </>
-        }
-      />
+          )}
+          <Button variant="outline" asChild>
+            <Link href="/import">
+              <Upload className="mr-2 h-4 w-4" />
+              Import Transactions
+            </Link>
+          </Button>
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            Add Transaction
+          </Button>
+        </div>
+      </div>
 
       {/* Search Box */}
       <Card>

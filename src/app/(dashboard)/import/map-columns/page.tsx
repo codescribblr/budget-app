@@ -17,7 +17,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import AppHeader from '@/components/layout/AppHeader';
 import type { CSVAnalysisResult, ColumnAnalysis } from '@/lib/column-analyzer';
 import type { ColumnMapping } from '@/lib/mapping-templates';
 import { CheckCircle2, AlertCircle, XCircle, ArrowLeft } from 'lucide-react';
@@ -242,8 +241,8 @@ export default function MapColumnsPage() {
   const previewRows = sampleData.slice(0, 3);
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <AppHeader title="Map CSV Columns" />
+    <div className="space-y-6">
+      <h1 className="text-2xl md:text-3xl font-bold">Map CSV Columns</h1>
       
       <Card>
         <CardHeader>

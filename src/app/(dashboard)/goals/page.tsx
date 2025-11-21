@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import AppHeader from '@/components/layout/AppHeader';
 import GoalDialog from '@/components/goals/GoalDialog';
 import GoalProgressCard from '@/components/goals/GoalProgressCard';
 import type { GoalWithDetails } from '@/lib/types';
@@ -166,11 +165,11 @@ export default function GoalsPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6">
-      <AppHeader 
-        title="Goals" 
-        subtitle="Track your savings goals and stay on target"
-      />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold">Goals</h1>
+        <p className="text-muted-foreground mt-1">Track your savings goals and stay on target</p>
+      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

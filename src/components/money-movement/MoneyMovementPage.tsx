@@ -7,7 +7,6 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import type { Category } from '@/lib/types';
 import TransferBetweenEnvelopes from './TransferBetweenEnvelopes';
 import AllocateIncome from './AllocateIncome';
-import AppHeader from '@/components/layout/AppHeader';
 
 export default function MoneyMovementPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -45,14 +44,10 @@ export default function MoneyMovementPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <AppHeader
-        title="Money Movement"
-        subtitle="Transfer funds between envelopes or allocate income"
-      />
+    <div className="space-y-6">
 
-      <Tabs defaultValue="transfer" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+      <Tabs defaultValue="transfer" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
           <TabsTrigger value="transfer">Transfer Between Envelopes</TabsTrigger>
           <TabsTrigger value="allocate">Allocate to Envelopes</TabsTrigger>
         </TabsList>

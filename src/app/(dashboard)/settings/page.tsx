@@ -29,7 +29,6 @@ import { Loader2, Trash2, Database, Download, Key } from 'lucide-react';
 import MerchantGroupsSettings from '@/components/settings/MerchantGroupsSettings';
 import DuplicateTransactionFinder from '@/components/settings/DuplicateTransactionFinder';
 import DataBackup from '@/components/settings/DataBackup';
-import AppHeader from '@/components/layout/AppHeader';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -155,8 +154,8 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <AppHeader title="Account Settings" />
+    <div className="space-y-6">
+      <h1 className="text-2xl md:text-3xl font-bold">Account Settings</h1>
 
       {/* Duplicate Transaction Finder */}
       <div className="mb-6">

@@ -19,7 +19,6 @@ import CreditCardList from './CreditCardList';
 import PendingCheckList from './PendingCheckList';
 import SummaryCards from './SummaryCards';
 import GoalsWidget from './GoalsWidget';
-import AppHeader from '@/components/layout/AppHeader';
 
 export default function Dashboard() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -72,8 +71,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
-      <AppHeader title="Budget Dashboard" />
+    <div className="space-y-4 md:space-y-6">
 
       {summary && <SummaryCards summary={summary} />}
 

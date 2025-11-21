@@ -1,0 +1,123 @@
+"use client"
+
+import * as React from "react"
+import { usePathname, useRouter } from "next/navigation"
+import Image from "next/image"
+import {
+  LayoutDashboard,
+  Receipt,
+  Upload,
+  ArrowLeftRight,
+  FileText,
+  TrendingUp,
+  DollarSign,
+  Store,
+  FolderTree,
+  Settings,
+  LogOut,
+} from "lucide-react"
+
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarHeader,
+  SidebarFooter,
+  useSidebar,
+} from "@/components/ui/sidebar"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
+import SignOutButton from "@/components/auth/SignOutButton"
+
+const navigationItems = [
+  { label: "Dashboard", path: "/", icon: LayoutDashboard },
+  { label: "Transactions", path: "/transactions", icon: Receipt },
+  { label: "Import", path: "/import", icon: Upload },
+  { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
+  { label: "Reports", path: "/reports", icon: FileText },
+  { label: "Trends", path: "/reports/trends", icon: TrendingUp },
+  { label: "Income", path: "/income", icon: DollarSign },
+  { label: "Merchants", path: "/merchants", icon: Store },
+  { label: "Category Rules", path: "/category-rules", icon: FolderTree },
+  { label: "Settings", path: "/settings", icon: Settings },
+]
+
+export function AppSidebar() {
+  const pathname = usePathname()
+  const router = useRouter()
+  const { state } = useSidebar()
+
+  const isActive = (path: string) => {
+    if (path === "/") {
+      return pathname === "/"
+    }
+    return pathname.startsWith(path)
+  }
+
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="border-b border-sidebar-border">
+        <div className="flex items-center gap-2 px-2 py-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden">
+            <Image
+              src="/icon.svg"
+              alt="Budget App"
+              width={32}
+              height={32}
+              className="h-8 w-8"
+              priority
+            />
+          </div>
+          {state === "expanded" && (
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold">Budget App</span>
+              <span className="text-xs text-muted-foreground">Envelope Budgeting</span>
+            </div>
+          )}
+        </div>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navigationItems.map((item) => {
+                const Icon = item.icon
+                const active = isActive(item.path)
+                return (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      onClick={() => router.push(item.path)}
+                      isActive={active}
+                      tooltip={item.label}
+                    >
+                      <Icon />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter className="border-t border-sidebar-border">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <div className="flex items-center gap-2 px-2 py-2">
+              <ThemeToggle />
+              {state === "expanded" && (
+                <SignOutButton />
+              )}
+            </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
+  )
+}
+

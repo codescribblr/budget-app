@@ -15,7 +15,6 @@ import type { MerchantGroupWithStats } from '@/lib/types';
 import EditMerchantGroupDialog from './EditMerchantGroupDialog';
 import MergeMerchantGroupsDialog from './MergeMerchantGroupsDialog';
 import DeleteMerchantGroupDialog from './DeleteMerchantGroupDialog';
-import AppHeader from '@/components/layout/AppHeader';
 
 export default function MerchantsPage() {
   const router = useRouter();
@@ -127,11 +126,11 @@ export default function MerchantsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <AppHeader
-        title="Merchant Groups"
-        subtitle="Manage and organize your merchant groups"
-      />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold">Merchant Groups</h1>
+        <p className="text-muted-foreground mt-1">Manage and organize your merchant groups</p>
+      </div>
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

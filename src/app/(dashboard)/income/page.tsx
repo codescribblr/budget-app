@@ -14,7 +14,6 @@ import { DollarSign, TrendingUp, Calculator, Save } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import PreTaxDeductionsSection from '@/components/income/PreTaxDeductionsSection';
 import type { PreTaxDeductionItem } from '@/lib/types';
-import AppHeader from '@/components/layout/AppHeader';
 
 type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly' | 'quarterly' | 'annually';
 
@@ -273,20 +272,20 @@ export default function IncomePage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-8 max-w-6xl">
-        <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading...</p>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6 max-w-6xl">
-      <AppHeader
-        title="Income Planning"
-        subtitle="Manage your income settings and explore budget scenarios"
-      />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold">Income Planning</h1>
+        <p className="text-muted-foreground mt-1">
+          Manage your income settings and explore budget scenarios
+        </p>
+      </div>
 
       <Tabs defaultValue="current" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 max-w-md">

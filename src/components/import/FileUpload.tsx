@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { parseCSVFile } from '@/lib/csv-parser';
@@ -17,12 +17,12 @@ export default function FileUpload({ onFileUploaded }: FileUploadProps) {
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounterRef = useRef(0);
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  // Process a file (used by both file input and drag-drop)
+  const processFile = async (file: File) => {
     setIsProcessing(true);
     setError(null);
 
@@ -109,6 +109,63 @@ export default function FileUpload({ onFileUploaded }: FileUploadProps) {
     }
   };
 
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await processFile(file);
+  };
+
+  // Drag and drop handlers
+  useEffect(() => {
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounterRef.current++;
+      if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+        setIsDragging(true);
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounterRef.current--;
+      if (dragCounterRef.current === 0) {
+        setIsDragging(false);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      dragCounterRef.current = 0;
+
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        processFile(files[0]);
+      }
+    };
+
+    // Add event listeners to document
+    document.addEventListener('dragenter', handleDragEnter);
+    document.addEventListener('dragleave', handleDragLeave);
+    document.addEventListener('dragover', handleDragOver);
+    document.addEventListener('drop', handleDrop);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('dragenter', handleDragEnter);
+      document.removeEventListener('dragleave', handleDragLeave);
+      document.removeEventListener('dragover', handleDragOver);
+      document.removeEventListener('drop', handleDrop);
+    };
+  }, []);
 
   const handleButtonClick = () => {
     fileInputRef.current?.click();
@@ -123,14 +180,22 @@ export default function FileUpload({ onFileUploaded }: FileUploadProps) {
         onChange={handleFileChange}
         className="hidden"
       />
-      
-      <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-8 text-center">
+
+      <div className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
+        isDragging
+          ? 'border-primary bg-primary/5 scale-105 shadow-lg'
+          : 'border-gray-300 dark:border-gray-700'
+      }`}>
         <div className="space-y-4">
-          <div className="text-4xl">📄 📷</div>
+          <div className="text-4xl">{isDragging ? '📥' : '📄 📷'}</div>
           <div>
-            <p className="text-lg font-medium">Upload CSV or Image</p>
+            <p className="text-lg font-medium">
+              {isDragging ? 'Drop file here' : 'Upload CSV or Image'}
+            </p>
             <p className="text-sm text-muted-foreground mt-1">
-              Upload a CSV file or screenshot/photo of transactions
+              {isDragging
+                ? 'Release to upload'
+                : 'Upload a CSV file or screenshot/photo of transactions'}
             </p>
           </div>
           <Button onClick={handleButtonClick} disabled={isProcessing}>

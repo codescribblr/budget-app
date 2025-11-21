@@ -15,7 +15,6 @@ import SpendingByCategory from './SpendingByCategory';
 import SpendingPieChart from './SpendingPieChart';
 import TransactionsByMerchant from './TransactionsByMerchant';
 import { X } from 'lucide-react';
-import AppHeader from '@/components/layout/AppHeader';
 
 interface MerchantGroupStat {
   group_id: number;
@@ -249,11 +248,11 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <AppHeader
-        title="Spending Reports"
-        subtitle="Analyze your spending patterns and trends"
-      />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold">Spending Reports</h1>
+        <p className="text-muted-foreground mt-1">Analyze your spending patterns and trends</p>
+      </div>
 
       {/* Active Category Filter Indicator */}
       {selectedCategoryId && (
