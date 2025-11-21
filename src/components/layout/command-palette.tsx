@@ -14,6 +14,7 @@ import {
   Store,
   FolderTree,
   Settings,
+  Folder,
 } from "lucide-react"
 
 import {
@@ -25,6 +26,7 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command"
+import type { Category } from "@/lib/types"
 
 const navigationItems = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
@@ -42,6 +44,8 @@ const navigationItems = [
 
 export function CommandPalette() {
   const [open, setOpen] = React.useState(false)
+  const [categories, setCategories] = React.useState<Category[]>([])
+  const [isLoading, setIsLoading] = React.useState(false)
   const router = useRouter()
 
   React.useEffect(() => {
@@ -55,6 +59,22 @@ export function CommandPalette() {
     document.addEventListener("keydown", down)
     return () => document.removeEventListener("keydown", down)
   }, [])
+
+  // Load categories when dialog opens
+  React.useEffect(() => {
+    if (open && categories.length === 0 && !isLoading) {
+      setIsLoading(true)
+      fetch('/api/categories')
+        .then(res => res.json())
+        .then(data => {
+          // Filter out system categories
+          const nonSystemCategories = data.filter((cat: Category) => !cat.is_system)
+          setCategories(nonSystemCategories)
+        })
+        .catch(err => console.error('Error loading categories:', err))
+        .finally(() => setIsLoading(false))
+    }
+  }, [open, categories.length, isLoading])
 
   const runCommand = React.useCallback((command: () => void) => {
     setOpen(false)
@@ -73,17 +93,36 @@ export function CommandPalette() {
               return (
                 <CommandItem
                   key={item.path}
+                  value={item.label}
                   onSelect={() => {
                     runCommand(() => router.push(item.path))
                   }}
                 >
                   <Icon className="mr-2 h-4 w-4" />
                   <span>{item.label}</span>
-                  <CommandShortcut>⌘K</CommandShortcut>
                 </CommandItem>
               )
             })}
           </CommandGroup>
+          {categories.length > 0 && (
+            <CommandGroup heading="Categories">
+              {categories.map((category) => (
+                <CommandItem
+                  key={category.id}
+                  value={category.name}
+                  onSelect={() => {
+                    runCommand(() => router.push(`/reports?category=${category.id}`))
+                  }}
+                >
+                  <Folder className="mr-2 h-4 w-4" />
+                  <span>{category.name}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    ${category.monthly_amount.toFixed(0)}/mo
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
         </CommandList>
       </CommandDialog>
     </>
