@@ -272,13 +272,14 @@ export interface Goal {
   id: number;
   user_id: string;
   name: string;
-  target_amount: number; // For debt-paydown: starting debt amount (from credit card balance at creation)
+  target_amount: number; // For debt-paydown: starting debt amount (from credit card/loan balance at creation)
   target_date: string | null; // ISO date string or null
   goal_type: 'envelope' | 'account-linked' | 'debt-paydown';
   monthly_contribution: number;
   linked_account_id: number | null;
   linked_category_id: number | null;
-  linked_credit_card_id: number | null; // For debt-paydown goals
+  linked_credit_card_id: number | null; // For debt-paydown goals (credit cards)
+  linked_loan_id: number | null; // For debt-paydown goals (loans)
   status: 'active' | 'completed' | 'overdue' | 'paused';
   sort_order: number;
   notes: string | null;
@@ -286,7 +287,7 @@ export interface Goal {
   updated_at: string;
   
   // Computed fields (not in DB)
-  current_balance?: number; // For debt-paydown: credit card balance (decreases as debt is paid)
+  current_balance?: number; // For debt-paydown: credit card/loan balance (decreases as debt is paid)
   progress_percentage?: number; // For debt-paydown: (target_amount - current_balance) / target_amount * 100
   remaining_amount?: number; // For debt-paydown: current_balance (how much debt is left to pay)
   months_remaining?: number | null;
@@ -298,18 +299,20 @@ export interface Goal {
 export interface GoalWithDetails extends Goal {
   linked_account?: Account | null;
   linked_category?: Category | null;
-  linked_credit_card?: CreditCard | null; // For debt-paydown goals
+  linked_credit_card?: CreditCard | null; // For debt-paydown goals (credit cards)
+  linked_loan?: Loan | null; // For debt-paydown goals (loans)
 }
 
 export interface CreateGoalRequest {
   name: string;
-  target_amount?: number; // For debt-paydown: captured automatically from credit card balance at creation
+  target_amount?: number; // For debt-paydown: captured automatically from credit card/loan balance at creation
   target_date?: string | null;
   goal_type: 'envelope' | 'account-linked' | 'debt-paydown';
   monthly_contribution: number;
   linked_account_id?: number | null;
   linked_category_id?: number | null; // For envelope goals (auto-created)
-  linked_credit_card_id?: number | null; // Required for debt-paydown
+  linked_credit_card_id?: number | null; // For debt-paydown (credit cards)
+  linked_loan_id?: number | null; // For debt-paydown (loans)
   starting_balance?: number; // For envelope goals
   notes?: string | null;
   // Fields for creating a new account (for account-linked goals)

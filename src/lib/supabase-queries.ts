@@ -1453,7 +1453,8 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
       *,
       linked_account:accounts!goals_linked_account_id_fkey(*),
       linked_category:categories!goals_linked_category_id_fkey(*),
-      linked_credit_card:credit_cards!goals_linked_credit_card_id_fkey(*)
+      linked_credit_card:credit_cards!goals_linked_credit_card_id_fkey(*),
+      linked_loan:loans!goals_linked_loan_id_fkey(*)
     `)
     .eq('user_id', user.id)
     .order('sort_order')
@@ -1470,8 +1471,12 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
         currentBalance = goal.linked_category.current_balance || 0;
       } else if (goal.goal_type === 'account-linked' && goal.linked_account) {
         currentBalance = goal.linked_account.balance || 0;
-      } else if (goal.goal_type === 'debt-paydown' && goal.linked_credit_card) {
-        currentBalance = goal.linked_credit_card.current_balance || 0;
+      } else if (goal.goal_type === 'debt-paydown') {
+        if (goal.linked_credit_card) {
+          currentBalance = goal.linked_credit_card.current_balance || 0;
+        } else if (goal.linked_loan) {
+          currentBalance = goal.linked_loan.balance || 0;
+        }
       }
       
       const progress = calculateGoalProgress(goal, currentBalance);
@@ -1493,6 +1498,7 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
       return {
         ...goal,
         linked_credit_card: goal.linked_credit_card || null,
+        linked_loan: goal.linked_loan || null,
         current_balance: currentBalance,
         progress_percentage: progress.progress_percentage,
         remaining_amount: progress.remaining_amount,
@@ -1519,7 +1525,8 @@ export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
       *,
       linked_account:accounts!goals_linked_account_id_fkey(*),
       linked_category:categories!goals_linked_category_id_fkey(*),
-      linked_credit_card:credit_cards!goals_linked_credit_card_id_fkey(*)
+      linked_credit_card:credit_cards!goals_linked_credit_card_id_fkey(*),
+      linked_loan:loans!goals_linked_loan_id_fkey(*)
     `)
     .eq('id', id)
     .eq('user_id', user.id)
@@ -1537,8 +1544,12 @@ export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
     currentBalance = goal.linked_category.current_balance || 0;
   } else if (goal.goal_type === 'account-linked' && goal.linked_account) {
     currentBalance = goal.linked_account.balance || 0;
-  } else if (goal.goal_type === 'debt-paydown' && goal.linked_credit_card) {
-    currentBalance = goal.linked_credit_card.current_balance || 0;
+  } else if (goal.goal_type === 'debt-paydown') {
+    if (goal.linked_credit_card) {
+      currentBalance = goal.linked_credit_card.current_balance || 0;
+    } else if (goal.linked_loan) {
+      currentBalance = goal.linked_loan.balance || 0;
+    }
   }
   
   const progress = calculateGoalProgress(goal, currentBalance);
@@ -1547,6 +1558,7 @@ export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
   return {
     ...goal,
     linked_credit_card: goal.linked_credit_card || null,
+    linked_loan: goal.linked_loan || null,
     current_balance: currentBalance,
     progress_percentage: progress.progress_percentage,
     remaining_amount: progress.remaining_amount,
@@ -1566,48 +1578,93 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
   let linkedCategoryId: number | null = null;
   let linkedAccountId: number | null = null;
   let linkedCreditCardId: number | null = null;
+  let linkedLoanId: number | null = null;
   let targetAmount = data.target_amount || 0;
-  
+
   // Handle debt-paydown goals
   if (data.goal_type === 'debt-paydown') {
-    if (!data.linked_credit_card_id) {
-      throw new Error('Credit card is required for debt paydown goals');
+    if (!data.linked_credit_card_id && !data.linked_loan_id) {
+      throw new Error('Credit card or loan is required for debt paydown goals');
+    }
+    if (data.linked_credit_card_id && data.linked_loan_id) {
+      throw new Error('Cannot link both a credit card and a loan to a debt paydown goal');
     }
     
-    // Verify credit card exists and belongs to user
-    const { data: creditCard, error: ccError } = await supabase
-      .from('credit_cards')
-      .select('*')
-      .eq('id', data.linked_credit_card_id)
-      .eq('user_id', user.id)
-      .single();
-    
-    if (ccError || !creditCard) {
-      throw new Error('Credit card not found or does not belong to user');
+    // Handle credit card debt paydown
+    if (data.linked_credit_card_id) {
+      // Verify credit card exists and belongs to user
+      const { data: creditCard, error: ccError } = await supabase
+        .from('credit_cards')
+        .select('*')
+        .eq('id', data.linked_credit_card_id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (ccError || !creditCard) {
+        throw new Error('Credit card not found or does not belong to user');
+      }
+
+      // Check if credit card is already linked to another goal
+      const { data: existingGoal } = await supabase
+        .from('goals')
+        .select('id')
+        .eq('linked_credit_card_id', data.linked_credit_card_id)
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .single();
+
+      if (existingGoal) {
+        throw new Error('Credit card is already linked to another active goal');
+      }
+
+      // Warn if balance is 0 (already paid off)
+      if (creditCard.current_balance <= 0) {
+        // Still allow creation, but user should be aware
+        console.warn('Credit card balance is 0 or negative. Goal may complete immediately.');
+      }
+
+      // Set target_amount to credit card's current balance (starting debt amount)
+      targetAmount = creditCard.current_balance;
+      linkedCreditCardId = data.linked_credit_card_id;
     }
-    
-    // Check if credit card is already linked to another goal
-    const { data: existingGoal } = await supabase
-      .from('goals')
-      .select('id')
-      .eq('linked_credit_card_id', data.linked_credit_card_id)
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-      .single();
-    
-    if (existingGoal) {
-      throw new Error('Credit card is already linked to another active goal');
+
+    // Handle loan debt paydown
+    if (data.linked_loan_id) {
+      // Verify loan exists and belongs to user
+      const { data: loan, error: loanError } = await supabase
+        .from('loans')
+        .select('*')
+        .eq('id', data.linked_loan_id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (loanError || !loan) {
+        throw new Error('Loan not found or does not belong to user');
+      }
+
+      // Check if loan is already linked to another goal
+      const { data: existingGoal } = await supabase
+        .from('goals')
+        .select('id')
+        .eq('linked_loan_id', data.linked_loan_id)
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .single();
+
+      if (existingGoal) {
+        throw new Error('Loan is already linked to another active goal');
+      }
+
+      // Warn if balance is 0 (already paid off)
+      if (loan.balance <= 0) {
+        // Still allow creation, but user should be aware
+        console.warn('Loan balance is 0 or negative. Goal may complete immediately.');
+      }
+
+      // Set target_amount to loan's current balance (starting debt amount)
+      targetAmount = loan.balance;
+      linkedLoanId = data.linked_loan_id;
     }
-    
-    // Warn if balance is 0 (already paid off)
-    if (creditCard.current_balance <= 0) {
-      // Still allow creation, but user should be aware
-      console.warn('Credit card balance is 0 or negative. Goal may complete immediately.');
-    }
-    
-    // Set target_amount to credit card's current balance (starting debt amount)
-    targetAmount = creditCard.current_balance;
-    linkedCreditCardId = data.linked_credit_card_id;
   }
   
   // Create category for envelope goals
@@ -1711,6 +1768,7 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
       linked_account_id: linkedAccountId,
       linked_category_id: linkedCategoryId,
       linked_credit_card_id: linkedCreditCardId,
+      linked_loan_id: linkedLoanId,
       status: 'active',
       notes: data.notes || null,
     })

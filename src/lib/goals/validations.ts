@@ -12,7 +12,7 @@ export function validateCreateGoal(data: CreateGoalRequest): { valid: boolean; e
     return { valid: false, error: 'Goal name must be 255 characters or less' };
   }
   
-  // Target amount validation (not required for debt-paydown, will be set from credit card)
+  // Target amount validation (not required for debt-paydown, will be set from credit card/loan)
   if (data.goal_type !== 'debt-paydown') {
     if (!data.target_amount || data.target_amount <= 0) {
       return { valid: false, error: 'Target amount must be greater than 0' };
@@ -39,6 +39,9 @@ export function validateCreateGoal(data: CreateGoalRequest): { valid: boolean; e
     if (data.linked_credit_card_id) {
       return { valid: false, error: 'Envelope goals cannot be linked to a credit card' };
     }
+    if (data.linked_loan_id) {
+      return { valid: false, error: 'Envelope goals cannot be linked to a loan' };
+    }
   }
   
   if (data.goal_type === 'account-linked') {
@@ -60,11 +63,17 @@ export function validateCreateGoal(data: CreateGoalRequest): { valid: boolean; e
     if (data.linked_credit_card_id) {
       return { valid: false, error: 'Account-linked goals cannot be linked to a credit card' };
     }
+    if (data.linked_loan_id) {
+      return { valid: false, error: 'Account-linked goals cannot be linked to a loan' };
+    }
   }
   
   if (data.goal_type === 'debt-paydown') {
-    if (!data.linked_credit_card_id) {
-      return { valid: false, error: 'Debt paydown goals must be linked to a credit card' };
+    if (!data.linked_credit_card_id && !data.linked_loan_id) {
+      return { valid: false, error: 'Debt paydown goals must be linked to a credit card or loan' };
+    }
+    if (data.linked_credit_card_id && data.linked_loan_id) {
+      return { valid: false, error: 'Debt paydown goals cannot be linked to both a credit card and a loan' };
     }
     if (!data.monthly_contribution || data.monthly_contribution <= 0) {
       return { valid: false, error: 'Monthly contribution must be greater than 0 for debt paydown goals' };
@@ -76,7 +85,7 @@ export function validateCreateGoal(data: CreateGoalRequest): { valid: boolean; e
       return { valid: false, error: 'Debt paydown goals cannot be linked to a category' };
     }
     if (data.starting_balance !== undefined) {
-      return { valid: false, error: 'Debt paydown goals cannot have a starting balance (it is set from credit card balance)' };
+      return { valid: false, error: 'Debt paydown goals cannot have a starting balance (it is set from credit card/loan balance)' };
     }
   }
   
