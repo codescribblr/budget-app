@@ -126,11 +126,11 @@ export default function TransactionsByMerchant({
           <CardDescription>
             {isGrouped ? (
               <>
-                Top 10 merchant groups by total spending
+                Top 20 merchant groups by total spending
                 <Badge variant="secondary" className="ml-2">Grouped</Badge>
               </>
             ) : (
-              'Top 10 by total spending (ungrouped)'
+              'Top 20 by total spending (ungrouped)'
             )}
           </CardDescription>
         </CardHeader>
