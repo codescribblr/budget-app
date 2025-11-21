@@ -321,10 +321,10 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   const totalExcludedCount = items.filter(item => item.status === 'excluded').length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-full overflow-hidden">
       <div className="p-4 bg-muted rounded-md space-y-4">
-        <div className="flex justify-between items-center">
-          <div className="flex gap-6 text-sm">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+          <div className="flex flex-wrap gap-4 text-sm">
             <div>
               <span className="font-medium">Categorized:</span> {categorizedCount}
             </div>
@@ -345,7 +345,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
               <span className="font-medium">Excluded:</span> {totalExcludedCount}
             </div>
           </div>
-          <Button onClick={handleImportClick} disabled={isImporting || categorizedCount === 0}>
+          <Button onClick={handleImportClick} disabled={isImporting || categorizedCount === 0} className="shrink-0">
             {isImporting ? 'Importing...' : `Import ${categorizedCount} Transaction${categorizedCount !== 1 ? 's' : ''}`}
           </Button>
         </div>
@@ -364,12 +364,12 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
           </Label>
         </div>
 
-        <div className="flex items-center space-x-2 pt-2 border-t">
-          <Label htmlFor="default-account" className="text-sm font-medium min-w-[120px]">
+        <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 pt-2 border-t">
+          <Label htmlFor="default-account" className="text-sm font-medium sm:min-w-[120px]">
             Default Account/Card:
           </Label>
           <Select value={getDefaultAccountValue()} onValueChange={handleDefaultAccountChange}>
-            <SelectTrigger id="default-account" className="w-[250px]">
+            <SelectTrigger id="default-account" className="w-full sm:w-[250px]">
               <SelectValue placeholder="None" />
             </SelectTrigger>
             <SelectContent>
@@ -399,18 +399,18 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         </div>
       </div>
 
-      <div className="border rounded-md">
+      <div className="border rounded-md overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Merchant</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="whitespace-nowrap">Date</TableHead>
+              <TableHead className="whitespace-nowrap">Merchant</TableHead>
+              <TableHead className="whitespace-nowrap">Description</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
+              <TableHead className="whitespace-nowrap">Category</TableHead>
+              <TableHead className="whitespace-nowrap">Account</TableHead>
+              <TableHead className="whitespace-nowrap">Status</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -436,7 +436,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                   {/* Date Cell - Inline Editable */}
                   <TableCell
                     onClick={() => setEditingField({ transactionId: transaction.id, field: 'date' })}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className="cursor-pointer hover:bg-muted/50 min-w-[120px]"
                   >
                     {isEditingDate ? (
                       <Input
@@ -453,17 +453,17 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                   </TableCell>
 
                   {/* Merchant Cell - Not Editable */}
-                  <TableCell className="font-medium">{transaction.merchant}</TableCell>
+                  <TableCell className="font-medium min-w-[150px] max-w-[200px] truncate">{transaction.merchant}</TableCell>
 
                   {/* Description Cell - Not Editable */}
-                  <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                  <TableCell className="text-sm text-muted-foreground min-w-[150px] max-w-[250px] truncate">
                     {transaction.description}
                   </TableCell>
 
                   {/* Amount Cell - Inline Editable */}
                   <TableCell
                     onClick={() => setEditingField({ transactionId: transaction.id, field: 'amount' })}
-                    className="text-right font-semibold cursor-pointer hover:bg-muted/50"
+                    className="text-right font-semibold cursor-pointer hover:bg-muted/50 min-w-[100px]"
                   >
                     {isEditingAmount ? (
                       <Input
@@ -483,7 +483,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                   {/* Category Cell - Inline Editable */}
                   <TableCell
                     onClick={() => transaction.splits.length <= 1 && setEditingField({ transactionId: transaction.id, field: 'category' })}
-                    className={transaction.splits.length <= 1 ? 'cursor-pointer hover:bg-muted/50' : ''}
+                    className={`min-w-[150px] max-w-[200px] ${transaction.splits.length <= 1 ? 'cursor-pointer hover:bg-muted/50' : ''}`}
                   >
                     {isEditingCategory ? (
                       <Select
@@ -523,7 +523,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                   {/* Account Cell - Inline Editable */}
                   <TableCell
                     onClick={() => setEditingField({ transactionId: transaction.id, field: 'account' })}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className="cursor-pointer hover:bg-muted/50 min-w-[120px] max-w-[180px]"
                   >
                     {isEditingAccount ? (
                       <Select
@@ -573,32 +573,32 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                   </TableCell>
 
                   {/* Status Cell */}
-                  <TableCell>
+                  <TableCell className="min-w-[120px]">
                     {transaction.status === 'excluded' && transaction.splits.length === 0 ? (
-                      <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded">
+                      <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded whitespace-nowrap">
                         Uncategorized
                       </span>
                     ) : transaction.status === 'excluded' && transaction.duplicateType === 'database' ? (
-                      <span className="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded">
+                      <span className="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded whitespace-nowrap">
                         Duplicate
                       </span>
                     ) : transaction.status === 'excluded' && transaction.duplicateType === 'within-file' ? (
-                      <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded">
+                      <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded whitespace-nowrap">
                         Potential Duplicate
                       </span>
                     ) : transaction.status === 'excluded' ? (
-                      <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded">
+                      <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded whitespace-nowrap">
                         Excluded
                       </span>
                     ) : (
-                      <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">
+                      <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded whitespace-nowrap">
                         Ready
                       </span>
                     )}
                   </TableCell>
 
                   {/* Actions Cell */}
-                  <TableCell className="text-right">
+                  <TableCell className="text-right min-w-[160px]">
                     <div className="flex justify-end gap-1">
                       <Button
                         variant="ghost"
