@@ -16,7 +16,6 @@ import {
   Store,
   FolderTree,
   Settings,
-  LogOut,
 } from "lucide-react"
 
 import {
@@ -69,8 +68,14 @@ export function AppSidebar() {
   const router = useRouter()
   const { state } = useSidebar()
   const { resolvedTheme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
 
-  const logoSrc = resolvedTheme === "dark" ? "/icon-darkmode.svg" : "/icon.svg"
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Use default icon during SSR to prevent hydration mismatch
+  const logoSrc = mounted && resolvedTheme === "dark" ? "/icon-darkmode.svg" : "/icon.svg"
 
   const isActive = (path: string) => {
     if (path === "/") {
