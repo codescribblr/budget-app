@@ -152,6 +152,35 @@ export async function POST(request: Request) {
       }
     }
 
+    // Check if disabling category_types - prevent if non-monthly_expense categories exist
+    if (featureName === 'category_types' && !enabled) {
+      const { data: categories, error: categoriesError } = await supabase
+        .from('categories')
+        .select('id, name, category_type')
+        .eq('user_id', user.id)
+        .neq('category_type', 'monthly_expense');
+
+      if (categoriesError) {
+        console.error('Error checking categories:', categoriesError);
+        return NextResponse.json(
+          { error: 'Failed to check categories' },
+          { status: 500 }
+        );
+      }
+
+      if (categories && categories.length > 0) {
+        const categoryNames = categories.map(c => c.name).join(', ');
+        return NextResponse.json(
+          {
+            error: 'Cannot disable feature',
+            message: `You have ${categories.length} categor${categories.length === 1 ? 'y' : 'ies'} that ${categories.length === 1 ? 'is' : 'are'} not Monthly Expense type (${categoryNames}). Please change ${categories.length === 1 ? 'it' : 'them'} to Monthly Expense or delete ${categories.length === 1 ? 'it' : 'them'} before disabling Category Types.`,
+            affectedCategories: categories,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Upsert the feature flag
     const { data, error } = await supabase
       .from('user_feature_flags')
