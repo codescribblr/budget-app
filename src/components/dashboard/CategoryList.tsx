@@ -686,43 +686,8 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
                 placeholder="Category name"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium">Monthly Budget Amount</label>
-              <Input
-                type="number"
-                step="0.01"
-                value={newMonthlyAmount}
-                onChange={(e) => setNewMonthlyAmount(e.target.value)}
-                placeholder="0.00"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Used by "Use Monthly Amounts" button when allocating to envelopes
-              </p>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Current Balance</label>
-              <Input
-                type="number"
-                step="0.01"
-                value={newBalance}
-                onChange={(e) => setNewBalance(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Notes</label>
-              <textarea
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                value={newNotes}
-                onChange={(e) => setNewNotes(e.target.value)}
-                placeholder="e.g., car repairs = 900 for tires for 4 cars over 4 years, 60 for oil changes for 3 cars 3x per year, 100 for other repairs all /12 months"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Optional notes to track budget formulas or other information
-              </p>
-            </div>
 
-            {/* Category Type - Only show if feature enabled */}
+            {/* Category Type - Move to position 2, only show if feature enabled */}
             {categoryTypesEnabled && (
               <div>
                 <div className="flex items-center gap-2 mb-2">
@@ -747,6 +712,126 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
               </div>
             )}
 
+            {/* Type-specific fields */}
+            {categoryTypesEnabled && newCategoryType === 'monthly_expense' && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-medium">Monthly Budget</label>
+                  <HelpTooltip content="How much you plan to spend each month." />
+                </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newMonthlyAmount}
+                  onChange={(e) => setNewMonthlyAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            )}
+
+            {categoryTypesEnabled && newCategoryType === 'accumulation' && (
+              <>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-sm font-medium">Annual Target</label>
+                    <HelpTooltip content="Total amount needed per year (e.g., annual insurance premium)." />
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newAnnualTarget}
+                    onChange={(e) => {
+                      setNewAnnualTarget(e.target.value);
+                      // Auto-calculate monthly amount
+                      const annual = parseFloat(e.target.value);
+                      if (!isNaN(annual) && annual > 0) {
+                        setNewMonthlyAmount((annual / 12).toFixed(2));
+                      } else {
+                        setNewMonthlyAmount('');
+                      }
+                    }}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-sm font-medium">Monthly Budget</label>
+                    <HelpTooltip content="Auto-calculated: Annual Target ÷ 12 months" />
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newMonthlyAmount}
+                    disabled
+                    placeholder="0.00"
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Auto-calculated from annual target
+                  </p>
+                </div>
+              </>
+            )}
+
+            {categoryTypesEnabled && newCategoryType === 'target_balance' && (
+              <>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-sm font-medium">Target Balance</label>
+                    <HelpTooltip content="Goal balance to reach (e.g., $10,000 emergency fund)." />
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newTargetBalance}
+                    onChange={(e) => setNewTargetBalance(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-sm font-medium">Monthly Budget</label>
+                    <HelpTooltip content="Optional: Set if you plan to spend from this category (usually $0)." />
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newMonthlyAmount}
+                    onChange={(e) => setNewMonthlyAmount(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Show Monthly Budget Amount for non-category-types users */}
+            {!categoryTypesEnabled && (
+              <div>
+                <label className="text-sm font-medium">Monthly Budget Amount</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newMonthlyAmount}
+                  onChange={(e) => setNewMonthlyAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Used by "Use Monthly Amounts" button when allocating to envelopes
+                </p>
+              </div>
+            )}
+
+            <div>
+              <label className="text-sm font-medium">Current Balance</label>
+              <Input
+                type="number"
+                step="0.01"
+                value={newBalance}
+                onChange={(e) => setNewBalance(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+
             {/* Priority - Only show if feature enabled */}
             {prioritySystemEnabled && (
               <div>
@@ -769,54 +854,18 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
               </div>
             )}
 
-            {/* Target amounts - Only show if category types enabled */}
-            {categoryTypesEnabled && newCategoryType === 'monthly_expense' && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <label className="text-sm font-medium">Monthly Target</label>
-                  <HelpTooltip content="Target amount to fund each month. Defaults to Monthly Budget Amount if not set." />
-                </div>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={newMonthlyTarget}
-                  onChange={(e) => setNewMonthlyTarget(e.target.value)}
-                  placeholder={newMonthlyAmount || "0.00"}
-                />
-              </div>
-            )}
-
-            {categoryTypesEnabled && newCategoryType === 'accumulation' && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <label className="text-sm font-medium">Annual Target</label>
-                  <HelpTooltip content="Total amount needed per year. System will calculate monthly funding needed and catch up if behind." />
-                </div>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={newAnnualTarget}
-                  onChange={(e) => setNewAnnualTarget(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-            )}
-
-            {categoryTypesEnabled && newCategoryType === 'target_balance' && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <label className="text-sm font-medium">Target Balance</label>
-                  <HelpTooltip content="Goal balance to reach. System will stop allocating once this balance is achieved." />
-                </div>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={newTargetBalance}
-                  onChange={(e) => setNewTargetBalance(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-            )}
+            <div>
+              <label className="text-sm font-medium">Notes</label>
+              <textarea
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={newNotes}
+                onChange={(e) => setNewNotes(e.target.value)}
+                placeholder="e.g., car repairs = 900 for tires for 4 cars over 4 years, 60 for oil changes for 3 cars 3x per year, 100 for other repairs all /12 months"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional notes to track budget formulas or other information
+              </p>
+            </div>
 
             <div className="flex items-center space-x-2">
               <Checkbox
@@ -857,43 +906,8 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
                 placeholder="e.g., Groceries"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium">Monthly Budget Amount</label>
-              <Input
-                type="number"
-                step="0.01"
-                value={newMonthlyAmount}
-                onChange={(e) => setNewMonthlyAmount(e.target.value)}
-                placeholder="0.00"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Used by "Use Monthly Amounts" button when allocating to envelopes
-              </p>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Starting Balance</label>
-              <Input
-                type="number"
-                step="0.01"
-                value={newBalance}
-                onChange={(e) => setNewBalance(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Notes</label>
-              <textarea
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                value={newNotes}
-                onChange={(e) => setNewNotes(e.target.value)}
-                placeholder="e.g., car repairs = 900 for tires for 4 cars over 4 years, 60 for oil changes for 3 cars 3x per year, 100 for other repairs all /12 months"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Optional notes to track budget formulas or other information
-              </p>
-            </div>
 
-            {/* Category Type - Only show if feature enabled */}
+            {/* Category Type - Move to position 2, only show if feature enabled */}
             {categoryTypesEnabled && (
               <div>
                 <div className="flex items-center gap-2 mb-2">
@@ -918,6 +932,126 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
               </div>
             )}
 
+            {/* Type-specific fields */}
+            {categoryTypesEnabled && newCategoryType === 'monthly_expense' && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-medium">Monthly Budget</label>
+                  <HelpTooltip content="How much you plan to spend each month." />
+                </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newMonthlyAmount}
+                  onChange={(e) => setNewMonthlyAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            )}
+
+            {categoryTypesEnabled && newCategoryType === 'accumulation' && (
+              <>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-sm font-medium">Annual Target</label>
+                    <HelpTooltip content="Total amount needed per year (e.g., annual insurance premium)." />
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newAnnualTarget}
+                    onChange={(e) => {
+                      setNewAnnualTarget(e.target.value);
+                      // Auto-calculate monthly amount
+                      const annual = parseFloat(e.target.value);
+                      if (!isNaN(annual) && annual > 0) {
+                        setNewMonthlyAmount((annual / 12).toFixed(2));
+                      } else {
+                        setNewMonthlyAmount('');
+                      }
+                    }}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-sm font-medium">Monthly Budget</label>
+                    <HelpTooltip content="Auto-calculated: Annual Target ÷ 12 months" />
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newMonthlyAmount}
+                    disabled
+                    placeholder="0.00"
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Auto-calculated from annual target
+                  </p>
+                </div>
+              </>
+            )}
+
+            {categoryTypesEnabled && newCategoryType === 'target_balance' && (
+              <>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-sm font-medium">Target Balance</label>
+                    <HelpTooltip content="Goal balance to reach (e.g., $10,000 emergency fund)." />
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newTargetBalance}
+                    onChange={(e) => setNewTargetBalance(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-sm font-medium">Monthly Budget</label>
+                    <HelpTooltip content="Optional: Set if you plan to spend from this category (usually $0)." />
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newMonthlyAmount}
+                    onChange={(e) => setNewMonthlyAmount(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Show Monthly Budget Amount for non-category-types users */}
+            {!categoryTypesEnabled && (
+              <div>
+                <label className="text-sm font-medium">Monthly Budget Amount</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newMonthlyAmount}
+                  onChange={(e) => setNewMonthlyAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Used by "Use Monthly Amounts" button when allocating to envelopes
+                </p>
+              </div>
+            )}
+
+            <div>
+              <label className="text-sm font-medium">Starting Balance</label>
+              <Input
+                type="number"
+                step="0.01"
+                value={newBalance}
+                onChange={(e) => setNewBalance(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+
             {/* Priority - Only show if feature enabled */}
             {prioritySystemEnabled && (
               <div>
@@ -940,54 +1074,18 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
               </div>
             )}
 
-            {/* Target amounts - Only show if category types enabled */}
-            {categoryTypesEnabled && newCategoryType === 'monthly_expense' && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <label className="text-sm font-medium">Monthly Target</label>
-                  <HelpTooltip content="Target amount to fund each month. Defaults to Monthly Budget Amount if not set." />
-                </div>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={newMonthlyTarget}
-                  onChange={(e) => setNewMonthlyTarget(e.target.value)}
-                  placeholder={newMonthlyAmount || "0.00"}
-                />
-              </div>
-            )}
-
-            {categoryTypesEnabled && newCategoryType === 'accumulation' && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <label className="text-sm font-medium">Annual Target</label>
-                  <HelpTooltip content="Total amount needed per year. System will calculate monthly funding needed and catch up if behind." />
-                </div>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={newAnnualTarget}
-                  onChange={(e) => setNewAnnualTarget(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-            )}
-
-            {categoryTypesEnabled && newCategoryType === 'target_balance' && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <label className="text-sm font-medium">Target Balance</label>
-                  <HelpTooltip content="Goal balance to reach. System will stop allocating once this balance is achieved." />
-                </div>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={newTargetBalance}
-                  onChange={(e) => setNewTargetBalance(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-            )}
+            <div>
+              <label className="text-sm font-medium">Notes</label>
+              <textarea
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={newNotes}
+                onChange={(e) => setNewNotes(e.target.value)}
+                placeholder="e.g., car repairs = 900 for tires for 4 cars over 4 years, 60 for oil changes for 3 cars 3x per year, 100 for other repairs all /12 months"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional notes to track budget formulas or other information
+              </p>
+            </div>
 
             <div className="flex items-center space-x-2">
               <Checkbox

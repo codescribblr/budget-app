@@ -84,21 +84,49 @@ export async function createCategory(data: {
 }): Promise<Category> {
   const { supabase, user } = await getAuthenticatedUser();
 
+  // Auto-calculate fields based on category type
+  const categoryType = data.category_type ?? 'monthly_expense';
+  let monthlyAmount = data.monthly_amount;
+  let monthlyTarget = data.monthly_target ?? null;
+  let annualTarget = data.annual_target ?? null;
+  let targetBalance = data.target_balance ?? null;
+
+  if (categoryType === 'monthly_expense') {
+    // For monthly expense, sync monthly_target with monthly_amount
+    monthlyTarget = monthlyAmount;
+    annualTarget = null;
+    targetBalance = null;
+  } else if (categoryType === 'accumulation') {
+    // For accumulation, calculate monthly_amount from annual_target
+    if (data.annual_target) {
+      monthlyAmount = data.annual_target / 12;
+      annualTarget = data.annual_target;
+    }
+    monthlyTarget = null;
+    targetBalance = null;
+  } else if (categoryType === 'target_balance') {
+    // For target balance, keep monthly_amount as is (user input or 0)
+    monthlyAmount = data.monthly_amount ?? 0;
+    monthlyTarget = null;
+    annualTarget = null;
+    targetBalance = data.target_balance ?? null;
+  }
+
   const { data: category, error } = await supabase
     .from('categories')
     .insert({
       user_id: user.id,
       name: data.name,
-      monthly_amount: data.monthly_amount,
+      monthly_amount: monthlyAmount,
       current_balance: data.current_balance ?? 0,
       sort_order: data.sort_order ?? 0,
       notes: data.notes ?? null,
       is_system: data.is_system ?? false,
-      category_type: data.category_type ?? 'monthly_expense',
+      category_type: categoryType,
       priority: data.priority ?? 5,
-      monthly_target: data.monthly_target ?? null,
-      annual_target: data.annual_target ?? null,
-      target_balance: data.target_balance ?? null,
+      monthly_target: monthlyTarget,
+      annual_target: annualTarget,
+      target_balance: targetBalance,
     })
     .select()
     .single();
@@ -127,17 +155,51 @@ export async function updateCategory(
 
   const updateData: any = { updated_at: new Date().toISOString() };
 
+  // Auto-calculate fields based on category type
+  const categoryType = data.category_type;
+
+  if (categoryType === 'monthly_expense') {
+    // For monthly expense, sync monthly_target with monthly_amount
+    if (data.monthly_amount !== undefined) {
+      updateData.monthly_amount = data.monthly_amount;
+      updateData.monthly_target = data.monthly_amount;
+    }
+    updateData.annual_target = null;
+    updateData.target_balance = null;
+  } else if (categoryType === 'accumulation') {
+    // For accumulation, calculate monthly_amount from annual_target
+    if (data.annual_target !== undefined) {
+      updateData.annual_target = data.annual_target;
+      updateData.monthly_amount = data.annual_target / 12;
+    }
+    updateData.monthly_target = null;
+    updateData.target_balance = null;
+  } else if (categoryType === 'target_balance') {
+    // For target balance, keep monthly_amount as is
+    if (data.monthly_amount !== undefined) {
+      updateData.monthly_amount = data.monthly_amount;
+    }
+    if (data.target_balance !== undefined) {
+      updateData.target_balance = data.target_balance;
+    }
+    updateData.monthly_target = null;
+    updateData.annual_target = null;
+  } else {
+    // No category type specified, update fields as provided
+    if (data.monthly_amount !== undefined) updateData.monthly_amount = data.monthly_amount;
+    if (data.monthly_target !== undefined) updateData.monthly_target = data.monthly_target;
+    if (data.annual_target !== undefined) updateData.annual_target = data.annual_target;
+    if (data.target_balance !== undefined) updateData.target_balance = data.target_balance;
+  }
+
+  // Update other fields
   if (data.name !== undefined) updateData.name = data.name;
-  if (data.monthly_amount !== undefined) updateData.monthly_amount = data.monthly_amount;
   if (data.current_balance !== undefined) updateData.current_balance = data.current_balance;
   if (data.sort_order !== undefined) updateData.sort_order = data.sort_order;
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.is_system !== undefined) updateData.is_system = data.is_system;
   if (data.category_type !== undefined) updateData.category_type = data.category_type;
   if (data.priority !== undefined) updateData.priority = data.priority;
-  if (data.monthly_target !== undefined) updateData.monthly_target = data.monthly_target;
-  if (data.annual_target !== undefined) updateData.annual_target = data.annual_target;
-  if (data.target_balance !== undefined) updateData.target_balance = data.target_balance;
 
   const { data: category, error } = await supabase
     .from('categories')
