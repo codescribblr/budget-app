@@ -65,7 +65,9 @@ export default function FeaturesSettings() {
           : `${feature.name} disabled successfully`
       );
     } catch (error: any) {
-      toast.error(error.message || 'Failed to toggle feature');
+      toast.error(error.message || 'Failed to toggle feature', {
+        duration: 8000, // 8 seconds for error messages (default is 4 seconds)
+      });
     } finally {
       setTogglingFeature(null);
       setConfirmDialog({ open: false, feature: null, action: 'enable' });
