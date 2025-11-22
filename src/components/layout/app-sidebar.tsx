@@ -85,7 +85,8 @@ export function AppSidebar() {
     if (path === "/") {
       return pathname === "/"
     }
-    return pathname.startsWith(path)
+    // Exact match or starts with path followed by a slash
+    return pathname === path || pathname.startsWith(path + "/")
   }
 
   return (
