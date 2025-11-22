@@ -82,13 +82,26 @@ export function FeatureProvider({ children }: { children: React.ReactNode }) {
         throw new Error(errorData.message || errorData.error || 'Failed to toggle feature');
       }
 
-      // Refresh features after successful toggle
-      await fetchFeatures();
+      const data = await response.json();
+
+      // Update local state inline instead of refetching all features
+      setFeatures(prevFeatures =>
+        prevFeatures.map(feature =>
+          feature.key === featureName
+            ? {
+                ...feature,
+                enabled: data.feature.enabled,
+                enabledAt: data.feature.enabledAt,
+                disabledAt: data.feature.disabledAt
+              }
+            : feature
+        )
+      );
     } catch (err: any) {
       console.error('Error toggling feature:', err);
       throw err;
     }
-  }, [fetchFeatures]);
+  }, []);
 
   const value: FeatureContextType = {
     features,
