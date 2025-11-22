@@ -2043,3 +2043,119 @@ export async function deleteGoal(id: number, deleteCategory: boolean = false): P
   }
 }
 
+// =====================================================
+// MONTHLY FUNDING TRACKING
+// =====================================================
+
+/**
+ * Get funded amount for a category in a specific month
+ */
+export async function getFundedThisMonth(
+  categoryId: number,
+  month: string
+): Promise<number> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const { data, error } = await supabase
+    .from('category_monthly_funding')
+    .select('funded_amount')
+    .eq('user_id', user.id)
+    .eq('category_id', categoryId)
+    .eq('month', month)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.funded_amount || 0;
+}
+
+/**
+ * Record monthly funding for a category
+ * Creates or updates the monthly funding record
+ */
+export async function recordMonthlyFunding(
+  categoryId: number,
+  month: string,
+  amount: number,
+  targetAmount?: number
+): Promise<void> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  // Get current funded amount
+  const currentFunded = await getFundedThisMonth(categoryId, month);
+  const newFundedAmount = currentFunded + amount;
+
+  // Upsert the record
+  const { error } = await supabase
+    .from('category_monthly_funding')
+    .upsert({
+      user_id: user.id,
+      category_id: categoryId,
+      month,
+      funded_amount: newFundedAmount,
+      target_amount: targetAmount,
+      updated_at: new Date().toISOString(),
+    }, {
+      onConflict: 'user_id,category_id,month',
+    });
+
+  if (error) throw error;
+}
+
+/**
+ * Get or create monthly funding record for a category
+ */
+export async function getOrCreateMonthlyFunding(
+  categoryId: number,
+  month: string
+): Promise<{ funded_amount: number; target_amount: number | null }> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  // Try to get existing record
+  const { data: existing, error: fetchError } = await supabase
+    .from('category_monthly_funding')
+    .select('funded_amount, target_amount')
+    .eq('user_id', user.id)
+    .eq('category_id', categoryId)
+    .eq('month', month)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+
+  if (existing) {
+    return existing;
+  }
+
+  // Create new record with 0 funded amount
+  const { data: newRecord, error: createError } = await supabase
+    .from('category_monthly_funding')
+    .insert({
+      user_id: user.id,
+      category_id: categoryId,
+      month,
+      funded_amount: 0,
+      target_amount: null,
+    })
+    .select('funded_amount, target_amount')
+    .single();
+
+  if (createError) throw createError;
+  return newRecord;
+}
+
+/**
+ * Check if a feature is enabled for the current user
+ */
+export async function isFeatureEnabled(featureName: string): Promise<boolean> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const { data, error } = await supabase
+    .from('user_feature_flags')
+    .select('enabled')
+    .eq('user_id', user.id)
+    .eq('feature_name', featureName)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.enabled || false;
+}
+
