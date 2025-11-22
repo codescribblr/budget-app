@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { X, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 import {
   Sheet,
   SheetContent,
@@ -31,11 +32,12 @@ export function HelpPanel({ title, description, children, trigger }: HelpPanelPr
         )}
       </SheetTrigger>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
+        <SheetHeader className="p-6">
           <SheetTitle>{title}</SheetTitle>
           {description && <SheetDescription>{description}</SheetDescription>}
         </SheetHeader>
-        <div className="px-4 pb-4 space-y-4">
+        <Separator />
+        <div className="px-6 py-6 space-y-6">
           {children}
         </div>
       </SheetContent>
