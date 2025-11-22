@@ -1,0 +1,195 @@
+'use client';
+
+import { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Sparkles, Info, AlertTriangle, Loader2 } from 'lucide-react';
+import { useFeatures, type Feature } from '@/contexts/FeatureContext';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+
+const LEVEL_COLORS = {
+  basic: 'bg-green-500/10 text-green-700 dark:text-green-400',
+  intermediate: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+  advanced: 'bg-purple-500/10 text-purple-700 dark:text-purple-400',
+  power: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+};
+
+const LEVEL_LABELS = {
+  basic: 'Basic',
+  intermediate: 'Intermediate',
+  advanced: 'Advanced',
+  power: 'Power User',
+};
+
+export default function FeaturesSettings() {
+  const { features, loading, toggleFeature } = useFeatures();
+  const [togglingFeature, setTogglingFeature] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    feature: Feature | null;
+    action: 'enable' | 'disable';
+  }>({ open: false, feature: null, action: 'enable' });
+
+  const handleToggle = async (feature: Feature, enabled: boolean) => {
+    // Show confirmation for features with data loss warning
+    if (feature.dataLossWarning && !enabled) {
+      setConfirmDialog({ open: true, feature, action: 'disable' });
+      return;
+    }
+
+    await performToggle(feature, enabled);
+  };
+
+  const performToggle = async (feature: Feature, enabled: boolean) => {
+    setTogglingFeature(feature.key);
+    try {
+      await toggleFeature(feature.key, enabled);
+      toast.success(
+        enabled
+          ? `${feature.name} enabled successfully`
+          : `${feature.name} disabled successfully`
+      );
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to toggle feature');
+    } finally {
+      setTogglingFeature(null);
+      setConfirmDialog({ open: false, feature: null, action: 'enable' });
+    }
+  };
+
+  const groupedFeatures = features.reduce((acc, feature) => {
+    if (!acc[feature.level]) {
+      acc[feature.level] = [];
+    }
+    acc[feature.level].push(feature);
+    return acc;
+  }, {} as Record<string, Feature[]>);
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            Features
+          </CardTitle>
+          <CardDescription>
+            Enable advanced features to customize your budgeting experience
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            Features
+          </CardTitle>
+          <CardDescription>
+            Enable advanced features to customize your budgeting experience. Features are organized by complexity level.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {(['basic', 'intermediate', 'advanced', 'power'] as const).map((level) => {
+            const levelFeatures = groupedFeatures[level] || [];
+            if (levelFeatures.length === 0) return null;
+
+            return (
+              <div key={level} className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Badge className={LEVEL_COLORS[level]}>
+                    {LEVEL_LABELS[level]}
+                  </Badge>
+                </div>
+
+                <div className="space-y-3">
+                  {levelFeatures.map((feature) => (
+                    <div
+                      key={feature.key}
+                      className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-card"
+                    >
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold">{feature.name}</h4>
+                          {feature.dependencies.length > 0 && (
+                            <Badge variant="outline" className="text-xs">
+                              <Info className="h-3 w-3 mr-1" />
+                              Requires {feature.dependencies.length} feature{feature.dependencies.length > 1 ? 's' : ''}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {feature.description}
+                        </p>
+                      </div>
+
+                      <Switch
+                        checked={feature.enabled}
+                        onCheckedChange={(checked) => handleToggle(feature, checked)}
+                        disabled={togglingFeature === feature.key}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ open: false, feature: null, action: 'enable' })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              Disable {confirmDialog.feature?.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Disabling this feature may result in data loss. Historical data will be preserved,
+                  but you will no longer be able to track new data for this feature.
+                </p>
+                <p className="font-semibold">
+                  Are you sure you want to continue?
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmDialog.feature && performToggle(confirmDialog.feature, false)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Disable Feature
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+

@@ -29,6 +29,7 @@ import { Loader2, Trash2, Database, Download, Key } from 'lucide-react';
 import MerchantGroupsSettings from '@/components/settings/MerchantGroupsSettings';
 import DuplicateTransactionFinder from '@/components/settings/DuplicateTransactionFinder';
 import DataBackup from '@/components/settings/DataBackup';
+import FeaturesSettings from '@/components/settings/FeaturesSettings';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -156,6 +157,11 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-bold">Account Settings</h1>
+
+      {/* Features Section */}
+      <div id="features" className="mb-6">
+        <FeaturesSettings />
+      </div>
 
       {/* Duplicate Transaction Finder */}
       <div id="duplicates" className="mb-6">

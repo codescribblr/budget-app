@@ -33,6 +33,7 @@ import type { Category, Account, CreditCard, Loan, TransactionWithSplits, GoalWi
 
 // Settings items for search
 const settingsItems = [
+  { label: "Features", path: "/settings", section: "features", keywords: "features enable disable advanced power user" },
   { label: "Data Backup & Restore", path: "/settings", section: "backup", keywords: "backup restore export import data" },
   { label: "Merchant Groups", path: "/merchants", section: null, keywords: "merchant groups manage" },
   { label: "Category Rules", path: "/category-rules", section: null, keywords: "category rules auto categorize" },
