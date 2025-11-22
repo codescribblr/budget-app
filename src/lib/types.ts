@@ -152,6 +152,11 @@ export interface CreateCategoryRequest {
   sort_order?: number;
   notes?: string;
   is_system?: boolean;
+  category_type?: 'monthly_expense' | 'accumulation' | 'target_balance';
+  priority?: number;
+  monthly_target?: number;
+  annual_target?: number;
+  target_balance?: number;
 }
 
 export interface UpdateCategoryRequest {
@@ -161,6 +166,11 @@ export interface UpdateCategoryRequest {
   sort_order?: number;
   notes?: string;
   is_system?: boolean;
+  category_type?: 'monthly_expense' | 'accumulation' | 'target_balance';
+  priority?: number;
+  monthly_target?: number;
+  annual_target?: number;
+  target_balance?: number;
 }
 
 export interface CreateAccountRequest {

@@ -26,6 +26,10 @@ import { formatCurrency } from '@/lib/utils';
 import type { Category, DashboardSummary } from '@/lib/types';
 import { toast } from 'sonner';
 import { Check, X, Settings, GripVertical, Save, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { useFeature } from '@/contexts/FeatureContext';
+import { HelpTooltip } from '@/components/ui/help-tooltip';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
 import {
   DndContext,
   closestCenter,
@@ -237,12 +241,22 @@ function SortableRow({
 }
 
 export default function CategoryList({ categories, summary, onUpdate }: CategoryListProps) {
+  // Feature flags
+  const categoryTypesEnabled = useFeature('category_types');
+  const prioritySystemEnabled = useFeature('priority_system');
+
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [newName, setNewName] = useState('');
   const [newBalance, setNewBalance] = useState('');
   const [newMonthlyAmount, setNewMonthlyAmount] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [newIsSystem, setNewIsSystem] = useState(false);
+  // New variable income fields
+  const [newCategoryType, setNewCategoryType] = useState<'monthly_expense' | 'accumulation' | 'target_balance'>('monthly_expense');
+  const [newPriority, setNewPriority] = useState(5);
+  const [newMonthlyTarget, setNewMonthlyTarget] = useState('');
+  const [newAnnualTarget, setNewAnnualTarget] = useState('');
+  const [newTargetBalance, setNewTargetBalance] = useState('');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
@@ -319,16 +333,16 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
           current_balance: parseFloat(newBalance),
           notes: newNotes || null,
           is_system: newIsSystem,
+          category_type: newCategoryType,
+          priority: newPriority,
+          monthly_target: parseFloat(newMonthlyTarget) || null,
+          annual_target: parseFloat(newAnnualTarget) || null,
+          target_balance: parseFloat(newTargetBalance) || null,
         }),
       });
 
       setIsEditDialogOpen(false);
-      setEditingCategory(null);
-      setNewName('');
-      setNewMonthlyAmount('');
-      setNewBalance('');
-      setNewNotes('');
-      setNewIsSystem(false);
+      resetFormFields();
       onUpdate();
     } catch (error) {
       console.error('Error updating category:', error);
@@ -351,19 +365,34 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
           current_balance: parseFloat(newBalance) || 0,
           notes: newNotes || null,
           is_system: newIsSystem,
+          category_type: newCategoryType,
+          priority: newPriority,
+          monthly_target: parseFloat(newMonthlyTarget) || null,
+          annual_target: parseFloat(newAnnualTarget) || null,
+          target_balance: parseFloat(newTargetBalance) || null,
         }),
       });
 
       setIsAddDialogOpen(false);
-      setNewName('');
-      setNewMonthlyAmount('');
-      setNewBalance('');
-      setNewNotes('');
-      setNewIsSystem(false);
+      resetFormFields();
       onUpdate();
     } catch (error) {
       console.error('Error adding category:', error);
     }
+  };
+
+  const resetFormFields = () => {
+    setEditingCategory(null);
+    setNewName('');
+    setNewMonthlyAmount('');
+    setNewBalance('');
+    setNewNotes('');
+    setNewIsSystem(false);
+    setNewCategoryType('monthly_expense');
+    setNewPriority(5);
+    setNewMonthlyTarget('');
+    setNewAnnualTarget('');
+    setNewTargetBalance('');
   };
 
   const handleDeleteCategory = (category: Category) => {
@@ -400,15 +429,17 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
     setNewBalance(category.current_balance.toString());
     setNewNotes(category.notes || '');
     setNewIsSystem(category.is_system);
+    setNewCategoryType(category.category_type || 'monthly_expense');
+    setNewPriority(category.priority || 5);
+    setNewMonthlyTarget(category.monthly_target?.toString() || '');
+    setNewAnnualTarget(category.annual_target?.toString() || '');
+    setNewTargetBalance(category.target_balance?.toString() || '');
     setIsEditDialogOpen(true);
   };
 
   const openAddDialog = () => {
-    setNewName('');
-    setNewMonthlyAmount('');
+    resetFormFields();
     setNewBalance('0');
-    setNewNotes('');
-    setNewIsSystem(false);
     setIsAddDialogOpen(true);
   };
 
@@ -690,6 +721,103 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
                 Optional notes to track budget formulas or other information
               </p>
             </div>
+
+            {/* Category Type - Only show if feature enabled */}
+            {categoryTypesEnabled && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-medium">Category Type</label>
+                  <HelpTooltip content="Choose how this category behaves: Monthly Expense (regular spending), Accumulation (save for periodic expenses), or Target Balance (build a buffer)." />
+                </div>
+                <Select value={newCategoryType} onValueChange={(value: any) => setNewCategoryType(value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly_expense">Monthly Expense</SelectItem>
+                    <SelectItem value="accumulation">Accumulation</SelectItem>
+                    <SelectItem value="target_balance">Target Balance</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {newCategoryType === 'monthly_expense' && 'Regular monthly spending (e.g., groceries, gas)'}
+                  {newCategoryType === 'accumulation' && 'Save for periodic expenses (e.g., annual insurance)'}
+                  {newCategoryType === 'target_balance' && 'Build and maintain a buffer (e.g., emergency fund)'}
+                </p>
+              </div>
+            )}
+
+            {/* Priority - Only show if feature enabled */}
+            {prioritySystemEnabled && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-medium">Priority: {newPriority}</label>
+                  <HelpTooltip content="Set funding priority (1 = highest, 10 = lowest). Used by Smart Allocation to fund categories in order of importance." />
+                </div>
+                <Slider
+                  value={[newPriority]}
+                  onValueChange={(value) => setNewPriority(value[0])}
+                  min={1}
+                  max={10}
+                  step={1}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>Highest (1)</span>
+                  <span>Lowest (10)</span>
+                </div>
+              </div>
+            )}
+
+            {/* Target amounts - Only show if category types enabled */}
+            {categoryTypesEnabled && newCategoryType === 'monthly_expense' && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-medium">Monthly Target</label>
+                  <HelpTooltip content="Target amount to fund each month. Defaults to Monthly Budget Amount if not set." />
+                </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newMonthlyTarget}
+                  onChange={(e) => setNewMonthlyTarget(e.target.value)}
+                  placeholder={newMonthlyAmount || "0.00"}
+                />
+              </div>
+            )}
+
+            {categoryTypesEnabled && newCategoryType === 'accumulation' && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-medium">Annual Target</label>
+                  <HelpTooltip content="Total amount needed per year. System will calculate monthly funding needed and catch up if behind." />
+                </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newAnnualTarget}
+                  onChange={(e) => setNewAnnualTarget(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            )}
+
+            {categoryTypesEnabled && newCategoryType === 'target_balance' && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-medium">Target Balance</label>
+                  <HelpTooltip content="Goal balance to reach. System will stop allocating once this balance is achieved." />
+                </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newTargetBalance}
+                  onChange={(e) => setNewTargetBalance(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            )}
+
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="edit-is-system"
@@ -764,6 +892,103 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
                 Optional notes to track budget formulas or other information
               </p>
             </div>
+
+            {/* Category Type - Only show if feature enabled */}
+            {categoryTypesEnabled && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-medium">Category Type</label>
+                  <HelpTooltip content="Choose how this category behaves: Monthly Expense (regular spending), Accumulation (save for periodic expenses), or Target Balance (build a buffer)." />
+                </div>
+                <Select value={newCategoryType} onValueChange={(value: any) => setNewCategoryType(value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly_expense">Monthly Expense</SelectItem>
+                    <SelectItem value="accumulation">Accumulation</SelectItem>
+                    <SelectItem value="target_balance">Target Balance</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {newCategoryType === 'monthly_expense' && 'Regular monthly spending (e.g., groceries, gas)'}
+                  {newCategoryType === 'accumulation' && 'Save for periodic expenses (e.g., annual insurance)'}
+                  {newCategoryType === 'target_balance' && 'Build and maintain a buffer (e.g., emergency fund)'}
+                </p>
+              </div>
+            )}
+
+            {/* Priority - Only show if feature enabled */}
+            {prioritySystemEnabled && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-medium">Priority: {newPriority}</label>
+                  <HelpTooltip content="Set funding priority (1 = highest, 10 = lowest). Used by Smart Allocation to fund categories in order of importance." />
+                </div>
+                <Slider
+                  value={[newPriority]}
+                  onValueChange={(value) => setNewPriority(value[0])}
+                  min={1}
+                  max={10}
+                  step={1}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>Highest (1)</span>
+                  <span>Lowest (10)</span>
+                </div>
+              </div>
+            )}
+
+            {/* Target amounts - Only show if category types enabled */}
+            {categoryTypesEnabled && newCategoryType === 'monthly_expense' && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-medium">Monthly Target</label>
+                  <HelpTooltip content="Target amount to fund each month. Defaults to Monthly Budget Amount if not set." />
+                </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newMonthlyTarget}
+                  onChange={(e) => setNewMonthlyTarget(e.target.value)}
+                  placeholder={newMonthlyAmount || "0.00"}
+                />
+              </div>
+            )}
+
+            {categoryTypesEnabled && newCategoryType === 'accumulation' && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-medium">Annual Target</label>
+                  <HelpTooltip content="Total amount needed per year. System will calculate monthly funding needed and catch up if behind." />
+                </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newAnnualTarget}
+                  onChange={(e) => setNewAnnualTarget(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            )}
+
+            {categoryTypesEnabled && newCategoryType === 'target_balance' && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-medium">Target Balance</label>
+                  <HelpTooltip content="Goal balance to reach. System will stop allocating once this balance is achieved." />
+                </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newTargetBalance}
+                  onChange={(e) => setNewTargetBalance(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            )}
+
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="add-is-system"

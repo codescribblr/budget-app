@@ -76,6 +76,11 @@ export async function createCategory(data: {
   sort_order?: number;
   notes?: string;
   is_system?: boolean;
+  category_type?: 'monthly_expense' | 'accumulation' | 'target_balance';
+  priority?: number;
+  monthly_target?: number;
+  annual_target?: number;
+  target_balance?: number;
 }): Promise<Category> {
   const { supabase, user } = await getAuthenticatedUser();
 
@@ -89,6 +94,11 @@ export async function createCategory(data: {
       sort_order: data.sort_order ?? 0,
       notes: data.notes ?? null,
       is_system: data.is_system ?? false,
+      category_type: data.category_type ?? 'monthly_expense',
+      priority: data.priority ?? 5,
+      monthly_target: data.monthly_target ?? null,
+      annual_target: data.annual_target ?? null,
+      target_balance: data.target_balance ?? null,
     })
     .select()
     .single();
@@ -106,6 +116,11 @@ export async function updateCategory(
     sort_order: number;
     notes: string;
     is_system: boolean;
+    category_type: 'monthly_expense' | 'accumulation' | 'target_balance';
+    priority: number;
+    monthly_target: number;
+    annual_target: number;
+    target_balance: number;
   }>
 ): Promise<Category | null> {
   const { supabase } = await getAuthenticatedUser();
@@ -118,6 +133,11 @@ export async function updateCategory(
   if (data.sort_order !== undefined) updateData.sort_order = data.sort_order;
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.is_system !== undefined) updateData.is_system = data.is_system;
+  if (data.category_type !== undefined) updateData.category_type = data.category_type;
+  if (data.priority !== undefined) updateData.priority = data.priority;
+  if (data.monthly_target !== undefined) updateData.monthly_target = data.monthly_target;
+  if (data.annual_target !== undefined) updateData.annual_target = data.annual_target;
+  if (data.target_balance !== undefined) updateData.target_balance = data.target_balance;
 
   const { data: category, error } = await supabase
     .from('categories')
