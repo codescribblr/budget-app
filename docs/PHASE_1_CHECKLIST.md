@@ -30,6 +30,13 @@
   - [ ] Write migration script
   - [ ] Test migration on development database
 
+- [ ] Create `scheduled_jobs` table
+  - [ ] Write migration script (up)
+  - [ ] Write migration script (down/rollback)
+  - [ ] Add indexes for performance
+  - [ ] Test migration on development database
+  - [ ] Verify constraints
+
 ### Backend API - Monthly Funding
 - [ ] Create `GET /api/monthly-funding/:month` endpoint
   - [ ] Implement route handler
@@ -52,6 +59,26 @@
   - [ ] `recordMonthlyFunding(userId, categoryId, month, amount)` - Record funding
   - [ ] `getOrCreateMonthlyFunding(userId, categoryId, month)` - Get or create record
   - [ ] Write unit tests for each helper
+
+### Backend API - Scheduled Jobs
+- [ ] Create scheduled job utilities
+  - [ ] `updateJobStatus(jobName, status, duration, error)` - Update job record
+  - [ ] `getJobStatus(jobName)` - Get current job status
+  - [ ] `runScheduledJob(jobName, jobFunction)` - Wrapper for job execution
+  - [ ] Write unit tests
+
+- [ ] Create `GET /api/admin/scheduled-jobs` endpoint
+  - [ ] Implement route handler
+  - [ ] Add authentication middleware (admin only)
+  - [ ] Return all jobs with status
+  - [ ] Write unit tests
+
+- [ ] Implement monthly funding rollover job
+  - [ ] Create job function `monthlyFundingRollover()`
+  - [ ] Create new monthly funding records for new month
+  - [ ] Set up cron trigger (1st of month, 00:00 UTC)
+  - [ ] Test job execution
+  - [ ] Verify job status tracking
 
 ---
 
@@ -257,6 +284,8 @@
 - Cache feature flags in React context (don't fetch on every render)
 - Monthly funding records created on-demand (not pre-created)
 - Month rollover handled by cron job (creates new records with funded_amount = 0)
+- Scheduled jobs tracked in `scheduled_jobs` table for monitoring and alerting
+- Use Supabase Edge Functions with cron triggers for scheduled jobs
 
 ### Open Questions
 - [ ] Should we auto-enable Monthly Funding Tracking for new users after 1 month?
@@ -265,7 +294,7 @@
 
 ---
 
-**Last Updated:** 2024-04-15  
-**Status:** Not Started  
-**Next Review:** TBD
+**Last Updated:** 2025-11-22
+**Status:** In Progress
+**Next Review:** Weekly
 

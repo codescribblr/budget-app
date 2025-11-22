@@ -513,6 +513,71 @@ CREATE INDEX idx_help_content_feature ON help_content(feature_name, content_type
 
 ---
 
+### Scheduled Jobs System
+
+**Purpose:** Track and monitor automated background jobs (cron jobs)
+
+**Jobs:**
+
+1. **monthly-funding-rollover** - Runs on 1st of each month at 00:00 UTC
+   - Creates new `category_monthly_funding` records for the new month
+   - Resets `funded_amount` to 0 for all categories
+   - Copies `monthly_target` from categories table
+   - Duration: ~1-5 seconds depending on user count
+
+2. **income-buffer-auto-fund** - Runs on 1st of each month at 01:00 UTC
+   - For users with `auto_fund_from_buffer` enabled
+   - Suggests or auto-funds categories from income buffer
+   - Sends notification to user
+   - Duration: ~2-10 seconds depending on user count
+
+**Job Monitoring:**
+- Each job logs start time, end time, status, and errors to `scheduled_jobs` table
+- Dashboard shows job health (last run, next run, failure count)
+- Alerts sent if job fails or doesn't run on schedule
+- Admin page shows full job history and logs
+- Metrics tracked: run count, failure count, average duration
+
+**Implementation Options:**
+- **Supabase Edge Functions** with cron triggers (recommended for Supabase users)
+- **Vercel Cron Jobs** (if deployed on Vercel)
+- **node-cron** for self-hosted deployments
+- **GitHub Actions** as fallback
+
+**Job Execution Flow:**
+```javascript
+async function runScheduledJob(jobName, jobFunction) {
+  const startTime = Date.now();
+
+  try {
+    // Mark job as running
+    await updateJobStatus(jobName, 'running', null);
+
+    // Execute the job
+    await jobFunction();
+
+    // Mark job as successful
+    const duration = Date.now() - startTime;
+    await updateJobStatus(jobName, 'success', duration);
+
+  } catch (error) {
+    // Mark job as failed
+    const duration = Date.now() - startTime;
+    await updateJobStatus(jobName, 'failed', duration, error.message);
+
+    // Send alert to admins
+    await sendJobFailureAlert(jobName, error);
+  }
+}
+```
+
+**Admin Monitoring API:**
+- `GET /api/admin/scheduled-jobs` - List all jobs with status
+- `GET /api/admin/scheduled-jobs/:jobName/history` - Get job execution history
+- `POST /api/admin/scheduled-jobs/:jobName/run` - Manually trigger a job
+
+---
+
 ### API Endpoints
 
 #### Category Management
@@ -1931,6 +1996,24 @@ CREATE TABLE user_feature_flags (
 CREATE INDEX idx_user_feature_flags_user
   ON user_feature_flags(user_id);
 
+-- Create scheduled_jobs table for cron job monitoring
+CREATE TABLE scheduled_jobs (
+  id SERIAL PRIMARY KEY,
+  job_name VARCHAR(100) NOT NULL UNIQUE,
+  last_run_at TIMESTAMP,
+  last_run_status VARCHAR(20), -- 'success', 'failed', 'running'
+  last_run_duration_ms INTEGER,
+  last_error TEXT,
+  next_run_at TIMESTAMP,
+  run_count INTEGER DEFAULT 0,
+  failure_count INTEGER DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_scheduled_jobs_name ON scheduled_jobs(job_name);
+CREATE INDEX idx_scheduled_jobs_next_run ON scheduled_jobs(next_run_at);
+
 -- Add settings columns
 ALTER TABLE settings ADD COLUMN income_type VARCHAR(20) DEFAULT 'regular';
 ALTER TABLE settings ADD COLUMN auto_fund_from_buffer BOOLEAN DEFAULT false;
@@ -1941,6 +2024,7 @@ ALTER TABLE settings ADD COLUMN show_onboarding BOOLEAN DEFAULT true;
 ```sql
 DROP TABLE IF EXISTS category_monthly_funding;
 DROP TABLE IF EXISTS user_feature_flags;
+DROP TABLE IF EXISTS scheduled_jobs;
 ALTER TABLE settings DROP COLUMN IF EXISTS income_type;
 ALTER TABLE settings DROP COLUMN IF EXISTS auto_fund_from_buffer;
 ALTER TABLE settings DROP COLUMN IF EXISTS show_onboarding;
@@ -2339,8 +2423,8 @@ This implementation plan provides a comprehensive roadmap for enhancing the budg
 ---
 
 **Document Version:** 1.0
-**Last Updated:** 2024-04-15
+**Last Updated:** 2025-11-22
 **Author:** Budget App Team
-**Status:** Draft - Awaiting Approval
+**Status:** Approved - Ready for Implementation
 
 
