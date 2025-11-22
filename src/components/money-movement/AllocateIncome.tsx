@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { formatCurrency } from '@/lib/utils';
 import type { Category, GoalWithDetails } from '@/lib/types';
-import { Target, Info, Sparkles } from 'lucide-react';
+import { Target, Info, Sparkles, Wallet } from 'lucide-react';
 import { SmartAllocationDialog } from '@/components/allocations/SmartAllocationDialog';
+import { AddToBufferDialog } from './AddToBufferDialog';
 import { useFeature } from '@/contexts/FeatureContext';
 
 interface AllocateIncomeProps {
@@ -24,8 +25,10 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [monthlyFunding, setMonthlyFunding] = useState<{ [key: number]: number }>({});
   const [isSmartAllocationOpen, setIsSmartAllocationOpen] = useState(false);
+  const [isAddToBufferOpen, setIsAddToBufferOpen] = useState(false);
 
   const smartAllocationEnabled = useFeature('smart_allocation');
+  const incomeBufferEnabled = useFeature('income_buffer');
 
   // Filter out system categories (like Transfer) from allocation
   const envelopeCategories = categories.filter(cat => !cat.is_system && !cat.is_goal);
@@ -259,6 +262,16 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
           >
             <Sparkles className="mr-2 h-4 w-4" />
             Smart Allocation
+          </Button>
+        )}
+        {incomeBufferEnabled && (
+          <Button
+            variant="default"
+            onClick={() => setIsAddToBufferOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Wallet className="mr-2 h-4 w-4" />
+            Add to Income Buffer
           </Button>
         )}
         <Button variant="outline" onClick={handleUseMonthlyAmounts}>
@@ -500,6 +513,14 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
         open={isSmartAllocationOpen}
         onOpenChange={setIsSmartAllocationOpen}
         categories={categories}
+        availableToSave={currentSavings}
+        onSuccess={onSuccess}
+      />
+
+      {/* Add to Income Buffer Dialog */}
+      <AddToBufferDialog
+        open={isAddToBufferOpen}
+        onOpenChange={setIsAddToBufferOpen}
         availableToSave={currentSavings}
         onSuccess={onSuccess}
       />

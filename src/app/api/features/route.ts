@@ -205,6 +205,59 @@ export async function POST(request: Request) {
       );
     }
 
+    // Handle Income Buffer feature - create/delete special category
+    if (featureName === 'income_buffer') {
+      if (enabled) {
+        // Check if Income Buffer category already exists
+        const { data: existingBuffer } = await supabase
+          .from('categories')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('name', 'Income Buffer')
+          .eq('is_system', true)
+          .single();
+
+        if (!existingBuffer) {
+          // Create Income Buffer category
+          const { error: createError } = await supabase
+            .from('categories')
+            .insert({
+              user_id: user.id,
+              name: 'Income Buffer',
+              monthly_amount: 0,
+              current_balance: 0,
+              sort_order: -1, // Put at top
+              is_system: true,
+              category_type: 'target_balance',
+              priority: 10, // Lowest priority (never auto-funded)
+              notes: 'Special category for smoothing irregular income. Add large payments here and withdraw monthly.',
+            });
+
+          if (createError) {
+            console.error('Error creating Income Buffer category:', createError);
+            // Don't fail the feature toggle, just log the error
+          }
+        }
+      } else {
+        // When disabling, convert Income Buffer to regular category (don't delete - preserve balance)
+        const { error: updateError } = await supabase
+          .from('categories')
+          .update({
+            is_system: false,
+            notes: 'Former Income Buffer category. You can delete this or repurpose it.',
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id)
+          .eq('name', 'Income Buffer')
+          .eq('is_system', true);
+
+        if (updateError) {
+          console.error('Error converting Income Buffer category:', updateError);
+          // Don't fail the feature toggle, just log the error
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       feature: {

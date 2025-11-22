@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import type {
@@ -14,6 +15,8 @@ import type {
   DashboardSummary,
 } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
+import { Info } from 'lucide-react';
+import Link from 'next/link';
 import CategoryList from './CategoryList';
 import AccountList from './AccountList';
 import CreditCardList from './CreditCardList';
@@ -21,6 +24,7 @@ import LoanList from './LoanList';
 import PendingCheckList from './PendingCheckList';
 import SummaryCards from './SummaryCards';
 import GoalsWidget from './GoalsWidget';
+import IncomeBufferCard from './IncomeBufferCard';
 
 export default function Dashboard() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -31,11 +35,13 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPendingChecksOpen, setIsPendingChecksOpen] = useState(true);
+  const [bufferStatus, setBufferStatus] = useState<any>(null);
+  const [showBufferNotice, setShowBufferNotice] = useState(false);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [categoriesRes, accountsRes, creditCardsRes, loansRes, pendingChecksRes, summaryRes] =
+      const [categoriesRes, accountsRes, creditCardsRes, loansRes, pendingChecksRes, summaryRes, bufferRes] =
         await Promise.all([
           fetch('/api/categories'),
           fetch('/api/accounts'),
@@ -43,9 +49,10 @@ export default function Dashboard() {
           fetch('/api/loans'),
           fetch('/api/pending-checks'),
           fetch('/api/dashboard'),
+          fetch('/api/income-buffer/status'),
         ]);
 
-      const [categoriesData, accountsData, creditCardsData, loansData, pendingChecksData, summaryData] =
+      const [categoriesData, accountsData, creditCardsData, loansData, pendingChecksData, summaryData, bufferData] =
         await Promise.all([
           categoriesRes.json(),
           accountsRes.json(),
@@ -53,6 +60,7 @@ export default function Dashboard() {
           loansRes.json(),
           pendingChecksRes.json(),
           summaryRes.json(),
+          bufferRes.json(),
         ]);
 
       setCategories(categoriesData);
@@ -61,6 +69,14 @@ export default function Dashboard() {
       setLoans(loansData);
       setPendingChecks(pendingChecksData);
       setSummary(summaryData);
+      setBufferStatus(bufferData);
+
+      // Check if we should show buffer notice
+      // Show on 1st of month if buffer has funds and categories haven't been funded yet
+      const today = new Date().getDate();
+      if (bufferData.enabled && today === 1 && bufferData.balance > 0 && !bufferData.hasBeenFundedThisMonth) {
+        setShowBufferNotice(true);
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -78,6 +94,28 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-4 md:space-y-6">
+      {/* Income Buffer Notice - Show on 1st of month if funds available */}
+      {showBufferNotice && (
+        <Alert className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+          <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <AlertDescription className="flex items-center justify-between">
+            <span className="text-blue-900 dark:text-blue-100">
+              You have {formatCurrency(bufferStatus?.balance || 0)} available in your Income Buffer.
+              Ready to fund this month's categories?
+            </span>
+            <div className="flex gap-2">
+              <Link href="/income-buffer">
+                <Button size="sm" variant="default">
+                  Fund from Buffer
+                </Button>
+              </Link>
+              <Button size="sm" variant="ghost" onClick={() => setShowBufferNotice(false)}>
+                Dismiss
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {summary && <SummaryCards summary={summary} />}
 
@@ -142,6 +180,8 @@ export default function Dashboard() {
               <LoanList loans={loans} onUpdate={fetchData} />
             </CardContent>
           </Card>
+
+          {bufferStatus?.enabled && <IncomeBufferCard />}
 
           <GoalsWidget />
         </div>

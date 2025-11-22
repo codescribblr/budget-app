@@ -16,6 +16,7 @@ import {
   Store,
   FolderTree,
   Settings,
+  Wallet,
 } from "lucide-react"
 
 import {
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/sidebar"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import SignOutButton from "@/components/auth/SignOutButton"
+import { useFeature } from "@/contexts/FeatureContext"
 
 const navigationSections = [
   {
@@ -42,6 +44,7 @@ const navigationSections = [
       { label: "Transactions", path: "/transactions", icon: Receipt },
       { label: "Import", path: "/import", icon: Upload },
       { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
+      { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureFlag: "income_buffer" },
       { label: "Income", path: "/income", icon: DollarSign },
       { label: "Goals", path: "/goals", icon: Target },
     ],
@@ -69,6 +72,7 @@ export function AppSidebar() {
   const { state } = useSidebar()
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
+  const incomeBufferEnabled = useFeature('income_buffer')
 
   React.useEffect(() => {
     setMounted(true)
@@ -112,22 +116,24 @@ export function AppSidebar() {
             <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {section.items.map((item) => {
-                  const Icon = item.icon
-                  const active = isActive(item.path)
-                  return (
-                    <SidebarMenuItem key={item.path}>
-                      <SidebarMenuButton
-                        onClick={() => router.push(item.path)}
-                        isActive={active}
-                        tooltip={item.label}
-                      >
-                        <Icon />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )
-                })}
+                {section.items
+                  .filter((item) => !item.featureFlag || (item.featureFlag === 'income_buffer' && incomeBufferEnabled))
+                  .map((item) => {
+                    const Icon = item.icon
+                    const active = isActive(item.path)
+                    return (
+                      <SidebarMenuItem key={item.path}>
+                        <SidebarMenuButton
+                          onClick={() => router.push(item.path)}
+                          isActive={active}
+                          tooltip={item.label}
+                        >
+                          <Icon />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )
+                  })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
