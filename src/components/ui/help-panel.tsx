@@ -35,7 +35,7 @@ export function HelpPanel({ title, description, children, trigger }: HelpPanelPr
           <SheetTitle>{title}</SheetTitle>
           {description && <SheetDescription>{description}</SheetDescription>}
         </SheetHeader>
-        <div className="mt-6 space-y-4">
+        <div className="px-4 pb-4 space-y-4">
           {children}
         </div>
       </SheetContent>
