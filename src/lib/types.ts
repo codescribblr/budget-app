@@ -8,6 +8,12 @@ export interface Category {
   is_system: boolean;
   is_goal?: boolean;
   notes?: string | null;
+  // Variable income enhancement fields
+  category_type?: 'monthly_expense' | 'accumulation' | 'target_balance';
+  priority?: number; // 1-10, 1 is highest priority
+  monthly_target?: number;
+  annual_target?: number;
+  target_balance?: number;
   created_at: string;
   updated_at: string;
 }
