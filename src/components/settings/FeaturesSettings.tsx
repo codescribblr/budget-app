@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Sparkles, Info, AlertTriangle, Loader2 } from 'lucide-react';
 import { useFeatures, type Feature } from '@/contexts/FeatureContext';
 import { toast } from 'sonner';
+import { HelpTooltip } from '@/components/ui/help-tooltip';
+import { HelpPanel, HelpSection } from '@/components/ui/help-panel';
+import { HELP_CONTENT } from '@/lib/help-content';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -124,33 +127,59 @@ export default function FeaturesSettings() {
                 </div>
 
                 <div className="space-y-3">
-                  {levelFeatures.map((feature) => (
-                    <div
-                      key={feature.key}
-                      className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-card"
-                    >
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-semibold">{feature.name}</h4>
-                          {feature.dependencies.length > 0 && (
-                            <Badge variant="outline" className="text-xs">
-                              <Info className="h-3 w-3 mr-1" />
-                              Requires {feature.dependencies.length} feature{feature.dependencies.length > 1 ? 's' : ''}
-                            </Badge>
+                  {levelFeatures.map((feature) => {
+                    const helpContent = HELP_CONTENT[feature.key as keyof typeof HELP_CONTENT];
+
+                    return (
+                      <div
+                        key={feature.key}
+                        className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-card"
+                      >
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-semibold">{feature.name}</h4>
+                            {helpContent && (
+                              <HelpTooltip content={helpContent.tooltip} />
+                            )}
+                            {feature.dependencies.length > 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                <Info className="h-3 w-3 mr-1" />
+                                Requires {feature.dependencies.length} feature{feature.dependencies.length > 1 ? 's' : ''}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {feature.description}
+                          </p>
+                          {helpContent && (
+                            <div className="pt-2">
+                              <HelpPanel
+                                title={helpContent.title}
+                                description={helpContent.description}
+                                trigger={
+                                  <Button variant="link" size="sm" className="h-auto p-0 text-xs">
+                                    Learn more →
+                                  </Button>
+                                }
+                              >
+                                {helpContent.sections.map((section, idx) => (
+                                  <HelpSection key={idx} title={section.title}>
+                                    {section.content}
+                                  </HelpSection>
+                                ))}
+                              </HelpPanel>
+                            </div>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {feature.description}
-                        </p>
-                      </div>
 
-                      <Switch
-                        checked={feature.enabled}
-                        onCheckedChange={(checked) => handleToggle(feature, checked)}
-                        disabled={togglingFeature === feature.key}
-                      />
-                    </div>
-                  ))}
+                        <Switch
+                          checked={feature.enabled}
+                          onCheckedChange={(checked) => handleToggle(feature, checked)}
+                          disabled={togglingFeature === feature.key}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
