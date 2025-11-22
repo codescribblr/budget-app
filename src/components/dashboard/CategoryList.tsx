@@ -30,6 +30,7 @@ import { useFeature } from '@/contexts/FeatureContext';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
+import { FundingProgressIndicator } from '@/components/categories/FundingProgressIndicator';
 import {
   DndContext,
   closestCenter,
@@ -127,7 +128,9 @@ function SortableRow({
         </a>
       </TableCell>
       <TableCell>
-        {budget > 0 ? (
+        {category.category_type === 'accumulation' || category.category_type === 'target_balance' ? (
+          <FundingProgressIndicator category={category} spent={spent} />
+        ) : budget > 0 ? (
           <div className="space-y-1">
             <div className="flex justify-between text-xs">
               <span className={getBudgetStatusColor(percentUsed)}>
@@ -790,8 +793,8 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <label className="text-sm font-medium">Monthly Budget</label>
-                    <HelpTooltip content="Optional: Set if you plan to spend from this category (usually $0)." />
+                    <label className="text-sm font-medium">Monthly Allocation Target</label>
+                    <HelpTooltip content="How much you want to allocate to this category each month (used by 'Use Monthly Amounts' button). Set to $0 if you don't want automatic allocation." />
                   </div>
                   <Input
                     type="number"
@@ -1010,8 +1013,8 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <label className="text-sm font-medium">Monthly Budget</label>
-                    <HelpTooltip content="Optional: Set if you plan to spend from this category (usually $0)." />
+                    <label className="text-sm font-medium">Monthly Allocation Target</label>
+                    <HelpTooltip content="How much you want to allocate to this category each month (used by 'Use Monthly Amounts' button). Set to $0 if you don't want automatic allocation." />
                   </div>
                   <Input
                     type="number"
