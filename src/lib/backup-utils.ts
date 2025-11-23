@@ -20,6 +20,8 @@ export interface UserBackupData {
   settings: any[];
   goals?: any[]; // Added in version 1.1
   csv_import_templates?: any[]; // Added in version 1.1
+  category_monthly_funding?: any[]; // Added in version 1.3
+  user_feature_flags?: any[]; // Added in version 1.3
 }
 
 /**
@@ -47,6 +49,8 @@ export async function exportUserData(): Promise<UserBackupData> {
     { data: settings },
     { data: goals },
     { data: csv_import_templates },
+    { data: category_monthly_funding },
+    { data: user_feature_flags },
   ] = await Promise.all([
     supabase.from('accounts').select('*').eq('user_id', user.id),
     supabase.from('categories').select('*').eq('user_id', user.id),
@@ -71,10 +75,12 @@ export async function exportUserData(): Promise<UserBackupData> {
     supabase.from('settings').select('*').eq('user_id', user.id),
     supabase.from('goals').select('*').eq('user_id', user.id),
     supabase.from('csv_import_templates').select('*').eq('user_id', user.id),
+    supabase.from('category_monthly_funding').select('*').eq('user_id', user.id),
+    supabase.from('user_feature_flags').select('*').eq('user_id', user.id),
   ]);
 
   return {
-    version: '1.2',
+    version: '1.3',
     created_at: new Date().toISOString(),
     accounts: accounts || [],
     categories: categories || [],
@@ -93,6 +99,8 @@ export async function exportUserData(): Promise<UserBackupData> {
     settings: settings || [],
     goals: goals || [],
     csv_import_templates: csv_import_templates || [],
+    category_monthly_funding: category_monthly_funding || [],
+    user_feature_flags: user_feature_flags || [],
   };
 }
 
@@ -155,6 +163,8 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   await supabase.from('goals').delete().eq('user_id', user.id);
   await supabase.from('loans').delete().eq('user_id', user.id);
   await supabase.from('credit_cards').delete().eq('user_id', user.id);
+  await supabase.from('category_monthly_funding').delete().eq('user_id', user.id);
+  await supabase.from('user_feature_flags').delete().eq('user_id', user.id);
   await supabase.from('categories').delete().eq('user_id', user.id);
   await supabase.from('accounts').delete().eq('user_id', user.id);
 
@@ -521,6 +531,43 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       throw error;
     }
     console.log('[Import] Inserted', csvImportTemplatesToInsert.length, 'CSV import templates');
+  }
+
+  // Insert category monthly funding (batch with remapped category_id)
+  if (backupData.category_monthly_funding && backupData.category_monthly_funding.length > 0) {
+    const categoryMonthlyFundingToInsert = backupData.category_monthly_funding.map(({ id, category_id, ...funding }) => ({
+      ...funding,
+      user_id: user.id,
+      category_id: category_id ? (categoryIdMap.get(category_id) || null) : null,
+    }));
+
+    const { error } = await supabase
+      .from('category_monthly_funding')
+      .insert(categoryMonthlyFundingToInsert);
+
+    if (error) {
+      console.error('[Import] Error inserting category monthly funding:', error);
+      throw error;
+    }
+    console.log('[Import] Inserted', categoryMonthlyFundingToInsert.length, 'category monthly funding records');
+  }
+
+  // Insert user feature flags (batch)
+  if (backupData.user_feature_flags && backupData.user_feature_flags.length > 0) {
+    const userFeatureFlagsToInsert = backupData.user_feature_flags.map(({ id, ...flag }) => ({
+      ...flag,
+      user_id: user.id,
+    }));
+
+    const { error } = await supabase
+      .from('user_feature_flags')
+      .insert(userFeatureFlagsToInsert);
+
+    if (error) {
+      console.error('[Import] Error inserting user feature flags:', error);
+      throw error;
+    }
+    console.log('[Import] Inserted', userFeatureFlagsToInsert.length, 'user feature flags');
   }
 
   console.log('[Import] Import completed successfully');
