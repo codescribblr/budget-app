@@ -75,28 +75,33 @@ export async function POST(request: NextRequest) {
     // Create a map for quick lookup
     const categoryMap = new Map(categories.map(cat => [cat.id, cat]));
 
-    // Prepare batch updates
-    const updates = allocations.map(allocation => {
+    // Update each category balance individually
+    // Note: We can't use a single batch update because Supabase doesn't support
+    // updating multiple rows with different values in one query
+    const updatePromises = allocations.map(async (allocation) => {
       const category = categoryMap.get(allocation.categoryId);
       if (!category) {
         throw new Error(`Category ${allocation.categoryId} not found`);
       }
       const newBalance = (category.current_balance || 0) + allocation.amount;
-      return {
-        id: allocation.categoryId,
-        user_id: user.id,  // Required for RLS policy
-        current_balance: newBalance,
-        updated_at: new Date().toISOString(),
-      };
+
+      return supabase
+        .from('categories')
+        .update({
+          current_balance: newBalance,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', allocation.categoryId)
+        .eq('user_id', user.id);
     });
 
-    // Execute batch update using upsert
-    const { error: updateError } = await supabase
-      .from('categories')
-      .upsert(updates, { onConflict: 'id', ignoreDuplicates: false });
+    // Execute all updates in parallel
+    const updateResults = await Promise.all(updatePromises);
 
-    if (updateError) {
-      console.error('Error updating category balances:', updateError);
+    // Check for any errors
+    const updateError = updateResults.find(result => result.error);
+    if (updateError?.error) {
+      console.error('Error updating category balances:', updateError.error);
       return NextResponse.json(
         { error: 'Failed to update category balances' },
         { status: 500 }
