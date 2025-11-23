@@ -228,54 +228,65 @@ export function SmartAllocationDialog({
 
               <div>
                 <h4 className="text-sm font-medium mb-2">Allocation Preview</h4>
-                <div className="border rounded-lg overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="min-w-[140px]">Category</TableHead>
-                        <TableHead className="text-center w-20">Priority</TableHead>
-                        <TableHead className="text-right w-24 sm:w-28">Funded</TableHead>
-                        <TableHead className="text-right w-24 sm:w-28">Target</TableHead>
-                        <TableHead className="text-right w-28 sm:w-32">Will Allocate</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {allocations.map((allocation) => {
-                        const editedAmount = editedAllocations[allocation.categoryId] || 0;
-                        // Show all categories, not just those with allocations
-                        return (
-                          <TableRow key={allocation.categoryId}>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{allocation.categoryName}</span>
-                                {getCategoryTypeBadge(allocation.categoryType)}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant="secondary">{allocation.priority}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right text-muted-foreground">
-                              {formatCurrency(allocation.fundedThisMonth)}
-                            </TableCell>
-                            <TableCell className="text-right text-muted-foreground">
-                              {formatCurrency(allocation.targetAmount)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={editedAmount || ''}
-                                onChange={(e) => handleAllocationChange(allocation.categoryId, e.target.value)}
-                                placeholder="0.00"
-                                className="w-24 sm:w-28 text-right ml-auto"
-                                disabled={applying}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="overflow-y-auto max-h-[50vh]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="sticky top-0 bg-background">Category</TableHead>
+                          <TableHead className="sticky top-0 bg-background text-center w-16 hidden sm:table-cell">Priority</TableHead>
+                          <TableHead className="sticky top-0 bg-background text-right w-20 hidden md:table-cell">Funded</TableHead>
+                          <TableHead className="sticky top-0 bg-background text-right w-20 hidden md:table-cell">Target</TableHead>
+                          <TableHead className="sticky top-0 bg-background text-right w-32">Will Allocate</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {allocations.map((allocation) => {
+                          const editedAmount = editedAllocations[allocation.categoryId] || 0;
+                          // Show all categories, not just those with allocations
+                          return (
+                            <TableRow key={allocation.categoryId}>
+                              <TableCell>
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{allocation.categoryName}</span>
+                                    {getCategoryTypeBadge(allocation.categoryType)}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground sm:hidden">
+                                    <span>P{allocation.priority}</span>
+                                    <span>•</span>
+                                    <span>Funded: {formatCurrency(allocation.fundedThisMonth)}</span>
+                                    <span>•</span>
+                                    <span>Target: {formatCurrency(allocation.targetAmount)}</span>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center hidden sm:table-cell">
+                                <Badge variant="secondary" className="text-xs">{allocation.priority}</Badge>
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground text-sm hidden md:table-cell">
+                                {formatCurrency(allocation.fundedThisMonth)}
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground text-sm hidden md:table-cell">
+                                {formatCurrency(allocation.targetAmount)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={editedAmount || ''}
+                                  onChange={(e) => handleAllocationChange(allocation.categoryId, e.target.value)}
+                                  placeholder="0.00"
+                                  className="w-full max-w-[120px] text-right ml-auto"
+                                  disabled={applying}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               </div>
 
