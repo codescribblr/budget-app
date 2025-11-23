@@ -17,6 +17,7 @@ import {
   FolderTree,
   Settings,
   Wallet,
+  HelpCircle,
 } from "lucide-react"
 
 import {
@@ -62,6 +63,12 @@ const navigationSections = [
       { label: "Merchants", path: "/merchants", icon: Store },
       { label: "Category Rules", path: "/category-rules", icon: FolderTree },
       { label: "Settings", path: "/settings", icon: Settings },
+    ],
+  },
+  {
+    label: "Help & Support",
+    items: [
+      { label: "Help Center", path: "/help", icon: HelpCircle },
     ],
   },
 ]
