@@ -160,7 +160,7 @@ export function SmartAllocationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-purple-600" />
@@ -209,34 +209,34 @@ export function SmartAllocationDialog({
 
           {allocations.length > 0 && (
             <>
-              <div className="rounded-lg border p-4 bg-muted/50">
-                <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="rounded-lg border p-3 sm:p-4 bg-muted/50">
+                <div className="grid grid-cols-3 gap-2 sm:gap-4 text-sm">
                   <div>
-                    <div className="text-muted-foreground">Total to Allocate</div>
-                    <div className="text-lg font-semibold">{formatCurrency(parseFloat(amount))}</div>
+                    <div className="text-muted-foreground text-xs sm:text-sm">Total to Allocate</div>
+                    <div className="text-base sm:text-lg font-semibold">{formatCurrency(parseFloat(amount))}</div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground">Will be Allocated</div>
-                    <div className="text-lg font-semibold text-green-600">{formatCurrency(totalAllocated)}</div>
+                    <div className="text-muted-foreground text-xs sm:text-sm">Will be Allocated</div>
+                    <div className="text-base sm:text-lg font-semibold text-green-600">{formatCurrency(totalAllocated)}</div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground">Remaining</div>
-                    <div className="text-lg font-semibold">{formatCurrency(remainingFunds)}</div>
+                    <div className="text-muted-foreground text-xs sm:text-sm">Remaining</div>
+                    <div className="text-base sm:text-lg font-semibold">{formatCurrency(remainingFunds)}</div>
                   </div>
                 </div>
               </div>
 
               <div>
                 <h4 className="text-sm font-medium mb-2">Allocation Preview</h4>
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-lg overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Category</TableHead>
-                        <TableHead className="text-center">Priority</TableHead>
-                        <TableHead className="text-right">Funded</TableHead>
-                        <TableHead className="text-right">Target</TableHead>
-                        <TableHead className="text-right">Will Allocate</TableHead>
+                        <TableHead className="min-w-[140px]">Category</TableHead>
+                        <TableHead className="text-center w-20">Priority</TableHead>
+                        <TableHead className="text-right w-24 sm:w-28">Funded</TableHead>
+                        <TableHead className="text-right w-24 sm:w-28">Target</TableHead>
+                        <TableHead className="text-right w-28 sm:w-32">Will Allocate</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -267,7 +267,7 @@ export function SmartAllocationDialog({
                                 value={editedAmount || ''}
                                 onChange={(e) => handleAllocationChange(allocation.categoryId, e.target.value)}
                                 placeholder="0.00"
-                                className="w-28 text-right ml-auto"
+                                className="w-24 sm:w-28 text-right ml-auto"
                                 disabled={applying}
                               />
                             </TableCell>
