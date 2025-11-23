@@ -114,36 +114,39 @@ export function SmartAllocationDialog({
   const handleApply = async () => {
     setApplying(true);
     try {
-      // Build array of allocation promises to execute in parallel
-      const allocationPromises = allocations
+      // Build array of allocations with amounts > 0
+      const batchAllocations = allocations
         .filter(allocation => {
           const editedAmount = editedAllocations[allocation.categoryId] || 0;
           return editedAmount > 0;
         })
-        .map(allocation => {
-          const editedAmount = editedAllocations[allocation.categoryId];
-          return fetch('/api/allocations/manual', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              categoryId: allocation.categoryId,
-              amount: editedAmount,
-              month: currentMonth,
-            }),
-          });
-        });
+        .map(allocation => ({
+          categoryId: allocation.categoryId,
+          amount: editedAllocations[allocation.categoryId],
+        }));
 
-      // Execute all allocations in parallel
-      const results = await Promise.all(allocationPromises);
-
-      // Check for any failed requests
-      const failedRequests = results.filter(r => !r.ok);
-      if (failedRequests.length > 0) {
-        throw new Error(`${failedRequests.length} allocation(s) failed`);
+      if (batchAllocations.length === 0) {
+        toast.error('No allocations to apply');
+        return;
       }
 
-      const allocatedCount = Object.values(editedAllocations).filter(a => a > 0).length;
-      toast.success(`Successfully allocated ${formatCurrency(totalAllocated)} across ${allocatedCount} categories`);
+      // Execute batch allocation in a single request
+      const response = await fetch('/api/allocations/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          allocations: batchAllocations,
+          month: currentMonth,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to apply allocation');
+      }
+
+      const result = await response.json();
+      toast.success(`Successfully allocated ${formatCurrency(totalAllocated)} across ${result.allocationsProcessed} categories`);
       onSuccess();
       onOpenChange(false);
       setAmount('');
