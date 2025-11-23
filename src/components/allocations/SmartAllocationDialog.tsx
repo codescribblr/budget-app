@@ -160,7 +160,7 @@ export function SmartAllocationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+      <DialogContent className="max-w-[95vw] sm:max-w-3xl md:max-w-4xl lg:max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-purple-600" />
@@ -233,11 +233,11 @@ export function SmartAllocationDialog({
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="sticky top-0 bg-background">Category</TableHead>
+                          <TableHead className="sticky top-0 bg-background w-[45%] sm:w-auto">Category</TableHead>
                           <TableHead className="sticky top-0 bg-background text-center w-16 hidden sm:table-cell">Priority</TableHead>
-                          <TableHead className="sticky top-0 bg-background text-right w-20 hidden md:table-cell">Funded</TableHead>
-                          <TableHead className="sticky top-0 bg-background text-right w-20 hidden md:table-cell">Target</TableHead>
-                          <TableHead className="sticky top-0 bg-background text-right w-32">Will Allocate</TableHead>
+                          <TableHead className="sticky top-0 bg-background text-right w-24 hidden md:table-cell">Funded</TableHead>
+                          <TableHead className="sticky top-0 bg-background text-right w-24 hidden md:table-cell">Target</TableHead>
+                          <TableHead className="sticky top-0 bg-background text-right w-[55%] sm:w-32">Allocate</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -246,38 +246,35 @@ export function SmartAllocationDialog({
                           // Show all categories, not just those with allocations
                           return (
                             <TableRow key={allocation.categoryId}>
-                              <TableCell>
-                                <div className="flex flex-col gap-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium">{allocation.categoryName}</span>
+                              <TableCell className="py-3">
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-medium text-sm break-words">{allocation.categoryName}</span>
                                     {getCategoryTypeBadge(allocation.categoryType)}
                                   </div>
-                                  <div className="flex items-center gap-2 text-xs text-muted-foreground sm:hidden">
-                                    <span>P{allocation.priority}</span>
-                                    <span>•</span>
-                                    <span>Funded: {formatCurrency(allocation.fundedThisMonth)}</span>
-                                    <span>•</span>
-                                    <span>Target: {formatCurrency(allocation.targetAmount)}</span>
+                                  <div className="text-[11px] text-muted-foreground sm:hidden space-y-0.5">
+                                    <div>Priority: {allocation.priority}</div>
+                                    <div>Funded: {formatCurrency(allocation.fundedThisMonth)} / Target: {formatCurrency(allocation.targetAmount)}</div>
                                   </div>
                                 </div>
                               </TableCell>
                               <TableCell className="text-center hidden sm:table-cell">
                                 <Badge variant="secondary" className="text-xs">{allocation.priority}</Badge>
                               </TableCell>
-                              <TableCell className="text-right text-muted-foreground text-sm hidden md:table-cell">
+                              <TableCell className="text-right text-muted-foreground text-sm hidden md:table-cell whitespace-nowrap">
                                 {formatCurrency(allocation.fundedThisMonth)}
                               </TableCell>
-                              <TableCell className="text-right text-muted-foreground text-sm hidden md:table-cell">
+                              <TableCell className="text-right text-muted-foreground text-sm hidden md:table-cell whitespace-nowrap">
                                 {formatCurrency(allocation.targetAmount)}
                               </TableCell>
-                              <TableCell className="text-right">
+                              <TableCell className="text-right py-3">
                                 <Input
                                   type="number"
                                   step="0.01"
                                   value={editedAmount || ''}
                                   onChange={(e) => handleAllocationChange(allocation.categoryId, e.target.value)}
                                   placeholder="0.00"
-                                  className="w-full max-w-[120px] text-right ml-auto"
+                                  className="w-full sm:w-28 md:w-32 text-right ml-auto text-sm"
                                   disabled={applying}
                                 />
                               </TableCell>
