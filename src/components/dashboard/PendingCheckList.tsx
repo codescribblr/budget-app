@@ -85,7 +85,7 @@ export default function PendingCheckList({ pendingChecks, onUpdate }: PendingChe
   return (
     <>
       <div className="space-y-4">
-        <div className="flex justify-end">
+        <div className="mb-3">
           <Button onClick={() => setIsAddDialogOpen(true)} size="sm">
             Add Pending Check
           </Button>

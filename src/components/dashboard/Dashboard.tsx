@@ -15,7 +15,7 @@ import type {
   DashboardSummary,
 } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
-import { Info } from 'lucide-react';
+import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, DollarSign } from 'lucide-react';
 import Link from 'next/link';
 import CategoryList from './CategoryList';
 import AccountList from './AccountList';
@@ -122,7 +122,10 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[calc(100vh-400px)]">
         <Card className="flex flex-col lg:col-span-2">
           <CardHeader>
-            <CardTitle>Budget Categories (Envelopes)</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Budget Categories (Envelopes)
+            </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden">
             <CategoryList categories={categories} summary={summary} onUpdate={fetchData} />
@@ -132,7 +135,10 @@ export default function Dashboard() {
         <div className="space-y-6">
           <Card id="accounts-section">
             <CardHeader>
-              <CardTitle>Accounts</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Wallet className="h-5 w-5" />
+                Accounts
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <AccountList accounts={accounts} onUpdate={fetchData} />
@@ -141,7 +147,10 @@ export default function Dashboard() {
 
           <Card id="credit-cards-section">
             <CardHeader>
-              <CardTitle>Credit Cards</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCardIcon className="h-5 w-5" />
+                Credit Cards
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <CreditCardList creditCards={creditCards} onUpdate={fetchData} />
@@ -155,6 +164,7 @@ export default function Dashboard() {
                   <CollapsibleTrigger asChild>
                     <Button variant="ghost" className="p-0 hover:bg-transparent">
                       <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
                         Pending Checks
                         <span className="text-sm font-normal text-muted-foreground">
                           ({pendingChecks.length})
@@ -174,7 +184,10 @@ export default function Dashboard() {
 
           <Card id="loans-section">
             <CardHeader>
-              <CardTitle>Loans</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Landmark className="h-5 w-5" />
+                Loans
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <LoanList loans={loans} onUpdate={fetchData} />
