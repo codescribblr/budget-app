@@ -33,9 +33,9 @@ export function calculateSmartAllocation(
   availableFunds: number,
   currentMonth: string
 ): SmartAllocationResult {
-  // Filter out system categories and sort by priority
+  // Filter out system categories, buffer category, and goals - sort by priority
   const eligibleCategories = categories
-    .filter(cat => !cat.is_system && !cat.is_goal)
+    .filter(cat => !cat.is_system && !cat.is_goal && !cat.is_buffer)
     .sort((a, b) => {
       const priorityA = a.priority || 5;
       const priorityB = b.priority || 5;

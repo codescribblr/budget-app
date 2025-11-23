@@ -6,6 +6,7 @@ export interface Category {
   current_balance: number;
   sort_order: number;
   is_system: boolean;
+  is_buffer?: boolean; // Income Buffer category - doesn't show in dropdowns but counts in totals
   is_goal?: boolean;
   notes?: string | null;
   // Variable income enhancement fields

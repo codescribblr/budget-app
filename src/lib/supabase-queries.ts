@@ -731,12 +731,17 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     .filter(acc => acc.include_in_totals === true)
     .reduce((sum, acc) => sum + Number(acc.balance), 0);
 
-  const envelopeCategories = (categories as Category[]).filter(cat => !cat.is_system);
+  // Filter categories for envelope display (exclude system categories and buffer)
+  const envelopeCategories = (categories as Category[]).filter(cat => !cat.is_system && !cat.is_buffer);
 
-  const totalEnvelopes = envelopeCategories
+  // For totals calculation, include buffer category but exclude other system categories
+  // Buffer category is special: doesn't show in lists but DOES count in totals
+  const categoriesTotalBalance = (categories as Category[])
+    .filter(cat => !cat.is_system || cat.is_buffer)
     .reduce((sum, cat) => sum + Number(cat.current_balance), 0);
 
-  const hasNegativeEnvelopes = envelopeCategories
+  const hasNegativeEnvelopes = (categories as Category[])
+    .filter(cat => !cat.is_system || cat.is_buffer)
     .some(cat => Number(cat.current_balance) < 0);
 
   const totalCreditCardBalances = (creditCards as CreditCard[])
@@ -746,9 +751,9 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const totalPendingChecks = (pendingChecks as any[])
     .reduce((sum, pc) => sum + Number(pc.amount), 0);
 
-  const currentSavings = totalMonies - totalEnvelopes - totalCreditCardBalances - totalPendingChecks;
+  const currentSavings = totalMonies - categoriesTotalBalance - totalCreditCardBalances - totalPendingChecks;
 
-  // Calculate total monthly budget
+  // Calculate total monthly budget (exclude buffer from budget totals)
   const totalMonthlyBudget = envelopeCategories
     .reduce((sum, cat) => sum + Number(cat.monthly_amount), 0);
 
@@ -757,7 +762,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   return {
     total_monies: totalMonies,
-    total_envelopes: totalEnvelopes,
+    total_envelopes: categoriesTotalBalance, // Includes buffer category balance
     total_credit_card_balances: totalCreditCardBalances,
     total_pending_checks: totalPendingChecks,
     current_savings: currentSavings,

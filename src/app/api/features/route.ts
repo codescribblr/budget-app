@@ -228,6 +228,7 @@ export async function POST(request: Request) {
               current_balance: 0,
               sort_order: -1, // Put at top
               is_system: true,
+              is_buffer: true, // Special flag: doesn't show in dropdowns but counts in totals
               category_type: 'target_balance',
               priority: 10, // Lowest priority (never auto-funded)
               notes: 'Special category for smoothing irregular income. Add large payments here and withdraw monthly.',
@@ -244,6 +245,7 @@ export async function POST(request: Request) {
           .from('categories')
           .update({
             is_system: false,
+            is_buffer: false,
             notes: 'Former Income Buffer category. You can delete this or repurpose it.',
             updated_at: new Date().toISOString()
           })
