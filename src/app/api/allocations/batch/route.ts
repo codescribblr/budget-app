@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
       const newBalance = (category.current_balance || 0) + allocation.amount;
       return {
         id: allocation.categoryId,
+        user_id: user.id,  // Required for RLS policy
         current_balance: newBalance,
         updated_at: new Date().toISOString(),
       };
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
     // Execute batch update using upsert
     const { error: updateError } = await supabase
       .from('categories')
-      .upsert(updates, { onConflict: 'id' });
+      .upsert(updates, { onConflict: 'id', ignoreDuplicates: false });
 
     if (updateError) {
       console.error('Error updating category balances:', updateError);
