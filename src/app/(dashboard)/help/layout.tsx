@@ -1,5 +1,6 @@
 import { HelpSidebar } from '@/components/help/HelpSidebar';
 import { HelpMobileNav } from '@/components/help/HelpMobileNav';
+import { BackToTop } from '@/components/help/BackToTop';
 
 export default function HelpLayout({
   children,
@@ -33,6 +34,9 @@ export default function HelpLayout({
           {children}
         </div>
       </div>
+
+      {/* Back to Top Button */}
+      <BackToTop />
     </div>
   );
 }

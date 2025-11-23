@@ -2,6 +2,8 @@ import { Breadcrumbs } from '@/components/help/Breadcrumbs';
 import { Callout } from '@/components/help/Callout';
 import { StepList } from '@/components/help/StepList';
 import { WasThisHelpful } from '@/components/help/WasThisHelpful';
+import { RelatedArticles } from '@/components/help/RelatedArticles';
+import { PrintButton } from '@/components/help/PrintButton';
 import Link from 'next/link';
 
 export default function FirstBudgetTutorialPage() {
@@ -15,11 +17,14 @@ export default function FirstBudgetTutorialPage() {
         ]}
       />
 
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Tutorial: Setting Up Your First Budget</h1>
-        <p className="text-lg text-muted-foreground">
-          A complete walkthrough for creating your first budget from scratch
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Tutorial: Setting Up Your First Budget</h1>
+          <p className="text-lg text-muted-foreground">
+            A complete walkthrough for creating your first budget from scratch
+          </p>
+        </div>
+        <PrintButton />
       </div>
 
       <div className="prose dark:prose-invert max-w-none">
@@ -276,6 +281,31 @@ export default function FirstBudgetTutorialPage() {
           building the habit of tracking your spending and adjusting as you go.
         </Callout>
       </div>
+
+      <RelatedArticles
+        articles={[
+          {
+            title: 'Quick Start Guide',
+            href: '/help/getting-started/quick-start',
+            description: 'Get up and running quickly with the basics',
+          },
+          {
+            title: 'Importing Transactions',
+            href: '/help/tutorials/importing',
+            description: 'Learn how to import transactions from your bank',
+          },
+          {
+            title: 'Budget Setup Wizard',
+            href: '/help/wizards/budget-setup',
+            description: 'Interactive wizard to guide you through setup',
+          },
+          {
+            title: 'Getting Started FAQ',
+            href: '/help/faq/getting-started',
+            description: 'Answers to common questions for new users',
+          },
+        ]}
+      />
 
       <WasThisHelpful articlePath="/help/tutorials/first-budget" />
     </div>
