@@ -114,11 +114,15 @@ export function SmartAllocationDialog({
   const handleApply = async () => {
     setApplying(true);
     try {
-      // Apply each allocation using edited amounts
-      for (const allocation of allocations) {
-        const editedAmount = editedAllocations[allocation.categoryId] || 0;
-        if (editedAmount > 0) {
-          await fetch('/api/allocations/manual', {
+      // Build array of allocation promises to execute in parallel
+      const allocationPromises = allocations
+        .filter(allocation => {
+          const editedAmount = editedAllocations[allocation.categoryId] || 0;
+          return editedAmount > 0;
+        })
+        .map(allocation => {
+          const editedAmount = editedAllocations[allocation.categoryId];
+          return fetch('/api/allocations/manual', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -127,7 +131,15 @@ export function SmartAllocationDialog({
               month: currentMonth,
             }),
           });
-        }
+        });
+
+      // Execute all allocations in parallel
+      const results = await Promise.all(allocationPromises);
+
+      // Check for any failed requests
+      const failedRequests = results.filter(r => !r.ok);
+      if (failedRequests.length > 0) {
+        throw new Error(`${failedRequests.length} allocation(s) failed`);
       }
 
       const allocatedCount = Object.values(editedAllocations).filter(a => a > 0).length;
@@ -139,7 +151,7 @@ export function SmartAllocationDialog({
       setEditedAllocations({});
     } catch (error) {
       console.error('Error applying allocation:', error);
-      toast.error('Failed to apply allocation');
+      toast.error('Failed to apply allocation', { duration: 8000 });
     } finally {
       setApplying(false);
     }
