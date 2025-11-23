@@ -3,16 +3,17 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { WizardProgress } from './WizardProgress';
-import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
 
 interface WizardProps {
   steps: string[];
   children: React.ReactNode[];
-  onComplete: () => void;
+  onComplete: () => void | Promise<void>;
   onCancel?: () => void;
+  isProcessing?: boolean;
 }
 
-export function Wizard({ steps, children, onComplete, onCancel }: WizardProps) {
+export function Wizard({ steps, children, onComplete, onCancel, isProcessing = false }: WizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = steps.length;
   const isFirstStep = currentStep === 1;
@@ -70,8 +71,14 @@ export function Wizard({ steps, children, onComplete, onCancel }: WizardProps) {
           <Button
             type="button"
             onClick={handleNext}
+            disabled={isProcessing}
           >
-            {isLastStep ? (
+            {isProcessing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : isLastStep ? (
               <>
                 <Check className="h-4 w-4 mr-2" />
                 Complete

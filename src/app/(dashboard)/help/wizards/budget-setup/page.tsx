@@ -9,10 +9,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Callout } from '@/components/help/Callout';
-import { Rocket } from 'lucide-react';
+import { Rocket, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+const DEFAULT_CATEGORIES = [
+  { name: 'Rent/Mortgage', monthly_amount: 0 },
+  { name: 'Utilities', monthly_amount: 0 },
+  { name: 'Groceries', monthly_amount: 0 },
+  { name: 'Transportation', monthly_amount: 0 },
+  { name: 'Insurance', monthly_amount: 0 },
+  { name: 'Dining Out', monthly_amount: 0 },
+  { name: 'Entertainment', monthly_amount: 0 },
+  { name: 'Clothing', monthly_amount: 0 },
+  { name: 'Personal Care', monthly_amount: 0 },
+  { name: 'Emergency Fund', monthly_amount: 0 },
+  { name: 'Savings', monthly_amount: 0 },
+  { name: 'Miscellaneous', monthly_amount: 0 },
+];
 
 export default function BudgetSetupWizardPage() {
   const router = useRouter();
+  const [isCreating, setIsCreating] = useState(false);
   const [wizardData, setWizardData] = useState({
     checkingBalance: '',
     savingsBalance: '',
@@ -20,9 +37,71 @@ export default function BudgetSetupWizardPage() {
     startDate: new Date().toISOString().split('T')[0],
   });
 
-  const handleComplete = () => {
-    // In a real implementation, this would save the data and redirect
-    router.push('/');
+  const handleComplete = async () => {
+    setIsCreating(true);
+    try {
+      // Create accounts
+      const accountsToCreate = [];
+
+      if (wizardData.checkingBalance && parseFloat(wizardData.checkingBalance) > 0) {
+        accountsToCreate.push({
+          name: 'Checking Account',
+          balance: parseFloat(wizardData.checkingBalance),
+          account_type: 'checking' as const,
+          include_in_totals: true,
+        });
+      }
+
+      if (wizardData.savingsBalance && parseFloat(wizardData.savingsBalance) > 0) {
+        accountsToCreate.push({
+          name: 'Savings Account',
+          balance: parseFloat(wizardData.savingsBalance),
+          account_type: 'savings' as const,
+          include_in_totals: true,
+        });
+      }
+
+      // Create accounts
+      for (const account of accountsToCreate) {
+        const response = await fetch('/api/accounts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(account),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create account');
+        }
+      }
+
+      // Create categories
+      for (let i = 0; i < DEFAULT_CATEGORIES.length; i++) {
+        const category = DEFAULT_CATEGORIES[i];
+        const response = await fetch('/api/categories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...category,
+            sort_order: i,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create category');
+        }
+      }
+
+      toast.success(
+        `Budget created! Added ${accountsToCreate.length} account(s) and ${DEFAULT_CATEGORIES.length} categories.`
+      );
+
+      // Redirect to money movement page
+      router.push('/money-movement');
+    } catch (error) {
+      console.error('Error creating budget:', error);
+      toast.error('Failed to create budget. Please try again.');
+      setIsCreating(false);
+    }
   };
 
   const handleCancel = () => {
@@ -60,6 +139,7 @@ export default function BudgetSetupWizardPage() {
           steps={['Welcome', 'Accounts', 'Income', 'Categories', 'Review']}
           onComplete={handleComplete}
           onCancel={handleCancel}
+          isProcessing={isCreating}
         >
           {/* Step 1: Welcome */}
           <WizardStep
