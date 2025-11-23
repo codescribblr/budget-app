@@ -15,7 +15,7 @@ import type {
   DashboardSummary,
 } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
-import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, DollarSign } from 'lucide-react';
+import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, Mail } from 'lucide-react';
 import Link from 'next/link';
 import CategoryList from './CategoryList';
 import AccountList from './AccountList';
@@ -123,7 +123,7 @@ export default function Dashboard() {
         <Card className="flex flex-col lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
+              <Mail className="h-5 w-5" />
               Budget Categories (Envelopes)
             </CardTitle>
           </CardHeader>
@@ -160,19 +160,17 @@ export default function Dashboard() {
           <Collapsible open={isPendingChecksOpen} onOpenChange={setIsPendingChecksOpen}>
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CollapsibleTrigger asChild>
-                    <Button variant="ghost" className="p-0 hover:bg-transparent">
-                      <CardTitle className="flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
-                        Pending Checks
-                        <span className="text-sm font-normal text-muted-foreground">
-                          ({pendingChecks.length})
-                        </span>
-                      </CardTitle>
-                    </Button>
-                  </CollapsibleTrigger>
-                </div>
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center gap-2 cursor-pointer">
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Pending Checks
+                      <span className="text-sm font-normal text-muted-foreground">
+                        ({pendingChecks.length})
+                      </span>
+                    </CardTitle>
+                  </div>
+                </CollapsibleTrigger>
               </CardHeader>
               <CollapsibleContent>
                 <CardContent>
