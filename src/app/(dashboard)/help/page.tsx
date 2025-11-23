@@ -65,8 +65,9 @@ const sections = [
 const popularArticles = [
   { title: 'Quick Start Guide', href: '/help/getting-started/quick-start' },
   { title: 'Understanding Core Concepts', href: '/help/getting-started/core-concepts' },
+  { title: 'Setting Up Your First Budget', href: '/help/tutorials/first-budget' },
   { title: 'Importing Transactions', href: '/help/tutorials/importing' },
-  { title: 'Setting Up Auto-Categorization', href: '/help/tutorials/auto-categorization' },
+  { title: 'Managing Irregular Income', href: '/help/tutorials/irregular-income' },
   { title: 'What is Available to Save?', href: '/help/faq/envelope-budgeting' },
 ];
 
