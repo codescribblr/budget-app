@@ -233,11 +233,11 @@ export function SmartAllocationDialog({
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="sticky top-0 bg-background w-[55%] sm:w-auto">Category</TableHead>
+                          <TableHead className="sticky top-0 bg-background w-[55%] sm:w-auto md:w-[30%]">Category</TableHead>
                           <TableHead className="sticky top-0 bg-background text-center w-16 hidden sm:table-cell">Priority</TableHead>
                           <TableHead className="sticky top-0 bg-background text-right w-24 hidden md:table-cell">Funded</TableHead>
                           <TableHead className="sticky top-0 bg-background text-right w-24 hidden md:table-cell">Target</TableHead>
-                          <TableHead className="sticky top-0 bg-background text-right w-[45%] sm:w-24">Allocate</TableHead>
+                          <TableHead className="sticky top-0 bg-background text-right w-[45%] sm:w-24 md:w-32">Allocate</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -274,7 +274,7 @@ export function SmartAllocationDialog({
                                   value={editedAmount || ''}
                                   onChange={(e) => handleAllocationChange(allocation.categoryId, e.target.value)}
                                   placeholder="0.00"
-                                  className="w-full sm:w-20 text-right ml-auto text-sm"
+                                  className="w-full sm:w-20 md:w-28 text-right ml-auto text-sm"
                                   disabled={applying}
                                 />
                               </TableCell>
