@@ -33,6 +33,11 @@ const allPages = [
   { label: 'Income Buffer', href: '/help/features/income-buffer', section: 'Features' },
   { label: 'Reports', href: '/help/features/reports', section: 'Features' },
 
+  // Tutorials
+  { label: 'Setting Up Your First Budget', href: '/help/tutorials/first-budget', section: 'Tutorials' },
+  { label: 'Importing Transactions', href: '/help/tutorials/importing', section: 'Tutorials' },
+  { label: 'Managing Irregular Income', href: '/help/tutorials/irregular-income', section: 'Tutorials' },
+
   // Wizards
   { label: 'Budget Setup Wizard', href: '/help/wizards/budget-setup', section: 'Wizards' },
   { label: 'Income Buffer Wizard', href: '/help/wizards/income-buffer', section: 'Wizards' },
@@ -64,7 +69,7 @@ export function HelpMobileNav() {
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {['Getting Started', 'Features', 'Wizards', 'FAQ', 'Support'].map((section) => (
+        {['Getting Started', 'Features', 'Tutorials', 'Wizards', 'FAQ', 'Support'].map((section) => (
           <React.Fragment key={section}>
             <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">
               {section}

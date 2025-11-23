@@ -56,6 +56,15 @@ const navigationSections: NavSection[] = [
     ],
   },
   {
+    label: 'Tutorials',
+    icon: GraduationCap,
+    items: [
+      { label: 'Setting Up Your First Budget', href: '/help/tutorials/first-budget' },
+      { label: 'Importing Transactions', href: '/help/tutorials/importing' },
+      { label: 'Managing Irregular Income', href: '/help/tutorials/irregular-income' },
+    ],
+  },
+  {
     label: 'Wizards',
     icon: Sparkles,
     items: [
