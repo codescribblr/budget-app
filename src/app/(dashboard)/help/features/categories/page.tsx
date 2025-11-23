@@ -2,10 +2,23 @@ import Link from 'next/link';
 import { Breadcrumbs } from '@/components/help/Breadcrumbs';
 import { Callout } from '@/components/help/Callout';
 import { WasThisHelpful } from '@/components/help/WasThisHelpful';
+import { StepList } from '@/components/help/StepList';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  FolderOpen,
+  Tag,
+  DollarSign,
+  TrendingUp,
+  Calendar,
+  ArrowUpDown,
+  Edit3,
+  Shield,
+  Lightbulb
+} from 'lucide-react';
 
 export default function CategoriesFeaturePage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Breadcrumbs
         items={[
           { label: 'Help Center', href: '/help' },
@@ -14,6 +27,7 @@ export default function CategoriesFeaturePage() {
         ]}
       />
 
+      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold mb-2">Budget Categories (Envelopes)</h1>
         <p className="text-lg text-muted-foreground">
@@ -21,161 +35,427 @@ export default function CategoriesFeaturePage() {
         </p>
       </div>
 
-      <div className="prose dark:prose-invert max-w-none">
-        <p>
-          Categories (also called envelopes) are the heart of envelope budgeting. Each category
-          represents a specific purpose for your money - like groceries, rent, or savings.
-        </p>
+      {/* Introduction */}
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-base leading-relaxed">
+            Categories (also called envelopes) are the heart of envelope budgeting. Each category
+            represents a specific purpose for your money - like groceries, rent, or savings.
+          </p>
+        </CardContent>
+      </Card>
 
-        <h2>Creating Categories</h2>
-        <ol>
-          <li>Go to the Dashboard</li>
-          <li>In the Budget Categories card, click "Add Category"</li>
-          <li>Enter a category name (e.g., "Groceries", "Rent", "Entertainment")</li>
-          <li>Set a monthly amount (how much you plan to spend/save in this category each month)</li>
-          <li>Optionally set category type and priority (if features are enabled)</li>
-          <li>Click "Add Category"</li>
-        </ol>
+      {/* Creating Categories */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <FolderOpen className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Creating Categories</CardTitle>
+              <CardDescription className="text-base">
+                Follow these steps to add a new budget category
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <StepList
+            steps={[
+              { title: 'Go to the Dashboard', content: 'Navigate to your main dashboard page' },
+              { title: 'Click "Add Category"', content: 'Find the Budget Categories card and click the "Add Category" button' },
+              { title: 'Enter category name', content: 'Choose a clear name (e.g., "Groceries", "Rent", "Entertainment")' },
+              { title: 'Set monthly amount', content: 'Enter how much you plan to spend/save in this category each month' },
+              { title: 'Optional settings', content: 'Set category type and priority if these features are enabled' },
+              { title: 'Save', content: 'Click "Add Category" to create your new category' },
+            ]}
+          />
+          <Callout type="tip" title="Start simple">
+            Begin with 10-15 broad categories. You can always add more specific categories later as
+            you refine your budget.
+          </Callout>
+        </CardContent>
+      </Card>
 
-        <Callout type="tip" title="Start simple">
-          Begin with 10-15 broad categories. You can always add more specific categories later as
-          you refine your budget.
-        </Callout>
+      {/* Understanding Category Fields */}
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold">Understanding Category Fields</h2>
 
-        <h2>Understanding Category Fields</h2>
+        {/* Category Name */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Tag className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl mb-2">Category Name</CardTitle>
+                <CardDescription className="text-base">
+                  Choose clear, descriptive names that make sense to you
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3">
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className="font-medium text-sm mb-2">Fixed Expenses</p>
+                <p className="text-sm text-muted-foreground">Rent/Mortgage, Insurance, Loan Payments</p>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className="font-medium text-sm mb-2">Variable Expenses</p>
+                <p className="text-sm text-muted-foreground">Groceries, Gas, Utilities, Dining Out</p>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className="font-medium text-sm mb-2">Savings</p>
+                <p className="text-sm text-muted-foreground">Emergency Fund, Vacation, Down Payment</p>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className="font-medium text-sm mb-2">Discretionary</p>
+                <p className="text-sm text-muted-foreground">Entertainment, Hobbies, Clothing</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        <h3>Category Name</h3>
-        <p>
-          Choose clear, descriptive names that make sense to you. Common categories include:
-        </p>
-        <ul>
-          <li><strong>Fixed expenses:</strong> Rent/Mortgage, Insurance, Loan Payments</li>
-          <li><strong>Variable expenses:</strong> Groceries, Gas, Utilities, Dining Out</li>
-          <li><strong>Savings:</strong> Emergency Fund, Vacation, Down Payment</li>
-          <li><strong>Discretionary:</strong> Entertainment, Hobbies, Clothing</li>
-        </ul>
+        {/* Monthly Amount */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <DollarSign className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl mb-2">Monthly Amount</CardTitle>
+                <CardDescription className="text-base">
+                  How much you plan to allocate to this category each month
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              This is used by the "Use Monthly Amounts" feature in Money Movement to quickly allocate your paycheck.
+            </p>
+            <div className="grid gap-3">
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <div className="font-medium text-sm min-w-[140px]">Fixed Expenses</div>
+                <div className="text-sm text-muted-foreground">Use the actual amount (e.g., $1,200 for rent)</div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <div className="font-medium text-sm min-w-[140px]">Variable Expenses</div>
+                <div className="text-sm text-muted-foreground">Estimate based on past spending or your goal</div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <div className="font-medium text-sm min-w-[140px]">Periodic Expenses</div>
+                <div className="text-sm text-muted-foreground">Divide annual cost by 12 (e.g., $600/year car insurance = $50/month)</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        <h3>Monthly Amount</h3>
-        <p>
-          This is how much you plan to allocate to this category each month. It's used by the
-          "Use Monthly Amounts" feature in Money Movement to quickly allocate your paycheck.
-        </p>
-        <p>
-          <strong>For fixed expenses:</strong> Use the actual amount (e.g., $1,200 for rent)
-        </p>
-        <p>
-          <strong>For variable expenses:</strong> Estimate based on past spending or your goal
-        </p>
-        <p>
-          <strong>For periodic expenses:</strong> Divide the annual cost by 12 (e.g., $600/year car insurance = $50/month)
-        </p>
+        {/* Current Balance */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <TrendingUp className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl mb-2">Current Balance</CardTitle>
+                <CardDescription className="text-base">
+                  Shows how much money is currently allocated to this category
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              The balance increases when you allocate money to it, and decreases when you record transactions in this category.
+            </p>
+            <Callout type="warning">
+              A negative balance means you've spent more than you allocated - you'll need to transfer
+              money from another category or allocate more in your next paycheck.
+            </Callout>
+          </CardContent>
+        </Card>
 
-        <h3>Current Balance</h3>
-        <p>
-          This shows how much money is currently allocated to this category. It increases when you
-          allocate money to it, and decreases when you record transactions in this category.
-        </p>
-        <p>
-          A negative balance means you've spent more than you allocated - you'll need to transfer
-          money from another category or allocate more in your next paycheck.
-        </p>
-
-        <h3>Funded This Month (if enabled)</h3>
-        <p>
-          If you have the Monthly Funding Tracking feature enabled, this shows how much you've
-          allocated to this category in the current month, separate from the current balance.
-        </p>
-        <p>
-          This prevents accidentally re-funding categories for bills you've already paid.
-        </p>
-
-        <h2>Category Types (Advanced Feature)</h2>
-        <p>
-          If you enable the Category Types feature in Settings, you can assign a type to each category:
-        </p>
-
-        <h3>Monthly Expense</h3>
-        <p>
-          For expenses that happen every month and should be fully funded each month. Examples:
-          rent, utilities, groceries.
-        </p>
-
-        <h3>Accumulation</h3>
-        <p>
-          For expenses that happen periodically or goals you're saving toward. You set an annual
-          target, and the app calculates how much to save each month. Examples: car insurance,
-          vacation fund, Christmas gifts.
-        </p>
-
-        <h3>Target Balance</h3>
-        <p>
-          For categories where you want to maintain a specific balance. The app will suggest funding
-          to reach that target. Examples: emergency fund, buffer category.
-        </p>
-
-        <Callout type="info" title="Learn more">
-          See the <Link href="/help/features/advanced" className="text-primary hover:underline">Advanced Features</Link> guide
-          for detailed information about category types.
-        </Callout>
-
-        <h2>Priority System (Advanced Feature)</h2>
-        <p>
-          If enabled, you can assign a priority (1-10) to each category. This is used by Smart
-          Allocation to determine which categories to fund first.
-        </p>
-        <ul>
-          <li><strong>1-3:</strong> Essential (rent, utilities, minimum debt payments)</li>
-          <li><strong>4-6:</strong> Important (groceries, insurance, savings)</li>
-          <li><strong>7-10:</strong> Nice to have (entertainment, hobbies, extra savings)</li>
-        </ul>
-
-        <h2>Sorting and Organizing Categories</h2>
-        <p>
-          You can reorder your categories to match your preferences:
-        </p>
-        <ol>
-          <li>Go to the Dashboard or view all categories</li>
-          <li>Click "Reorder" button</li>
-          <li>Drag categories to your desired order</li>
-          <li>Click "Save" to keep the new order</li>
-        </ol>
-
-        <h2>Editing and Deleting Categories</h2>
-        <p>
-          You can edit or delete categories at any time:
-        </p>
-        <ul>
-          <li><strong>Edit:</strong> Click the "..." menu and select "Edit" to change name, monthly amount, type, or priority</li>
-          <li><strong>Delete:</strong> Click the "..." menu and select "Delete" to remove the category</li>
-        </ul>
-
-        <Callout type="warning" title="Deleting categories">
-          Deleting a category will also delete all transactions in that category. Make sure to
-          re-categorize or export transactions before deleting if you want to keep the history.
-        </Callout>
-
-        <h2>System Categories</h2>
-        <p>
-          Some categories are created automatically by the system:
-        </p>
-        <ul>
-          <li><strong>Transfer:</strong> Used for money transfers between accounts (not shown in category list)</li>
-          <li><strong>Income Buffer:</strong> Created when you enable the Income Buffer feature</li>
-        </ul>
-        <p>
-          System categories have special behavior and can't be deleted through the normal interface.
-        </p>
-
-        <h2>Tips for Managing Categories</h2>
-        <ul>
-          <li>Start broad, then get specific as needed</li>
-          <li>Group similar expenses together (e.g., "Utilities" instead of separate electric, water, gas)</li>
-          <li>Create categories for irregular expenses (car maintenance, gifts, etc.)</li>
-          <li>Review and adjust monthly amounts based on actual spending</li>
-          <li>Use descriptive names that make sense to you</li>
-          <li>Don't create too many categories - it makes budgeting harder</li>
-        </ul>
+        {/* Funded This Month */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Calendar className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl mb-2">Funded This Month</CardTitle>
+                <CardDescription className="text-base">
+                  Available if Monthly Funding Tracking feature is enabled
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-3">
+              Shows how much you've allocated to this category in the current month, separate from the current balance.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              This prevents accidentally re-funding categories for bills you've already paid.
+            </p>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Advanced Features */}
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold">Advanced Features</h2>
+
+        {/* Category Types */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Category Types</CardTitle>
+            <CardDescription className="text-base">
+              Available when Category Types feature is enabled in Settings
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3">
+              <div className="p-4 bg-muted/50 rounded-lg border">
+                <h3 className="font-semibold mb-2">Monthly Expense</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  For expenses that happen every month and should be fully funded each month.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  <strong>Examples:</strong> Rent, utilities, groceries
+                </p>
+              </div>
+              <div className="p-4 bg-muted/50 rounded-lg border">
+                <h3 className="font-semibold mb-2">Accumulation</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  For expenses that happen periodically or goals you're saving toward. You set an annual
+                  target, and the app calculates how much to save each month.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  <strong>Examples:</strong> Car insurance, vacation fund, Christmas gifts
+                </p>
+              </div>
+              <div className="p-4 bg-muted/50 rounded-lg border">
+                <h3 className="font-semibold mb-2">Target Balance</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  For categories where you want to maintain a specific balance. The app will suggest funding
+                  to reach that target.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  <strong>Examples:</strong> Emergency fund, buffer category
+                </p>
+              </div>
+            </div>
+            <Callout type="info" title="Learn more">
+              See the <Link href="/help/features/advanced" className="text-primary hover:underline">Advanced Features</Link> guide
+              for detailed information about category types.
+            </Callout>
+          </CardContent>
+        </Card>
+
+        {/* Priority System */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Priority System</CardTitle>
+            <CardDescription className="text-base">
+              Assign priorities to determine which categories to fund first
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              If enabled, you can assign a priority (1-10) to each category. This is used by Smart
+              Allocation to determine which categories to fund first.
+            </p>
+            <div className="grid gap-3">
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <div className="font-medium text-sm min-w-[80px]">1-3</div>
+                <div className="text-sm text-muted-foreground">
+                  <strong>Essential:</strong> Rent, utilities, minimum debt payments
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <div className="font-medium text-sm min-w-[80px]">4-6</div>
+                <div className="text-sm text-muted-foreground">
+                  <strong>Important:</strong> Groceries, insurance, savings
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <div className="font-medium text-sm min-w-[80px]">7-10</div>
+                <div className="text-sm text-muted-foreground">
+                  <strong>Nice to have:</strong> Entertainment, hobbies, extra savings
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sorting and Organizing */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <ArrowUpDown className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Sorting and Organizing Categories</CardTitle>
+              <CardDescription className="text-base">
+                Reorder your categories to match your preferences
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <StepList
+            steps={[
+              { title: 'Navigate to categories', content: 'Go to the Dashboard or view all categories' },
+              { title: 'Click "Reorder"', content: 'Find and click the "Reorder" button' },
+              { title: 'Drag to reorder', content: 'Drag categories to your desired order' },
+              { title: 'Save changes', content: 'Click "Save" to keep the new order' },
+            ]}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Editing and Deleting */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Edit3 className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Editing and Deleting Categories</CardTitle>
+              <CardDescription className="text-base">
+                Modify or remove categories at any time
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3">
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm min-w-[80px]">Edit</div>
+              <div className="text-sm text-muted-foreground">
+                Click the "..." menu and select "Edit" to change name, monthly amount, type, or priority
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm min-w-[80px]">Delete</div>
+              <div className="text-sm text-muted-foreground">
+                Click the "..." menu and select "Delete" to remove the category
+              </div>
+            </div>
+          </div>
+          <Callout type="warning" title="Deleting categories">
+            Deleting a category will also delete all transactions in that category. Make sure to
+            re-categorize or export transactions before deleting if you want to keep the history.
+          </Callout>
+        </CardContent>
+      </Card>
+
+      {/* System Categories */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Shield className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">System Categories</CardTitle>
+              <CardDescription className="text-base">
+                Special categories created automatically by the system
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            <li className="flex items-start gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+              <span><strong>Transfer:</strong> Used for money transfers between accounts (not shown in category list)</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+              <span><strong>Income Buffer:</strong> Created when you enable the Income Buffer feature</span>
+            </li>
+          </ul>
+          <p className="text-sm text-muted-foreground mt-4">
+            System categories have special behavior and can't be deleted through the normal interface.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Tips Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Lightbulb className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl">Tips for Managing Categories</CardTitle>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-3">
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">1</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Start broad, then get specific as needed
+              </p>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">2</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Group similar expenses together (e.g., "Utilities" instead of separate electric, water, gas)
+              </p>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">3</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Create categories for irregular expenses (car maintenance, gifts, etc.)
+              </p>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">4</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Review and adjust monthly amounts based on actual spending
+              </p>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">5</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Use descriptive names that make sense to you
+              </p>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">6</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Don't create too many categories - it makes budgeting harder
+              </p>
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
 
       <WasThisHelpful articlePath="/help/features/categories" />
     </div>
