@@ -30,6 +30,7 @@ export function SmartAllocationDialog({
 }: SmartAllocationDialogProps) {
   const [amount, setAmount] = useState('');
   const [allocations, setAllocations] = useState<AllocationPlan[]>([]);
+  const [editedAllocations, setEditedAllocations] = useState<{ [key: number]: number }>({});
   const [totalAllocated, setTotalAllocated] = useState(0);
   const [remainingFunds, setRemainingFunds] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -47,6 +48,7 @@ export function SmartAllocationDialog({
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) {
       setAllocations([]);
+      setEditedAllocations({});
       return;
     }
 
@@ -66,6 +68,14 @@ export function SmartAllocationDialog({
 
       const result = calculateSmartAllocation(categories, fundingMap, amountNum, currentMonth);
       setAllocations(result.allocations);
+
+      // Initialize edited allocations with calculated values
+      const initialEdits: { [key: number]: number } = {};
+      result.allocations.forEach(a => {
+        initialEdits[a.categoryId] = a.allocatedAmount;
+      });
+      setEditedAllocations(initialEdits);
+
       setTotalAllocated(result.totalAllocated);
       setRemainingFunds(result.remainingFunds);
     } catch (error) {
@@ -76,29 +86,52 @@ export function SmartAllocationDialog({
     }
   };
 
+  const handleAllocationChange = (categoryId: number, value: string) => {
+    const numValue = parseFloat(value);
+    const newEdited = { ...editedAllocations };
+
+    if (!isNaN(numValue) && numValue >= 0) {
+      newEdited[categoryId] = numValue;
+    } else if (value === '') {
+      newEdited[categoryId] = 0;
+    }
+
+    setEditedAllocations(newEdited);
+
+    // Recalculate totals
+    const newTotal = Object.values(newEdited).reduce((sum, val) => sum + (val || 0), 0);
+    setTotalAllocated(newTotal);
+
+    const amountNum = parseFloat(amount) || 0;
+    setRemainingFunds(amountNum - newTotal);
+  };
+
   const handleApply = async () => {
     setApplying(true);
     try {
-      // Apply each allocation
+      // Apply each allocation using edited amounts
       for (const allocation of allocations) {
-        if (allocation.allocatedAmount > 0) {
+        const editedAmount = editedAllocations[allocation.categoryId] || 0;
+        if (editedAmount > 0) {
           await fetch('/api/allocations/manual', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               categoryId: allocation.categoryId,
-              amount: allocation.allocatedAmount,
+              amount: editedAmount,
               month: currentMonth,
             }),
           });
         }
       }
 
-      toast.success(`Successfully allocated ${formatCurrency(totalAllocated)} across ${allocations.filter(a => a.allocatedAmount > 0).length} categories`);
+      const allocatedCount = Object.values(editedAllocations).filter(a => a > 0).length;
+      toast.success(`Successfully allocated ${formatCurrency(totalAllocated)} across ${allocatedCount} categories`);
       onSuccess();
       onOpenChange(false);
       setAmount('');
       setAllocations([]);
+      setEditedAllocations({});
     } catch (error) {
       console.error('Error applying allocation:', error);
       toast.error('Failed to apply allocation');
@@ -191,28 +224,40 @@ export function SmartAllocationDialog({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {allocations.filter(a => a.allocatedAmount > 0).map((allocation) => (
-                        <TableRow key={allocation.categoryId}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{allocation.categoryName}</span>
-                              {getCategoryTypeBadge(allocation.categoryType)}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="secondary">{allocation.priority}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {formatCurrency(allocation.fundedThisMonth)}
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {formatCurrency(allocation.targetAmount)}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-green-600">
-                            +{formatCurrency(allocation.allocatedAmount)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {allocations.map((allocation) => {
+                        const editedAmount = editedAllocations[allocation.categoryId] || 0;
+                        // Show all categories, not just those with allocations
+                        return (
+                          <TableRow key={allocation.categoryId}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{allocation.categoryName}</span>
+                                {getCategoryTypeBadge(allocation.categoryType)}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="secondary">{allocation.priority}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              {formatCurrency(allocation.fundedThisMonth)}
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              {formatCurrency(allocation.targetAmount)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={editedAmount || ''}
+                                onChange={(e) => handleAllocationChange(allocation.categoryId, e.target.value)}
+                                placeholder="0.00"
+                                className="w-28 text-right ml-auto"
+                                disabled={applying}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
