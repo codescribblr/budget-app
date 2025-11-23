@@ -46,25 +46,11 @@ export default function MoneyMovementPage() {
   return (
     <div className="space-y-6">
 
-      <Tabs defaultValue="transfer" className="space-y-6">
+      <Tabs defaultValue="allocate" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 max-w-md">
-          <TabsTrigger value="transfer">Transfer Between Envelopes</TabsTrigger>
           <TabsTrigger value="allocate">Allocate to Envelopes</TabsTrigger>
+          <TabsTrigger value="transfer">Transfer Between Envelopes</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="transfer" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Transfer Between Envelopes</CardTitle>
-              <CardDescription>
-                Move money from one budget category to another
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TransferBetweenEnvelopes categories={categories} onSuccess={fetchData} />
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="allocate" className="mt-6">
           <Card>
@@ -80,6 +66,20 @@ export default function MoneyMovementPage() {
                 currentSavings={currentSavings}
                 onSuccess={fetchData}
               />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="transfer" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Transfer Between Envelopes</CardTitle>
+              <CardDescription>
+                Move money from one budget category to another
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TransferBetweenEnvelopes categories={categories} onSuccess={fetchData} />
             </CardContent>
           </Card>
         </TabsContent>

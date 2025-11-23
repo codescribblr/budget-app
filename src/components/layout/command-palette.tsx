@@ -19,6 +19,7 @@ import {
   CreditCard as CreditCardIcon,
   Building2,
 } from "lucide-react"
+import { useFeature } from "@/contexts/FeatureContext"
 
 import {
   CommandDialog,
@@ -33,6 +34,7 @@ import type { Category, Account, CreditCard, Loan, TransactionWithSplits, GoalWi
 
 // Settings items for search
 const settingsItems = [
+  { label: "Features", path: "/settings", section: "features", keywords: "features enable disable advanced power user" },
   { label: "Data Backup & Restore", path: "/settings", section: "backup", keywords: "backup restore export import data" },
   { label: "Merchant Groups", path: "/merchants", section: null, keywords: "merchant groups manage" },
   { label: "Category Rules", path: "/category-rules", section: null, keywords: "category rules auto categorize" },
@@ -66,6 +68,7 @@ const navigationItems = [
   { label: "Transactions", path: "/transactions", icon: Receipt },
   { label: "Import", path: "/import", icon: Upload },
   { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
+  { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureFlag: "income_buffer" },
   { label: "Reports", path: "/reports", icon: FileText },
   { label: "Trends", path: "/reports/trends", icon: TrendingUp },
   { label: "Income", path: "/income", icon: DollarSign },
@@ -87,6 +90,7 @@ export function CommandPalette() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [transactionsLoading, setTransactionsLoading] = React.useState(false)
   const router = useRouter()
+  const incomeBufferEnabled = useFeature('income_buffer')
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -181,21 +185,23 @@ export function CommandPalette() {
             {isLoading || transactionsLoading ? 'Loading...' : 'No results found.'}
           </CommandEmpty>
           <CommandGroup heading="Navigation">
-            {navigationItems.map((item) => {
-              const Icon = item.icon
-              return (
-                <CommandItem
-                  key={item.path}
-                  value={item.label}
-                  onSelect={() => {
-                    runCommand(() => router.push(item.path))
-                  }}
-                >
-                  <Icon className="mr-2 h-4 w-4" />
-                  <span>{item.label}</span>
-                </CommandItem>
-              )
-            })}
+            {navigationItems
+              .filter((item) => !item.featureFlag || (item.featureFlag === 'income_buffer' && incomeBufferEnabled))
+              .map((item) => {
+                const Icon = item.icon
+                return (
+                  <CommandItem
+                    key={item.path}
+                    value={item.label}
+                    onSelect={() => {
+                      runCommand(() => router.push(item.path))
+                    }}
+                  >
+                    <Icon className="mr-2 h-4 w-4" />
+                    <span>{item.label}</span>
+                  </CommandItem>
+                )
+              })}
           </CommandGroup>
           {categories.length > 0 && (
             <CommandGroup heading="Categories">

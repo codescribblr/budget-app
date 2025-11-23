@@ -76,19 +76,57 @@ export async function createCategory(data: {
   sort_order?: number;
   notes?: string;
   is_system?: boolean;
+  category_type?: 'monthly_expense' | 'accumulation' | 'target_balance';
+  priority?: number;
+  monthly_target?: number;
+  annual_target?: number;
+  target_balance?: number;
 }): Promise<Category> {
   const { supabase, user } = await getAuthenticatedUser();
+
+  // Auto-calculate fields based on category type
+  const categoryType = data.category_type ?? 'monthly_expense';
+  let monthlyAmount = data.monthly_amount;
+  let monthlyTarget = data.monthly_target ?? null;
+  let annualTarget = data.annual_target ?? null;
+  let targetBalance = data.target_balance ?? null;
+
+  if (categoryType === 'monthly_expense') {
+    // For monthly expense, sync monthly_target with monthly_amount
+    monthlyTarget = monthlyAmount;
+    annualTarget = null;
+    targetBalance = null;
+  } else if (categoryType === 'accumulation') {
+    // For accumulation, calculate monthly_amount from annual_target
+    if (data.annual_target) {
+      monthlyAmount = data.annual_target / 12;
+      annualTarget = data.annual_target;
+    }
+    monthlyTarget = null;
+    targetBalance = null;
+  } else if (categoryType === 'target_balance') {
+    // For target balance, keep monthly_amount as is (user input or 0)
+    monthlyAmount = data.monthly_amount ?? 0;
+    monthlyTarget = null;
+    annualTarget = null;
+    targetBalance = data.target_balance ?? null;
+  }
 
   const { data: category, error } = await supabase
     .from('categories')
     .insert({
       user_id: user.id,
       name: data.name,
-      monthly_amount: data.monthly_amount,
+      monthly_amount: monthlyAmount,
       current_balance: data.current_balance ?? 0,
       sort_order: data.sort_order ?? 0,
       notes: data.notes ?? null,
       is_system: data.is_system ?? false,
+      category_type: categoryType,
+      priority: data.priority ?? 5,
+      monthly_target: monthlyTarget,
+      annual_target: annualTarget,
+      target_balance: targetBalance,
     })
     .select()
     .single();
@@ -106,18 +144,62 @@ export async function updateCategory(
     sort_order: number;
     notes: string;
     is_system: boolean;
+    category_type: 'monthly_expense' | 'accumulation' | 'target_balance';
+    priority: number;
+    monthly_target: number;
+    annual_target: number;
+    target_balance: number;
   }>
 ): Promise<Category | null> {
   const { supabase } = await getAuthenticatedUser();
 
   const updateData: any = { updated_at: new Date().toISOString() };
 
+  // Auto-calculate fields based on category type
+  const categoryType = data.category_type;
+
+  if (categoryType === 'monthly_expense') {
+    // For monthly expense, sync monthly_target with monthly_amount
+    if (data.monthly_amount !== undefined) {
+      updateData.monthly_amount = data.monthly_amount;
+      updateData.monthly_target = data.monthly_amount;
+    }
+    updateData.annual_target = null;
+    updateData.target_balance = null;
+  } else if (categoryType === 'accumulation') {
+    // For accumulation, calculate monthly_amount from annual_target
+    if (data.annual_target !== undefined) {
+      updateData.annual_target = data.annual_target;
+      updateData.monthly_amount = data.annual_target / 12;
+    }
+    updateData.monthly_target = null;
+    updateData.target_balance = null;
+  } else if (categoryType === 'target_balance') {
+    // For target balance, keep monthly_amount as is
+    if (data.monthly_amount !== undefined) {
+      updateData.monthly_amount = data.monthly_amount;
+    }
+    if (data.target_balance !== undefined) {
+      updateData.target_balance = data.target_balance;
+    }
+    updateData.monthly_target = null;
+    updateData.annual_target = null;
+  } else {
+    // No category type specified, update fields as provided
+    if (data.monthly_amount !== undefined) updateData.monthly_amount = data.monthly_amount;
+    if (data.monthly_target !== undefined) updateData.monthly_target = data.monthly_target;
+    if (data.annual_target !== undefined) updateData.annual_target = data.annual_target;
+    if (data.target_balance !== undefined) updateData.target_balance = data.target_balance;
+  }
+
+  // Update other fields
   if (data.name !== undefined) updateData.name = data.name;
-  if (data.monthly_amount !== undefined) updateData.monthly_amount = data.monthly_amount;
   if (data.current_balance !== undefined) updateData.current_balance = data.current_balance;
   if (data.sort_order !== undefined) updateData.sort_order = data.sort_order;
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.is_system !== undefined) updateData.is_system = data.is_system;
+  if (data.category_type !== undefined) updateData.category_type = data.category_type;
+  if (data.priority !== undefined) updateData.priority = data.priority;
 
   const { data: category, error } = await supabase
     .from('categories')
@@ -649,12 +731,17 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     .filter(acc => acc.include_in_totals === true)
     .reduce((sum, acc) => sum + Number(acc.balance), 0);
 
-  const envelopeCategories = (categories as Category[]).filter(cat => !cat.is_system);
+  // Filter categories for envelope display (exclude system categories and buffer)
+  const envelopeCategories = (categories as Category[]).filter(cat => !cat.is_system && !cat.is_buffer);
 
-  const totalEnvelopes = envelopeCategories
+  // For totals calculation, include buffer category but exclude other system categories
+  // Buffer category is special: doesn't show in lists but DOES count in totals
+  const categoriesTotalBalance = (categories as Category[])
+    .filter(cat => !cat.is_system || cat.is_buffer)
     .reduce((sum, cat) => sum + Number(cat.current_balance), 0);
 
-  const hasNegativeEnvelopes = envelopeCategories
+  const hasNegativeEnvelopes = (categories as Category[])
+    .filter(cat => !cat.is_system || cat.is_buffer)
     .some(cat => Number(cat.current_balance) < 0);
 
   const totalCreditCardBalances = (creditCards as CreditCard[])
@@ -664,9 +751,9 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const totalPendingChecks = (pendingChecks as any[])
     .reduce((sum, pc) => sum + Number(pc.amount), 0);
 
-  const currentSavings = totalMonies - totalEnvelopes - totalCreditCardBalances - totalPendingChecks;
+  const currentSavings = totalMonies - categoriesTotalBalance - totalCreditCardBalances - totalPendingChecks;
 
-  // Calculate total monthly budget
+  // Calculate total monthly budget (exclude buffer from budget totals)
   const totalMonthlyBudget = envelopeCategories
     .reduce((sum, cat) => sum + Number(cat.monthly_amount), 0);
 
@@ -675,7 +762,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   return {
     total_monies: totalMonies,
-    total_envelopes: totalEnvelopes,
+    total_envelopes: categoriesTotalBalance, // Includes buffer category balance
     total_credit_card_balances: totalCreditCardBalances,
     total_pending_checks: totalPendingChecks,
     current_savings: currentSavings,
@@ -2041,5 +2128,121 @@ export async function deleteGoal(id: number, deleteCategory: boolean = false): P
       throw partialError;
     }
   }
+}
+
+// =====================================================
+// MONTHLY FUNDING TRACKING
+// =====================================================
+
+/**
+ * Get funded amount for a category in a specific month
+ */
+export async function getFundedThisMonth(
+  categoryId: number,
+  month: string
+): Promise<number> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const { data, error } = await supabase
+    .from('category_monthly_funding')
+    .select('funded_amount')
+    .eq('user_id', user.id)
+    .eq('category_id', categoryId)
+    .eq('month', month)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.funded_amount || 0;
+}
+
+/**
+ * Record monthly funding for a category
+ * Creates or updates the monthly funding record
+ */
+export async function recordMonthlyFunding(
+  categoryId: number,
+  month: string,
+  amount: number,
+  targetAmount?: number
+): Promise<void> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  // Get current funded amount
+  const currentFunded = await getFundedThisMonth(categoryId, month);
+  const newFundedAmount = currentFunded + amount;
+
+  // Upsert the record
+  const { error } = await supabase
+    .from('category_monthly_funding')
+    .upsert({
+      user_id: user.id,
+      category_id: categoryId,
+      month,
+      funded_amount: newFundedAmount,
+      target_amount: targetAmount,
+      updated_at: new Date().toISOString(),
+    }, {
+      onConflict: 'user_id,category_id,month',
+    });
+
+  if (error) throw error;
+}
+
+/**
+ * Get or create monthly funding record for a category
+ */
+export async function getOrCreateMonthlyFunding(
+  categoryId: number,
+  month: string
+): Promise<{ funded_amount: number; target_amount: number | null }> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  // Try to get existing record
+  const { data: existing, error: fetchError } = await supabase
+    .from('category_monthly_funding')
+    .select('funded_amount, target_amount')
+    .eq('user_id', user.id)
+    .eq('category_id', categoryId)
+    .eq('month', month)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+
+  if (existing) {
+    return existing;
+  }
+
+  // Create new record with 0 funded amount
+  const { data: newRecord, error: createError } = await supabase
+    .from('category_monthly_funding')
+    .insert({
+      user_id: user.id,
+      category_id: categoryId,
+      month,
+      funded_amount: 0,
+      target_amount: null,
+    })
+    .select('funded_amount, target_amount')
+    .single();
+
+  if (createError) throw createError;
+  return newRecord;
+}
+
+/**
+ * Check if a feature is enabled for the current user
+ */
+export async function isFeatureEnabled(featureName: string): Promise<boolean> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const { data, error } = await supabase
+    .from('user_feature_flags')
+    .select('enabled')
+    .eq('user_id', user.id)
+    .eq('feature_name', featureName)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.enabled || false;
 }
 

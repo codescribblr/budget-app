@@ -7,7 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { formatCurrency } from '@/lib/utils';
 import type { Category, GoalWithDetails } from '@/lib/types';
-import { Target, Info } from 'lucide-react';
+import { Target, Info, Sparkles, Wallet } from 'lucide-react';
+import { SmartAllocationDialog } from '@/components/allocations/SmartAllocationDialog';
+import { AddToBufferDialog } from './AddToBufferDialog';
+import { useFeature } from '@/contexts/FeatureContext';
 
 interface AllocateIncomeProps {
   categories: Category[];
@@ -20,6 +23,12 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
   const [goalAllocations, setGoalAllocations] = useState<{ [key: number]: number }>({});
   const [allGoals, setAllGoals] = useState<GoalWithDetails[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [monthlyFunding, setMonthlyFunding] = useState<{ [key: number]: number }>({});
+  const [isSmartAllocationOpen, setIsSmartAllocationOpen] = useState(false);
+  const [isAddToBufferOpen, setIsAddToBufferOpen] = useState(false);
+
+  const smartAllocationEnabled = useFeature('smart_allocation');
+  const incomeBufferEnabled = useFeature('income_buffer');
 
   // Filter out system categories (like Transfer) from allocation
   const envelopeCategories = categories.filter(cat => !cat.is_system && !cat.is_goal);
@@ -29,20 +38,35 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
   const accountLinkedGoals = allGoals.filter(g => g.goal_type === 'account-linked' && g.status === 'active');
   const debtPaydownGoals = allGoals.filter(g => g.goal_type === 'debt-paydown' && g.status === 'active');
   
-  // Fetch all goals
+  // Fetch all goals and monthly funding data
   useEffect(() => {
-    const fetchGoals = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch('/api/goals?status=active');
-        if (response.ok) {
-          const data = await response.json();
-          setAllGoals(data);
+        const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
+
+        const [goalsResponse, fundingResponse] = await Promise.all([
+          fetch('/api/goals?status=active'),
+          fetch(`/api/monthly-funding/${currentMonth}`)
+        ]);
+
+        if (goalsResponse.ok) {
+          const goalsData = await goalsResponse.json();
+          setAllGoals(goalsData);
+        }
+
+        if (fundingResponse.ok) {
+          const fundingData = await fundingResponse.json();
+          const fundingMap: { [key: number]: number } = {};
+          fundingData.categories?.forEach((cat: any) => {
+            fundingMap[cat.categoryId] = cat.fundedAmount || 0;
+          });
+          setMonthlyFunding(fundingMap);
         }
       } catch (error) {
-        console.error('Error fetching goals:', error);
+        console.error('Error fetching data:', error);
       }
     };
-    fetchGoals();
+    fetchData();
   }, []);
 
   const totalMonthlyBudget = envelopeCategories.reduce((sum, cat) => sum + cat.monthly_amount, 0);
@@ -230,6 +254,26 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
       </div>
 
       <div className="flex flex-wrap gap-2">
+        {smartAllocationEnabled && (
+          <Button
+            variant="default"
+            onClick={() => setIsSmartAllocationOpen(true)}
+            className="bg-purple-600 hover:bg-purple-700"
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            Smart Allocation
+          </Button>
+        )}
+        {incomeBufferEnabled && (
+          <Button
+            variant="default"
+            onClick={() => setIsAddToBufferOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Wallet className="mr-2 h-4 w-4" />
+            Add to Income Buffer
+          </Button>
+        )}
         <Button variant="outline" onClick={handleUseMonthlyAmounts}>
           Use Monthly Amounts
         </Button>
@@ -251,6 +295,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
             <TableRow>
               <TableHead>Category</TableHead>
               <TableHead className="text-right">Monthly Amount</TableHead>
+              <TableHead className="text-right">Funded This Month</TableHead>
               <TableHead className="text-right">Current Balance</TableHead>
               <TableHead className="text-right">Allocate</TableHead>
               <TableHead className="text-right">New Balance</TableHead>
@@ -259,6 +304,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
           <TableBody>
             {envelopeCategories.map((category) => {
               const allocation = allocations[category.id] || 0;
+              const fundedThisMonth = monthlyFunding[category.id] || 0;
               const newBalance = category.current_balance + allocation;
 
               return (
@@ -273,6 +319,9 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
                   </TableCell>
                   <TableCell className="text-right text-muted-foreground">
                     {formatCurrency(category.monthly_amount)}
+                  </TableCell>
+                  <TableCell className="text-right text-blue-600 dark:text-blue-400">
+                    {formatCurrency(fundedThisMonth)}
                   </TableCell>
                   <TableCell className="text-right">
                     {formatCurrency(category.current_balance)}
@@ -458,6 +507,23 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
           {isSubmitting ? 'Allocating...' : 'Allocate to Envelopes'}
         </Button>
       </div>
+
+      {/* Smart Allocation Dialog */}
+      <SmartAllocationDialog
+        open={isSmartAllocationOpen}
+        onOpenChange={setIsSmartAllocationOpen}
+        categories={categories}
+        availableToSave={currentSavings}
+        onSuccess={onSuccess}
+      />
+
+      {/* Add to Income Buffer Dialog */}
+      <AddToBufferDialog
+        open={isAddToBufferOpen}
+        onOpenChange={setIsAddToBufferOpen}
+        availableToSave={currentSavings}
+        onSuccess={onSuccess}
+      />
     </div>
   );
 }
