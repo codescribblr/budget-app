@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { HelpSearch } from '@/components/help/HelpSearch';
 
 const sections = [
   {
@@ -83,6 +84,9 @@ export default function HelpCenterPage() {
             Whether you're just getting started or looking to master advanced features, we've got you covered.
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <HelpSearch />
+        </CardContent>
       </Card>
 
       {/* Main Sections Grid */}
