@@ -24,9 +24,9 @@ export function RelatedArticles({ articles }: RelatedArticlesProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {articles.map((article) => (
+          {articles.map((article, index) => (
             <Link
-              key={article.href}
+              key={`related-${article.href}-${index}`}
               href={article.href}
               className="block p-3 rounded-lg hover:bg-muted transition-colors"
             >

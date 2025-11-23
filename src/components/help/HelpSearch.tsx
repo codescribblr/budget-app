@@ -97,11 +97,11 @@ export function HelpSearch() {
         <Card className="absolute top-full mt-2 w-full z-50 shadow-lg">
           <CardContent className="p-2">
             <div className="space-y-1">
-              {searchResults.map((result) => {
+              {searchResults.map((result, index) => {
                 const Icon = categoryIcons[result.category as keyof typeof categoryIcons] || FileText;
                 return (
                   <Link
-                    key={result.href}
+                    key={`${result.href}-${index}`}
                     href={result.href}
                     onClick={() => setSearchQuery('')}
                     className="block p-3 rounded-lg hover:bg-muted transition-colors"

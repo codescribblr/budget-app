@@ -99,7 +99,7 @@ export function HelpSidebar() {
   const [expandedSections, setExpandedSections] = useState<string[]>(() => {
     // Auto-expand section containing current page
     const currentSection = navigationSections.find(section =>
-      section.items.some(item => pathname.startsWith(item.href))
+      section.items.some(item => item.href === pathname || pathname.startsWith(item.href + '/'))
     );
     return currentSection ? [currentSection.label] : ['Getting Started'];
   });

@@ -91,10 +91,10 @@ export default function HelpCenterPage() {
 
       {/* Main Sections Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {sections.map((section) => {
+        {sections.map((section, index) => {
           const Icon = section.icon;
           return (
-            <Link key={section.href} href={section.href}>
+            <Link key={`section-${section.href}-${index}`} href={section.href}>
               <Card className="h-full hover:shadow-md transition-shadow cursor-pointer">
                 <CardHeader>
                   <div className={`w-12 h-12 rounded-lg ${section.bgColor} flex items-center justify-center mb-3`}>
@@ -124,9 +124,9 @@ export default function HelpCenterPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {popularArticles.map((article) => (
+            {popularArticles.map((article, index) => (
               <Link
-                key={article.href}
+                key={`article-${article.href}-${index}`}
                 href={article.href}
                 className="block p-3 rounded-lg hover:bg-muted transition-colors"
               >
