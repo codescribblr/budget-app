@@ -353,8 +353,9 @@ export default function CategoriesFeaturePage() {
             </div>
           </div>
           <Callout type="warning" title="Deleting categories">
-            Deleting a category will also delete all transactions in that category. Make sure to
-            re-categorize or export transactions before deleting if you want to keep the history.
+            Deleting a category will remove the category assignments from all transactions in that category.
+            The transactions will remain in your history but will become uncategorized. Re-categorize
+            transactions before deleting if you want to preserve their category assignments.
           </Callout>
         </CardContent>
       </Card>
