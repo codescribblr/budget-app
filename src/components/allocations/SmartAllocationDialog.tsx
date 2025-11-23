@@ -183,6 +183,13 @@ export function SmartAllocationDialog({
                 step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
+                onKeyDown={(e) => {
+                  // Only allow Enter to submit if preview is not shown yet
+                  if (e.key === 'Enter' && allocations.length === 0 && !loading && amount && parseFloat(amount) > 0) {
+                    e.preventDefault();
+                    calculateAllocation();
+                  }
+                }}
                 placeholder="0.00"
                 disabled={applying || loading}
                 className="flex-1"
