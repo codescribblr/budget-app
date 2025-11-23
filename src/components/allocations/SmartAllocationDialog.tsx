@@ -38,11 +38,16 @@ export function SmartAllocationDialog({
 
   const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
 
+  // Reset state when dialog closes
   useEffect(() => {
-    if (open && amount) {
-      calculateAllocation();
+    if (!open) {
+      setAmount('');
+      setAllocations([]);
+      setEditedAllocations({});
+      setTotalAllocated(0);
+      setRemainingFunds(0);
     }
-  }, [amount, open]);
+  }, [open]);
 
   const calculateAllocation = async () => {
     const amountNum = parseFloat(amount);
@@ -172,26 +177,37 @@ export function SmartAllocationDialog({
               <label className="text-sm font-medium">Amount to Allocate</label>
               <HelpTooltip content="Enter the amount you want to distribute. The system will allocate funds in priority order." />
             </div>
-            <Input
-              type="number"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              disabled={applying}
-            />
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                disabled={applying || loading}
+                className="flex-1"
+              />
+              <Button
+                onClick={calculateAllocation}
+                disabled={!amount || parseFloat(amount) <= 0 || applying || loading}
+                variant="default"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Calculating...
+                  </>
+                ) : (
+                  'Calculate'
+                )}
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground mt-1">
               Available to save: {formatCurrency(availableToSave)}
             </p>
           </div>
 
-          {loading && (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          )}
-
-          {!loading && allocations.length > 0 && (
+          {allocations.length > 0 && (
             <>
               <div className="rounded-lg border p-4 bg-muted/50">
                 <div className="grid grid-cols-3 gap-4 text-sm">
