@@ -56,6 +56,14 @@ const navigationSections: NavSection[] = [
     ],
   },
   {
+    label: 'Wizards',
+    icon: Sparkles,
+    items: [
+      { label: 'Budget Setup Wizard', href: '/help/wizards/budget-setup' },
+      { label: 'Income Buffer Wizard', href: '/help/wizards/income-buffer' },
+    ],
+  },
+  {
     label: 'FAQ',
     icon: MessageCircleQuestion,
     items: [
