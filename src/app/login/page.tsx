@@ -200,10 +200,12 @@ function LoginForm() {
       <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Reset Your Password</DialogTitle>
-            <DialogDescription>
-              Enter your email address and we'll send you a magic link to sign in.
-            </DialogDescription>
+            <DialogTitle>Passwordless Login</DialogTitle>
+            {!resetSuccess && (
+              <DialogDescription>
+                Enter your email address and we'll send you a magic link to sign in.
+              </DialogDescription>
+            )}
           </DialogHeader>
 
           {!resetSuccess ? (
