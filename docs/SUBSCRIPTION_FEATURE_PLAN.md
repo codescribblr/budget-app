@@ -24,7 +24,7 @@ Add a subscription-based monetization model to the budget app with two tiers: **
 - ✅ Data backup and restore
 - ✅ Mobile-responsive interface
 
-### Premium Tier ($9.99/month)
+### Premium Tier ($5.00/month)
 **Target Users:** Power users who want advanced budgeting features and insights
 
 **All Free Features PLUS:**
@@ -737,7 +737,7 @@ export async function GET() {
    - Name: "Budget App Premium"
    - Description: "Access to all premium budgeting features"
    - Pricing model: Recurring
-   - Price: $9.99 USD
+   - Price: $5.00 USD
    - Billing period: Monthly
    - Free trial: 60 days
 
@@ -1084,12 +1084,12 @@ Create admin dashboard at `/admin/subscriptions`:
 - Stripe handles securely
 
 ### Pricing Rationale
-- $9.99/month is competitive for budgeting apps
+- $5.00/month is highly competitive for budgeting apps
 - YNAB: $14.99/month
 - Mint: Free (ad-supported, being shut down)
 - EveryDollar: $17.99/month
 - PocketSmith: $9.95/month
-- Our pricing: Premium features at accessible price
+- Our pricing: Premium features at very accessible price point
 
 ### Data Retention on Downgrade
 - Keep ALL user data when downgrading

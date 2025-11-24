@@ -141,7 +141,7 @@ Follow this order for implementation:
 ## 🔑 Key Decisions Made
 
 ### Business Decisions
-- **Pricing:** $9.99/month (competitive with market)
+- **Pricing:** $5.00/month (highly competitive, very accessible)
 - **Trial Period:** 60 days (longer than standard to demonstrate value)
 - **Trial Requirement:** Credit card required (reduces abuse, smoother conversion)
 - **Cancellation:** Allow end-of-period cancellation (user-friendly)
