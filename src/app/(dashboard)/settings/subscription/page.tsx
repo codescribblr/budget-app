@@ -194,7 +194,7 @@ function SubscriptionPageContent() {
               <Button
                 onClick={handleStartTrial}
                 disabled={actionLoading}
-                className="w-full"
+                className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
                 size="lg"
               >
                 {actionLoading ? (
@@ -205,7 +205,7 @@ function SubscriptionPageContent() {
                 ) : (
                   <>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Start 60-Day Free Trial
+                    Start 60-Day Premium Free Trial
                   </>
                 )}
               </Button>
@@ -263,6 +263,24 @@ function SubscriptionPageContent() {
                     </li>
                   ))}
                 </ul>
+                <Button
+                  onClick={handleStartTrial}
+                  disabled={actionLoading}
+                  className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
+                  size="lg"
+                >
+                  {actionLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Start 60-Day Premium Free Trial
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           </CardContent>
