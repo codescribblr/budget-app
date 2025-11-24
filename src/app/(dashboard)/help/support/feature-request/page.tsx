@@ -1,6 +1,8 @@
 import { Breadcrumbs } from '@/components/help/Breadcrumbs';
 import { Callout } from '@/components/help/Callout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ExternalLink } from 'lucide-react';
 
 export default function FeatureRequestPage() {
   return (
@@ -67,26 +69,45 @@ export default function FeatureRequestPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Where to Submit</CardTitle>
+          <CardTitle>Submit Your Feature Request</CardTitle>
+          <CardDescription>
+            Use our GitHub issue template to submit a detailed feature request
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <h3 className="font-semibold mb-1">Email</h3>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            We use GitHub Issues to track feature requests. This allows you to:
+          </p>
+          <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-2">
+            <li>See what features others have requested</li>
+            <li>Upvote features you want (👍 reaction)</li>
+            <li>Track the status of your request</li>
+            <li>Participate in discussions about features</li>
+          </ul>
+
+          <Button asChild className="w-full sm:w-auto">
+            <a
+              href="https://github.com/codescribblr/budget-app/issues/new?template=feature_request.md"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Submit Feature Request
+              <ExternalLink className="ml-2 h-4 w-4" />
+            </a>
+          </Button>
+
+          <div className="pt-2 border-t">
             <p className="text-sm text-muted-foreground">
-              Send feature requests to:{' '}
+              <strong>Before submitting:</strong> Search{' '}
               <a
-                href="mailto:features@budgetapp.example.com"
+                href="https://github.com/codescribblr/budget-app/issues?q=label%3Aenhancement"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-primary hover:underline"
               >
-                features@budgetapp.example.com
-              </a>
-            </p>
-          </div>
-
-          <div>
-            <h3 className="font-semibold mb-1">GitHub Discussions (if available)</h3>
-            <p className="text-sm text-muted-foreground">
-              Join the conversation and vote on feature requests in our GitHub Discussions.
+                existing feature requests
+              </a>{' '}
+              to see if someone has already suggested it. If so, add a 👍 reaction to show your support!
             </p>
           </div>
         </CardContent>

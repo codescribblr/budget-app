@@ -1,0 +1,9 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 General Questions & Support
+    url: https://github.com/codescribblr/budget-app/discussions
+    about: Ask questions and discuss the app with the community
+  - name: 📚 Documentation
+    url: https://github.com/codescribblr/budget-app#readme
+    about: Read the documentation and getting started guide
+

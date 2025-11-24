@@ -41,31 +41,33 @@ export default function ContactSupportPage() {
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center">
-                <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <MessageSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <CardTitle className="text-lg">Email Support</CardTitle>
-                <CardDescription>Get help via email</CardDescription>
+                <CardTitle className="text-lg">GitHub Discussions</CardTitle>
+                <CardDescription>Ask questions & get help</CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-3">
-              Send us an email and we'll get back to you within 24-48 hours.
+              Join the community to ask questions, share tips, and get help from other users.
             </p>
             <a
-              href="mailto:support@budgetapp.example.com"
+              href="https://github.com/codescribblr/budget-app/discussions"
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-primary hover:underline font-medium"
             >
-              support@budgetapp.example.com
+              Visit Discussions →
             </a>
             <div className="mt-4 text-xs text-muted-foreground">
-              <p className="font-medium mb-1">Please include:</p>
+              <p className="font-medium mb-1">Great for:</p>
               <ul className="list-disc list-inside space-y-0.5">
-                <li>A clear description of your issue</li>
-                <li>Steps to reproduce (if applicable)</li>
-                <li>Screenshots (if helpful)</li>
-                <li>Your browser and operating system</li>
+                <li>General questions about using the app</li>
+                <li>Tips and best practices</li>
+                <li>Feature discussions</li>
+                <li>Community support</li>
               </ul>
             </div>
           </CardContent>
@@ -124,11 +126,11 @@ export default function ContactSupportPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Expected Response Time</CardTitle>
+          <CardTitle>Response Time & Process</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <p>
-            <strong>Email Support:</strong> We typically respond within 24-48 hours during business days.
+            <strong>GitHub Discussions:</strong> Community members and maintainers typically respond within 1-2 days.
           </p>
           <p>
             <strong>Bug Reports:</strong> Critical bugs are addressed immediately. Other bugs are triaged
@@ -136,10 +138,18 @@ export default function ContactSupportPage() {
           </p>
           <p>
             <strong>Feature Requests:</strong> We review all feature requests and consider them for our
-            roadmap. Popular requests are prioritized.
+            roadmap. Popular requests (with more upvotes) are prioritized.
           </p>
         </CardContent>
       </Card>
+
+      <Callout type="info" title="Why GitHub?">
+        <p>
+          We use GitHub for support because it's transparent, searchable, and allows the community to help each other.
+          You can see if your question has already been answered, upvote feature requests you care about, and track
+          the progress of bug fixes.
+        </p>
+      </Callout>
     </div>
   );
 }

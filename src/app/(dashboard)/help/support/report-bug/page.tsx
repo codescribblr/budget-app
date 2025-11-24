@@ -1,6 +1,8 @@
 import { Breadcrumbs } from '@/components/help/Breadcrumbs';
 import { Callout } from '@/components/help/Callout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ExternalLink } from 'lucide-react';
 
 export default function ReportBugPage() {
   return (
@@ -83,38 +85,61 @@ export default function ReportBugPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Where to Report</CardTitle>
+          <CardTitle>Submit a Bug Report</CardTitle>
+          <CardDescription>
+            Use our GitHub issue template to report bugs with all the necessary details
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <h3 className="font-semibold mb-1">Email</h3>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            We use GitHub Issues to track bugs. This allows you to:
+          </p>
+          <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-2">
+            <li>See if the bug has already been reported</li>
+            <li>Track the status of the fix</li>
+            <li>Get notified when it's resolved</li>
+            <li>Participate in discussions about the bug</li>
+          </ul>
+
+          <Button asChild className="w-full sm:w-auto">
+            <a
+              href="https://github.com/codescribblr/budget-app/issues/new?template=bug_report.md"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Report a Bug
+              <ExternalLink className="ml-2 h-4 w-4" />
+            </a>
+          </Button>
+
+          <div className="pt-2 border-t">
             <p className="text-sm text-muted-foreground">
-              Send bug reports to:{' '}
+              <strong>Before submitting:</strong> Search{' '}
               <a
-                href="mailto:bugs@budgetapp.example.com"
+                href="https://github.com/codescribblr/budget-app/issues?q=label%3Abug"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-primary hover:underline"
               >
-                bugs@budgetapp.example.com
-              </a>
-            </p>
-          </div>
-
-          <div>
-            <h3 className="font-semibold mb-1">GitHub Issues (if available)</h3>
-            <p className="text-sm text-muted-foreground">
-              If this is an open-source project, you can also report bugs on our GitHub repository.
+                existing bug reports
+              </a>{' '}
+              to see if it's already been reported. If so, add any additional details you have!
             </p>
           </div>
         </CardContent>
       </Card>
 
-      <Callout type="important" title="Security Issues">
-        If you've found a security vulnerability, please DO NOT report it publicly. Instead, email
-        us directly at{' '}
-        <a href="mailto:security@budgetapp.example.com" className="text-primary hover:underline">
-          security@budgetapp.example.com
+      <Callout type="important" title="Security Vulnerabilities">
+        If you've found a security vulnerability, please DO NOT report it publicly. Instead, use{' '}
+        <a
+          href="https://github.com/codescribblr/budget-app/security/advisories/new"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          GitHub Security Advisories
         </a>{' '}
-        so we can address it privately.
+        to report it privately so we can address it before disclosure.
       </Callout>
     </div>
   );
