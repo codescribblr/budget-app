@@ -32,7 +32,7 @@ export default function IncomeBufferPage() {
 
   useEffect(() => {
     if (!incomeBufferEnabled) {
-      router.push('/');
+      router.push('/dashboard');
       return;
     }
     fetchStatus();

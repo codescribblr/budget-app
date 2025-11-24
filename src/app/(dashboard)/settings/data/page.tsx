@@ -46,7 +46,7 @@ export default function DataPage() {
       toast.success('All data cleared successfully');
 
       setShowClearDataDialog(false);
-      router.push('/');
+      router.push('/dashboard');
       router.refresh();
     } catch (error) {
       console.error('Error clearing data:', error);
@@ -71,7 +71,7 @@ export default function DataPage() {
       toast.success(`Imported ${data.counts.categories} categories, ${data.counts.accounts} accounts, ${data.counts.creditCards} credit cards`);
 
       setShowImportDefaultsDialog(false);
-      router.push('/');
+      router.push('/dashboard');
       router.refresh();
     } catch (error) {
       console.error('Error importing defaults:', error);
