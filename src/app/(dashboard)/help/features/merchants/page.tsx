@@ -2,10 +2,23 @@ import Link from 'next/link';
 import { Breadcrumbs } from '@/components/help/Breadcrumbs';
 import { Callout } from '@/components/help/Callout';
 import { WasThisHelpful } from '@/components/help/WasThisHelpful';
+import { StepList } from '@/components/help/StepList';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Store,
+  Tag,
+  TrendingUp,
+  Edit3,
+  Lightbulb,
+  Zap,
+  BarChart3,
+  AlertCircle,
+  CheckCircle2
+} from 'lucide-react';
 
 export default function MerchantsFeaturePage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Breadcrumbs
         items={[
           { label: 'Help Center', href: '/help' },
@@ -14,6 +27,7 @@ export default function MerchantsFeaturePage() {
         ]}
       />
 
+      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold mb-2">Merchants & Auto-Categorization</h1>
         <p className="text-lg text-muted-foreground">
@@ -21,180 +35,464 @@ export default function MerchantsFeaturePage() {
         </p>
       </div>
 
-      <div className="prose dark:prose-invert max-w-none">
-        <p>
-          The merchant system helps you automatically categorize transactions based on where you
-          spent money. Once set up, it can save you hours of manual categorization!
-        </p>
+      {/* Introduction */}
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-base leading-relaxed">
+            The merchant system helps you automatically categorize transactions based on where you
+            spent money. Once set up, it can save you hours of manual categorization!
+          </p>
+        </CardContent>
+      </Card>
 
-        <h2>How Auto-Categorization Works</h2>
-        <p>
-          When you categorize a transaction, the app remembers the merchant and category. Future
-          transactions from that merchant are automatically categorized the same way.
-        </p>
+      {/* How Auto-Categorization Works */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Zap className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">How Auto-Categorization Works</CardTitle>
+              <CardDescription className="text-base">
+                The app learns from your categorization choices
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            When you categorize a transaction, the app remembers the merchant and category. Future
+            transactions from that merchant are automatically categorized the same way.
+          </p>
 
-        <h3>Example</h3>
-        <ol>
-          <li>You import a transaction from "Safeway #1234" and categorize it as "Groceries"</li>
-          <li>Next month, you import another transaction from "Safeway #5678"</li>
-          <li>The app recognizes "Safeway" and automatically categorizes it as "Groceries"</li>
-        </ol>
+          <div className="bg-muted/50 rounded-lg p-4 border">
+            <p className="text-sm font-medium mb-3">Example</p>
+            <StepList
+              steps={[
+                { title: 'First transaction', content: 'You import a transaction from "Safeway #1234" and categorize it as "Groceries"' },
+                { title: 'Next month', content: 'You import another transaction from "Safeway #5678"' },
+                { title: 'Auto-categorized', content: 'The app recognizes "Safeway" and automatically categorizes it as "Groceries"' },
+              ]}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-        <h2>Merchant Groups</h2>
-        <p>
-          Merchant groups solve the problem of merchants appearing with different names. For example:
-        </p>
-        <ul>
-          <li>"Safeway #1234"</li>
-          <li>"Safeway #5678"</li>
-          <li>"SAFEWAY STORE 1234"</li>
-          <li>"Safeway Online"</li>
-        </ul>
-        <p>
-          These are all the same merchant (Safeway), but they appear differently in your bank
-          statement. Merchant groups let you group them together.
-        </p>
+      {/* Merchant Groups */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Tag className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Merchant Groups</CardTitle>
+              <CardDescription className="text-base">
+                Group merchant name variations together
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Merchant groups solve the problem of merchants appearing with different names. For example:
+          </p>
 
-        <h3>Creating a Merchant Group</h3>
-        <ol>
-          <li>Go to the <Link href="/merchants" className="text-primary hover:underline">Merchants page</Link></li>
-          <li>Click "Create Merchant Group"</li>
-          <li>Enter a group name (e.g., "Safeway")</li>
-          <li>Select a default category (e.g., "Groceries")</li>
-          <li>Click "Create"</li>
-        </ol>
+          <div className="bg-muted/50 rounded-lg p-4 border">
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>"Safeway #1234"</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>"Safeway #5678"</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>"SAFEWAY STORE 1234"</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>"Safeway Online"</span>
+              </li>
+            </ul>
+          </div>
 
-        <h3>Adding Merchants to a Group</h3>
-        <p>
-          Once you've created a group, you need to add merchant names to it:
-        </p>
-        <ol>
-          <li>Click on a merchant group to view details</li>
-          <li>Click "Add Merchant Mapping"</li>
-          <li>Enter the merchant name as it appears in your transactions (e.g., "Safeway #1234")</li>
-          <li>Click "Add"</li>
-          <li>Repeat for all variations of this merchant</li>
-        </ol>
+          <p className="text-sm text-muted-foreground">
+            These are all the same merchant (Safeway), but they appear differently in your bank
+            statement. Merchant groups let you group them together.
+          </p>
 
-        <Callout type="tip" title="Use wildcards">
-          You can use wildcards in merchant mappings. For example, "Safeway*" will match any
-          merchant name starting with "Safeway". This saves you from adding every store number!
-        </Callout>
+          <div className="space-y-4 pt-2">
+            <div>
+              <p className="text-sm font-medium mb-3">Creating a Merchant Group</p>
+              <StepList
+                steps={[
+                  { title: 'Go to Merchants page', content: <><Link href="/merchants" className="text-primary hover:underline">Navigate to the Merchants page</Link></> },
+                  { title: 'Create group', content: 'Click "Create Merchant Group"' },
+                  { title: 'Enter name', content: 'Enter a group name (e.g., "Safeway")' },
+                  { title: 'Select category', content: 'Select a default category (e.g., "Groceries")' },
+                  { title: 'Save', content: 'Click "Create"' },
+                ]}
+              />
+            </div>
 
-        <h2>Auto-Grouping</h2>
-        <p>
-          The app can automatically create merchant groups based on your transaction history:
-        </p>
-        <ol>
-          <li>Go to the <Link href="/merchants" className="text-primary hover:underline">Merchants page</Link></li>
-          <li>Click "Auto-Group Merchants"</li>
-          <li>The app will analyze your transactions and suggest merchant groups</li>
-          <li>Review the suggestions and approve the ones you want</li>
-        </ol>
-        <p>
-          This is a huge time-saver when you're first setting up the merchant system!
-        </p>
+            <div>
+              <p className="text-sm font-medium mb-3">Adding Merchants to a Group</p>
+              <p className="text-sm text-muted-foreground mb-3">Once you've created a group, you need to add merchant names to it:</p>
+              <StepList
+                steps={[
+                  { title: 'View group', content: 'Click on a merchant group to view details' },
+                  { title: 'Add mapping', content: 'Click "Add Merchant Mapping"' },
+                  { title: 'Enter name', content: 'Enter the merchant name as it appears in your transactions (e.g., "Safeway #1234")' },
+                  { title: 'Save', content: 'Click "Add"' },
+                  { title: 'Repeat', content: 'Repeat for all variations of this merchant' },
+                ]}
+              />
+            </div>
+          </div>
 
-        <h2>Backfilling Categories</h2>
-        <p>
-          After setting up merchant groups, you can backfill categories for existing transactions:
-        </p>
-        <ol>
-          <li>Go to the <Link href="/merchants" className="text-primary hover:underline">Merchants page</Link></li>
-          <li>Click "Backfill Categories"</li>
-          <li>The app will re-categorize all uncategorized transactions based on merchant groups</li>
-        </ol>
-        <p>
-          This is useful if you imported transactions before setting up merchant groups.
-        </p>
+          <Callout type="tip" title="Use wildcards">
+            You can use wildcards in merchant mappings. For example, "Safeway*" will match any
+            merchant name starting with "Safeway". This saves you from adding every store number!
+          </Callout>
+        </CardContent>
+      </Card>
 
-        <h2>Merchant Statistics</h2>
-        <p>
-          The Merchants page shows statistics for each merchant group:
-        </p>
-        <ul>
-          <li><strong>Transaction count:</strong> How many transactions from this merchant</li>
-          <li><strong>Total spent:</strong> How much you've spent at this merchant</li>
-          <li><strong>Average transaction:</strong> Typical transaction amount</li>
-          <li><strong>Most common category:</strong> Which category you use most for this merchant</li>
-        </ul>
-        <p>
-          This helps you understand your spending patterns and verify that merchant groups are
-          set up correctly.
-        </p>
+      {/* Auto-Grouping */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Zap className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Auto-Grouping</CardTitle>
+              <CardDescription className="text-base">
+                Let the app suggest merchant groups automatically
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            The app can automatically create merchant groups based on your transaction history:
+          </p>
+          <StepList
+            steps={[
+              { title: 'Go to Merchants page', content: <><Link href="/merchants" className="text-primary hover:underline">Navigate to the Merchants page</Link></> },
+              { title: 'Auto-group', content: 'Click "Auto-Group Merchants"' },
+              { title: 'Review suggestions', content: 'The app will analyze your transactions and suggest merchant groups' },
+              { title: 'Approve', content: 'Review the suggestions and approve the ones you want' },
+            ]}
+          />
+          <p className="text-sm text-muted-foreground">
+            This is a huge time-saver when you're first setting up the merchant system!
+          </p>
+        </CardContent>
+      </Card>
 
-        <h2>Editing and Deleting Merchant Groups</h2>
-        <p>
-          You can edit or delete merchant groups at any time:
-        </p>
-        <ul>
-          <li><strong>Edit:</strong> Click on a merchant group to view details, then click "Edit"
-            to change the name or default category</li>
-          <li><strong>Delete:</strong> Click the "..." menu and select "Delete" to remove the group</li>
-        </ul>
+      {/* Backfilling Categories */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <TrendingUp className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Backfilling Categories</CardTitle>
+              <CardDescription className="text-base">
+                Apply merchant groups to existing transactions
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            After setting up merchant groups, you can backfill categories for existing transactions:
+          </p>
+          <StepList
+            steps={[
+              { title: 'Go to Merchants page', content: <><Link href="/merchants" className="text-primary hover:underline">Navigate to the Merchants page</Link></> },
+              { title: 'Backfill', content: 'Click "Backfill Categories"' },
+              { title: 'Re-categorize', content: 'The app will re-categorize all uncategorized transactions based on merchant groups' },
+            ]}
+          />
+          <p className="text-sm text-muted-foreground">
+            This is useful if you imported transactions before setting up merchant groups.
+          </p>
+        </CardContent>
+      </Card>
 
-        <Callout type="warning" title="Deleting merchant groups">
-          Deleting a merchant group doesn't delete transactions or change their categories. It
-          just removes the auto-categorization rule for future transactions.
-        </Callout>
+      {/* Merchant Statistics */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <BarChart3 className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Merchant Statistics</CardTitle>
+              <CardDescription className="text-base">
+                Track spending patterns by merchant
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">The Merchants page shows statistics for each merchant group:</p>
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            <li className="flex items-start gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+              <span><strong>Transaction count:</strong> How many transactions from this merchant</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+              <span><strong>Total spent:</strong> How much you've spent at this merchant</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+              <span><strong>Average transaction:</strong> Typical transaction amount</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+              <span><strong>Most common category:</strong> Which category you use most for this merchant</span>
+            </li>
+          </ul>
+          <p className="text-sm text-muted-foreground">
+            This helps you understand your spending patterns and verify that merchant groups are
+            set up correctly.
+          </p>
+        </CardContent>
+      </Card>
 
-        <h2>Best Practices</h2>
+      {/* Editing and Deleting */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Edit3 className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Editing and Deleting Merchant Groups</CardTitle>
+              <CardDescription className="text-base">
+                Manage your merchant groups
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">You can edit or delete merchant groups at any time:</p>
+          <div className="grid gap-3">
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm min-w-[80px]">Edit</div>
+              <div className="text-sm text-muted-foreground">
+                Click on a merchant group to view details, then click "Edit" to change the name or default category
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm min-w-[80px]">Delete</div>
+              <div className="text-sm text-muted-foreground">
+                Click the "..." menu and select "Delete" to remove the group
+              </div>
+            </div>
+          </div>
+          <Callout type="warning" title="Deleting merchant groups">
+            Deleting a merchant group doesn't delete transactions or change their categories. It
+            just removes the auto-categorization rule for future transactions.
+          </Callout>
+        </CardContent>
+      </Card>
 
-        <h3>Start with Common Merchants</h3>
-        <p>
-          Focus on merchants you visit frequently:
-        </p>
-        <ul>
-          <li>Grocery stores</li>
-          <li>Gas stations</li>
-          <li>Restaurants you visit regularly</li>
-          <li>Utility companies</li>
-          <li>Subscription services</li>
-        </ul>
+      {/* Best Practices */}
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold">Best Practices</h2>
 
-        <h3>Use Descriptive Group Names</h3>
-        <p>
-          Use the merchant's common name, not the exact text from your bank statement:
-        </p>
-        <ul>
-          <li>Good: "Safeway"</li>
-          <li>Less good: "SAFEWAY STORE 1234"</li>
-        </ul>
+        <Card>
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Store className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl mb-2">Start with Common Merchants</CardTitle>
+                <CardDescription className="text-base">
+                  Focus on merchants you visit frequently
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>Grocery stores</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>Gas stations</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>Restaurants you visit regularly</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>Utility companies</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>Subscription services</span>
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
 
-        <h3>Review Auto-Categorization</h3>
-        <p>
-          Periodically review auto-categorized transactions to make sure they're correct. If you
-          find errors, adjust the merchant group's default category.
-        </p>
+        <Card>
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <CheckCircle2 className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl mb-2">Use Descriptive Group Names</CardTitle>
+                <CardDescription className="text-base">
+                  Use the merchant's common name
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2">
+              <div className="flex items-start gap-3 p-3 bg-green-500/10 rounded-lg border border-green-500/20">
+                <div className="font-medium text-sm min-w-[100px] text-green-700 dark:text-green-400">Good</div>
+                <div className="text-sm text-muted-foreground">"Safeway"</div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
+                <div className="font-medium text-sm min-w-[100px] text-yellow-700 dark:text-yellow-400">Less good</div>
+                <div className="text-sm text-muted-foreground">"SAFEWAY STORE 1234"</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        <h3>Handle Split Merchants</h3>
-        <p>
-          Some merchants sell items in multiple categories (e.g., Target sells groceries, clothing,
-          and household items). You have two options:
-        </p>
-        <ol>
-          <li><strong>Choose the most common category:</strong> Set the default to the category you
-            use most often, then manually adjust exceptions</li>
-          <li><strong>Don't auto-categorize:</strong> Leave these merchants without a group and
-            categorize each transaction manually</li>
-        </ol>
-
-        <h2>Tips for Success</h2>
-        <ul>
-          <li>Set up merchant groups before importing large batches of transactions</li>
-          <li>Use the auto-grouping feature to get started quickly</li>
-          <li>Add new merchants as you encounter them</li>
-          <li>Use wildcards to match multiple store locations</li>
-          <li>Review merchant statistics to find patterns in your spending</li>
-          <li>Update default categories if your spending habits change</li>
-          <li>Don't try to create groups for every merchant - focus on frequent ones</li>
-        </ul>
-
-        <Callout type="tip" title="The 80/20 rule">
-          You probably spend 80% of your money at 20% of merchants. Focus on setting up groups
-          for those frequent merchants, and you'll auto-categorize most of your transactions!
-        </Callout>
+        <Card>
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <AlertCircle className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl mb-2">Handle Split Merchants</CardTitle>
+                <CardDescription className="text-base">
+                  Merchants that sell items in multiple categories
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Some merchants sell items in multiple categories (e.g., Target sells groceries, clothing,
+              and household items). You have two options:
+            </p>
+            <div className="grid gap-3">
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <div className="font-medium text-sm min-w-[180px]">Choose most common</div>
+                <div className="text-sm text-muted-foreground">
+                  Set the default to the category you use most often, then manually adjust exceptions
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <div className="font-medium text-sm min-w-[180px]">Don't auto-categorize</div>
+                <div className="text-sm text-muted-foreground">
+                  Leave these merchants without a group and categorize each transaction manually
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Tips Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Lightbulb className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl">Tips for Success</CardTitle>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ul className="space-y-3">
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">1</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Set up merchant groups before importing large batches of transactions
+              </p>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">2</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Use the auto-grouping feature to get started quickly
+              </p>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">3</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Add new merchants as you encounter them
+              </p>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">4</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Use wildcards to match multiple store locations
+              </p>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">5</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Review merchant statistics to find patterns in your spending
+              </p>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">6</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Update default categories if your spending habits change
+              </p>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-primary">7</span>
+              </div>
+              <p className="text-sm text-muted-foreground pt-0.5">
+                Don't try to create groups for every merchant - focus on frequent ones
+              </p>
+            </li>
+          </ul>
+
+          <Callout type="tip" title="The 80/20 rule">
+            You probably spend 80% of your money at 20% of merchants. Focus on setting up groups
+            for those frequent merchants, and you'll auto-categorize most of your transactions!
+          </Callout>
+        </CardContent>
+      </Card>
 
       <WasThisHelpful articlePath="/help/features/merchants" />
     </div>
