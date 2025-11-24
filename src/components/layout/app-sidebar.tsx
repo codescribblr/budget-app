@@ -98,8 +98,8 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-2">
+      <SidebarHeader className="h-16 border-b border-sidebar-border p-0">
+        <div className="flex h-full items-center gap-2 px-4">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden">
             <Image
               src={logoSrc}
