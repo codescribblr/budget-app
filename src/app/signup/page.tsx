@@ -60,7 +60,7 @@ export default function SignupPage() {
         setLoading(false);
       } else {
         // Auto-login successful, redirect to dashboard
-        router.push('/');
+        router.push('/dashboard');
         router.refresh();
       }
     } catch (err) {

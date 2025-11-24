@@ -31,13 +31,13 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   // Protected routes - require authentication
-  const protectedPaths = ['/', '/dashboard', '/categories', '/accounts', '/credit-cards', '/transactions', '/reports', '/import']
-  const isProtectedPath = protectedPaths.some(path => 
+  const protectedPaths = ['/dashboard', '/categories', '/accounts', '/credit-cards', '/transactions', '/reports', '/import', '/goals', '/loans', '/settings', '/help', '/merchants', '/income', '/income-buffer', '/money-movement', '/category-rules']
+  const isProtectedPath = protectedPaths.some(path =>
     request.nextUrl.pathname === path || request.nextUrl.pathname.startsWith(path + '/')
   )
 
   // Public routes - allow without authentication
-  const publicPaths = ['/login', '/signup', '/auth']
+  const publicPaths = ['/login', '/signup', '/auth', '/privacy', '/terms']
   const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path))
 
   // Redirect to login if accessing protected route without authentication
@@ -51,7 +51,7 @@ export async function middleware(request: NextRequest) {
   // Redirect to dashboard if accessing login/signup while authenticated
   if (isPublicPath && user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
     const url = request.nextUrl.clone()
-    url.pathname = '/'
+    url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
 

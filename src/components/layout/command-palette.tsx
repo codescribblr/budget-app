@@ -230,7 +230,7 @@ export function CommandPalette() {
                   value={account.name}
                   onSelect={() => {
                     runCommand(() => {
-                      router.push('/')
+                      router.push('/dashboard')
                       // Scroll to accounts section after navigation
                       setTimeout(() => {
                         const element = document.getElementById('accounts-section')
@@ -256,7 +256,7 @@ export function CommandPalette() {
                   value={card.name}
                   onSelect={() => {
                     runCommand(() => {
-                      router.push('/')
+                      router.push('/dashboard')
                       // Scroll to credit cards section after navigation
                       setTimeout(() => {
                         const element = document.getElementById('credit-cards-section')
@@ -282,7 +282,7 @@ export function CommandPalette() {
                   value={loan.name}
                   onSelect={() => {
                     runCommand(() => {
-                      router.push('/')
+                      router.push('/dashboard')
                       // Scroll to loans section after navigation
                       setTimeout(() => {
                         const element = document.getElementById('loans-section')

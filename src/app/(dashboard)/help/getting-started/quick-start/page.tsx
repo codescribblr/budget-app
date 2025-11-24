@@ -13,7 +13,7 @@ export default function QuickStartPage() {
         <>
           <p>Start by adding your bank accounts and credit cards.</p>
           <ul className="list-disc list-inside mt-2 space-y-1">
-            <li>Go to the <Link href="/" className="text-primary hover:underline">Dashboard</Link></li>
+            <li>Go to the <Link href="/dashboard" className="text-primary hover:underline">Dashboard</Link></li>
             <li>Click "Add Account" in the Accounts card</li>
             <li>Enter your account name and current balance</li>
             <li>Repeat for all your accounts</li>

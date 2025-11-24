@@ -38,8 +38,8 @@ export default function AppHeader({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isActive = (path: string) => {
-    if (path === '/') {
-      return pathname === '/';
+    if (path === '/dashboard') {
+      return pathname === '/dashboard';
     }
     return pathname.startsWith(path);
   };
@@ -86,9 +86,9 @@ export default function AppHeader({
                   </SheetHeader>
                   <nav className="flex flex-col mt-6">
                     <button
-                      onClick={() => handleNavigation('/')}
+                      onClick={() => handleNavigation('/dashboard')}
                       className={`w-full text-left px-4 py-3 transition-colors border-b ${
-                        isActive('/')
+                        isActive('/dashboard')
                           ? 'bg-gray-800 text-white hover:bg-gray-700'
                           : 'hover:bg-accent'
                       }`}
@@ -200,8 +200,8 @@ export default function AppHeader({
             {/* Desktop Navigation */}
             <div className="hidden lg:flex flex-wrap gap-2 justify-end">
               <Button
-                variant={getButtonVariant('/')}
-                onClick={() => window.location.href = '/'}
+                variant={getButtonVariant('/dashboard')}
+                onClick={() => window.location.href = '/dashboard'}
                 size="sm"
                 className="md:size-default"
               >
