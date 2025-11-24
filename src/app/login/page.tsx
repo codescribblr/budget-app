@@ -73,7 +73,8 @@ function LoginForm() {
       const { error } = await supabase.auth.signInWithOtp({
         email: resetEmail,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+          // Redirect to settings page to set a new password after magic link login
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/settings')}`,
         },
       });
 
@@ -248,7 +249,7 @@ function LoginForm() {
                   If we have an account for <strong>{resetEmail}</strong>, we've sent you a link to sign in.
                 </p>
                 <p className="text-sm text-green-700 dark:text-green-300 mt-2">
-                  Check your email and click the link to access your account.
+                  Check your email and click the link to access your account. You'll be directed to settings where you can set a new password.
                 </p>
               </div>
 
