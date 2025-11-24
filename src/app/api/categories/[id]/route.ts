@@ -8,7 +8,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const category = await getCategoryById(parseInt(id));
+    const categoryId = parseInt(id);
+    
+    if (isNaN(categoryId)) {
+      return NextResponse.json({ error: 'Invalid category ID' }, { status: 400 });
+    }
+    
+    const category = await getCategoryById(categoryId);
 
     if (!category) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 });
@@ -30,8 +36,14 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const categoryId = parseInt(id);
+    
+    if (isNaN(categoryId)) {
+      return NextResponse.json({ error: 'Invalid category ID' }, { status: 400 });
+    }
+    
     const body = (await request.json()) as UpdateCategoryRequest;
-    const category = await updateCategory(parseInt(id), body);
+    const category = await updateCategory(categoryId, body);
 
     if (!category) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 });
@@ -53,7 +65,13 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await deleteCategory(parseInt(id));
+    const categoryId = parseInt(id);
+    
+    if (isNaN(categoryId)) {
+      return NextResponse.json({ error: 'Invalid category ID' }, { status: 400 });
+    }
+    
+    await deleteCategory(categoryId);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting category:', error);
