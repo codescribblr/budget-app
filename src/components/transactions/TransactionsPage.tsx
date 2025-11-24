@@ -19,6 +19,22 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { TransactionWithSplits, Category, MerchantGroup } from '@/lib/types';
 import TransactionList from './TransactionList';
 import AddTransactionDialog from './AddTransactionDialog';
@@ -56,6 +72,8 @@ export default function TransactionsPage() {
   const endDateParam = searchParams.get('endDate');
   const searchQueryParam = searchParams.get('q');
   const editIdParam = searchParams.get('editId');
+  const pageParam = searchParams.get('page');
+  const pageSizeParam = searchParams.get('pageSize');
 
   const [transactions, setTransactions] = useState<TransactionWithSplits[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -68,6 +86,22 @@ export default function TransactionsPage() {
   const [endDateObj, setEndDateObj] = useState<Date | undefined>(undefined);
   const [editingTransaction, setEditingTransaction] = useState<TransactionWithSplits | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+
+  // Initialize pagination state with values from URL params or defaults
+  const [currentPage, setCurrentPage] = useState(() => {
+    if (pageParam) {
+      const page = parseInt(pageParam);
+      return !isNaN(page) && page > 0 ? page : 1;
+    }
+    return 1;
+  });
+  const [pageSize, setPageSize] = useState(() => {
+    if (pageSizeParam) {
+      const size = parseInt(pageSizeParam);
+      return !isNaN(size) && size > 0 ? size : 50;
+    }
+    return 50;
+  });
 
   const fetchData = async () => {
     try {
@@ -136,6 +170,25 @@ export default function TransactionsPage() {
       setEndDateObj(undefined);
     }
   }, [startDateParam, endDateParam]);
+
+  // Update pagination when URL params change
+  useEffect(() => {
+    if (pageParam) {
+      const page = parseInt(pageParam);
+      if (!isNaN(page) && page > 0 && page !== currentPage) {
+        setCurrentPage(page);
+      }
+    }
+  }, [pageParam]);
+
+  useEffect(() => {
+    if (pageSizeParam) {
+      const size = parseInt(pageSizeParam);
+      if (!isNaN(size) && size > 0 && size !== pageSize) {
+        setPageSize(size);
+      }
+    }
+  }, [pageSizeParam]);
 
   // Fetch merchant group name if merchantGroupId is provided
   useEffect(() => {
@@ -240,6 +293,20 @@ export default function TransactionsPage() {
     });
   }, [transactions, categories, searchQuery, merchantFilter, merchantGroupIdParam, categoryIdParam, startDateParam, endDateParam]);
 
+  // Calculate pagination
+  const totalTransactions = filteredTransactions.length;
+  const totalPages = Math.ceil(totalTransactions / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedTransactions = filteredTransactions.slice(startIndex, endIndex);
+
+  // Reset to page 1 if current page is out of bounds
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      updatePagination(1);
+    }
+  }, [currentPage, totalPages]);
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -271,6 +338,18 @@ export default function TransactionsPage() {
       }
     });
 
+    // Reset to page 1 when filters change
+    params.set('page', '1');
+
+    router.push(`/transactions?${params.toString()}`);
+  };
+
+  const updatePagination = (page: number, size?: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('page', page.toString());
+    if (size !== undefined) {
+      params.set('pageSize', size.toString());
+    }
     router.push(`/transactions?${params.toString()}`);
   };
 
@@ -296,50 +375,52 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Transactions</h1>
-          {hasFilters && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {merchantFilter && (
-                <Badge variant="secondary">
-                  Merchant: {merchantFilter}
-                </Badge>
-              )}
-              {merchantGroupName && (
-                <Badge variant="secondary">
-                  Merchant Group: {merchantGroupName}
-                </Badge>
-              )}
-              {selectedCategory && (
-                <Badge variant="secondary">
-                  Category: {selectedCategory.name}
-                </Badge>
-              )}
-              {(startDateParam || endDateParam) && (
-                <Badge variant="secondary">
-                  Date: {startDateParam || '...'} to {endDateParam || '...'}
-                </Badge>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {hasFilters && (
-            <Button variant="outline" onClick={handleClearFilters}>
-              <X className="mr-2 h-4 w-4" />
-              Clear Filters
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">Transactions</h1>
+            {hasFilters && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {merchantFilter && (
+                  <Badge variant="secondary">
+                    Merchant: {merchantFilter}
+                  </Badge>
+                )}
+                {merchantGroupName && (
+                  <Badge variant="secondary">
+                    Merchant Group: {merchantGroupName}
+                  </Badge>
+                )}
+                {selectedCategory && (
+                  <Badge variant="secondary">
+                    Category: {selectedCategory.name}
+                  </Badge>
+                )}
+                {(startDateParam || endDateParam) && (
+                  <Badge variant="secondary">
+                    Date: {startDateParam || '...'} to {endDateParam || '...'}
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            {hasFilters && (
+              <Button variant="outline" onClick={handleClearFilters} className="w-full sm:w-auto">
+                <X className="mr-2 h-4 w-4" />
+                Clear Filters
+              </Button>
+            )}
+            <Button variant="outline" asChild className="w-full sm:w-auto">
+              <Link href="/import">
+                <Upload className="mr-2 h-4 w-4" />
+                Import Transactions
+              </Link>
             </Button>
-          )}
-          <Button variant="outline" asChild>
-            <Link href="/import">
-              <Upload className="mr-2 h-4 w-4" />
-              Import Transactions
-            </Link>
-          </Button>
-          <Button onClick={() => setIsAddDialogOpen(true)}>
-            Add Transaction
-          </Button>
+            <Button onClick={() => setIsAddDialogOpen(true)} className="w-full sm:w-auto">
+              Add Transaction
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -349,7 +430,7 @@ export default function TransactionsPage() {
         </CardHeader>
         <CardContent>
           {/* Search and Filter Toolbar */}
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4">
             {/* Search Input */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -362,15 +443,18 @@ export default function TransactionsPage() {
               />
             </div>
 
-            {/* Category Filter */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10">
-                  <Filter className="mr-2 h-4 w-4" />
-                  Category
-                  {categoryIdParam && <Badge variant="secondary" className="ml-2">1</Badge>}
-                </Button>
-              </DropdownMenuTrigger>
+            {/* Filters Row - wraps on mobile */}
+            <div className="flex flex-wrap gap-2">
+              {/* Category Filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Category</span>
+                    <span className="sm:hidden">Cat.</span>
+                    {categoryIdParam && <Badge variant="secondary" className="ml-2">1</Badge>}
+                  </Button>
+                </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-[200px]">
                 <DropdownMenuLabel>Filter by category</DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -394,47 +478,48 @@ export default function TransactionsPage() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Merchant Group Filter */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10">
-                  <Filter className="mr-2 h-4 w-4" />
-                  Merchant
-                  {merchantGroupIdParam && <Badge variant="secondary" className="ml-2">1</Badge>}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[200px]">
-                <DropdownMenuLabel>Filter by merchant</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem
-                  checked={!merchantGroupIdParam}
-                  onCheckedChange={() => handleMerchantGroupChange(null)}
-                >
-                  All Merchants
-                </DropdownMenuCheckboxItem>
-                {merchantGroups.map((group) => (
+              {/* Merchant Group Filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Merchant</span>
+                    <span className="sm:hidden">Merch.</span>
+                    {merchantGroupIdParam && <Badge variant="secondary" className="ml-2">1</Badge>}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[200px]">
+                  <DropdownMenuLabel>Filter by merchant</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
                   <DropdownMenuCheckboxItem
-                    key={group.id}
-                    checked={merchantGroupIdParam === group.id.toString()}
-                    onCheckedChange={(checked) => {
-                      handleMerchantGroupChange(checked ? group.id.toString() : null);
-                    }}
+                    checked={!merchantGroupIdParam}
+                    onCheckedChange={() => handleMerchantGroupChange(null)}
                   >
-                    {group.display_name}
+                    All Merchants
                   </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {merchantGroups.map((group) => (
+                    <DropdownMenuCheckboxItem
+                      key={group.id}
+                      checked={merchantGroupIdParam === group.id.toString()}
+                      onCheckedChange={(checked) => {
+                        handleMerchantGroupChange(checked ? group.id.toString() : null);
+                      }}
+                    >
+                      {group.display_name}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-            {/* Date Range Filter */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  Date
-                  {(startDateParam || endDateParam) && <Badge variant="secondary" className="ml-2">1</Badge>}
-                </Button>
-              </PopoverTrigger>
+              {/* Date Range Filter */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    Date
+                    {(startDateParam || endDateParam) && <Badge variant="secondary" className="ml-2">1</Badge>}
+                  </Button>
+                </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="end">
                 <div className="p-4 space-y-4">
                   <div>
@@ -467,6 +552,7 @@ export default function TransactionsPage() {
                 </div>
               </PopoverContent>
             </Popover>
+            </div>
           </div>
 
           {(searchQuery || hasFilters) && (
@@ -476,10 +562,124 @@ export default function TransactionsPage() {
           )}
 
           <TransactionList
-            transactions={filteredTransactions}
+            transactions={paginatedTransactions}
             categories={categories}
             onUpdate={fetchData}
           />
+
+          {/* Pagination Controls */}
+          {totalTransactions > 0 && (
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Pagination Info and Page Size Selector */}
+              <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-sm text-muted-foreground w-full sm:w-auto">
+                <div className="text-center sm:text-left">
+                  Showing {startIndex + 1}-{Math.min(endIndex, totalTransactions)} of {totalTransactions}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="hidden sm:inline">Rows per page:</span>
+                  <span className="sm:hidden">Per page:</span>
+                  <Select
+                    value={pageSize.toString()}
+                    onValueChange={(value) => {
+                      const newSize = parseInt(value);
+                      setPageSize(newSize);
+                      updatePagination(1, newSize);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[70px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="200">200</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Pagination Buttons */}
+              {totalPages > 1 && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage > 1) {
+                            updatePagination(currentPage - 1);
+                          }
+                        }}
+                        className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
+                      />
+                    </PaginationItem>
+
+                    {/* Page Numbers */}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                      // Show first page, last page, current page, and pages around current
+                      const showPage =
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1);
+
+                      const showEllipsisBefore = page === currentPage - 2 && currentPage > 3;
+                      const showEllipsisAfter = page === currentPage + 2 && currentPage < totalPages - 2;
+
+                      if (showEllipsisBefore) {
+                        return (
+                          <PaginationItem key={`ellipsis-before-${page}`}>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        );
+                      }
+
+                      if (showEllipsisAfter) {
+                        return (
+                          <PaginationItem key={`ellipsis-after-${page}`}>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        );
+                      }
+
+                      if (!showPage) {
+                        return null;
+                      }
+
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              updatePagination(page);
+                            }}
+                            isActive={currentPage === page}
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    })}
+
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage < totalPages) {
+                            updatePagination(currentPage + 1);
+                          }
+                        }}
+                        className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

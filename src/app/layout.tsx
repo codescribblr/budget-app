@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/providers/theme-provider";
-import { FeatureProvider } from "@/contexts/FeatureContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -81,10 +80,8 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <ThemeProvider>
-          <FeatureProvider>
-            {children}
-            <Toaster />
-          </FeatureProvider>
+          {children}
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

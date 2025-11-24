@@ -83,7 +83,68 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
 
   return (
     <>
-      <div className="overflow-x-auto">
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-3">
+        {transactions.map((transaction) => (
+          <div key={transaction.id} className="border rounded-lg p-4 space-y-3">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="font-medium text-sm mb-1">{transaction.description}</div>
+                <div className="text-xs text-muted-foreground">{formatDate(transaction.date)}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={`font-semibold text-sm ${transaction.total_amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrency(transaction.total_amount)}
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleEdit(transaction)}>
+                      <Edit className="mr-2 h-4 w-4" />
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDelete(transaction)} className="text-red-600">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            {transaction.merchant_name && (
+              <div className="text-xs">
+                <span className="text-muted-foreground">Merchant: </span>
+                <span>{transaction.merchant_name}</span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-1">
+              {transaction.splits.map((split) => (
+                <Badge key={split.id} variant="secondary" className="text-xs">
+                  {split.category_name}: {formatCurrency(split.amount)}
+                </Badge>
+              ))}
+            </div>
+
+            {(transaction.account_name || transaction.credit_card_name) && (
+              <div className="text-xs">
+                <span className="text-muted-foreground">Account: </span>
+                <Badge variant="outline" className="text-xs">
+                  {transaction.account_name || transaction.credit_card_name}
+                </Badge>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden md:block overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
