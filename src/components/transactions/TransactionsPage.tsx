@@ -19,6 +19,22 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { TransactionWithSplits, Category, MerchantGroup } from '@/lib/types';
 import TransactionList from './TransactionList';
 import AddTransactionDialog from './AddTransactionDialog';
@@ -56,6 +72,8 @@ export default function TransactionsPage() {
   const endDateParam = searchParams.get('endDate');
   const searchQueryParam = searchParams.get('q');
   const editIdParam = searchParams.get('editId');
+  const pageParam = searchParams.get('page');
+  const pageSizeParam = searchParams.get('pageSize');
 
   const [transactions, setTransactions] = useState<TransactionWithSplits[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -136,6 +154,29 @@ export default function TransactionsPage() {
       setEndDateObj(undefined);
     }
   }, [startDateParam, endDateParam]);
+
+  // Initialize pagination from URL parameters
+  useEffect(() => {
+    if (pageParam) {
+      const page = parseInt(pageParam);
+      if (!isNaN(page) && page > 0) {
+        setCurrentPage(page);
+      }
+    } else {
+      setCurrentPage(1);
+    }
+  }, [pageParam]);
+
+  useEffect(() => {
+    if (pageSizeParam) {
+      const size = parseInt(pageSizeParam);
+      if (!isNaN(size) && size > 0) {
+        setPageSize(size);
+      }
+    } else {
+      setPageSize(50);
+    }
+  }, [pageSizeParam]);
 
   // Fetch merchant group name if merchantGroupId is provided
   useEffect(() => {
@@ -240,6 +281,20 @@ export default function TransactionsPage() {
     });
   }, [transactions, categories, searchQuery, merchantFilter, merchantGroupIdParam, categoryIdParam, startDateParam, endDateParam]);
 
+  // Calculate pagination
+  const totalTransactions = filteredTransactions.length;
+  const totalPages = Math.ceil(totalTransactions / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedTransactions = filteredTransactions.slice(startIndex, endIndex);
+
+  // Reset to page 1 if current page is out of bounds
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      updatePagination(1);
+    }
+  }, [currentPage, totalPages]);
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -271,6 +326,18 @@ export default function TransactionsPage() {
       }
     });
 
+    // Reset to page 1 when filters change
+    params.set('page', '1');
+
+    router.push(`/transactions?${params.toString()}`);
+  };
+
+  const updatePagination = (page: number, size?: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('page', page.toString());
+    if (size !== undefined) {
+      params.set('pageSize', size.toString());
+    }
     router.push(`/transactions?${params.toString()}`);
   };
 
@@ -476,10 +543,123 @@ export default function TransactionsPage() {
           )}
 
           <TransactionList
-            transactions={filteredTransactions}
+            transactions={paginatedTransactions}
             categories={categories}
             onUpdate={fetchData}
           />
+
+          {/* Pagination Controls */}
+          {totalTransactions > 0 && (
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Pagination Info and Page Size Selector */}
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div>
+                  Showing {startIndex + 1}-{Math.min(endIndex, totalTransactions)} of {totalTransactions}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span>Rows per page:</span>
+                  <Select
+                    value={pageSize.toString()}
+                    onValueChange={(value) => {
+                      const newSize = parseInt(value);
+                      setPageSize(newSize);
+                      updatePagination(1, newSize);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[70px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="200">200</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Pagination Buttons */}
+              {totalPages > 1 && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage > 1) {
+                            updatePagination(currentPage - 1);
+                          }
+                        }}
+                        className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
+                      />
+                    </PaginationItem>
+
+                    {/* Page Numbers */}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                      // Show first page, last page, current page, and pages around current
+                      const showPage =
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1);
+
+                      const showEllipsisBefore = page === currentPage - 2 && currentPage > 3;
+                      const showEllipsisAfter = page === currentPage + 2 && currentPage < totalPages - 2;
+
+                      if (showEllipsisBefore) {
+                        return (
+                          <PaginationItem key={`ellipsis-before-${page}`}>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        );
+                      }
+
+                      if (showEllipsisAfter) {
+                        return (
+                          <PaginationItem key={`ellipsis-after-${page}`}>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        );
+                      }
+
+                      if (!showPage) {
+                        return null;
+                      }
+
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              updatePagination(page);
+                            }}
+                            isActive={currentPage === page}
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    })}
+
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage < totalPages) {
+                            updatePagination(currentPage + 1);
+                          }
+                        }}
+                        className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
