@@ -3,15 +3,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { 
-  User, 
-  Key, 
-  Database, 
-  Sparkles, 
-  Copy, 
-  Users, 
+import {
+  User,
+  Key,
+  Database,
+  Sparkles,
+  Copy,
+  Users,
   Download,
-  Trash2
+  Trash2,
+  Crown
 } from 'lucide-react';
 
 const settingsNavItems = [
@@ -20,6 +21,12 @@ const settingsNavItems = [
     href: '/settings',
     icon: Sparkles,
     description: 'Manage optional features',
+  },
+  {
+    title: 'Subscription',
+    href: '/settings/subscription',
+    icon: Crown,
+    description: 'Manage your subscription',
   },
   {
     title: 'Password',
