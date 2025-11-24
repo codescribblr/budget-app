@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
 import type { GoalWithDetails } from '@/lib/types';
-import { Target, Calendar, TrendingUp, ArrowRight } from 'lucide-react';
+import { Target, Calendar, TrendingUp, ArrowRight, Crown } from 'lucide-react';
 import Link from 'next/link';
 import { parseLocalDate } from '@/lib/date-utils';
 import { useFeature } from '@/contexts/FeatureContext';
@@ -57,13 +57,17 @@ export default function GoalsWidget() {
           </CardTitle>
           <CardDescription>Track your savings goals</CardDescription>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-4">
+        <CardContent className="text-center py-4 space-y-4">
+          <p className="text-muted-foreground">
             Goals & Debt Tracking is a premium feature
           </p>
-          <Button onClick={() => router.push('/settings/subscription')} variant="outline" size="sm">
+          <Button
+            onClick={() => router.push('/settings/subscription')}
+            size="sm"
+            className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
+          >
+            <Crown className="mr-2 h-4 w-4" />
             Upgrade to Premium
-            <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </CardContent>
       </Card>

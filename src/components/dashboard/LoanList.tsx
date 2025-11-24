@@ -27,7 +27,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { Loan } from '@/lib/types';
 import { toast } from 'sonner';
-import { Check, X, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { Check, X, MoreVertical, Edit, Trash2, Crown } from 'lucide-react';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 
 interface LoanListProps {
@@ -216,7 +216,12 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
         <p className="text-muted-foreground">
           Loans Management is a premium feature
         </p>
-        <Button onClick={() => router.push('/settings/subscription')} size="sm">
+        <Button
+          onClick={() => router.push('/settings/subscription')}
+          size="sm"
+          className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
+        >
+          <Crown className="mr-2 h-4 w-4" />
           Upgrade to Premium
         </Button>
       </div>
