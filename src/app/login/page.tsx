@@ -73,8 +73,8 @@ function LoginForm() {
       const { error } = await supabase.auth.signInWithOtp({
         email: resetEmail,
         options: {
-          // Redirect to settings page to set a new password after magic link login
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/settings')}`,
+          // Redirect to password settings page to set a new password after magic link login
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/settings/password')}`,
         },
       });
 
