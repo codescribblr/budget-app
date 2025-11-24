@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Magic Link</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f8fafc; color: #0f172a;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" style="max-width: 600px; width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);">
+          
+          <!-- Header with Logo -->
+          <tr>
+            <td style="padding: 40px 40px 32px; text-align: center; border-bottom: 1px solid #e2e8f0;">
+              <div style="display: inline-block; width: 64px; height: 64px; background: linear-gradient(135deg, #0f172a 0%, #334155 100%); border-radius: 12px; margin-bottom: 16px;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M20 7H4C2.89543 7 2 7.89543 2 9V19C2 20.1046 2.89543 21 4 21H20C21.1046 21 22 20.1046 22 19V9C22 7.89543 21.1046 7 20 7Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M16 21V5C16 4.46957 15.7893 3.96086 15.4142 3.58579C15.0391 3.21071 14.5304 3 14 3H10C9.46957 3 8.96086 3.21071 8.58579 3.58579C8.21071 3.96086 8 4.46957 8 5V21" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #0f172a;">Budget App</h1>
+              <p style="margin: 8px 0 0; font-size: 14px; color: #64748b;">Envelope Budgeting Made Simple</p>
+            </td>
+          </tr>
+
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 40px;">
+              <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600; color: #0f172a;">Sign in to Budget App</h2>
+              
+              <p style="margin: 0 0 24px; font-size: 16px; line-height: 24px; color: #475569;">
+                Click the button below to securely sign in to your account. This link will expire in 1 hour.
+              </p>
+
+              <!-- CTA Button -->
+              <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td align="center">
+                    <a href="{{ .ConfirmationURL }}" style="display: inline-block; padding: 14px 32px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600;">
+                      Sign In to Budget App
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 32px 0 0; font-size: 14px; line-height: 20px; color: #64748b;">
+                If the button doesn't work, copy and paste this link into your browser:
+              </p>
+              <p style="margin: 8px 0 0; font-size: 14px; line-height: 20px; word-break: break-all;">
+                <a href="{{ .ConfirmationURL }}" style="color: #3b82f6; text-decoration: underline;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 32px 40px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; border-radius: 0 0 12px 12px;">
+              <p style="margin: 0 0 8px; font-size: 14px; color: #64748b; text-align: center;">
+                This email was sent to <strong>{{ .Email }}</strong>
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #94a3b8; text-align: center;">
+                If you didn't request this link, you can safely ignore this email.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+
+        <!-- Footer Links -->
+        <table role="presentation" style="max-width: 600px; width: 100%; border-collapse: collapse; margin-top: 24px;">
+          <tr>
+            <td style="text-align: center; padding: 0 20px;">
+              <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                © 2025 Budget App. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+
