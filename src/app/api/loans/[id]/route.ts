@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getLoanById, updateLoan, deleteLoan, getAuthenticatedUser } from '@/lib/supabase-queries';
-import { requirePremiumSubscription } from '@/lib/subscription-utils';
+import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
 import type { UpdateLoanRequest } from '@/lib/types';
 
 export async function GET(
@@ -15,6 +15,12 @@ export async function GET(
     const loan = await getLoanById(parseInt(id));
     return NextResponse.json(loan);
   } catch (error) {
+    if (error instanceof PremiumRequiredError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      );
+    }
     console.error('Error fetching loan:', error);
     return NextResponse.json(
       { error: 'Failed to fetch loan' },
@@ -37,6 +43,12 @@ export async function PATCH(
     const loan = await updateLoan(parseInt(id), body);
     return NextResponse.json(loan);
   } catch (error) {
+    if (error instanceof PremiumRequiredError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      );
+    }
     console.error('Error updating loan:', error);
     return NextResponse.json(
       { error: 'Failed to update loan' },
@@ -57,6 +69,12 @@ export async function DELETE(
     await deleteLoan(parseInt(id));
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof PremiumRequiredError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      );
+    }
     console.error('Error deleting loan:', error);
     return NextResponse.json(
       { error: 'Failed to delete loan' },

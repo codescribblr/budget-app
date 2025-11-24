@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAllLoans, createLoan, getAuthenticatedUser } from '@/lib/supabase-queries';
-import { requirePremiumSubscription } from '@/lib/subscription-utils';
+import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
 import type { CreateLoanRequest } from '@/lib/types';
 
 export async function GET() {
@@ -11,6 +11,12 @@ export async function GET() {
     const loans = await getAllLoans();
     return NextResponse.json(loans);
   } catch (error) {
+    if (error instanceof PremiumRequiredError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      );
+    }
     console.error('Error fetching loans:', error);
     return NextResponse.json(
       { error: 'Failed to fetch loans' },
@@ -48,6 +54,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json(loan, { status: 201 });
   } catch (error) {
+    if (error instanceof PremiumRequiredError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      );
+    }
     console.error('Error creating loan:', error);
     return NextResponse.json(
       { error: 'Failed to create loan' },

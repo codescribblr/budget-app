@@ -1,6 +1,16 @@
 import { createClient } from './supabase/server';
 import type Stripe from 'stripe';
 
+/**
+ * Custom error for premium subscription requirements
+ */
+export class PremiumRequiredError extends Error {
+  constructor(message: string = 'Premium subscription required') {
+    super(message);
+    this.name = 'PremiumRequiredError';
+  }
+}
+
 export interface UserSubscription {
   id: number;
   user_id: string;
@@ -75,15 +85,15 @@ export function getTrialDaysRemaining(subscription: UserSubscription | null): nu
 }
 
 /**
- * Require premium subscription (throws if not premium)
+ * Require premium subscription (throws PremiumRequiredError if not premium)
  */
 export async function requirePremiumSubscription(userId: string): Promise<UserSubscription> {
   const subscription = await getUserSubscription(userId);
-  
+
   if (!isPremiumUser(subscription)) {
-    throw new Error('Premium subscription required');
+    throw new PremiumRequiredError('Premium subscription required');
   }
-  
+
   return subscription!;
 }
 

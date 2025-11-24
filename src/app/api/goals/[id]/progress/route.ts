@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGoalById, getAuthenticatedUser } from '@/lib/supabase-queries';
 import { calculateGoalProgress } from '@/lib/goals/calculations';
-import { requirePremiumSubscription } from '@/lib/subscription-utils';
+import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
 
 /**
  * GET /api/goals/[id]/progress
@@ -48,6 +48,12 @@ export async function GET(
       progress,
     });
   } catch (error: any) {
+    if (error instanceof PremiumRequiredError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      );
+    }
     console.error('Error fetching goal progress:', error);
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGoalById, updateGoal, deleteGoal, getAuthenticatedUser } from '@/lib/supabase-queries';
 import { validateUpdateGoal } from '@/lib/goals/validations';
-import { requirePremiumSubscription } from '@/lib/subscription-utils';
+import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
 import type { UpdateGoalRequest, Goal } from '@/lib/types';
 
 /**
@@ -37,6 +37,12 @@ export async function GET(
     
     return NextResponse.json(goal);
   } catch (error: any) {
+    if (error instanceof PremiumRequiredError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      );
+    }
     console.error('Error fetching goal:', error);
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -107,6 +113,12 @@ export async function PATCH(
     const goal = await updateGoal(goalId, data);
     return NextResponse.json(goal);
   } catch (error: any) {
+    if (error instanceof PremiumRequiredError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      );
+    }
     console.error('Error updating goal:', error);
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -148,11 +160,17 @@ export async function DELETE(
     
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    if (error instanceof PremiumRequiredError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      );
+    }
     console.error('Error deleting goal:', error);
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
+
     // Handle partial success (goal deleted but category deletion failed)
     if (error.partialSuccess) {
       return NextResponse.json({
@@ -164,7 +182,7 @@ export async function DELETE(
         categoryError: error.categoryError,
       }, { status: 207 }); // 207 Multi-Status indicates partial success
     }
-    
+
     return NextResponse.json(
       { error: 'Failed to delete goal', message: error.message },
       { status: 500 }
