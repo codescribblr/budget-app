@@ -209,8 +209,6 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
     }
   };
 
-  const totalBalance = loans.reduce((sum, loan) => sum + loan.balance, 0);
-
   // Show upgrade prompt if loans feature is not enabled
   if (!loansEnabled) {
     return (
@@ -224,6 +222,8 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
       </div>
     );
   }
+
+  const totalBalance = loans.reduce((sum, loan) => sum + loan.balance, 0);
 
   return (
     <>

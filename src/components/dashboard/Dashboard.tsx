@@ -66,7 +66,8 @@ export default function Dashboard() {
       setCategories(categoriesData);
       setAccounts(accountsData);
       setCreditCards(creditCardsData);
-      setLoans(loansData);
+      // Handle 403 (premium required) by setting empty array
+      setLoans(loansRes.status === 403 ? [] : loansData);
       setPendingChecks(pendingChecksData);
       setSummary(summaryData);
       setBufferStatus(bufferData);
