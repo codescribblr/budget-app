@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -19,7 +19,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  // Use service role client to bypass RLS (webhooks aren't authenticated as users)
+  const supabase = createServiceRoleClient();
 
   try {
     switch (event.type) {
@@ -28,13 +29,19 @@ export async function POST(request: Request) {
         const userId = session.metadata?.user_id;
         const subscriptionId = session.subscription as string;
 
-        if (!userId) break;
+        if (!userId) {
+          console.error('❌ No user_id in checkout session metadata');
+          break;
+        }
+
+        console.log(`📝 Processing checkout for user ${userId}, subscription ${subscriptionId}`);
 
         // Get subscription details
         const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
+        console.log(`📝 Subscription status: ${subscription.status}`);
 
         // Create or update subscription record
-        await supabase
+        const { data: subData, error: subError } = await supabase
           .from('user_subscriptions')
           .upsert({
             user_id: userId,
@@ -50,7 +57,15 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           }, {
             onConflict: 'user_id',
-          });
+          })
+          .select();
+
+        if (subError) {
+          console.error('❌ Error creating subscription:', subError);
+          throw new Error(`Failed to create subscription: ${subError.message}`);
+        }
+
+        console.log(`✅ Subscription record created/updated:`, subData);
 
         // Auto-enable all premium features
         const premiumFeatures = [
@@ -75,22 +90,34 @@ export async function POST(request: Request) {
         }));
 
         // Bulk upsert all premium features
-        await supabase
+        const { data: featuresData, error: featuresError } = await supabase
           .from('user_feature_flags')
           .upsert(featureFlagsToInsert, {
             onConflict: 'user_id,feature_name',
-          });
+          })
+          .select();
+
+        if (featuresError) {
+          console.error('❌ Error enabling features:', featuresError);
+          throw new Error(`Failed to enable features: ${featuresError.message}`);
+        }
+
+        console.log(`✅ Enabled ${featuresData?.length || 0} premium features`);
 
         // Create Income Buffer category (special initialization for income_buffer feature)
-        const { data: existingBuffer } = await supabase
+        const { data: existingBuffer, error: bufferCheckError } = await supabase
           .from('categories')
           .select('id')
           .eq('user_id', userId)
           .eq('name', 'Income Buffer')
           .maybeSingle();
 
-        if (!existingBuffer) {
-          await supabase
+        if (bufferCheckError) {
+          console.error('❌ Error checking for Income Buffer:', bufferCheckError);
+        }
+
+        if (!existingBuffer && !bufferCheckError) {
+          const { error: bufferCreateError } = await supabase
             .from('categories')
             .insert({
               user_id: userId,
@@ -104,6 +131,12 @@ export async function POST(request: Request) {
               priority: 10,
               notes: 'Special category for smoothing irregular income. Add large payments here and withdraw monthly.',
             });
+
+          if (bufferCreateError) {
+            console.error('❌ Error creating Income Buffer category:', bufferCreateError);
+          } else {
+            console.log(`✅ Income Buffer category created`);
+          }
         }
 
         console.log(`✅ Subscription created for user ${userId} with all premium features enabled`);
