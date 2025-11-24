@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Info, AlertTriangle, Loader2 } from 'lucide-react';
+import { Sparkles, Info, AlertTriangle, Loader2, Crown } from 'lucide-react';
 import { useFeatures, type Feature } from '@/contexts/FeatureContext';
 import { toast } from 'sonner';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
@@ -37,7 +38,8 @@ const LEVEL_LABELS = {
 };
 
 export default function FeaturesSettings() {
-  const { features, loading, toggleFeature } = useFeatures();
+  const router = useRouter();
+  const { features, loading, hasPremium, toggleFeature } = useFeatures();
   const [togglingFeature, setTogglingFeature] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -46,6 +48,12 @@ export default function FeaturesSettings() {
   }>({ open: false, feature: null, action: 'enable' });
 
   const handleToggle = async (feature: Feature, enabled: boolean) => {
+    // Check if premium required and user doesn't have premium
+    if (enabled && feature.requiresPremium && !hasPremium) {
+      router.push('/settings/subscription');
+      return;
+    }
+
     // Show confirmation for features with data loss warning
     if (feature.dataLossWarning && !enabled) {
       setConfirmDialog({ open: true, feature, action: 'disable' });
@@ -131,6 +139,7 @@ export default function FeaturesSettings() {
                 <div className="space-y-3">
                   {levelFeatures.map((feature) => {
                     const helpContent = HELP_CONTENT[feature.key as keyof typeof HELP_CONTENT];
+                    const isPremiumLocked = feature.requiresPremium && !hasPremium;
 
                     return (
                       <div
@@ -140,6 +149,15 @@ export default function FeaturesSettings() {
                         <div className="flex-1 space-y-1">
                           <div className="flex items-center gap-2">
                             <h4 className="font-semibold">{feature.name}</h4>
+                            {feature.requiresPremium && (
+                              <Badge
+                                variant="default"
+                                className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-0 text-xs"
+                              >
+                                <Crown className="h-3 w-3 mr-1" />
+                                Premium
+                              </Badge>
+                            )}
                             {helpContent && (
                               <HelpTooltip content={helpContent.tooltip} />
                             )}
@@ -174,11 +192,23 @@ export default function FeaturesSettings() {
                           )}
                         </div>
 
-                        <Switch
-                          checked={feature.enabled}
-                          onCheckedChange={(checked) => handleToggle(feature, checked)}
-                          disabled={togglingFeature === feature.key}
-                        />
+                        <div className="flex flex-col items-end gap-2">
+                          <Switch
+                            checked={feature.enabled}
+                            onCheckedChange={(checked) => handleToggle(feature, checked)}
+                            disabled={togglingFeature === feature.key || isPremiumLocked}
+                          />
+                          {isPremiumLocked && (
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="h-auto p-0 text-xs"
+                              onClick={() => router.push('/settings/subscription')}
+                            >
+                              Upgrade to enable →
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

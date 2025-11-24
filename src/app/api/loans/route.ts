@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getAllLoans, createLoan } from '@/lib/supabase-queries';
+import { getAllLoans, createLoan, getAuthenticatedUser } from '@/lib/supabase-queries';
+import { requirePremiumSubscription } from '@/lib/subscription-utils';
 import type { CreateLoanRequest } from '@/lib/types';
 
 export async function GET() {
   try {
+    const { user } = await getAuthenticatedUser();
+    await requirePremiumSubscription(user.id);
+
     const loans = await getAllLoans();
     return NextResponse.json(loans);
   } catch (error) {
@@ -17,6 +21,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const { user } = await getAuthenticatedUser();
+    await requirePremiumSubscription(user.id);
+
     const body: CreateLoanRequest = await request.json();
 
     // Validate required fields

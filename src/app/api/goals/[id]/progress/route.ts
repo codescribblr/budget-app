@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGoalById } from '@/lib/supabase-queries';
+import { getGoalById, getAuthenticatedUser } from '@/lib/supabase-queries';
 import { calculateGoalProgress } from '@/lib/goals/calculations';
+import { requirePremiumSubscription } from '@/lib/subscription-utils';
 
 /**
  * GET /api/goals/[id]/progress
@@ -11,6 +12,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await getAuthenticatedUser();
+    await requirePremiumSubscription(user.id);
+
     const { id } = await params;
     const goalId = parseInt(id);
     

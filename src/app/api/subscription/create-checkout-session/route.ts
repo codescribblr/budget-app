@@ -3,9 +3,7 @@ import Stripe from 'stripe';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getOrCreateStripeCustomer } from '@/lib/subscription-utils';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export async function POST(request: Request) {
   try {

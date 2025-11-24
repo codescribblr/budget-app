@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getLoanById, updateLoan, deleteLoan } from '@/lib/supabase-queries';
+import { getLoanById, updateLoan, deleteLoan, getAuthenticatedUser } from '@/lib/supabase-queries';
+import { requirePremiumSubscription } from '@/lib/subscription-utils';
 import type { UpdateLoanRequest } from '@/lib/types';
 
 export async function GET(
@@ -7,6 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await getAuthenticatedUser();
+    await requirePremiumSubscription(user.id);
+
     const { id } = await params;
     const loan = await getLoanById(parseInt(id));
     return NextResponse.json(loan);
@@ -24,6 +28,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await getAuthenticatedUser();
+    await requirePremiumSubscription(user.id);
+
     const { id } = await params;
     const body: UpdateLoanRequest = await request.json();
 
@@ -43,6 +50,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await getAuthenticatedUser();
+    await requirePremiumSubscription(user.id);
+
     const { id } = await params;
     await deleteLoan(parseInt(id));
     return NextResponse.json({ success: true });

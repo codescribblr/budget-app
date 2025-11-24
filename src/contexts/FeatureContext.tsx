@@ -2,12 +2,14 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-export type FeatureName = 
+export type FeatureName =
   | 'monthly_funding_tracking'
   | 'category_types'
   | 'priority_system'
   | 'smart_allocation'
   | 'income_buffer'
+  | 'goals'
+  | 'loans'
   | 'advanced_reporting';
 
 export interface Feature {
@@ -17,6 +19,7 @@ export interface Feature {
   level: 'basic' | 'intermediate' | 'advanced' | 'power';
   dependencies: FeatureName[];
   dataLossWarning: boolean;
+  requiresPremium: boolean;
   enabled: boolean;
   enabledAt: string | null;
   disabledAt: string | null;
@@ -26,6 +29,7 @@ interface FeatureContextType {
   features: Feature[];
   loading: boolean;
   error: string | null;
+  hasPremium: boolean;
   isFeatureEnabled: (featureName: FeatureName) => boolean;
   toggleFeature: (featureName: FeatureName, enabled: boolean) => Promise<void>;
   refreshFeatures: () => Promise<void>;
@@ -35,6 +39,7 @@ const FeatureContext = createContext<FeatureContextType | undefined>(undefined);
 
 export function FeatureProvider({ children }: { children: React.ReactNode }) {
   const [features, setFeatures] = useState<Feature[]>([]);
+  const [hasPremium, setHasPremium] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,14 +47,15 @@ export function FeatureProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await fetch('/api/features');
       if (!response.ok) {
         throw new Error('Failed to fetch features');
       }
-      
+
       const data = await response.json();
       setFeatures(data.features);
+      setHasPremium(data.hasPremium || false);
     } catch (err: any) {
       console.error('Error fetching features:', err);
       setError(err.message);
@@ -107,6 +113,7 @@ export function FeatureProvider({ children }: { children: React.ReactNode }) {
     features,
     loading,
     error,
+    hasPremium,
     isFeatureEnabled,
     toggleFeature,
     refreshFeatures: fetchFeatures,

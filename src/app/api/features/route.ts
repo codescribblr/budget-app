@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getUserSubscription, isPremiumUser } from '@/lib/subscription-utils';
 
 /**
  * Feature definitions with metadata
@@ -11,6 +12,7 @@ const FEATURES = {
     level: 'basic',
     dependencies: [],
     dataLossWarning: false,
+    requiresPremium: true,
   },
   category_types: {
     name: 'Category Types',
@@ -18,6 +20,7 @@ const FEATURES = {
     level: 'intermediate',
     dependencies: ['monthly_funding_tracking'],
     dataLossWarning: false,
+    requiresPremium: true,
   },
   priority_system: {
     name: 'Priority System',
@@ -25,6 +28,7 @@ const FEATURES = {
     level: 'intermediate',
     dependencies: ['category_types'],
     dataLossWarning: false,
+    requiresPremium: true,
   },
   smart_allocation: {
     name: 'Smart Allocation',
@@ -32,6 +36,7 @@ const FEATURES = {
     level: 'advanced',
     dependencies: ['priority_system'],
     dataLossWarning: false,
+    requiresPremium: true,
   },
   income_buffer: {
     name: 'Income Buffer',
@@ -39,6 +44,23 @@ const FEATURES = {
     level: 'advanced',
     dependencies: ['smart_allocation'],
     dataLossWarning: false,
+    requiresPremium: true,
+  },
+  goals: {
+    name: 'Goals & Debt Tracking',
+    description: 'Track savings goals and debt payoff progress with visual progress indicators.',
+    level: 'intermediate',
+    dependencies: [],
+    dataLossWarning: true,
+    requiresPremium: true,
+  },
+  loans: {
+    name: 'Loans Management',
+    description: 'Track loans, mortgages, and other liabilities with amortization schedules.',
+    level: 'intermediate',
+    dependencies: [],
+    dataLossWarning: true,
+    requiresPremium: true,
   },
   advanced_reporting: {
     name: 'Advanced Reporting',
@@ -46,6 +68,7 @@ const FEATURES = {
     level: 'power',
     dependencies: ['category_types'],
     dataLossWarning: false,
+    requiresPremium: true,
   },
 } as const;
 
@@ -63,6 +86,10 @@ export async function GET() {
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Check subscription status
+    const subscription = await getUserSubscription(user.id);
+    const hasPremium = isPremiumUser(subscription);
 
     // Get user's feature flags
     const { data: userFlags, error: flagsError } = await supabase
@@ -90,7 +117,7 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ features });
+    return NextResponse.json({ features, hasPremium });
   } catch (error: any) {
     console.error('Error in GET /api/features:', error);
     return NextResponse.json(
@@ -126,6 +153,22 @@ export async function POST(request: Request) {
     }
 
     const feature = FEATURES[featureName as FeatureName];
+
+    // Check premium subscription if feature requires it
+    if (enabled && feature.requiresPremium) {
+      const subscription = await getUserSubscription(user.id);
+      const hasPremium = isPremiumUser(subscription);
+
+      if (!hasPremium) {
+        return NextResponse.json(
+          {
+            error: 'Premium subscription required',
+            message: `${feature.name} requires a Premium subscription. Start your 60-day free trial to unlock this feature.`,
+          },
+          { status: 403 }
+        );
+      }
+    }
 
     // Check dependencies if enabling
     if (enabled && feature.dependencies.length > 0) {

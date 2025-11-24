@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllGoals, createGoal } from '@/lib/supabase-queries';
+import { getAllGoals, createGoal, getAuthenticatedUser } from '@/lib/supabase-queries';
 import { validateCreateGoal } from '@/lib/goals/validations';
+import { requirePremiumSubscription } from '@/lib/subscription-utils';
 import type { CreateGoalRequest } from '@/lib/types';
 
 /**
@@ -9,6 +10,9 @@ import type { CreateGoalRequest } from '@/lib/types';
  */
 export async function GET(request: NextRequest) {
   try {
+    const { user } = await getAuthenticatedUser();
+    await requirePremiumSubscription(user.id);
+
     const status = request.nextUrl.searchParams.get('status');
     const goals = await getAllGoals();
     
@@ -36,6 +40,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const { user } = await getAuthenticatedUser();
+    await requirePremiumSubscription(user.id);
+
     const data: CreateGoalRequest = await request.json();
     
     // Validate request

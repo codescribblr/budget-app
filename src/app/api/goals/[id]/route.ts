@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGoalById, updateGoal, deleteGoal } from '@/lib/supabase-queries';
+import { getGoalById, updateGoal, deleteGoal, getAuthenticatedUser } from '@/lib/supabase-queries';
 import { validateUpdateGoal } from '@/lib/goals/validations';
+import { requirePremiumSubscription } from '@/lib/subscription-utils';
 import type { UpdateGoalRequest, Goal } from '@/lib/types';
 
 /**
@@ -12,6 +13,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await getAuthenticatedUser();
+    await requirePremiumSubscription(user.id);
+
     const { id } = await params;
     const goalId = parseInt(id);
     
@@ -53,6 +57,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await getAuthenticatedUser();
+    await requirePremiumSubscription(user.id);
+
     const { id } = await params;
     const goalId = parseInt(id);
     
@@ -120,6 +127,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await getAuthenticatedUser();
+    await requirePremiumSubscription(user.id);
+
     const { id } = await params;
     const goalId = parseInt(id);
     

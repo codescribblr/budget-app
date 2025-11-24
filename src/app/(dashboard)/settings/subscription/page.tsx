@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Crown, Check, X, Sparkles, CreditCard } from 'lucide-react';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 const PREMIUM_FEATURES = [
   'Monthly Funding Tracking',
@@ -29,7 +30,7 @@ const FREE_FEATURES = [
   'Data Backup & Restore',
 ];
 
-export default function SubscriptionPage() {
+function SubscriptionPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { subscription, loading, isPremium, isTrialing, trialDaysRemaining, refreshSubscription } = useSubscription();
@@ -268,6 +269,14 @@ export default function SubscriptionPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function SubscriptionPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <SubscriptionPageContent />
+    </Suspense>
   );
 }
 

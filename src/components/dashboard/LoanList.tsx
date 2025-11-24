@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useFeature } from '@/contexts/FeatureContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +36,8 @@ interface LoanListProps {
 }
 
 export default function LoanList({ loans, onUpdate }: LoanListProps) {
+  const router = useRouter();
+  const loansEnabled = useFeature('loans');
   const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
   const [loanName, setLoanName] = useState('');
   const [balance, setBalance] = useState('');
@@ -206,6 +210,20 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
   };
 
   const totalBalance = loans.reduce((sum, loan) => sum + loan.balance, 0);
+
+  // Show upgrade prompt if loans feature is not enabled
+  if (!loansEnabled) {
+    return (
+      <div className="text-center py-8 space-y-4">
+        <p className="text-muted-foreground">
+          Loans Management is a premium feature
+        </p>
+        <Button onClick={() => router.push('/settings/subscription')} size="sm">
+          Upgrade to Premium
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <>

@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@/lib/supabase/server';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
@@ -33,7 +31,7 @@ export async function POST(request: Request) {
         if (!userId) break;
 
         // Get subscription details
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
 
         // Create or update subscription record
         await supabase
@@ -44,11 +42,11 @@ export async function POST(request: Request) {
             status: subscription.status,
             stripe_customer_id: session.customer as string,
             stripe_subscription_id: subscriptionId,
-            stripe_price_id: subscription.items.data[0].price.id,
+            stripe_price_id: subscription.items.data[0]?.price.id,
             trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
             trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_start: subscription.current_period_start ? new Date(subscription.current_period_start * 1000).toISOString() : null,
+            current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
             updated_at: new Date().toISOString(),
           }, {
             onConflict: 'user_id',
@@ -60,7 +58,7 @@ export async function POST(request: Request) {
       }
 
       case 'customer.subscription.updated': {
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as any;
         const userId = subscription.metadata?.user_id;
 
         if (!userId) break;
@@ -71,8 +69,8 @@ export async function POST(request: Request) {
             status: subscription.status,
             trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
             trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_start: subscription.current_period_start ? new Date(subscription.current_period_start * 1000).toISOString() : null,
+            current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
             cancel_at_period_end: subscription.cancel_at_period_end,
             canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
             updated_at: new Date().toISOString(),
@@ -102,14 +100,14 @@ export async function POST(request: Request) {
       }
 
       case 'invoice.paid': {
-        const invoice = event.data.object as Stripe.Invoice;
+        const invoice = event.data.object as any;
         console.log(`✅ Invoice paid: ${invoice.id}`);
         // TODO: Send receipt email
         break;
       }
 
       case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice;
+        const invoice = event.data.object as any;
         const subscriptionId = invoice.subscription as string;
 
         await supabase

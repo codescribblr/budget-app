@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import GoalDialog from '@/components/goals/GoalDialog';
 import GoalProgressCard from '@/components/goals/GoalProgressCard';
+import { PremiumFeatureGate } from '@/components/subscription/PremiumFeatureGate';
 import type { GoalWithDetails } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -160,16 +161,19 @@ export default function GoalsPage() {
     ? (totalCurrentBalance / totalTargetAmount) * 100 
     : 0;
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
-
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold">Goals</h1>
-        <p className="text-muted-foreground mt-1">Track your savings goals and stay on target</p>
-      </div>
+    <PremiumFeatureGate
+      featureName="Goals & Debt Tracking"
+      featureDescription="Track your savings goals with visual progress indicators and stay motivated to reach your targets"
+    >
+      {loading ? (
+        <LoadingSpinner />
+      ) : (
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">Goals</h1>
+            <p className="text-muted-foreground mt-1">Track your savings goals and stay on target</p>
+          </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -370,7 +374,9 @@ export default function GoalsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+        </div>
+      )}
+    </PremiumFeatureGate>
   );
 }
 
