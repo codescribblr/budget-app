@@ -87,6 +87,22 @@ export default function TransactionsPage() {
   const [editingTransaction, setEditingTransaction] = useState<TransactionWithSplits | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
+  // Initialize pagination state with values from URL params or defaults
+  const [currentPage, setCurrentPage] = useState(() => {
+    if (pageParam) {
+      const page = parseInt(pageParam);
+      return !isNaN(page) && page > 0 ? page : 1;
+    }
+    return 1;
+  });
+  const [pageSize, setPageSize] = useState(() => {
+    if (pageSizeParam) {
+      const size = parseInt(pageSizeParam);
+      return !isNaN(size) && size > 0 ? size : 50;
+    }
+    return 50;
+  });
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -155,26 +171,22 @@ export default function TransactionsPage() {
     }
   }, [startDateParam, endDateParam]);
 
-  // Initialize pagination from URL parameters
+  // Update pagination when URL params change
   useEffect(() => {
     if (pageParam) {
       const page = parseInt(pageParam);
-      if (!isNaN(page) && page > 0) {
+      if (!isNaN(page) && page > 0 && page !== currentPage) {
         setCurrentPage(page);
       }
-    } else {
-      setCurrentPage(1);
     }
   }, [pageParam]);
 
   useEffect(() => {
     if (pageSizeParam) {
       const size = parseInt(pageSizeParam);
-      if (!isNaN(size) && size > 0) {
+      if (!isNaN(size) && size > 0 && size !== pageSize) {
         setPageSize(size);
       }
-    } else {
-      setPageSize(50);
     }
   }, [pageSizeParam]);
 
