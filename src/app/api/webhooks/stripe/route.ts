@@ -8,14 +8,24 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 export async function POST(request: Request) {
   const body = await request.text();
-  const signature = request.headers.get('stripe-signature')!;
+  const signature = request.headers.get('stripe-signature');
+
+  // Reject requests without signature header
+  if (!signature) {
+    console.error('❌ Webhook rejected: Missing stripe-signature header');
+    return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
+  }
 
   let event: Stripe.Event;
 
   try {
+    // This verifies:
+    // 1. Signature is valid (proves request is from Stripe)
+    // 2. Body hasn't been tampered with
+    // 3. Timestamp is recent (prevents replay attacks)
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
   } catch (err: any) {
-    console.error('Webhook signature verification failed:', err.message);
+    console.error('❌ Webhook signature verification failed:', err.message);
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
