@@ -163,7 +163,7 @@ export default function IncomeBufferWizardPage() {
                       { text: 'Flexibility', subtext: 'Handle irregular income more easily' },
                       { text: 'Peace of mind', subtext: 'Break the paycheck-to-paycheck cycle' },
                     ]}
-                    compact
+                    variant="compact"
                   />
                 </div>
 
