@@ -375,50 +375,52 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Transactions</h1>
-          {hasFilters && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {merchantFilter && (
-                <Badge variant="secondary">
-                  Merchant: {merchantFilter}
-                </Badge>
-              )}
-              {merchantGroupName && (
-                <Badge variant="secondary">
-                  Merchant Group: {merchantGroupName}
-                </Badge>
-              )}
-              {selectedCategory && (
-                <Badge variant="secondary">
-                  Category: {selectedCategory.name}
-                </Badge>
-              )}
-              {(startDateParam || endDateParam) && (
-                <Badge variant="secondary">
-                  Date: {startDateParam || '...'} to {endDateParam || '...'}
-                </Badge>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {hasFilters && (
-            <Button variant="outline" onClick={handleClearFilters}>
-              <X className="mr-2 h-4 w-4" />
-              Clear Filters
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">Transactions</h1>
+            {hasFilters && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {merchantFilter && (
+                  <Badge variant="secondary">
+                    Merchant: {merchantFilter}
+                  </Badge>
+                )}
+                {merchantGroupName && (
+                  <Badge variant="secondary">
+                    Merchant Group: {merchantGroupName}
+                  </Badge>
+                )}
+                {selectedCategory && (
+                  <Badge variant="secondary">
+                    Category: {selectedCategory.name}
+                  </Badge>
+                )}
+                {(startDateParam || endDateParam) && (
+                  <Badge variant="secondary">
+                    Date: {startDateParam || '...'} to {endDateParam || '...'}
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            {hasFilters && (
+              <Button variant="outline" onClick={handleClearFilters} className="w-full sm:w-auto">
+                <X className="mr-2 h-4 w-4" />
+                Clear Filters
+              </Button>
+            )}
+            <Button variant="outline" asChild className="w-full sm:w-auto">
+              <Link href="/import">
+                <Upload className="mr-2 h-4 w-4" />
+                Import Transactions
+              </Link>
             </Button>
-          )}
-          <Button variant="outline" asChild>
-            <Link href="/import">
-              <Upload className="mr-2 h-4 w-4" />
-              Import Transactions
-            </Link>
-          </Button>
-          <Button onClick={() => setIsAddDialogOpen(true)}>
-            Add Transaction
-          </Button>
+            <Button onClick={() => setIsAddDialogOpen(true)} className="w-full sm:w-auto">
+              Add Transaction
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -428,7 +430,7 @@ export default function TransactionsPage() {
         </CardHeader>
         <CardContent>
           {/* Search and Filter Toolbar */}
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4">
             {/* Search Input */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -441,15 +443,18 @@ export default function TransactionsPage() {
               />
             </div>
 
-            {/* Category Filter */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10">
-                  <Filter className="mr-2 h-4 w-4" />
-                  Category
-                  {categoryIdParam && <Badge variant="secondary" className="ml-2">1</Badge>}
-                </Button>
-              </DropdownMenuTrigger>
+            {/* Filters Row - wraps on mobile */}
+            <div className="flex flex-wrap gap-2">
+              {/* Category Filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Category</span>
+                    <span className="sm:hidden">Cat.</span>
+                    {categoryIdParam && <Badge variant="secondary" className="ml-2">1</Badge>}
+                  </Button>
+                </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-[200px]">
                 <DropdownMenuLabel>Filter by category</DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -473,47 +478,48 @@ export default function TransactionsPage() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Merchant Group Filter */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10">
-                  <Filter className="mr-2 h-4 w-4" />
-                  Merchant
-                  {merchantGroupIdParam && <Badge variant="secondary" className="ml-2">1</Badge>}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[200px]">
-                <DropdownMenuLabel>Filter by merchant</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem
-                  checked={!merchantGroupIdParam}
-                  onCheckedChange={() => handleMerchantGroupChange(null)}
-                >
-                  All Merchants
-                </DropdownMenuCheckboxItem>
-                {merchantGroups.map((group) => (
+              {/* Merchant Group Filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Merchant</span>
+                    <span className="sm:hidden">Merch.</span>
+                    {merchantGroupIdParam && <Badge variant="secondary" className="ml-2">1</Badge>}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[200px]">
+                  <DropdownMenuLabel>Filter by merchant</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
                   <DropdownMenuCheckboxItem
-                    key={group.id}
-                    checked={merchantGroupIdParam === group.id.toString()}
-                    onCheckedChange={(checked) => {
-                      handleMerchantGroupChange(checked ? group.id.toString() : null);
-                    }}
+                    checked={!merchantGroupIdParam}
+                    onCheckedChange={() => handleMerchantGroupChange(null)}
                   >
-                    {group.display_name}
+                    All Merchants
                   </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {merchantGroups.map((group) => (
+                    <DropdownMenuCheckboxItem
+                      key={group.id}
+                      checked={merchantGroupIdParam === group.id.toString()}
+                      onCheckedChange={(checked) => {
+                        handleMerchantGroupChange(checked ? group.id.toString() : null);
+                      }}
+                    >
+                      {group.display_name}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-            {/* Date Range Filter */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  Date
-                  {(startDateParam || endDateParam) && <Badge variant="secondary" className="ml-2">1</Badge>}
-                </Button>
-              </PopoverTrigger>
+              {/* Date Range Filter */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    Date
+                    {(startDateParam || endDateParam) && <Badge variant="secondary" className="ml-2">1</Badge>}
+                  </Button>
+                </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="end">
                 <div className="p-4 space-y-4">
                   <div>
@@ -546,6 +552,7 @@ export default function TransactionsPage() {
                 </div>
               </PopoverContent>
             </Popover>
+            </div>
           </div>
 
           {(searchQuery || hasFilters) && (
@@ -564,12 +571,13 @@ export default function TransactionsPage() {
           {totalTransactions > 0 && (
             <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
               {/* Pagination Info and Page Size Selector */}
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <div>
+              <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-sm text-muted-foreground w-full sm:w-auto">
+                <div className="text-center sm:text-left">
                   Showing {startIndex + 1}-{Math.min(endIndex, totalTransactions)} of {totalTransactions}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span>Rows per page:</span>
+                  <span className="hidden sm:inline">Rows per page:</span>
+                  <span className="sm:hidden">Per page:</span>
                   <Select
                     value={pageSize.toString()}
                     onValueChange={(value) => {
