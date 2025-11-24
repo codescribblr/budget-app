@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,11 +50,37 @@ function LoginForm() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Welcome Back</CardTitle>
-          <CardDescription className="text-center">
-            Sign in to your budget account
-          </CardDescription>
+        <CardHeader className="space-y-4">
+          {/* App Logo and Branding */}
+          <div className="flex flex-col items-center gap-3">
+            <div className="relative">
+              <Image
+                src="/icon.svg"
+                alt="Budget App"
+                width={64}
+                height={64}
+                className="dark:hidden"
+              />
+              <Image
+                src="/icon-darkmode.svg"
+                alt="Budget App"
+                width={64}
+                height={64}
+                className="hidden dark:block"
+              />
+            </div>
+            <div className="text-center">
+              <h2 className="text-2xl font-bold">Budget App</h2>
+              <p className="text-sm text-muted-foreground">Envelope Budgeting Made Simple</p>
+            </div>
+          </div>
+
+          <div className="space-y-1 text-center">
+            <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
+            <CardDescription>
+              Sign in to your budget account
+            </CardDescription>
+          </div>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
@@ -105,6 +132,12 @@ function LoginForm() {
               Don't have an account?{' '}
               <Link href="/signup" className="text-primary hover:underline font-medium">
                 Sign up
+              </Link>
+            </div>
+
+            <div className="text-xs text-center text-muted-foreground pt-2">
+              <Link href="/" className="hover:underline">
+                ← Back to home
               </Link>
             </div>
           </CardFooter>
