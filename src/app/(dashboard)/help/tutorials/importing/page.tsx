@@ -2,6 +2,7 @@ import { Breadcrumbs } from '@/components/help/Breadcrumbs';
 import { Callout } from '@/components/help/Callout';
 import { StepList } from '@/components/help/StepList';
 import { WasThisHelpful } from '@/components/help/WasThisHelpful';
+import { VisualChecklist } from '@/components/help/VisualChecklist';
 import Link from 'next/link';
 
 export default function ImportingTutorialPage() {
@@ -186,72 +187,107 @@ export default function ImportingTutorialPage() {
 
         <h2>Tips for Successful Importing</h2>
 
-        <h3>Import Regularly</h3>
-        <p>
-          Import transactions weekly or bi-weekly. This keeps your budget up-to-date and makes
-          it easier to catch errors.
-        </p>
+        <div className="grid md:grid-cols-2 gap-4 my-6">
+          <div className="rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-4">
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <span className="text-2xl">📅</span>
+              Import Regularly
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Import transactions weekly or bi-weekly. This keeps your budget up-to-date and makes
+              it easier to catch errors.
+            </p>
+          </div>
 
-        <h3>Use Auto-Categorization</h3>
-        <p>
-          After a few imports, the app will learn your spending patterns and automatically
-          categorize most transactions. See the{' '}
-          <Link href="/help/features/merchants" className="text-primary hover:underline">
-            Merchants guide
-          </Link>{' '}
-          for more information.
-        </p>
+          <div className="rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-4">
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <span className="text-2xl">🤖</span>
+              Use Auto-Categorization
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              After a few imports, the app will learn your spending patterns and automatically
+              categorize most transactions. See the{' '}
+              <Link href="/help/features/merchants" className="text-primary hover:underline">
+                Merchants guide
+              </Link>{' '}
+              for more information.
+            </p>
+          </div>
 
-        <h3>Handle Transfers Carefully</h3>
-        <p>
-          Transfers between your own accounts (like checking to savings) should be categorized
-          as "Transfer" to avoid double-counting. The app will try to detect these automatically.
-        </p>
+          <div className="rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-4">
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <span className="text-2xl">🔄</span>
+              Handle Transfers Carefully
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Transfers between your own accounts (like checking to savings) should be categorized
+              as "Transfer" to avoid double-counting. The app will try to detect these automatically.
+            </p>
+          </div>
 
-        <h3>Reconcile Your Accounts</h3>
-        <p>
-          After importing, check that your account balance in the app matches your bank's
-          balance. If not, you may have missed some transactions or imported duplicates.
-        </p>
+          <div className="rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-4">
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <span className="text-2xl">✅</span>
+              Reconcile Your Accounts
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              After importing, check that your account balance in the app matches your bank's
+              balance. If not, you may have missed some transactions or imported duplicates.
+            </p>
+          </div>
+        </div>
 
         <h2>Troubleshooting</h2>
 
-        <h3>CSV File Won't Upload</h3>
-        <ul>
-          <li>Make sure the file is actually a CSV (not Excel .xlsx)</li>
-          <li>Try opening the file in a text editor to verify it's formatted correctly</li>
-          <li>Some banks export in non-standard formats - you may need to clean it up first</li>
-        </ul>
+        <div className="grid md:grid-cols-2 gap-4 my-6">
+          <div className="rounded-lg border-2 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/20 p-4">
+            <h3 className="font-semibold mb-2">🚫 CSV File Won't Upload</h3>
+            <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+              <li>Make sure the file is actually a CSV (not Excel .xlsx)</li>
+              <li>Try opening the file in a text editor to verify it's formatted correctly</li>
+              <li>Some banks export in non-standard formats - you may need to clean it up first</li>
+            </ul>
+          </div>
 
-        <h3>Dates Are Wrong</h3>
-        <ul>
-          <li>Check that you mapped the correct date column</li>
-          <li>Some banks use MM/DD/YYYY, others use DD/MM/YYYY - the app tries to detect this</li>
-          <li>If dates are consistently wrong, try a different date column</li>
-        </ul>
+          <div className="rounded-lg border-2 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/20 p-4">
+            <h3 className="font-semibold mb-2">📅 Dates Are Wrong</h3>
+            <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+              <li>Check that you mapped the correct date column</li>
+              <li>Some banks use MM/DD/YYYY, others use DD/MM/YYYY - the app tries to detect this</li>
+              <li>If dates are consistently wrong, try a different date column</li>
+            </ul>
+          </div>
 
-        <h3>Amounts Are Negative</h3>
-        <ul>
-          <li>Some banks show expenses as negative numbers</li>
-          <li>The app should handle this automatically, but check the preview</li>
-          <li>If needed, you can manually flip the sign after importing</li>
-        </ul>
+          <div className="rounded-lg border-2 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/20 p-4">
+            <h3 className="font-semibold mb-2">➖ Amounts Are Negative</h3>
+            <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+              <li>Some banks show expenses as negative numbers</li>
+              <li>The app should handle this automatically, but check the preview</li>
+              <li>If needed, you can manually flip the sign after importing</li>
+            </ul>
+          </div>
 
-        <h3>Too Many Duplicates</h3>
-        <ul>
-          <li>The app compares date, description, and amount to detect duplicates</li>
-          <li>If you're getting false positives, you may need to manually review</li>
-          <li>Consider importing less frequently to reduce overlap</li>
-        </ul>
+          <div className="rounded-lg border-2 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/20 p-4">
+            <h3 className="font-semibold mb-2">🔄 Too Many Duplicates</h3>
+            <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+              <li>The app compares date, description, and amount to detect duplicates</li>
+              <li>If you're getting false positives, you may need to manually review</li>
+              <li>Consider importing less frequently to reduce overlap</li>
+            </ul>
+          </div>
+        </div>
 
         <h2>Advanced: Importing from Multiple Banks</h2>
         <p>If you have accounts at multiple banks:</p>
-        <ol>
-          <li>Create a separate template for each bank</li>
-          <li>Download CSV files from all banks</li>
-          <li>Import them one at a time, selecting the appropriate template</li>
-          <li>Make sure to select the correct account for each import</li>
-        </ol>
+
+        <VisualChecklist
+          items={[
+            { text: 'Create a separate template for each bank' },
+            { text: 'Download CSV files from all banks' },
+            { text: 'Import them one at a time, selecting the appropriate template' },
+            { text: 'Make sure to select the correct account for each import' },
+          ]}
+        />
 
         <Callout type="tip" title="Batch processing">
           You can import multiple CSV files in one session. Just repeat the process for each

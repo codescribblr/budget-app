@@ -208,16 +208,35 @@ export async function POST(request: Request) {
     // Handle Income Buffer feature - create/delete special category
     if (featureName === 'income_buffer') {
       if (enabled) {
-        // Check if Income Buffer category already exists
+        // Check if Income Buffer category already exists (either active or previously disabled)
         const { data: existingBuffer } = await supabase
           .from('categories')
-          .select('id')
+          .select('id, is_system, is_buffer')
           .eq('user_id', user.id)
           .eq('name', 'Income Buffer')
-          .eq('is_system', true)
           .single();
 
-        if (!existingBuffer) {
+        if (existingBuffer) {
+          // Category exists but might have been disabled - re-enable it
+          if (!existingBuffer.is_system || !existingBuffer.is_buffer) {
+            const { error: updateError } = await supabase
+              .from('categories')
+              .update({
+                is_system: true,
+                is_buffer: true,
+                notes: 'Special category for smoothing irregular income. Add large payments here and withdraw monthly.',
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_id', user.id)
+              .eq('name', 'Income Buffer');
+
+            if (updateError) {
+              console.error('Error re-enabling Income Buffer category:', updateError);
+              // Don't fail the feature toggle, just log the error
+            }
+          }
+          // If already properly configured, do nothing
+        } else {
           // Create Income Buffer category
           const { error: createError } = await supabase
             .from('categories')

@@ -4,6 +4,7 @@ import { StepList } from '@/components/help/StepList';
 import { WasThisHelpful } from '@/components/help/WasThisHelpful';
 import { RelatedArticles } from '@/components/help/RelatedArticles';
 import { PrintButton } from '@/components/help/PrintButton';
+import { VisualChecklist } from '@/components/help/VisualChecklist';
 import Link from 'next/link';
 
 export default function FirstBudgetTutorialPage() {
@@ -214,58 +215,94 @@ export default function FirstBudgetTutorialPage() {
         <h2>What's Next?</h2>
         <p>Now that your budget is set up, here's what to do going forward:</p>
 
-        <h3>Daily/Weekly Tasks</h3>
-        <ul>
-          <li>Record transactions as they happen (or import them weekly)</li>
-          <li>Check category balances before making purchases</li>
-          <li>Update account balances weekly</li>
-        </ul>
+        <div className="grid md:grid-cols-3 gap-4 my-6">
+          <VisualChecklist
+            title="Daily/Weekly Tasks"
+            items={[
+              { text: 'Record transactions as they happen (or import them weekly)' },
+              { text: 'Check category balances before making purchases' },
+              { text: 'Update account balances weekly' },
+            ]}
+            variant="compact"
+          />
 
-        <h3>When You Get Paid</h3>
-        <ol>
-          <li>Update your account balance with the new deposit</li>
-          <li>
-            Go to Money Movement and allocate the new money to categories based on your monthly
-            amounts
-          </li>
-          <li>Adjust allocations if needed based on what's coming up</li>
-        </ol>
+          <div className="rounded-lg border bg-card p-6">
+            <h3 className="font-semibold text-lg mb-4">When You Get Paid</h3>
+            <ol className="space-y-2 list-decimal list-inside text-sm">
+              <li>Update your account balance with the new deposit</li>
+              <li>
+                Go to Money Movement and allocate the new money to categories based on your monthly
+                amounts
+              </li>
+              <li>Adjust allocations if needed based on what's coming up</li>
+            </ol>
+          </div>
 
-        <h3>Monthly Tasks</h3>
-        <ul>
-          <li>
-            Review your{' '}
-            <Link href="/reports" className="text-primary hover:underline">
-              spending reports
-            </Link>
-          </li>
-          <li>Adjust category monthly amounts based on actual spending</li>
-          <li>Update loan balances if you have any</li>
-          <li>Check progress on your goals</li>
-        </ul>
+          <VisualChecklist
+            title="Monthly Tasks"
+            items={[
+              { text: 'Review your spending reports' },
+              { text: 'Adjust category monthly amounts based on actual spending' },
+              { text: 'Update loan balances if you have any' },
+              { text: 'Check progress on your goals' },
+            ]}
+            variant="compact"
+          />
+        </div>
 
         <h2>Tips for Success</h2>
-        <ul>
-          <li>
-            <strong>Be consistent:</strong> Record transactions regularly, don't let them pile up
-          </li>
-          <li>
-            <strong>Be flexible:</strong> Your budget will evolve. Adjust categories and amounts
-            as you learn
-          </li>
-          <li>
-            <strong>Be honest:</strong> Record all spending, even the embarrassing stuff. You
-            can't fix what you don't track
-          </li>
-          <li>
-            <strong>Be patient:</strong> It takes 2-3 months to get a realistic budget. Don't
-            give up!
-          </li>
-          <li>
-            <strong>Use reports:</strong> Review your spending monthly to find opportunities to
-            save
-          </li>
-        </ul>
+
+        <div className="grid md:grid-cols-2 gap-4 my-6">
+          <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-4">
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <span className="text-2xl">📅</span>
+              Be Consistent
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Record transactions regularly, don't let them pile up
+            </p>
+          </div>
+
+          <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-4">
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <span className="text-2xl">🔄</span>
+              Be Flexible
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Your budget will evolve. Adjust categories and amounts as you learn
+            </p>
+          </div>
+
+          <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-4">
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <span className="text-2xl">✅</span>
+              Be Honest
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Record all spending, even the embarrassing stuff. You can't fix what you don't track
+            </p>
+          </div>
+
+          <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-4">
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <span className="text-2xl">⏳</span>
+              Be Patient
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              It takes 2-3 months to get a realistic budget. Don't give up!
+            </p>
+          </div>
+
+          <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-4 md:col-span-2">
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <span className="text-2xl">📊</span>
+              Use Reports
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Review your spending monthly to find opportunities to save
+            </p>
+          </div>
+        </div>
 
         <h2>Common Questions</h2>
         <p>

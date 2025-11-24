@@ -8,8 +8,10 @@ import { WizardStep } from '@/components/wizards/WizardStep';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Callout } from '@/components/help/Callout';
+import { VisualChecklist } from '@/components/help/VisualChecklist';
 import { Zap } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 
 export default function IncomeBufferWizardPage() {
   const router = useRouter();
@@ -18,9 +20,83 @@ export default function IncomeBufferWizardPage() {
     currentBuffer: '',
     targetMonths: '1',
   });
+  const [isCompleting, setIsCompleting] = useState(false);
 
-  const handleComplete = () => {
-    router.push('/income-buffer');
+  const handleComplete = async () => {
+    setIsCompleting(true);
+    try {
+      const monthlyExpenses = parseFloat(wizardData.monthlyExpenses || '0');
+      const currentBuffer = parseFloat(wizardData.currentBuffer || '0');
+      const targetMonths = parseFloat(wizardData.targetMonths || '1');
+      const targetAmount = monthlyExpenses * targetMonths;
+
+      // Validate inputs
+      if (monthlyExpenses <= 0) {
+        toast.error('Please enter your monthly expenses');
+        setIsCompleting(false);
+        return;
+      }
+
+      // Step 1: Enable the income buffer feature (this creates the category if needed)
+      const featureResponse = await fetch('/api/features', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          featureName: 'income_buffer',
+          enabled: true,
+        }),
+      });
+
+      if (!featureResponse.ok) {
+        const errorData = await featureResponse.json();
+        throw new Error(errorData.error || 'Failed to enable income buffer feature');
+      }
+
+      // Wait for the feature response to complete before proceeding
+      await featureResponse.json();
+
+      // Step 2: Save buffer goal settings
+      const settingsResponse = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: [
+            { key: 'income_buffer_target_amount', value: targetAmount.toString() },
+            { key: 'income_buffer_monthly_expenses', value: monthlyExpenses.toString() },
+            { key: 'income_buffer_target_months', value: targetMonths.toString() },
+          ],
+        }),
+      });
+
+      if (!settingsResponse.ok) {
+        const errorData = await settingsResponse.json();
+        throw new Error(errorData.error || 'Failed to save buffer settings');
+      }
+
+      // Step 3: If they have a current buffer amount, add it to the Income Buffer category
+      // The feature enable request has completed, so the category should exist now
+      if (currentBuffer > 0) {
+        const addResponse = await fetch('/api/income-buffer/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: currentBuffer }),
+        });
+
+        if (!addResponse.ok) {
+          const errorData = await addResponse.json();
+          console.error('Failed to add initial buffer amount:', errorData);
+          // Don't fail the whole wizard if this fails - they can add it manually
+          toast.warning('Buffer enabled, but initial amount not added. You can add it manually from the Income Buffer page.');
+        }
+      }
+
+      toast.success('Income buffer setup complete!');
+      router.push('/income-buffer');
+    } catch (error: any) {
+      console.error('Error completing wizard:', error);
+      toast.error(error.message || 'Failed to complete setup. Please try again.');
+      setIsCompleting(false);
+    }
   };
 
   const handleCancel = () => {
@@ -61,37 +137,65 @@ export default function IncomeBufferWizardPage() {
 
       <div className="bg-card border rounded-lg p-6">
         <Wizard
-          steps={['Introduction', 'Calculate', 'Setup', 'Complete']}
+          steps={['Introduction', 'Calculate', 'Complete']}
           onComplete={handleComplete}
           onCancel={handleCancel}
+          isProcessing={isCompleting}
         >
           {/* Step 1: Introduction */}
           <WizardStep
             title="What is an Income Buffer?"
             description="Learn how the income buffer helps you age your money and reduce financial stress."
           >
-            <div className="space-y-4">
-              <div className="prose dark:prose-invert max-w-none">
-                <p>
-                  An income buffer is money you set aside to fund next month's expenses. Instead
-                  of living paycheck-to-paycheck, you'll be living on last month's income.
-                </p>
+            <div className="space-y-6">
+              <p className="text-muted-foreground">
+                An income buffer is money you set aside to fund next month's expenses. Instead
+                of living paycheck-to-paycheck, you'll be living on last month's income.
+              </p>
 
-                <h3>Benefits:</h3>
-                <ul>
-                  <li><strong>Reduced stress:</strong> You know you have next month covered</li>
-                  <li><strong>Better planning:</strong> Budget for the entire month at once</li>
-                  <li><strong>Flexibility:</strong> Handle irregular income more easily</li>
-                  <li><strong>Peace of mind:</strong> Break the paycheck-to-paycheck cycle</li>
-                </ul>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <h3 className="font-semibold mb-3">✨ Benefits</h3>
+                  <VisualChecklist
+                    items={[
+                      { text: 'Reduced stress', subtext: 'You know you have next month covered' },
+                      { text: 'Better planning', subtext: 'Budget for the entire month at once' },
+                      { text: 'Flexibility', subtext: 'Handle irregular income more easily' },
+                      { text: 'Peace of mind', subtext: 'Break the paycheck-to-paycheck cycle' },
+                    ]}
+                    compact
+                  />
+                </div>
 
-                <h3>How it works:</h3>
-                <ol>
-                  <li>Build up a buffer equal to one month's expenses</li>
-                  <li>When you get paid, add money to the buffer</li>
-                  <li>At the start of each month, fund your budget from the buffer</li>
-                  <li>Your current month's income goes into the buffer for next month</li>
-                </ol>
+                <div>
+                  <h3 className="font-semibold mb-3">🔄 How It Works</h3>
+                  <div className="space-y-3">
+                    <div className="flex gap-3">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold">
+                        1
+                      </div>
+                      <p className="text-sm">Build up a buffer equal to one month's expenses</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold">
+                        2
+                      </div>
+                      <p className="text-sm">When you get paid, add money to the buffer</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold">
+                        3
+                      </div>
+                      <p className="text-sm">At the start of each month, fund your budget from the buffer</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold">
+                        4
+                      </div>
+                      <p className="text-sm">Your current month's income goes into the buffer for next month</p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <Callout type="info" title="Is this right for you?">
@@ -179,99 +283,86 @@ export default function IncomeBufferWizardPage() {
             </div>
           </WizardStep>
 
-          {/* Step 3: Setup */}
+          {/* Step 3: Complete */}
           <WizardStep
-            title="Setup Your Buffer"
-            description="Here's how to get started with your income buffer."
+            title="You're All Set!"
+            description="When you click Complete, we'll set everything up for you."
           >
-            <div className="space-y-4">
-              <Callout type="info" title="Two approaches">
-                Choose the approach that works best for your situation:
-              </Callout>
-
-              <div className="space-y-4">
-                <div className="p-4 border rounded-lg">
-                  <h3 className="font-semibold mb-2">Option 1: Build Gradually</h3>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Best if you don't have the full buffer amount saved yet
-                  </p>
-                  <ol className="list-decimal list-inside text-sm space-y-1">
-                    <li>Create an "Income Buffer" category</li>
-                    <li>Each month, allocate extra money to this category</li>
-                    <li>Once you reach your target (${targetAmount.toFixed(2)}), you're ready!</li>
-                    <li>Enable the Income Buffer feature in Settings</li>
-                  </ol>
-                </div>
-
-                <div className="p-4 border rounded-lg">
-                  <h3 className="font-semibold mb-2">Option 2: Start Immediately</h3>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Best if you already have the buffer amount saved
-                  </p>
-                  <ol className="list-decimal list-inside text-sm space-y-1">
-                    <li>Enable the Income Buffer feature in Settings</li>
-                    <li>Add ${targetAmount.toFixed(2)} to your buffer</li>
-                    <li>Start using it to fund next month's budget</li>
-                  </ol>
+            <div className="space-y-6">
+              <div>
+                <h3 className="font-semibold mb-4">✨ What happens when you click Complete:</h3>
+                <div className="space-y-3">
+                  <div className="flex gap-3 p-3 border rounded-lg bg-green-50 dark:bg-green-950/20">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center text-sm font-semibold">
+                      1
+                    </div>
+                    <div>
+                      <p className="font-medium">Enable Income Buffer feature</p>
+                      <p className="text-sm text-muted-foreground">
+                        We'll automatically enable the feature and create your Income Buffer category
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 p-3 border rounded-lg bg-green-50 dark:bg-green-950/20">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center text-sm font-semibold">
+                      2
+                    </div>
+                    <div>
+                      <p className="font-medium">Save your buffer goal</p>
+                      <p className="text-sm text-muted-foreground">
+                        Your target of ${targetAmount.toFixed(2)} will be saved for tracking
+                      </p>
+                    </div>
+                  </div>
+                  {currentBuffer > 0 && (
+                    <div className="flex gap-3 p-3 border rounded-lg bg-green-50 dark:bg-green-950/20">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center text-sm font-semibold">
+                        3
+                      </div>
+                      <div>
+                        <p className="font-medium">Add your current buffer</p>
+                        <p className="text-sm text-muted-foreground">
+                          We'll add your ${currentBuffer.toFixed(2)} to the Income Buffer category
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <Callout type="tip" title="Take your time">
-                Building a buffer takes time! Don't stress if it takes several months. Every
-                dollar you add gets you closer to financial peace of mind.
-              </Callout>
-            </div>
-          </WizardStep>
+              {amountNeeded > 0 && (
+                <Callout type="info" title="Keep building your buffer">
+                  You still need ${amountNeeded.toFixed(2)} to reach your goal. Continue adding money
+                  to your Income Buffer category each month until you reach ${targetAmount.toFixed(2)}.
+                </Callout>
+              )}
 
-          {/* Step 4: Complete */}
-          <WizardStep
-            title="You're Ready!"
-            description="Here's what to do next to start using your income buffer."
-          >
-            <div className="space-y-4">
-              <div className="prose dark:prose-invert max-w-none">
-                <h3>Next Steps:</h3>
-                <ol>
-                  <li>
-                    <strong>Go to Settings:</strong> Enable the Income Buffer feature
-                  </li>
-                  <li>
-                    <strong>Add money to buffer:</strong> Transfer your current buffer amount
-                    (${currentBuffer.toFixed(2)})
-                  </li>
-                  <li>
-                    <strong>Build your buffer:</strong> Continue adding money until you reach
-                    ${targetAmount.toFixed(2)}
-                  </li>
-                  <li>
-                    <strong>Start using it:</strong> Once full, use it to fund next month's budget
-                  </li>
-                </ol>
+              {amountNeeded <= 0 && (
+                <Callout type="tip" title="You're ready to go!">
+                  You already have enough saved to start using the Income Buffer feature immediately.
+                  Start using it to fund next month's budget!
+                </Callout>
+              )}
 
-                <h3>Resources:</h3>
-                <ul>
-                  <li>
-                    <Link href="/help/features/income-buffer" className="text-primary hover:underline">
-                      Income Buffer Feature Guide
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href="/help/faq/advanced" className="text-primary hover:underline">
-                      Advanced Features FAQ
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href="/income-buffer" className="text-primary hover:underline">
-                      Income Buffer Page
-                    </Link>
-                  </li>
-                </ul>
+              <div>
+                <h3 className="font-semibold mb-3">📚 Helpful Resources</h3>
+                <div className="grid gap-2">
+                  <Link
+                    href="/help/features/income-buffer"
+                    className="flex items-center gap-2 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="text-2xl">📖</span>
+                    <span className="text-sm font-medium">Income Buffer Feature Guide</span>
+                  </Link>
+                  <Link
+                    href="/help/faq/advanced"
+                    className="flex items-center gap-2 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="text-2xl">❓</span>
+                    <span className="text-sm font-medium">Advanced Features FAQ</span>
+                  </Link>
+                </div>
               </div>
-
-              <Callout type="tip" title="Congratulations!">
-                You're on your way to breaking the paycheck-to-paycheck cycle. This is a big
-                step toward financial freedom!
-              </Callout>
             </div>
           </WizardStep>
         </Wizard>
