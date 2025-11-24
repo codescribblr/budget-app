@@ -41,7 +41,7 @@ const navigationSections = [
   {
     label: "General",
     items: [
-      { label: "Dashboard", path: "/", icon: LayoutDashboard },
+      { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
       { label: "Transactions", path: "/transactions", icon: Receipt },
       { label: "Import", path: "/import", icon: Upload },
       { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
