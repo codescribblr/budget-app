@@ -144,7 +144,7 @@ export default function DataBackup() {
 
       // Refresh the page after a short delay
       setTimeout(() => {
-        window.location.href = '/';
+        window.location.href = '/dashboard';
       }, 1500);
     } catch (error) {
       console.error('Error restoring backup:', error);
@@ -244,7 +244,7 @@ export default function DataBackup() {
 
       // Refresh the page after a short delay
       setTimeout(() => {
-        window.location.href = '/';
+        window.location.href = '/dashboard';
       }, 1500);
     } catch (error) {
       console.error('Error importing backup:', error);
