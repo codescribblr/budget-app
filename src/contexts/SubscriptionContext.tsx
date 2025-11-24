@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { UserSubscription } from '@/lib/subscription-utils';
-import { isPremiumUser, getTrialDaysRemaining } from '@/lib/subscription-utils';
 
 interface SubscriptionContextType {
   subscription: UserSubscription | null;
@@ -47,13 +46,21 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     fetchSubscription();
   }, [fetchSubscription]);
 
+  // Helper functions moved inline to avoid server-side imports
+  const isPremium = subscription?.tier === 'premium' &&
+    ['active', 'trialing'].includes(subscription?.status || '');
+
+  const trialDaysRemaining = subscription?.status === 'trialing' && subscription?.trial_end
+    ? Math.max(0, Math.ceil((new Date(subscription.trial_end).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))
+    : null;
+
   const value: SubscriptionContextType = {
     subscription,
     loading,
     error,
-    isPremium: isPremiumUser(subscription),
+    isPremium,
     isTrialing: subscription?.status === 'trialing',
-    trialDaysRemaining: getTrialDaysRemaining(subscription),
+    trialDaysRemaining,
     refreshSubscription: fetchSubscription,
   };
 
