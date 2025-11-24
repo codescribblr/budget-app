@@ -91,6 +91,7 @@ export function CommandPalette() {
   const [transactionsLoading, setTransactionsLoading] = React.useState(false)
   const router = useRouter()
   const incomeBufferEnabled = useFeature('income_buffer')
+  const scrollTimeoutsRef = React.useRef<NodeJS.Timeout[]>([])
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -111,11 +112,26 @@ export function CommandPalette() {
 
       // Fetch all static data in parallel
       Promise.all([
-        fetch('/api/categories').then(res => res.json()),
-        fetch('/api/accounts').then(res => res.json()),
-        fetch('/api/credit-cards').then(res => res.json()),
-        fetch('/api/loans').then(res => res.json()),
-        fetch('/api/goals').then(res => res.json()),
+        fetch('/api/categories').then(res => {
+          if (!res.ok) throw new Error(`Failed to fetch categories: ${res.status}`)
+          return res.json()
+        }),
+        fetch('/api/accounts').then(res => {
+          if (!res.ok) throw new Error(`Failed to fetch accounts: ${res.status}`)
+          return res.json()
+        }),
+        fetch('/api/credit-cards').then(res => {
+          if (!res.ok) throw new Error(`Failed to fetch credit cards: ${res.status}`)
+          return res.json()
+        }),
+        fetch('/api/loans').then(res => {
+          if (!res.ok) throw new Error(`Failed to fetch loans: ${res.status}`)
+          return res.json()
+        }),
+        fetch('/api/goals').then(res => {
+          if (!res.ok) throw new Error(`Failed to fetch goals: ${res.status}`)
+          return res.json()
+        }),
       ])
         .then(([categoriesData, accountsData, creditCardsData, loansData, goalsData]) => {
           // Filter out system categories
@@ -139,6 +155,9 @@ export function CommandPalette() {
         const response = await fetch(
           `/api/search/transactions?q=${encodeURIComponent(searchQuery)}&limit=10`
         )
+        if (!response.ok) {
+          throw new Error(`Failed to search transactions: ${response.status}`)
+        }
         const data = await response.json()
         setTransactions(data)
       } catch (err) {
@@ -166,6 +185,14 @@ export function CommandPalette() {
       setTransactionsLoading(false)
     }
   }, [query, open, searchTransactionsDebounced])
+
+  // Cleanup scroll timeouts on unmount or dialog close
+  React.useEffect(() => {
+    return () => {
+      scrollTimeoutsRef.current.forEach(timeout => clearTimeout(timeout))
+      scrollTimeoutsRef.current = []
+    }
+  }, [open])
 
   const runCommand = React.useCallback((command: () => void) => {
     setOpen(false)
@@ -232,10 +259,11 @@ export function CommandPalette() {
                     runCommand(() => {
                       router.push('/dashboard')
                       // Scroll to accounts section after navigation
-                      setTimeout(() => {
+                      const timeout = setTimeout(() => {
                         const element = document.getElementById('accounts-section')
                         element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                       }, 100)
+                      scrollTimeoutsRef.current.push(timeout)
                     })
                   }}
                 >
@@ -258,10 +286,11 @@ export function CommandPalette() {
                     runCommand(() => {
                       router.push('/dashboard')
                       // Scroll to credit cards section after navigation
-                      setTimeout(() => {
+                      const timeout = setTimeout(() => {
                         const element = document.getElementById('credit-cards-section')
                         element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                       }, 100)
+                      scrollTimeoutsRef.current.push(timeout)
                     })
                   }}
                 >
@@ -284,10 +313,11 @@ export function CommandPalette() {
                     runCommand(() => {
                       router.push('/dashboard')
                       // Scroll to loans section after navigation
-                      setTimeout(() => {
+                      const timeout = setTimeout(() => {
                         const element = document.getElementById('loans-section')
                         element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                       }, 100)
+                      scrollTimeoutsRef.current.push(timeout)
                     })
                   }}
                 >
@@ -378,10 +408,11 @@ export function CommandPalette() {
                       router.push(item.path)
                       // Scroll to section if specified
                       if (item.section) {
-                        setTimeout(() => {
+                        const timeout = setTimeout(() => {
                           const element = document.getElementById(item.section)
                           element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                         }, 100)
+                        scrollTimeoutsRef.current.push(timeout)
                       }
                     })
                   }}

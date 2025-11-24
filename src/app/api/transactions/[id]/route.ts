@@ -8,7 +8,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const transaction = await getTransactionById(parseInt(id));
+    const transactionId = parseInt(id);
+    
+    if (isNaN(transactionId)) {
+      return NextResponse.json({ error: 'Invalid transaction ID' }, { status: 400 });
+    }
+    
+    const transaction = await getTransactionById(transactionId);
 
     if (!transaction) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
@@ -30,8 +36,14 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const transactionId = parseInt(id);
+    
+    if (isNaN(transactionId)) {
+      return NextResponse.json({ error: 'Invalid transaction ID' }, { status: 400 });
+    }
+    
     const body = (await request.json()) as UpdateTransactionRequest;
-    const transaction = await updateTransaction(parseInt(id), body);
+    const transaction = await updateTransaction(transactionId, body);
 
     if (!transaction) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
@@ -53,7 +65,13 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await deleteTransaction(parseInt(id));
+    const transactionId = parseInt(id);
+    
+    if (isNaN(transactionId)) {
+      return NextResponse.json({ error: 'Invalid transaction ID' }, { status: 400 });
+    }
+    
+    await deleteTransaction(transactionId);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting transaction:', error);
