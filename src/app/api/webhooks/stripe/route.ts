@@ -52,7 +52,61 @@ export async function POST(request: Request) {
             onConflict: 'user_id',
           });
 
-        console.log(`✅ Subscription created for user ${userId}`);
+        // Auto-enable all premium features
+        const premiumFeatures = [
+          'monthly_funding_tracking',
+          'category_types',
+          'priority_system',
+          'smart_allocation',
+          'income_buffer',
+          'goals',
+          'loans',
+          'advanced_reporting',
+        ];
+
+        const now = new Date().toISOString();
+        const featureFlagsToInsert = premiumFeatures.map(featureName => ({
+          user_id: userId,
+          feature_name: featureName,
+          enabled: true,
+          enabled_at: now,
+          disabled_at: null,
+          updated_at: now,
+        }));
+
+        // Bulk upsert all premium features
+        await supabase
+          .from('user_feature_flags')
+          .upsert(featureFlagsToInsert, {
+            onConflict: 'user_id,feature_name',
+          });
+
+        // Create Income Buffer category (special initialization for income_buffer feature)
+        const { data: existingBuffer } = await supabase
+          .from('categories')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('name', 'Income Buffer')
+          .maybeSingle();
+
+        if (!existingBuffer) {
+          await supabase
+            .from('categories')
+            .insert({
+              user_id: userId,
+              name: 'Income Buffer',
+              monthly_amount: 0,
+              current_balance: 0,
+              sort_order: -1,
+              is_system: true,
+              is_buffer: true,
+              category_type: 'target_balance',
+              priority: 10,
+              notes: 'Special category for smoothing irregular income. Add large payments here and withdraw monthly.',
+            });
+        }
+
+        console.log(`✅ Subscription created for user ${userId} with all premium features enabled`);
         // TODO: Send welcome email
         break;
       }

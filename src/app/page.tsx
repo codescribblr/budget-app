@@ -67,7 +67,7 @@ export default function HomePage() {
             Track every dollar with confidence.
           </p>
           <div className="flex gap-4 justify-center flex-wrap">
-            <Link href="/signup">
+            <Link href="/signup?plan=premium">
               <Button size="lg" className="text-lg px-8">
                 Start Free Trial
                 <ArrowRight className="ml-2 h-5 w-5" />
@@ -278,7 +278,7 @@ export default function HomePage() {
                     <span>Priority Support</span>
                   </li>
                 </ul>
-                <Link href="/signup" className="block">
+                <Link href="/signup?plan=premium" className="block">
                   <Button
                     className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
                     size="lg"
@@ -300,9 +300,9 @@ export default function HomePage() {
           <p className="text-xl text-muted-foreground mb-8">
             Join thousands of users who have transformed their financial lives
           </p>
-          <Link href="/signup">
+          <Link href="/signup?plan=premium">
             <Button size="lg" className="text-lg px-8">
-              Get Started Free
+              Start Free Trial
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </Link>

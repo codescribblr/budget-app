@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
@@ -10,9 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
-export default function SignupPage() {
+function SignupForm() {
   const router = useRouter();
-  
+  const searchParams = useSearchParams();
+  const plan = searchParams.get('plan'); // 'premium' or null (free)
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -60,9 +62,33 @@ export default function SignupPage() {
         setSuccess(true);
         setLoading(false);
       } else {
-        // Auto-login successful, redirect to dashboard
-        router.push('/dashboard');
-        router.refresh();
+        // Auto-login successful
+        // If premium plan selected, redirect to checkout
+        if (plan === 'premium') {
+          // Create checkout session
+          const checkoutResponse = await fetch('/api/subscription/create-checkout-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              successUrl: `${window.location.origin}/dashboard?checkout=success`,
+              cancelUrl: `${window.location.origin}/dashboard?checkout=canceled`,
+            }),
+          });
+
+          if (checkoutResponse.ok) {
+            const { url } = await checkoutResponse.json();
+            // Redirect to Stripe Checkout
+            window.location.href = url;
+          } else {
+            // If checkout fails, still redirect to dashboard
+            router.push('/dashboard');
+            router.refresh();
+          }
+        } else {
+          // Free plan - redirect to dashboard
+          router.push('/dashboard');
+          router.refresh();
+        }
       }
     } catch (err) {
       setError('An unexpected error occurred');
@@ -234,3 +260,14 @@ export default function SignupPage() {
   );
 }
 
+export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="text-center">Loading...</div>
+      </div>
+    }>
+      <SignupForm />
+    </Suspense>
+  );
+}
