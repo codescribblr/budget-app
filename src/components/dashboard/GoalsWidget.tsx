@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -10,8 +11,11 @@ import type { GoalWithDetails } from '@/lib/types';
 import { Target, Calendar, TrendingUp, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { parseLocalDate } from '@/lib/date-utils';
+import { useFeature } from '@/contexts/FeatureContext';
 
 export default function GoalsWidget() {
+  const router = useRouter();
+  const goalsEnabled = useFeature('goals');
   const [goals, setGoals] = useState<GoalWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,11 +33,41 @@ export default function GoalsWidget() {
         setLoading(false);
       }
     };
-    fetchGoals();
-  }, []);
+
+    // Only fetch if feature is enabled
+    if (goalsEnabled) {
+      fetchGoals();
+    } else {
+      setLoading(false);
+    }
+  }, [goalsEnabled]);
 
   if (loading) {
     return null;
+  }
+
+  // Show upgrade prompt if goals feature is not enabled
+  if (!goalsEnabled) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="h-5 w-5" />
+            Goals
+          </CardTitle>
+          <CardDescription>Track your savings goals</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Goals & Debt Tracking is a premium feature
+          </p>
+          <Button onClick={() => router.push('/settings/subscription')} variant="outline" size="sm">
+            Upgrade to Premium
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </CardContent>
+      </Card>
+    );
   }
 
   if (goals.length === 0) {
