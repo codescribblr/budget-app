@@ -414,6 +414,8 @@ export async function createCreditCard(data: {
   sort_order?: number;
 }): Promise<CreditCard> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const creditLimit = data.credit_limit ?? 0;
   const availableCredit = data.available_credit ?? 0;
@@ -423,6 +425,7 @@ export async function createCreditCard(data: {
     .from('credit_cards')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       name: data.name,
       credit_limit: creditLimit,
       available_credit: availableCredit,
@@ -536,11 +539,14 @@ export async function createLoan(loan: {
   include_in_net_worth?: boolean;
 }): Promise<Loan> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   // Get the max sort_order
   const { data: maxData } = await supabase
     .from('loans')
     .select('sort_order')
+    .eq('account_id', accountId)
     .order('sort_order', { ascending: false })
     .limit(1);
 
@@ -550,6 +556,7 @@ export async function createLoan(loan: {
     .from('loans')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       ...loan,
       sort_order: nextSortOrder,
     })
@@ -653,11 +660,14 @@ export async function createPendingCheck(data: {
   amount: number;
 }): Promise<PendingCheck> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const { data: check, error } = await supabase
     .from('pending_checks')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       description: data.description,
       amount: data.amount,
     })
@@ -1133,6 +1143,8 @@ export async function createTransaction(data: {
   splits: { category_id: number; amount: number }[];
 }): Promise<TransactionWithSplits> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   // Validate that only one of account_id or credit_card_id is set
   if (data.account_id !== null && data.account_id !== undefined && 
@@ -1159,12 +1171,13 @@ export async function createTransaction(data: {
     .from('transactions')
     .insert({
       user_id: user.id,
+      budget_account_id: accountId,
       date: data.date,
       description: data.description,
       total_amount: totalAmount,
       merchant_group_id: merchantGroupId,
       is_historical: isHistorical,
-      account_id: data.account_id || null,
+      account_id: data.account_id || null, // This is bank account, not budget account
       credit_card_id: data.credit_card_id || null,
     })
     .select()
@@ -1811,6 +1824,8 @@ export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
 
 export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetails> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
   let linkedCategoryId: number | null = null;
   let linkedAccountId: number | null = null;
@@ -1910,6 +1925,7 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
       .from('categories')
       .insert({
         user_id: user.id,
+        account_id: accountId,
         name: data.name,
         monthly_amount: data.monthly_contribution,
         current_balance: data.starting_balance || 0,
@@ -1935,6 +1951,7 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
         .from('accounts')
         .insert({
           user_id: user.id,
+          account_id: accountId,
           name: data.new_account_name.trim(),
           balance: data.new_account_balance || 0,
           account_type: data.new_account_type || 'savings',
@@ -1997,6 +2014,7 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
     .from('goals')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       name: data.name,
       target_amount: targetAmount,
       target_date: data.target_date || null,
