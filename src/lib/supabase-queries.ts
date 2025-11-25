@@ -15,6 +15,7 @@ import type {
   UpdateGoalRequest,
 } from './types';
 import { calculateGoalProgress, calculateGoalStatus } from './goals/calculations';
+import { getActiveAccountId } from './account-context';
 
 // =====================================================
 // HELPER: Get authenticated user
@@ -36,10 +37,13 @@ export async function getAuthenticatedUser() {
 
 export async function getAllCategories(excludeGoals: boolean = false): Promise<Category[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
   let query = supabase
     .from('categories')
-    .select('*');
+    .select('*')
+    .eq('account_id', accountId);
   
   // Exclude goal categories when fetching for transactions
   if (excludeGoals) {
@@ -54,11 +58,14 @@ export async function getAllCategories(excludeGoals: boolean = false): Promise<C
 
 export async function getCategoryById(id: number): Promise<Category | null> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
   const { data, error } = await supabase
     .from('categories')
     .select('*')
     .eq('id', id)
+    .eq('account_id', accountId)
     .single();
   
   if (error) {
@@ -112,10 +119,14 @@ export async function createCategory(data: {
     targetBalance = data.target_balance ?? null;
   }
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
   const { data: category, error } = await supabase
     .from('categories')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       name: data.name,
       monthly_amount: monthlyAmount,
       current_balance: data.current_balance ?? 0,
@@ -261,10 +272,13 @@ export async function updateCategoriesOrder(
 
 export async function getAllAccounts(): Promise<Account[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
   const { data, error } = await supabase
     .from('accounts')
     .select('*')
+    .eq('account_id', accountId)
     .order('name');
   
   if (error) throw error;
@@ -297,10 +311,14 @@ export async function createAccount(data: {
 }): Promise<Account> {
   const { supabase, user } = await getAuthenticatedUser();
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
   const { data: account, error } = await supabase
     .from('accounts')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       name: data.name,
       balance: data.balance ?? 0,
       account_type: data.account_type ?? 'checking',
@@ -358,10 +376,13 @@ export async function deleteAccount(id: number): Promise<void> {
 
 export async function getAllCreditCards(): Promise<CreditCard[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
   const { data, error } = await supabase
     .from('credit_cards')
     .select('*')
+    .eq('account_id', accountId)
     .order('name');
   
   if (error) throw error;
