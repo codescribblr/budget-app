@@ -104,11 +104,24 @@ git push origin main
     ↓
 GitHub Actions starts
     ↓
+Check for pending migrations
+    ↓
+💾 Backup database (if migrations pending)
+    ↓
 Run database migrations
     ↓
 ✅ Success → Deploy to Vercel
 ❌ Failure → Stop (fix and retry)
 ```
+
+### Automatic Backups
+
+- **Backups are automatically created** before running migrations (only when there are pending migrations)
+- **Stored as GitHub Actions artifacts** for 90 days
+- **Includes metadata** (commit SHA, timestamp, pending migrations)
+- **Can be rolled back** using the Rollback Database workflow
+
+See [docs/BACKUP_AND_ROLLBACK.md](docs/BACKUP_AND_ROLLBACK.md) for detailed backup and rollback instructions.
 
 ## 📝 Creating Database Migrations
 

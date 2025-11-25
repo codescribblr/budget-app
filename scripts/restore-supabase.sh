@@ -92,7 +92,14 @@ echo -e "   📁 Backup file: ${BACKUP_FILE}"
 echo -e "   📊 File size: ${FILE_SIZE}"
 echo -e "   📅 Created: ${FILE_DATE}"
 echo ""
-read -p "Are you sure you want to continue? (yes/no): " CONFIRM
+
+# Check if running in non-interactive mode (CI/CD)
+if [ -n "$CI" ] || [ -n "$SKIP_CONFIRM" ]; then
+  CONFIRM="yes"
+  echo -e "${YELLOW}⚠️  Non-interactive mode: auto-confirming restore${NC}"
+else
+  read -p "Are you sure you want to continue? (yes/no): " CONFIRM
+fi
 
 if [ "$CONFIRM" != "yes" ]; then
   echo -e "${YELLOW}❌ Restore cancelled${NC}"

@@ -19,6 +19,44 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
+      - name: 🔍 Check for pending migrations
+        id: check_migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          chmod +x scripts/check-pending-migrations.sh
+          if ./scripts/check-pending-migrations.sh; then
+            echo "has_pending=true" >> $GITHUB_OUTPUT
+            echo "📋 Pending migrations detected - backup will be created"
+          else
+            echo "has_pending=false" >> $GITHUB_OUTPUT
+            echo "✨ No pending migrations - skipping backup"
+          fi
+
+      - name: 💾 Backup database (if migrations pending)
+        if: steps.check_migrations.outputs.has_pending == 'true'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          chmod +x scripts/backup-with-metadata.sh
+          mkdir -p database/backups
+          ./scripts/backup-with-metadata.sh database/backups
+          echo "📦 Backup created before migrations"
+
+      - name: 📦 Upload backup artifact
+        if: steps.check_migrations.outputs.has_pending == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            database/backups/backup_*.sql
+            database/backups/backup_*.metadata.json
+          retention-days: 90
+          if-no-files-found: ignore
+
       - name: 🔄 Run database migrations
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -37,6 +75,9 @@ jobs:
       - name: ✅ Deployment complete
         run: |
           echo "🎉 Deployment completed successfully!"
+          if [ "${{ steps.check_migrations.outputs.has_pending }}" == "true" ]; then
+            echo "💾 Database backup created and stored as artifact"
+          fi
           echo "📊 Migrations applied"
           echo "🌐 Application deployed to Vercel"
 

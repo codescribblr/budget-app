@@ -1,0 +1,90 @@
+name: Rollback Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_artifact_name:
+        description: 'Backup artifact name (from GitHub Actions artifacts)'
+        required: true
+        type: string
+      confirm_rollback:
+        description: 'Type "ROLLBACK" to confirm (this will overwrite current database)'
+        required: true
+        type: string
+
+jobs:
+  rollback:
+    name: Rollback Database from Backup
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🗄️ Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client jq
+
+      - name: ⚠️ Verify rollback confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm_rollback }}" != "ROLLBACK" ]; then
+            echo "❌ Rollback not confirmed. You must type 'ROLLBACK' to proceed."
+            exit 1
+          fi
+          echo "✅ Rollback confirmed"
+
+      - name: 📥 Download backup artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.inputs.backup_artifact_name }}
+          path: database/backups
+
+      - name: 📋 List available backups
+        run: |
+          echo "Available backups:"
+          ls -lh database/backups/*.sql 2>/dev/null || echo "No backup files found"
+          echo ""
+          echo "Metadata files:"
+          ls -lh database/backups/*.metadata.json 2>/dev/null || echo "No metadata files found"
+
+      - name: 📄 Display backup metadata
+        run: |
+          METADATA_FILE=$(ls -t database/backups/*.metadata.json 2>/dev/null | head -1)
+          if [ -n "$METADATA_FILE" ]; then
+            echo "📄 Backup Metadata:"
+            cat "$METADATA_FILE" | jq '.'
+            echo ""
+          else
+            echo "⚠️  No metadata file found"
+          fi
+
+      - name: 🔄 Restore database from backup
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          CI: true
+        run: |
+          BACKUP_FILE=$(ls -t database/backups/*.sql 2>/dev/null | head -1)
+          if [ -z "$BACKUP_FILE" ]; then
+            echo "❌ No backup file found"
+            exit 1
+          fi
+          
+          echo "🔄 Restoring from: $(basename "$BACKUP_FILE")"
+          echo "⚠️  WARNING: This will overwrite the current database!"
+          
+          chmod +x scripts/restore-supabase.sh
+          # CI environment variable enables non-interactive mode
+          ./scripts/restore-supabase.sh "$BACKUP_FILE" || {
+            echo "❌ Restore failed"
+            exit 1
+          }
+
+      - name: ✅ Rollback complete
+        run: |
+          echo "✅ Database rollback completed successfully!"
+          echo "📊 Database has been restored to the backup state"
+          echo ""
+          echo "⚠️  Note: You may need to redeploy the application if the code version"
+          echo "   doesn't match the database schema."
+
