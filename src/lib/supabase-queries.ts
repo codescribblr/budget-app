@@ -65,7 +65,7 @@ export async function getCategoryById(id: number): Promise<Category | null> {
     .from('categories')
     .select('*')
     .eq('id', id)
-    .eq('account_id', accountId)
+    .eq('budget_account_id', accountId)
     .single();
   
   if (error) {
@@ -498,10 +498,13 @@ export async function deleteCreditCard(id: number): Promise<void> {
 
 export async function getAllLoans(): Promise<Loan[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const { data, error } = await supabase
     .from('loans')
     .select('*')
+    .eq('account_id', accountId)
     .order('sort_order');
 
   if (error) throw error;
@@ -615,10 +618,13 @@ export async function deleteLoan(id: number): Promise<void> {
 
 export async function getAllPendingChecks(): Promise<PendingCheck[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const { data, error } = await supabase
     .from('pending_checks')
     .select('*')
+    .eq('account_id', accountId)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -892,6 +898,8 @@ function calculateMonthlyNetIncome(settingsObj: Record<string, string>): number 
 
 export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   // Get all transactions with merchant group, account, and credit card info
   const { data: transactions, error: txError } = await supabase
@@ -908,6 +916,7 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
         name
       )
     `)
+    .eq('budget_account_id', accountId)
     .order('date', { ascending: false })
     .order('created_at', { ascending: false });
 
@@ -1051,6 +1060,8 @@ export async function searchTransactions(
 
 export async function getTransactionById(id: number): Promise<TransactionWithSplits | null> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   // Get transaction with merchant group, account, and credit card info
   const { data: transaction, error: txError } = await supabase
@@ -1068,6 +1079,7 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
       )
     `)
     .eq('id', id)
+    .eq('budget_account_id', accountId)
     .single();
 
   if (txError) {
@@ -1464,6 +1476,8 @@ export async function checkDuplicateHash(hash: string): Promise<boolean> {
 
 export async function importTransactions(transactions: any[], isHistorical: boolean = false): Promise<number> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const importDate = new Date().toISOString();
 
@@ -1477,6 +1491,7 @@ export async function importTransactions(transactions: any[], isHistorical: bool
   // ===== STEP 1: Batch insert imported_transactions =====
   const importedTransactionsData = validTransactions.map(txn => ({
     user_id: user.id,
+    account_id: accountId,
     import_date: importDate,
     source_type: 'CSV Import',
     source_identifier: 'Unknown',
@@ -1497,12 +1512,12 @@ export async function importTransactions(transactions: any[], isHistorical: bool
     if (importError.code === '23505') {
       console.log('Duplicate hashes detected, filtering and retrying...');
 
-      // Get existing hashes for this user
+      // Get existing hashes for this account
       const hashes = validTransactions.map(txn => txn.hash);
       const { data: existingHashes } = await supabase
         .from('imported_transactions')
         .select('hash')
-        .eq('user_id', user.id)
+        .eq('account_id', accountId)
         .in('hash', hashes);
 
       const existingHashSet = new Set(existingHashes?.map(h => h.hash) || []);
@@ -1569,11 +1584,12 @@ export async function importTransactions(transactions: any[], isHistorical: bool
     const totalAmount = txn.splits.reduce((sum: number, split: any) => sum + split.amount, 0);
     return {
       user_id: user.id,
+      budget_account_id: accountId,
       date: txn.date,
       description: txn.description,
       total_amount: totalAmount,
       merchant_group_id: merchantGroupIds[index],
-      account_id: txn.account_id || null,
+      account_id: txn.account_id || null, // This is the bank account, not budget account
       credit_card_id: txn.credit_card_id || null,
       is_historical: isHistorical,
     };
@@ -1665,6 +1681,8 @@ export async function importTransactions(transactions: any[], isHistorical: bool
 
 export async function getAllGoals(): Promise<GoalWithDetails[]> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
   const { data: goals, error } = await supabase
     .from('goals')
@@ -1675,7 +1693,7 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
       linked_credit_card:credit_cards!goals_linked_credit_card_id_fkey(*),
       linked_loan:loans!goals_linked_loan_id_fkey(*)
     `)
-    .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .order('sort_order')
     .order('created_at', { ascending: false });
   

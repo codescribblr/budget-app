@@ -185,10 +185,11 @@ ON CONFLICT (account_id, user_id) DO NOTHING;
 -- =====================================================
 
 -- Add account_id column to all tables (nullable initially)
+-- Note: transactions already has account_id for bank accounts, so we use budget_account_id
 ALTER TABLE categories ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
 ALTER TABLE credit_cards ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
-ALTER TABLE transactions ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS budget_account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
 ALTER TABLE pending_checks ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
 ALTER TABLE merchant_mappings ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
 ALTER TABLE imported_transactions ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
@@ -225,9 +226,9 @@ FROM budget_accounts ba
 WHERE ba.owner_id = cc.user_id AND cc.account_id IS NULL;
 
 UPDATE transactions t
-SET account_id = ba.id
+SET budget_account_id = ba.id
 FROM budget_accounts ba
-WHERE ba.owner_id = t.user_id AND t.account_id IS NULL;
+WHERE ba.owner_id = t.user_id AND t.budget_account_id IS NULL;
 
 UPDATE pending_checks pc
 SET account_id = ba.id
@@ -302,7 +303,7 @@ WHERE ba.owner_id = ub.user_id AND ub.account_id IS NULL;
 ALTER TABLE categories ALTER COLUMN account_id SET NOT NULL;
 ALTER TABLE accounts ALTER COLUMN account_id SET NOT NULL;
 ALTER TABLE credit_cards ALTER COLUMN account_id SET NOT NULL;
-ALTER TABLE transactions ALTER COLUMN account_id SET NOT NULL;
+ALTER TABLE transactions ALTER COLUMN budget_account_id SET NOT NULL;
 ALTER TABLE pending_checks ALTER COLUMN account_id SET NOT NULL;
 ALTER TABLE merchant_mappings ALTER COLUMN account_id SET NOT NULL;
 ALTER TABLE imported_transactions ALTER COLUMN account_id SET NOT NULL;
@@ -321,7 +322,7 @@ ALTER TABLE user_backups ALTER COLUMN account_id SET NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_categories_account_id ON categories(account_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_account_id ON accounts(account_id);
 CREATE INDEX IF NOT EXISTS idx_credit_cards_account_id ON credit_cards(account_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_budget_account_id ON transactions(budget_account_id);
 CREATE INDEX IF NOT EXISTS idx_pending_checks_account_id ON pending_checks(account_id);
 CREATE INDEX IF NOT EXISTS idx_merchant_mappings_account_id ON merchant_mappings(account_id);
 CREATE INDEX IF NOT EXISTS idx_imported_transactions_account_id ON imported_transactions(account_id);
@@ -453,19 +454,19 @@ DROP POLICY IF EXISTS "Users can delete their own transactions" ON transactions;
 
 CREATE POLICY "Users can view transactions in their accounts"
   ON transactions FOR SELECT
-  USING (user_has_account_access(account_id));
+  USING (user_has_account_access(budget_account_id));
 
 CREATE POLICY "Users can insert transactions in their accounts"
   ON transactions FOR INSERT
-  WITH CHECK (user_has_account_write_access(account_id));
+  WITH CHECK (user_has_account_write_access(budget_account_id));
 
 CREATE POLICY "Users can update transactions in their accounts"
   ON transactions FOR UPDATE
-  USING (user_has_account_write_access(account_id));
+  USING (user_has_account_write_access(budget_account_id));
 
 CREATE POLICY "Users can delete transactions in their accounts"
   ON transactions FOR DELETE
-  USING (user_has_account_write_access(account_id));
+  USING (user_has_account_write_access(budget_account_id));
 
 -- Update RLS policies for pending_checks
 DROP POLICY IF EXISTS "Users can view their own pending checks" ON pending_checks;

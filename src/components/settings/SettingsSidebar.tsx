@@ -12,7 +12,8 @@ import {
   Users,
   Download,
   Trash2,
-  Crown
+  Crown,
+  UserPlus
 } from 'lucide-react';
 
 const settingsNavItems = [
@@ -57,6 +58,12 @@ const settingsNavItems = [
     href: '/settings/data',
     icon: Database,
     description: 'Import or clear data',
+  },
+  {
+    title: 'Collaborators',
+    href: '/settings/collaborators',
+    icon: UserPlus,
+    description: 'Manage account collaborators',
   },
   {
     title: 'Account',
