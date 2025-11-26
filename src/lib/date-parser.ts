@@ -13,13 +13,26 @@ export interface DateParseResult {
 }
 
 /**
- * Common date format patterns
- * US formats (MM/dd) are prioritized over European formats (dd/MM)
+ * US date format patterns (MM/dd) - prioritized
+ * Supports zero-padded and non-zero-padded months/days
  */
-export const DATE_FORMATS = [
-  'MM/dd/yyyy',
-  'MM-dd-yyyy',
-  'MM/dd/yy',
+export const US_DATE_FORMATS = [
+  'MM/dd/yyyy',  // 02/04/2025
+  'M/dd/yyyy',   // 2/04/2025
+  'MM/d/yyyy',   // 02/4/2025
+  'M/d/yyyy',    // 2/4/2025
+  'MM-dd-yyyy',  // 02-04-2025
+  'M-dd-yyyy',   // 2-04-2025
+  'MM-d-yyyy',   // 02-4-2025
+  'M-d-yyyy',    // 2-4-2025
+  'MM/dd/yy',    // 02/04/25
+  'M/d/yy',      // 2/4/25
+] as const;
+
+/**
+ * Other date format patterns (European, ISO, etc.)
+ */
+export const OTHER_DATE_FORMATS = [
   'yyyy-MM-dd',
   'yyyy/MM/dd',
   'MMM dd, yyyy',
@@ -30,6 +43,11 @@ export const DATE_FORMATS = [
   'dd/MM/yy',
   'dd-MM-yy',
 ] as const;
+
+/**
+ * All date format patterns (US formats first)
+ */
+export const DATE_FORMATS = [...US_DATE_FORMATS, ...OTHER_DATE_FORMATS] as const;
 
 /**
  * Validate that parsed date matches expected values from the string
@@ -62,8 +80,8 @@ function validateParsedDate(
   let expectedMonth: number | null = null;
   let expectedDay: number | null = null;
   
-  if (fmt.startsWith('MM') && !fmt.startsWith('MMM')) {
-    // US format: MM/dd/yyyy or MM-dd-yyyy
+  if ((fmt.startsWith('MM') || fmt.startsWith('M/') || fmt.startsWith('M-')) && !fmt.startsWith('MMM')) {
+    // US format: MM/dd/yyyy, M/dd/yyyy, MM/d/yyyy, M/d/yyyy, etc.
     expectedMonth = parseInt(parts[0], 10);
     expectedDay = parseInt(parts[1], 10);
   } else if (fmt.startsWith('dd')) {
@@ -90,6 +108,7 @@ function validateParsedDate(
 
 /**
  * Parse a date string with multiple format attempts
+ * Prioritizes US format (MM/dd/yyyy) for ambiguous dates
  */
 export function parseDate(dateStr: string, detectedFormat?: string): DateParseResult {
   const trimmed = dateStr.trim();
@@ -97,15 +116,22 @@ export function parseDate(dateStr: string, detectedFormat?: string): DateParseRe
     return { date: null, format: null, confidence: 0 };
   }
 
+  // Check if this looks like a US date format (MM/dd or M/d with slashes)
+  const looksLikeUSDate = /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(trimmed);
+
   // Try detected format first if provided
   if (detectedFormat) {
     const formatMap: Record<string, string> = {
       'MM/DD/YYYY': 'MM/dd/yyyy',
+      'M/DD/YYYY': 'M/dd/yyyy',
+      'MM/D/YYYY': 'MM/d/yyyy',
+      'M/D/YYYY': 'M/d/yyyy',
       'DD-MM-YYYY': 'dd-MM-yyyy',
       'DD.MM.YYYY': 'dd.MM.yyyy',
       'YYYY-MM-DD': 'yyyy-MM-dd',
       'MMM DD, YYYY': 'MMM dd, yyyy',
       'MM/DD/YY': 'MM/dd/yy',
+      'M/D/YY': 'M/d/yy',
       'YYYY/MM/DD': 'yyyy/MM/dd',
     };
 
@@ -123,7 +149,32 @@ export function parseDate(dateStr: string, detectedFormat?: string): DateParseRe
     }
   }
 
-  // Try all known formats
+  // If it looks like a US date format, ONLY try US formats (skip European formats)
+  // This prevents ambiguous dates like "11/01/2025" from being parsed as dd/MM/yyyy
+  if (looksLikeUSDate) {
+    for (const fmt of US_DATE_FORMATS) {
+      try {
+        const parsed = parse(trimmed, fmt, new Date());
+        if (isValid(parsed)) {
+          const year = parsed.getFullYear();
+          if (year >= 1900 && year <= 2100) {
+            // Validate that parsed values match expected values
+            if (validateParsedDate(parsed, trimmed, fmt)) {
+              return { date: parsed, format: fmt, confidence: 0.95 };
+            }
+            // If validation fails, continue to next format
+          }
+        }
+      } catch {
+        // Continue to next format
+      }
+    }
+    // If US formats didn't work, don't try European formats - return null
+    // This ensures we don't misinterpret ambiguous dates
+    return { date: null, format: null, confidence: 0 };
+  }
+
+  // Try all known formats (for non-US-looking dates)
   for (const fmt of DATE_FORMATS) {
     try {
       const parsed = parse(trimmed, fmt, new Date());
@@ -186,6 +237,7 @@ export function normalizeDate(date: Date | string): string {
 
 /**
  * Detect date format from sample values
+ * Prioritizes US formats for ambiguous dates
  */
 export function detectDateFormat(values: string[]): string | null {
   if (values.length === 0) return null;
@@ -196,7 +248,15 @@ export function detectDateFormat(values: string[]): string | null {
     const trimmed = value.trim();
     if (!trimmed) continue;
 
-    for (const fmt of DATE_FORMATS) {
+    // Check if this looks like a US date format
+    const looksLikeUSDate = /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(trimmed);
+
+    // Try US formats first for dates that look like US format
+    const formatsToTry = looksLikeUSDate 
+      ? [...US_DATE_FORMATS, ...OTHER_DATE_FORMATS]
+      : DATE_FORMATS;
+
+    for (const fmt of formatsToTry) {
       try {
         const parsed = parse(trimmed, fmt, new Date());
         if (isValid(parsed)) {
@@ -204,7 +264,10 @@ export function detectDateFormat(values: string[]): string | null {
           if (year >= 1900 && year <= 2100) {
             // Only count formats that pass validation
             if (validateParsedDate(parsed, trimmed, fmt)) {
-              formatScores.set(fmt, (formatScores.get(fmt) || 0) + 1);
+              // Give higher weight to US formats for ambiguous dates
+              const isUSFormat = (US_DATE_FORMATS as readonly string[]).includes(fmt);
+              const weight = looksLikeUSDate && isUSFormat ? 2 : 1;
+              formatScores.set(fmt, (formatScores.get(fmt) || 0) + weight);
             }
           }
         }
