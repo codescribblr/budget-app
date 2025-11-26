@@ -97,7 +97,7 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
                 <div className="text-xs text-muted-foreground">{formatDate(transaction.date)}</div>
               </div>
               <div className="flex items-center gap-2">
-                <div className={`font-semibold text-sm ${transaction.total_amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                <div className={`font-semibold text-sm ${transaction.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
                   {formatCurrency(transaction.total_amount)}
                 </div>
                 <DropdownMenu>
@@ -201,8 +201,14 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
                     <span className="text-muted-foreground">—</span>
                   )}
                 </TableCell>
-                <TableCell className="text-right font-semibold text-sm whitespace-nowrap">
-                  {formatCurrency(transaction.total_amount)}
+                <TableCell className={`text-right font-semibold text-sm whitespace-nowrap ${
+                  transaction.transaction_type === 'income' 
+                    ? 'text-green-600' 
+                    : 'text-red-600'
+                }`}>
+                  <span className={transaction.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'}>
+                    {formatCurrency(transaction.total_amount)}
+                  </span>
                 </TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>

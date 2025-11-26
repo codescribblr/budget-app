@@ -39,6 +39,7 @@ export default function EditTransactionDialog({
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [selectedCreditCardId, setSelectedCreditCardId] = useState<number | null>(null);
+  const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export default function EditTransactionDialog({
       setMerchantGroupId(transaction.merchant_group_id || null);
       setSelectedAccountId(transaction.account_id || null);
       setSelectedCreditCardId(transaction.credit_card_id || null);
+      setTransactionType(transaction.transaction_type || 'expense');
       setSplits(
         transaction.splits.map((split) => ({
           category_id: split.category_id,
@@ -154,6 +156,7 @@ export default function EditTransactionDialog({
         body: JSON.stringify({
           date: formatLocalDate(date),
           description,
+          transaction_type: transactionType,
           merchant_group_id: merchantGroupId,
           account_id: selectedAccountId || null,
           credit_card_id: selectedCreditCardId || null,
@@ -206,6 +209,22 @@ export default function EditTransactionDialog({
                 placeholder="e.g., Grocery shopping at Walmart"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="transactionType">Transaction Type</Label>
+            <Select
+              value={transactionType}
+              onValueChange={(value) => setTransactionType(value as 'income' | 'expense')}
+            >
+              <SelectTrigger id="transactionType">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="expense">Expense</SelectItem>
+                <SelectItem value="income">Income</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div>

@@ -35,6 +35,7 @@ export default function AddTransactionDialog({
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [selectedCreditCardId, setSelectedCreditCardId] = useState<number | null>(null);
+  const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export default function AddTransactionDialog({
       setSplits([{ category_id: 0, amount: '' }]);
       setSelectedAccountId(null);
       setSelectedCreditCardId(null);
+      setTransactionType('expense');
       setIsSubmitting(false);
     }
   }, [isOpen]);
@@ -128,6 +130,7 @@ export default function AddTransactionDialog({
         body: JSON.stringify({
           date: formatLocalDate(date),
           description,
+          transaction_type: transactionType,
           account_id: selectedAccountId || null,
           credit_card_id: selectedCreditCardId || null,
           splits: validSplits.map(s => ({
@@ -185,6 +188,22 @@ export default function AddTransactionDialog({
                 placeholder="e.g., Grocery shopping at Walmart"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="transactionType">Transaction Type</Label>
+            <Select
+              value={transactionType}
+              onValueChange={(value) => setTransactionType(value as 'income' | 'expense')}
+            >
+              <SelectTrigger id="transactionType">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="expense">Expense</SelectItem>
+                <SelectItem value="income">Income</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div>

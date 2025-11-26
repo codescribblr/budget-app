@@ -82,9 +82,12 @@ export default function TransactionsByMerchant({
 
   filteredTransactions.forEach(transaction => {
     const current = merchantSpending.get(transaction.description) || { count: 0, total: 0 };
+    const amount = transaction.transaction_type === 'expense'
+      ? transaction.total_amount
+      : -transaction.total_amount;
     merchantSpending.set(transaction.description, {
       count: current.count + 1,
-      total: current.total + transaction.total_amount,
+      total: current.total + amount,
     });
   });
 

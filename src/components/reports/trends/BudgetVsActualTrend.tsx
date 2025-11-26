@@ -26,19 +26,21 @@ export default function BudgetVsActualTrend({ transactions, categories }: Budget
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
       // Sum only splits that are NOT in system categories
+      // Expenses add, income subtracts
       const nonSystemTotal = transaction.splits.reduce((sum, split) => {
         const category = categories.find(c => c.id === split.category_id);
         if (category && !category.is_system) {
-          return sum + split.amount;
+          const amount = transaction.transaction_type === 'expense'
+            ? split.amount
+            : -split.amount;
+          return sum + amount;
         }
         return sum;
       }, 0);
 
-      // Add to monthly data
-      if (nonSystemTotal > 0) {
-        const current = monthlyData.get(monthKey) || 0;
-        monthlyData.set(monthKey, current + nonSystemTotal);
-      }
+      // Add to monthly data (can be positive or negative)
+      const current = monthlyData.get(monthKey) || 0;
+      monthlyData.set(monthKey, current + nonSystemTotal);
     });
 
     // Convert to array and sort by date

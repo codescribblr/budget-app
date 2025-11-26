@@ -129,7 +129,7 @@ export async function getMerchantGroupStats(
   // Get transactions
   let query = supabase
     .from('transactions')
-    .select('id, description, total_amount')
+    .select('id, description, total_amount, transaction_type')
     .eq('budget_account_id', accountId);
 
   if (transactionIds && transactionIds.length > 0) {
@@ -157,7 +157,11 @@ export async function getMerchantGroupStats(
       };
 
       current.transaction_count++;
-      current.total_amount += t.total_amount;
+      // Expenses add, income subtracts
+      const amount = (t as any).transaction_type === 'income'
+        ? -(t.total_amount)
+        : t.total_amount;
+      current.total_amount += amount;
       current.patterns.add(t.description);
 
       groupStats.set(groupId, current);

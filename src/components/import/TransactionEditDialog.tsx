@@ -37,6 +37,7 @@ export default function TransactionEditDialog({
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(transaction.account_id || null);
   const [selectedCreditCardId, setSelectedCreditCardId] = useState<number | null>(transaction.credit_card_id || null);
+  const [transactionType, setTransactionType] = useState<'income' | 'expense'>(transaction.transaction_type || 'expense');
 
   useEffect(() => {
     fetchAccounts();
@@ -128,6 +129,7 @@ export default function TransactionEditDialog({
       date: formatLocalDate(date),
       merchant,
       description,
+      transaction_type: transactionType,
       account_id: selectedAccountId || null,
       credit_card_id: selectedCreditCardId || null,
       splits,
@@ -163,6 +165,22 @@ export default function TransactionEditDialog({
                 className="bg-muted"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="transactionType">Transaction Type</Label>
+            <Select
+              value={transactionType}
+              onValueChange={(value) => setTransactionType(value as 'income' | 'expense')}
+            >
+              <SelectTrigger id="transactionType">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="expense">Expense</SelectItem>
+                <SelectItem value="income">Income</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div>

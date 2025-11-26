@@ -591,7 +591,9 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                   {/* Amount Cell - Inline Editable */}
                   <TableCell
                     onClick={() => setEditingField({ transactionId: transaction.id, field: 'amount' })}
-                    className="text-right font-semibold cursor-pointer hover:bg-muted/50 min-w-[100px]"
+                    className={`text-right font-semibold cursor-pointer hover:bg-muted/50 min-w-[100px] ${
+                      transaction.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'
+                    }`}
                   >
                     {isEditingAmount ? (
                       <Input

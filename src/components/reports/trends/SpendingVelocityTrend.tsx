@@ -21,22 +21,24 @@ export default function SpendingVelocityTrend({ transactions, categories }: Spen
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
       // Sum only splits that are NOT in system categories
+      // Expenses add, income subtracts
       const nonSystemTotal = transaction.splits.reduce((sum, split) => {
         const category = categories.find(c => c.id === split.category_id);
         if (category && !category.is_system) {
-          return sum + split.amount;
+          const amount = transaction.transaction_type === 'expense'
+            ? split.amount
+            : -split.amount;
+          return sum + amount;
         }
         return sum;
       }, 0);
 
-      // Add to monthly data
-      if (nonSystemTotal > 0) {
-        const current = monthlyData.get(monthKey) || { total: 0, days: 0 };
-        monthlyData.set(monthKey, {
-          total: current.total + nonSystemTotal,
-          days: new Date(parseInt(monthKey.split('-')[0]), parseInt(monthKey.split('-')[1]), 0).getDate(),
-        });
-      }
+      // Add to monthly data (can be positive or negative)
+      const current = monthlyData.get(monthKey) || { total: 0, days: 0 };
+      monthlyData.set(monthKey, {
+        total: current.total + nonSystemTotal,
+        days: new Date(parseInt(monthKey.split('-')[0]), parseInt(monthKey.split('-')[1]), 0).getDate(),
+      });
     });
 
     // Convert to array and calculate daily average

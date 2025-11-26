@@ -44,10 +44,14 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
 
       monthTransactions.forEach(transaction => {
         // Sum only splits that are NOT in system categories
+        // Expenses add, income subtracts
         const nonSystemTotal = transaction.splits.reduce((sum, split) => {
           const category = categories.find(c => c.id === split.category_id);
           if (category && !category.is_system) {
-            return sum + split.amount;
+            const amount = transaction.transaction_type === 'expense'
+              ? split.amount
+              : -split.amount;
+            return sum + amount;
           }
           return sum;
         }, 0);

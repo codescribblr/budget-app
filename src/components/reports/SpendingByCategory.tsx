@@ -16,13 +16,16 @@ interface SpendingByCategoryProps {
 }
 
 export default function SpendingByCategory({ transactions, categories, onCategoryClick, loading = false, startDate, endDate }: SpendingByCategoryProps) {
-  // Calculate spending by category
+  // Calculate spending by category (expenses add, income subtracts)
   const categorySpending = new Map<number, number>();
 
   transactions.forEach(transaction => {
     transaction.splits.forEach(split => {
       const current = categorySpending.get(split.category_id) || 0;
-      categorySpending.set(split.category_id, current + split.amount);
+      const amount = transaction.transaction_type === 'expense'
+        ? split.amount      // Expenses add to spending
+        : -split.amount;     // Income subtracts from spending
+      categorySpending.set(split.category_id, current + amount);
     });
   });
 
