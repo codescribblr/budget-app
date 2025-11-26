@@ -683,6 +683,7 @@ export async function getPendingCheckById(id: number): Promise<PendingCheck | nu
 export async function createPendingCheck(data: {
   description: string;
   amount: number;
+  type?: 'expense' | 'income';
 }): Promise<PendingCheck> {
   const { supabase, user } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
@@ -695,6 +696,7 @@ export async function createPendingCheck(data: {
       account_id: accountId,
       description: data.description,
       amount: data.amount,
+      type: data.type || 'expense',
     })
     .select()
     .single();
@@ -708,14 +710,18 @@ export async function updatePendingCheck(
   data: Partial<{
     description: string;
     amount: number;
+    type: 'expense' | 'income';
   }>
 ): Promise<PendingCheck | null> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const { data: check, error } = await supabase
     .from('pending_checks')
     .update(data)
     .eq('id', id)
+    .eq('account_id', accountId)
     .select()
     .single();
 
@@ -818,10 +824,17 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     .filter(cc => cc.include_in_totals === true)
     .reduce((sum, cc) => sum + Number(cc.current_balance), 0);
 
-  const totalPendingChecks = (pendingChecks as any[])
-    .reduce((sum, pc) => sum + Number(pc.amount), 0);
+  // Calculate pending checks total: expenses subtract, income adds
+  // Income is positive (adds to available funds), expense is negative (subtracts from available funds)
+  const totalPendingChecks = (pendingChecks as PendingCheck[])
+    .reduce((sum, pc) => {
+      const amount = Number(pc.amount);
+      // Income adds to available funds (positive), expenses subtract (negative)
+      return sum + (pc.type === 'income' ? amount : -amount);
+    }, 0);
 
-  const currentSavings = totalMonies - categoriesTotalBalance - totalCreditCardBalances - totalPendingChecks;
+  // Add totalPendingChecks (income increases savings, expenses decrease savings)
+  const currentSavings = totalMonies - categoriesTotalBalance - totalCreditCardBalances + totalPendingChecks;
 
   // Calculate total monthly budget (exclude buffer from budget totals)
   const totalMonthlyBudget = envelopeCategories

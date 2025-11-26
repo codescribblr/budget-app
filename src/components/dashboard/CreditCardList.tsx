@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,11 +28,12 @@ import { handleApiError } from '@/lib/api-error-handler';
 
 interface CreditCardListProps {
   creditCards: CreditCard[];
-  onUpdate: () => void;
+  onUpdate: (updatedCreditCards: CreditCard[]) => void;
+  onUpdateSummary?: () => void;
   disabled?: boolean;
 }
 
-export default function CreditCardList({ creditCards, onUpdate, disabled = false }: CreditCardListProps) {
+export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary, disabled = false }: CreditCardListProps) {
   const [editingCard, setEditingCard] = useState<CreditCard | null>(null);
   const [cardName, setCardName] = useState('');
   const [creditLimit, setCreditLimit] = useState('');
@@ -50,13 +51,36 @@ export default function CreditCardList({ creditCards, onUpdate, disabled = false
   const handleUpdateCard = async () => {
     if (!editingCard) return;
 
+    const newAvailableCredit = parseFloat(availableCredit);
+    const newCreditLimit = parseFloat(creditLimit);
+    const newCurrentBalance = newCreditLimit - newAvailableCredit;
+
+    // Optimistic update
+    const updatedCard: CreditCard = {
+      ...editingCard,
+      credit_limit: newCreditLimit,
+      available_credit: newAvailableCredit,
+      current_balance: newCurrentBalance,
+      include_in_totals: includeInTotals,
+    };
+    const updatedCreditCards = creditCards.map(card => 
+      card.id === editingCard.id ? updatedCard : card
+    );
+    onUpdate(updatedCreditCards);
+    setIsEditDialogOpen(false);
+    setEditingCard(null);
+    setCardName('');
+    setCreditLimit('');
+    setAvailableCredit('');
+    setIncludeInTotals(true);
+
     try {
       const response = await fetch(`/api/credit-cards/${editingCard.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          credit_limit: parseFloat(creditLimit),
-          available_credit: parseFloat(availableCredit),
+          credit_limit: newCreditLimit,
+          available_credit: newAvailableCredit,
           include_in_totals: includeInTotals,
         }),
       });
@@ -66,14 +90,10 @@ export default function CreditCardList({ creditCards, onUpdate, disabled = false
         throw new Error(errorMessage || 'Failed to update credit card');
       }
 
-      setIsEditDialogOpen(false);
-      setEditingCard(null);
-      setCardName('');
-      setCreditLimit('');
-      setAvailableCredit('');
-      setIncludeInTotals(true);
-      onUpdate();
+      if (onUpdateSummary) onUpdateSummary();
     } catch (error) {
+      // Revert on error
+      onUpdate(creditCards);
       console.error('Error updating credit card:', error);
       // Error toast already shown by handleApiError
     }
@@ -102,12 +122,16 @@ export default function CreditCardList({ creditCards, onUpdate, disabled = false
         throw new Error(errorMessage || 'Failed to add credit card');
       }
 
+      const newCard = await response.json();
+      const updatedCreditCards = [...creditCards, newCard];
+      onUpdate(updatedCreditCards);
+      if (onUpdateSummary) onUpdateSummary();
+
       setIsAddDialogOpen(false);
       setCardName('');
       setCreditLimit('');
       setAvailableCredit('');
       setIncludeInTotals(true);
-      onUpdate();
     } catch (error) {
       console.error('Error adding credit card:', error);
       // Error toast already shown by handleApiError
@@ -122,6 +146,10 @@ export default function CreditCardList({ creditCards, onUpdate, disabled = false
   const confirmDeleteCard = async () => {
     if (!cardToDelete) return;
 
+    // Optimistic update
+    const updatedCreditCards = creditCards.filter(card => card.id !== cardToDelete.id);
+    onUpdate(updatedCreditCards);
+
     try {
       const response = await fetch(`/api/credit-cards/${cardToDelete.id}`, {
         method: 'DELETE',
@@ -131,10 +159,12 @@ export default function CreditCardList({ creditCards, onUpdate, disabled = false
         throw new Error(errorMessage || 'Failed to delete credit card');
       }
       toast.success('Credit card deleted');
+      if (onUpdateSummary) onUpdateSummary();
       setDeleteDialogOpen(false);
       setCardToDelete(null);
-      onUpdate();
     } catch (error) {
+      // Revert on error
+      onUpdate(creditCards);
       console.error('Error deleting credit card:', error);
       // Error toast already shown by handleApiError
     }
@@ -169,12 +199,28 @@ export default function CreditCardList({ creditCards, onUpdate, disabled = false
   };
 
   const saveInlineAvailable = async (cardId: number) => {
+    const newAvailableCredit = parseFloat(editingAvailableValue) || 0;
+    const card = creditCards.find(c => c.id === cardId);
+    if (!card) return;
+    
+    const newCurrentBalance = card.credit_limit - newAvailableCredit;
+    
+    // Optimistic update
+    const updatedCreditCards = creditCards.map(c => 
+      c.id === cardId 
+        ? { ...c, available_credit: newAvailableCredit, current_balance: newCurrentBalance }
+        : c
+    );
+    onUpdate(updatedCreditCards);
+    setEditingAvailableId(null);
+    setEditingAvailableValue('');
+
     try {
       const response = await fetch(`/api/credit-cards/${cardId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          available_credit: parseFloat(editingAvailableValue) || 0,
+          available_credit: newAvailableCredit,
         }),
       });
 
@@ -184,10 +230,12 @@ export default function CreditCardList({ creditCards, onUpdate, disabled = false
       }
 
       toast.success('Available credit updated');
-      setEditingAvailableId(null);
-      setEditingAvailableValue('');
-      onUpdate();
+      if (onUpdateSummary) onUpdateSummary();
     } catch (error) {
+      // Revert on error
+      onUpdate(creditCards);
+      setEditingAvailableId(cardId);
+      setEditingAvailableValue(newAvailableCredit.toString());
       console.error('Error updating available credit:', error);
       // Error toast already shown by handleApiError
     }
@@ -298,8 +346,19 @@ export default function CreditCardList({ creditCards, onUpdate, disabled = false
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit {editingCard?.name}</DialogTitle>
+            <DialogDescription>
+              Update the credit card limit and available credit.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 pt-4">
+          <div 
+            className="space-y-4 pt-4"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleUpdateCard();
+              }
+            }}
+          >
             <div>
               <Label htmlFor="credit-limit">Credit Limit</Label>
               <Input
@@ -355,8 +414,21 @@ export default function CreditCardList({ creditCards, onUpdate, disabled = false
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Credit Card</DialogTitle>
+            <DialogDescription>
+              Add a new credit card to track your balances.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 pt-4">
+          <div 
+            className="space-y-4 pt-4"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (cardName.trim()) {
+                  handleAddCard();
+                }
+              }
+            }}
+          >
             <div>
               <Label htmlFor="card-name">Card Name</Label>
               <Input

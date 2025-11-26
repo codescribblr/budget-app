@@ -277,19 +277,19 @@ export function getPendingCheckById(id: number): PendingCheck | undefined {
   return db.prepare('SELECT * FROM pending_checks WHERE id = ?').get(id) as PendingCheck | undefined;
 }
 
-export function createPendingCheck(data: { description: string; amount: number }): PendingCheck {
+export function createPendingCheck(data: { description: string; amount: number; type?: 'expense' | 'income' }): PendingCheck {
   const stmt = db.prepare(`
-    INSERT INTO pending_checks (description, amount)
-    VALUES (?, ?)
+    INSERT INTO pending_checks (description, amount, type)
+    VALUES (?, ?, ?)
   `);
 
-  const result = stmt.run(data.description, data.amount);
+  const result = stmt.run(data.description, data.amount, data.type || 'expense');
   return getPendingCheckById(result.lastInsertRowid as number)!;
 }
 
 export function updatePendingCheck(
   id: number,
-  data: Partial<{ description: string; amount: number }>
+  data: Partial<{ description: string; amount: number; type: 'expense' | 'income' }>
 ): PendingCheck | undefined {
   const updates: string[] = [];
   const values: any[] = [];
@@ -301,6 +301,10 @@ export function updatePendingCheck(
   if (data.amount !== undefined) {
     updates.push('amount = ?');
     values.push(data.amount);
+  }
+  if (data.type !== undefined) {
+    updates.push('type = ?');
+    values.push(data.type);
   }
 
   if (updates.length === 0) return getPendingCheckById(id);
@@ -515,14 +519,20 @@ export function getDashboardSummary(): DashboardSummary {
     .prepare('SELECT COALESCE(SUM(credit_limit - available_credit), 0) as total FROM credit_cards WHERE include_in_totals = 1')
     .get() as { total: number };
 
-  const totalPendingChecks = db
-    .prepare('SELECT COALESCE(SUM(amount), 0) as total FROM pending_checks')
-    .get() as { total: number };
+  // Calculate pending checks total: expenses subtract, income adds
+  // Income is positive (adds to available funds), expense is negative (subtracts from available funds)
+  const pendingChecks = db.prepare('SELECT amount, type FROM pending_checks').all() as Array<{ amount: number; type: 'expense' | 'income' }>;
+  const totalPendingChecks = {
+    total: pendingChecks.reduce((sum, pc) => {
+      return sum + (pc.type === 'income' ? pc.amount : -pc.amount);
+    }, 0)
+  };
 
+  // Add totalPendingChecks (income increases savings, expenses decrease savings)
   const currentSavings =
     totalMonies.total -
     totalEnvelopes.total -
-    totalCreditCardBalances.total -
+    totalCreditCardBalances.total +
     totalPendingChecks.total;
 
   return {

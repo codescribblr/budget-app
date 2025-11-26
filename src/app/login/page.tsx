@@ -147,7 +147,7 @@ function LoginForm() {
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 relative">
             {error && (
               <div className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
                 {error}
@@ -165,6 +165,7 @@ function LoginForm() {
                 required
                 autoComplete="email"
                 disabled={loading}
+                tabIndex={1}
               />
             </div>
             
@@ -175,6 +176,8 @@ function LoginForm() {
                   type="button"
                   onClick={handleForgotPasswordClick}
                   className="text-xs text-primary hover:underline"
+                  aria-label="Forgot password"
+                  tabIndex={4}
                 >
                   Forgot password?
                 </button>
@@ -188,6 +191,7 @@ function LoginForm() {
                 required
                 autoComplete="current-password"
                 disabled={loading}
+                tabIndex={2}
               />
             </div>
           </CardContent>
@@ -197,6 +201,7 @@ function LoginForm() {
               type="submit" 
               className="w-full" 
               disabled={loading}
+              tabIndex={3}
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>

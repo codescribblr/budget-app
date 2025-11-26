@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -53,7 +53,8 @@ import { CSS } from '@dnd-kit/utilities';
 interface CategoryListProps {
   categories: Category[];
   summary: DashboardSummary | null;
-  onUpdate: () => void;
+  onUpdate: (updatedCategories: Category[]) => void;
+  onUpdateSummary?: () => void;
   disabled?: boolean;
 }
 
@@ -249,7 +250,7 @@ function SortableRow({
   );
 }
 
-export default function CategoryList({ categories, summary, onUpdate, disabled = false }: CategoryListProps) {
+export default function CategoryList({ categories, summary, onUpdate, onUpdateSummary, disabled = false }: CategoryListProps) {
   // Feature flags
   const categoryTypesEnabled = useFeature('category_types');
   const prioritySystemEnabled = useFeature('priority_system');
@@ -333,6 +334,27 @@ export default function CategoryList({ categories, summary, onUpdate, disabled =
   const handleUpdateCategory = async () => {
     if (!editingCategory) return;
 
+    // Optimistic update
+    const updatedCategory: Category = {
+      ...editingCategory,
+      name: newName,
+      monthly_amount: parseFloat(newMonthlyAmount) || 0,
+      current_balance: parseFloat(newBalance),
+      notes: newNotes || null,
+      is_system: newIsSystem,
+      category_type: newCategoryType,
+      priority: newPriority,
+      monthly_target: parseFloat(newMonthlyTarget) || null,
+      annual_target: parseFloat(newAnnualTarget) || null,
+      target_balance: parseFloat(newTargetBalance) || null,
+    };
+    const updatedCategories = categories.map(cat => 
+      cat.id === editingCategory.id ? updatedCategory : cat
+    );
+    onUpdate(updatedCategories);
+    setIsEditDialogOpen(false);
+    resetFormFields();
+
     try {
       const response = await fetch(`/api/categories/${editingCategory.id}`, {
         method: 'PATCH',
@@ -356,10 +378,22 @@ export default function CategoryList({ categories, summary, onUpdate, disabled =
         throw new Error(errorMessage || 'Failed to update category');
       }
 
-      setIsEditDialogOpen(false);
-      resetFormFields();
-      onUpdate();
+      if (onUpdateSummary) onUpdateSummary();
     } catch (error) {
+      // Revert on error
+      onUpdate(categories);
+      setIsEditDialogOpen(true);
+      setEditingCategory(editingCategory);
+      setNewName(newName);
+      setNewMonthlyAmount(newMonthlyAmount);
+      setNewBalance(newBalance);
+      setNewNotes(newNotes);
+      setNewIsSystem(newIsSystem);
+      setNewCategoryType(newCategoryType);
+      setNewPriority(newPriority);
+      setNewMonthlyTarget(newMonthlyTarget);
+      setNewAnnualTarget(newAnnualTarget);
+      setNewTargetBalance(newTargetBalance);
       console.error('Error updating category:', error);
       // Error toast already shown by handleApiError
     }
@@ -394,9 +428,13 @@ export default function CategoryList({ categories, summary, onUpdate, disabled =
         throw new Error(errorMessage || 'Failed to add category');
       }
 
+      const newCategory = await response.json();
+      const updatedCategories = [...categories, newCategory];
+      onUpdate(updatedCategories);
+      if (onUpdateSummary) onUpdateSummary();
+
       setIsAddDialogOpen(false);
       resetFormFields();
-      onUpdate();
     } catch (error) {
       console.error('Error adding category:', error);
       // Error toast already shown by handleApiError
@@ -429,6 +467,10 @@ export default function CategoryList({ categories, summary, onUpdate, disabled =
   const confirmDeleteCategory = async () => {
     if (!categoryToDelete) return;
 
+    // Optimistic update
+    const updatedCategories = categories.filter(cat => cat.id !== categoryToDelete.id);
+    onUpdate(updatedCategories);
+
     try {
       const response = await fetch(`/api/categories/${categoryToDelete.id}`, {
         method: 'DELETE',
@@ -438,10 +480,12 @@ export default function CategoryList({ categories, summary, onUpdate, disabled =
         throw new Error(errorMessage || 'Failed to delete category');
       }
       toast.success('Category deleted');
+      if (onUpdateSummary) onUpdateSummary();
       setDeleteDialogOpen(false);
       setCategoryToDelete(null);
-      onUpdate();
     } catch (error) {
+      // Revert on error
+      onUpdate(categories);
       console.error('Error deleting category:', error);
       // Error toast already shown by handleApiError
     }
@@ -481,12 +525,22 @@ export default function CategoryList({ categories, summary, onUpdate, disabled =
   };
 
   const saveInlineBalance = async (categoryId: number) => {
+    const newBalance = parseFloat(editingBalanceValue) || 0;
+    
+    // Optimistic update
+    const updatedCategories = categories.map(cat => 
+      cat.id === categoryId ? { ...cat, current_balance: newBalance } : cat
+    );
+    onUpdate(updatedCategories);
+    setEditingBalanceId(null);
+    setEditingBalanceValue('');
+
     try {
       const response = await fetch(`/api/categories/${categoryId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          current_balance: parseFloat(editingBalanceValue) || 0,
+          current_balance: newBalance,
         }),
       });
 
@@ -496,10 +550,12 @@ export default function CategoryList({ categories, summary, onUpdate, disabled =
       }
 
       toast.success('Balance updated');
-      setEditingBalanceId(null);
-      setEditingBalanceValue('');
-      onUpdate();
+      if (onUpdateSummary) onUpdateSummary();
     } catch (error) {
+      // Revert on error
+      onUpdate(categories);
+      setEditingBalanceId(categoryId);
+      setEditingBalanceValue(newBalance.toString());
       console.error('Error updating balance:', error);
       // Error toast already shown by handleApiError
     }
@@ -540,6 +596,13 @@ export default function CategoryList({ categories, summary, onUpdate, disabled =
     try {
       setIsSaving(true);
 
+      // Optimistic update
+      const updatedCategories = reorderedCategories.map((category, index) => ({
+        ...category,
+        sort_order: index,
+      }));
+      onUpdate(updatedCategories);
+
       // Create array of category IDs with new sort_order
       const categoryOrders = reorderedCategories.map((category, index) => ({
         id: category.id,
@@ -560,8 +623,9 @@ export default function CategoryList({ categories, summary, onUpdate, disabled =
       toast.success('Category order saved');
       setIsReorderMode(false);
       setReorderedCategories([]);
-      onUpdate();
     } catch (error) {
+      // Revert on error
+      onUpdate(categories);
       console.error('Error saving category order:', error);
       // Error toast already shown by handleApiError
     } finally {
@@ -708,8 +772,21 @@ export default function CategoryList({ categories, summary, onUpdate, disabled =
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Category</DialogTitle>
+            <DialogDescription>
+              Update the category details and settings.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 pt-4">
+          <div 
+            className="space-y-4 pt-4"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && e.target instanceof HTMLTextAreaElement === false) {
+                e.preventDefault();
+                if (newName.trim()) {
+                  handleUpdateCategory();
+                }
+              }
+            }}
+          >
             <div>
               <label className="text-sm font-medium">Category Name</label>
               <Input
@@ -928,8 +1005,21 @@ export default function CategoryList({ categories, summary, onUpdate, disabled =
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Category</DialogTitle>
+            <DialogDescription>
+              Create a new budget category to track your spending.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 pt-4">
+          <div 
+            className="space-y-4 pt-4"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && e.target instanceof HTMLTextAreaElement === false) {
+                e.preventDefault();
+                if (newName.trim()) {
+                  handleAddCategory();
+                }
+              }
+            }}
+          >
             <div>
               <label className="text-sm font-medium">Category Name</label>
               <Input

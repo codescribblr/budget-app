@@ -126,6 +126,7 @@ export interface PendingCheck {
   id: number;
   description: string;
   amount: number;
+  type: 'expense' | 'income';
   created_at: string;
   updated_at: string;
 }
@@ -233,11 +234,13 @@ export interface UpdateTransactionRequest {
 export interface CreatePendingCheckRequest {
   description: string;
   amount: number;
+  type?: 'expense' | 'income';
 }
 
 export interface UpdatePendingCheckRequest {
   description?: string;
   amount?: number;
+  type?: 'expense' | 'income';
 }
 
 export interface CreateLoanRequest {

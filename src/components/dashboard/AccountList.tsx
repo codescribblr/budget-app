@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,11 +28,12 @@ import { Check, X, MoreVertical, Edit, Trash2 } from 'lucide-react';
 
 interface AccountListProps {
   accounts: Account[];
-  onUpdate: () => void;
+  onUpdate: (updatedAccounts: Account[]) => void;
+  onUpdateSummary?: () => void;
   disabled?: boolean;
 }
 
-export default function AccountList({ accounts, onUpdate, disabled = false }: AccountListProps) {
+export default function AccountList({ accounts, onUpdate, onUpdateSummary, disabled = false }: AccountListProps) {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [accountName, setAccountName] = useState('');
   const [newBalance, setNewBalance] = useState('');
@@ -49,8 +50,24 @@ export default function AccountList({ accounts, onUpdate, disabled = false }: Ac
   const handleUpdateAccount = async () => {
     if (!editingAccount) return;
 
+    // Optimistic update
+    const updatedAccount: Account = {
+      ...editingAccount,
+      balance: parseFloat(newBalance),
+      include_in_totals: includeInTotals,
+    };
+    const updatedAccounts = accounts.map(acc => 
+      acc.id === editingAccount.id ? updatedAccount : acc
+    );
+    onUpdate(updatedAccounts);
+    setIsEditDialogOpen(false);
+    setEditingAccount(null);
+    setAccountName('');
+    setNewBalance('');
+    setIncludeInTotals(true);
+
     try {
-      await fetch(`/api/accounts/${editingAccount.id}`, {
+      const response = await fetch(`/api/accounts/${editingAccount.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -59,14 +76,16 @@ export default function AccountList({ accounts, onUpdate, disabled = false }: Ac
         }),
       });
 
-      setIsEditDialogOpen(false);
-      setEditingAccount(null);
-      setAccountName('');
-      setNewBalance('');
-      setIncludeInTotals(true);
-      onUpdate();
+      if (!response.ok) {
+        throw new Error('Failed to update account');
+      }
+
+      if (onUpdateSummary) onUpdateSummary();
     } catch (error) {
+      // Revert on error
+      onUpdate(accounts);
       console.error('Error updating account:', error);
+      toast.error('Failed to update account');
     }
   };
 
@@ -77,7 +96,7 @@ export default function AccountList({ accounts, onUpdate, disabled = false }: Ac
     }
 
     try {
-      await fetch('/api/accounts', {
+      const response = await fetch('/api/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -87,13 +106,22 @@ export default function AccountList({ accounts, onUpdate, disabled = false }: Ac
         }),
       });
 
+      if (!response.ok) {
+        throw new Error('Failed to add account');
+      }
+
+      const newAccount = await response.json();
+      const updatedAccounts = [...accounts, newAccount];
+      onUpdate(updatedAccounts);
+      if (onUpdateSummary) onUpdateSummary();
+
       setIsAddDialogOpen(false);
       setAccountName('');
       setNewBalance('');
       setIncludeInTotals(true);
-      onUpdate();
     } catch (error) {
       console.error('Error adding account:', error);
+      toast.error('Failed to add account');
     }
   };
 
@@ -105,6 +133,10 @@ export default function AccountList({ accounts, onUpdate, disabled = false }: Ac
   const confirmDeleteAccount = async () => {
     if (!accountToDelete) return;
 
+    // Optimistic update
+    const updatedAccounts = accounts.filter(acc => acc.id !== accountToDelete.id);
+    onUpdate(updatedAccounts);
+
     try {
       const response = await fetch(`/api/accounts/${accountToDelete.id}`, {
         method: 'DELETE',
@@ -114,10 +146,12 @@ export default function AccountList({ accounts, onUpdate, disabled = false }: Ac
         throw new Error(errorMessage || 'Failed to delete account');
       }
       toast.success('Account deleted');
+      if (onUpdateSummary) onUpdateSummary();
       setDeleteDialogOpen(false);
       setAccountToDelete(null);
-      onUpdate();
     } catch (error) {
+      // Revert on error
+      onUpdate(accounts);
       console.error('Error deleting account:', error);
       // Error toast already shown above
     }
@@ -150,12 +184,22 @@ export default function AccountList({ accounts, onUpdate, disabled = false }: Ac
   };
 
   const saveInlineBalance = async (accountId: number) => {
+    const newBalance = parseFloat(editingBalanceValue) || 0;
+    
+    // Optimistic update
+    const updatedAccounts = accounts.map(acc => 
+      acc.id === accountId ? { ...acc, balance: newBalance } : acc
+    );
+    onUpdate(updatedAccounts);
+    setEditingBalanceId(null);
+    setEditingBalanceValue('');
+
     try {
       const response = await fetch(`/api/accounts/${accountId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          balance: parseFloat(editingBalanceValue) || 0,
+          balance: newBalance,
         }),
       });
 
@@ -165,10 +209,12 @@ export default function AccountList({ accounts, onUpdate, disabled = false }: Ac
       }
 
       toast.success('Balance updated');
-      setEditingBalanceId(null);
-      setEditingBalanceValue('');
-      onUpdate();
+      if (onUpdateSummary) onUpdateSummary();
     } catch (error) {
+      // Revert on error
+      onUpdate(accounts);
+      setEditingBalanceId(accountId);
+      setEditingBalanceValue(newBalance.toString());
       console.error('Error updating balance:', error);
       // Error toast already shown above
     }
@@ -274,8 +320,19 @@ export default function AccountList({ accounts, onUpdate, disabled = false }: Ac
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit {editingAccount?.name}</DialogTitle>
+            <DialogDescription>
+              Update the account balance and settings.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 pt-4">
+          <div 
+            className="space-y-4 pt-4"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleUpdateAccount();
+              }
+            }}
+          >
             <div>
               <Label htmlFor="balance">Balance</Label>
               <Input
@@ -314,8 +371,21 @@ export default function AccountList({ accounts, onUpdate, disabled = false }: Ac
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Account</DialogTitle>
+            <DialogDescription>
+              Add a new bank account to track your finances.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 pt-4">
+          <div 
+            className="space-y-4 pt-4"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (accountName.trim()) {
+                  handleAddAccount();
+                }
+              }
+            }}
+          >
             <div>
               <Label htmlFor="account-name">Account Name</Label>
               <Input

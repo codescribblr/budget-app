@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useFeature } from '@/contexts/FeatureContext';
 import {
   DropdownMenu,
@@ -33,7 +33,7 @@ import { handleApiError } from '@/lib/api-error-handler';
 
 interface LoanListProps {
   loans: Loan[];
-  onUpdate: () => void;
+  onUpdate: (updatedLoans: Loan[]) => void;
   disabled?: boolean;
 }
 
@@ -74,6 +74,27 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
   const handleUpdateLoan = async () => {
     if (!editingLoan) return;
 
+    // Optimistic update
+    const updatedLoan: Loan = {
+      ...editingLoan,
+      name: loanName,
+      balance: parseFloat(balance),
+      interest_rate: interestRate ? parseFloat(interestRate) : null,
+      minimum_payment: minimumPayment ? parseFloat(minimumPayment) : null,
+      payment_due_date: paymentDueDate ? parseInt(paymentDueDate) : null,
+      open_date: openDate ? formatLocalDate(openDate) : null,
+      starting_balance: startingBalance ? parseFloat(startingBalance) : null,
+      institution: institution || null,
+      include_in_net_worth: includeInNetWorth,
+    };
+    const updatedLoans = loans.map(loan => 
+      loan.id === editingLoan.id ? updatedLoan : loan
+    );
+    onUpdate(updatedLoans);
+    setIsEditDialogOpen(false);
+    setEditingLoan(null);
+    resetForm();
+
     try {
       const response = await fetch(`/api/loans/${editingLoan.id}`, {
         method: 'PATCH',
@@ -96,12 +117,10 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
         throw new Error(errorMessage || 'Failed to update loan');
       }
 
-      setIsEditDialogOpen(false);
-      setEditingLoan(null);
-      resetForm();
       toast.success('Loan updated');
-      onUpdate();
     } catch (error) {
+      // Revert on error
+      onUpdate(loans);
       console.error('Error updating loan:', error);
       // Error toast already shown by handleApiError
     }
@@ -135,10 +154,13 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
         throw new Error(errorMessage || 'Failed to add loan');
       }
 
+      const newLoan = await response.json();
+      const updatedLoans = [...loans, newLoan];
+      onUpdate(updatedLoans);
+
       setIsAddDialogOpen(false);
       resetForm();
       toast.success('Loan added');
-      onUpdate();
     } catch (error) {
       console.error('Error adding loan:', error);
       // Error toast already shown by handleApiError
@@ -153,6 +175,10 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
   const confirmDeleteLoan = async () => {
     if (!loanToDelete) return;
 
+    // Optimistic update
+    const updatedLoans = loans.filter(loan => loan.id !== loanToDelete.id);
+    onUpdate(updatedLoans);
+
     try {
       const response = await fetch(`/api/loans/${loanToDelete.id}`, {
         method: 'DELETE',
@@ -164,8 +190,9 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
       toast.success('Loan deleted');
       setDeleteDialogOpen(false);
       setLoanToDelete(null);
-      onUpdate();
     } catch (error) {
+      // Revert on error
+      onUpdate(loans);
       console.error('Error deleting loan:', error);
       // Error toast already shown by handleApiError
     }
@@ -203,12 +230,22 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
   };
 
   const saveInlineBalance = async (loanId: number) => {
+    const newBalance = parseFloat(editingBalanceValue) || 0;
+    
+    // Optimistic update
+    const updatedLoans = loans.map(loan => 
+      loan.id === loanId ? { ...loan, balance: newBalance } : loan
+    );
+    onUpdate(updatedLoans);
+    setEditingBalanceId(null);
+    setEditingBalanceValue('');
+
     try {
       const response = await fetch(`/api/loans/${loanId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          balance: parseFloat(editingBalanceValue) || 0,
+          balance: newBalance,
         }),
       });
 
@@ -218,10 +255,11 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
       }
 
       toast.success('Balance updated');
-      setEditingBalanceId(null);
-      setEditingBalanceValue('');
-      onUpdate();
     } catch (error) {
+      // Revert on error
+      onUpdate(loans);
+      setEditingBalanceId(loanId);
+      setEditingBalanceValue(newBalance.toString());
       console.error('Error updating balance:', error);
       // Error toast already shown by handleApiError
     }
@@ -346,8 +384,21 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Loan</DialogTitle>
+            <DialogDescription>
+              Update the loan details and balance.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div 
+            className="space-y-4"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (loanName.trim()) {
+                  handleUpdateLoan();
+                }
+              }
+            }}
+          >
             <div>
               <Label htmlFor="edit-loan-name">Name *</Label>
               <Input
@@ -456,8 +507,21 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Add Loan</DialogTitle>
+            <DialogDescription>
+              Add a new loan to track your debt.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div 
+            className="space-y-4"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (loanName.trim()) {
+                  handleAddLoan();
+                }
+              }
+            }}
+          >
             <div>
               <Label htmlFor="add-loan-name">Name *</Label>
               <Input
