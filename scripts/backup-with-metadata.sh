@@ -78,9 +78,17 @@ if [ -n "$PENDING_MIGRATIONS" ]; then
 fi
 echo ""
 
-# Find the correct pg_dump binary (prefer PostgreSQL 15+)
+# Find the correct pg_dump binary (prefer PostgreSQL 17, then 16, then 15+)
 PG_DUMP_CMD="pg_dump"
-if command -v pg_dump-15 >/dev/null 2>&1; then
+if command -v pg_dump-17 >/dev/null 2>&1; then
+  PG_DUMP_CMD="pg_dump-17"
+elif [ -f "/usr/lib/postgresql/17/bin/pg_dump" ]; then
+  PG_DUMP_CMD="/usr/lib/postgresql/17/bin/pg_dump"
+elif command -v pg_dump-16 >/dev/null 2>&1; then
+  PG_DUMP_CMD="pg_dump-16"
+elif [ -f "/usr/lib/postgresql/16/bin/pg_dump" ]; then
+  PG_DUMP_CMD="/usr/lib/postgresql/16/bin/pg_dump"
+elif command -v pg_dump-15 >/dev/null 2>&1; then
   PG_DUMP_CMD="pg_dump-15"
 elif [ -f "/usr/lib/postgresql/15/bin/pg_dump" ]; then
   PG_DUMP_CMD="/usr/lib/postgresql/15/bin/pg_dump"

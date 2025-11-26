@@ -18,20 +18,20 @@ jobs:
         run: |
           sudo apt-get update
           # Remove any existing PostgreSQL client to avoid conflicts
-          sudo apt-get remove -y postgresql-client postgresql-client-common postgresql-16 postgresql-client-16 2>/dev/null || true
-          # Install PostgreSQL 15 client (matches Supabase server version)
+          sudo apt-get remove -y postgresql-client postgresql-client-common postgresql-15 postgresql-client-15 postgresql-16 postgresql-client-16 2>/dev/null || true
+          # Install PostgreSQL 17 client (matches Supabase server version 17.6)
           sudo apt-get install -y wget ca-certificates lsb-release gnupg
           # Add PostgreSQL official APT repository with modern GPG key handling
           sudo mkdir -p /etc/apt/keyrings
           wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg
           echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
-          sudo apt-get install -y postgresql-client-15
-          # Ensure PostgreSQL 15 binaries are in PATH
-          echo "/usr/lib/postgresql/15/bin" >> $GITHUB_PATH
+          sudo apt-get install -y postgresql-client-17
+          # Ensure PostgreSQL 17 binaries are in PATH
+          echo "/usr/lib/postgresql/17/bin" >> $GITHUB_PATH
           # Verify pg_dump is available and show version
-          if [ -f "/usr/lib/postgresql/15/bin/pg_dump" ]; then
-            /usr/lib/postgresql/15/bin/pg_dump --version
+          if [ -f "/usr/lib/postgresql/17/bin/pg_dump" ]; then
+            /usr/lib/postgresql/17/bin/pg_dump --version
           elif command -v pg_dump >/dev/null 2>&1; then
             pg_dump --version
           else
