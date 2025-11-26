@@ -77,6 +77,8 @@ async function processCSVData(
       descriptionColumn: analysis.descriptionColumn,
       debitColumn: analysis.debitColumn,
       creditColumn: analysis.creditColumn,
+      transactionTypeColumn: null,
+      amountSignConvention: 'positive_is_expense',
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
     };
@@ -114,6 +116,27 @@ async function processCSVData(
 }
 
 /**
+ * Determine transaction type from column value or fallback to amount sign
+ */
+function determineTransactionTypeFromColumn(
+  transactionTypeValue: string | null,
+  fallbackAmount: number
+): 'income' | 'expense' {
+  if (transactionTypeValue) {
+    const normalized = transactionTypeValue.toUpperCase().trim();
+    if (['INCOME', 'CREDIT', 'CR', 'DEPOSIT', '+'].includes(normalized)) {
+      return 'income';
+    }
+    if (['EXPENSE', 'DEBIT', 'DB', 'WITHDRAWAL', '-'].includes(normalized)) {
+      return 'expense';
+    }
+  }
+  
+  // Fallback to amount sign if column value unclear
+  return fallbackAmount >= 0 ? 'expense' : 'income';
+}
+
+/**
  * Parse a single row using column mapping
  */
 function parseRowWithMapping(
@@ -126,22 +149,74 @@ function parseRowWithMapping(
   const descriptionValue = mapping.descriptionColumn !== null ? row[mapping.descriptionColumn] : null;
   
   let amount = 0;
+  let transaction_type: 'income' | 'expense' = 'expense';
 
-  // Handle amount extraction (can be from amount column, or debit/credit columns)
-  if (mapping.amountColumn !== null) {
+  // Handle different amount conventions
+  const convention = mapping.amountSignConvention || 'positive_is_expense';
+
+  if (convention === 'separate_debit_credit') {
+    // Handle separate debit/credit columns
+    if (mapping.debitColumn === null || mapping.creditColumn === null) {
+      console.warn('Both debit and credit columns must be mapped for separate_debit_credit convention');
+      return null;
+    }
+
+    const debitValue = parseAmount(row[mapping.debitColumn] || '0');
+    const creditValue = parseAmount(row[mapping.creditColumn] || '0');
+
+    if (debitValue > 0 && creditValue > 0) {
+      console.warn(`Row has both debit and credit values, using debit. Row: ${row.join(',')}`);
+      amount = debitValue;
+      transaction_type = 'expense';
+    } else if (debitValue > 0) {
+      amount = debitValue;
+      transaction_type = 'expense';
+    } else if (creditValue > 0) {
+      amount = creditValue;
+      transaction_type = 'income';
+    } else {
+      // Both are zero or empty, skip this row
+      return null;
+    }
+  } else if (convention === 'separate_column') {
+    // Use transaction type column
+    const transactionTypeValue = mapping.transactionTypeColumn !== null
+      ? row[mapping.transactionTypeColumn]?.trim() || null
+      : null;
+
+    // Get amount from amountColumn
+    if (mapping.amountColumn === null) {
+      console.warn('Amount column must be mapped for separate_column convention');
+      return null;
+    }
     amount = parseAmount(row[mapping.amountColumn]);
-  } else if (mapping.debitColumn !== null && mapping.creditColumn !== null) {
-    const debit = parseAmount(row[mapping.debitColumn] || '0');
-    const credit = parseAmount(row[mapping.creditColumn] || '0');
-    amount = debit || credit; // Use whichever is non-zero
-  } else if (mapping.debitColumn !== null) {
-    amount = parseAmount(row[mapping.debitColumn]);
-  } else if (mapping.creditColumn !== null) {
-    amount = parseAmount(row[mapping.creditColumn]);
+
+    transaction_type = determineTransactionTypeFromColumn(transactionTypeValue, amount);
+    amount = Math.abs(amount); // Normalize to positive
+  } else {
+    // Use amount column with sign convention
+    if (mapping.amountColumn !== null) {
+      amount = parseAmount(row[mapping.amountColumn]);
+    } else if (mapping.debitColumn !== null && mapping.creditColumn !== null) {
+      const debit = parseAmount(row[mapping.debitColumn] || '0');
+      const credit = parseAmount(row[mapping.creditColumn] || '0');
+      amount = debit || credit; // Use whichever is non-zero
+    } else if (mapping.debitColumn !== null) {
+      amount = parseAmount(row[mapping.debitColumn]);
+    } else if (mapping.creditColumn !== null) {
+      amount = parseAmount(row[mapping.creditColumn]);
+    }
+
+    if (convention === 'positive_is_expense') {
+      transaction_type = amount >= 0 ? 'expense' : 'income';
+    } else { // positive_is_income
+      transaction_type = amount >= 0 ? 'income' : 'expense';
+    }
+    amount = Math.abs(amount); // Normalize to positive
   }
 
   // Validate required fields
-  if (!dateValue || !descriptionValue || !amount || isNaN(amount)) {
+  if (!dateValue || !descriptionValue || !amount || isNaN(amount) || amount === 0) {
     return null;
   }
 
@@ -162,14 +237,15 @@ function parseRowWithMapping(
   const merchant = extractMerchant(description);
   const originalData = JSON.stringify(row);
   // Use absolute amount in hash for consistency (we store abs amount)
-  const hash = generateTransactionHash(date, description, Math.abs(amount), originalData);
+  const hash = generateTransactionHash(date, description, amount, originalData);
 
   return {
     id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     date,
     description,
     merchant,
-    amount: Math.abs(amount),
+    amount,
+    transaction_type,
     originalData,
     hash,
     isDuplicate: false,

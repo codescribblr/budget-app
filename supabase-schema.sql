@@ -68,6 +68,7 @@ CREATE TABLE transactions (
   date TEXT NOT NULL,
   description TEXT NOT NULL,
   total_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  transaction_type TEXT NOT NULL DEFAULT 'expense' CHECK (transaction_type IN ('income', 'expense')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -64,7 +64,8 @@ export interface Transaction {
   id: number;
   date: string;
   description: string;
-  total_amount: number;
+  total_amount: number; // Always positive
+  transaction_type: 'income' | 'expense'; // NEW FIELD
   merchant_group_id?: number | null;
   account_id?: number | null;
   credit_card_id?: number | null;
@@ -210,24 +211,26 @@ export interface UpdateCreditCardRequest {
 export interface CreateTransactionRequest {
   date: string;
   description: string;
+  transaction_type?: 'income' | 'expense'; // Optional, defaults to 'expense'
   is_historical?: boolean;
   account_id?: number | null;
   credit_card_id?: number | null;
   splits: {
     category_id: number;
-    amount: number;
+    amount: number; // Always positive
   }[];
 }
 
 export interface UpdateTransactionRequest {
   date?: string;
   description?: string;
+  transaction_type?: 'income' | 'expense'; // NEW FIELD
   merchant_group_id?: number | null;
   account_id?: number | null;
   credit_card_id?: number | null;
   splits?: {
     category_id: number;
-    amount: number;
+    amount: number; // Always positive
   }[];
 }
 

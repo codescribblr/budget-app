@@ -3,7 +3,8 @@ export interface ParsedTransaction {
   date: string;
   description: string;
   merchant: string;
-  amount: number;
+  amount: number; // Always positive
+  transaction_type: 'income' | 'expense'; // NEW FIELD
   originalData: string; // JSON string of original CSV row
   hash: string; // Unique hash for deduplication
   suggestedCategory?: number; // Category ID

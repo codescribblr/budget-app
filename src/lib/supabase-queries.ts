@@ -1019,6 +1019,7 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
     date: transaction.date,
     description: transaction.description,
     total_amount: transaction.total_amount,
+    transaction_type: transaction.transaction_type || 'expense',
     merchant_group_id: transaction.merchant_group_id,
     account_id: transaction.account_id,
     credit_card_id: transaction.credit_card_id,
@@ -1105,6 +1106,7 @@ export async function searchTransactions(
     date: transaction.date,
     description: transaction.description,
     total_amount: transaction.total_amount,
+    transaction_type: transaction.transaction_type || 'expense',
     merchant_group_id: transaction.merchant_group_id,
     account_id: transaction.account_id,
     credit_card_id: transaction.credit_card_id,
@@ -1173,6 +1175,7 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
     date: transaction.date,
     description: transaction.description,
     total_amount: transaction.total_amount,
+    transaction_type: transaction.transaction_type || 'expense',
     merchant_group_id: transaction.merchant_group_id,
     account_id: transaction.account_id,
     credit_card_id: transaction.credit_card_id,
@@ -1189,6 +1192,7 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
 export async function createTransaction(data: {
   date: string;
   description: string;
+  transaction_type?: 'income' | 'expense';
   is_historical?: boolean;
   account_id?: number | null;
   credit_card_id?: number | null;
@@ -1206,6 +1210,7 @@ export async function createTransaction(data: {
 
   const totalAmount = data.splits.reduce((sum, split) => sum + split.amount, 0);
   const isHistorical = data.is_historical || false;
+  const transactionType = data.transaction_type || 'expense';
 
   // Auto-assign merchant group first
   let merchantGroupId: number | null = null;
@@ -1227,6 +1232,7 @@ export async function createTransaction(data: {
       date: data.date,
       description: data.description,
       total_amount: totalAmount,
+      transaction_type: transactionType,
       merchant_group_id: merchantGroupId,
       is_historical: isHistorical,
       account_id: data.account_id || null, // This is bank account, not budget account
@@ -1259,10 +1265,15 @@ export async function createTransaction(data: {
         .single();
 
       if (category && !category.is_system) {
+        // Update category balance based on transaction type
+        const balanceChange = transactionType === 'income' 
+          ? split.amount  // Income adds to balance
+          : -split.amount; // Expense subtracts from balance
+
         const { error: balanceError } = await supabase
           .from('categories')
           .update({
-            current_balance: Number(category.current_balance) - split.amount,
+            current_balance: Number(category.current_balance) + balanceChange,
             updated_at: new Date().toISOString(),
           })
           .eq('id', split.category_id);
@@ -1283,6 +1294,7 @@ export async function updateTransaction(
   data: {
     date?: string;
     description?: string;
+    transaction_type?: 'income' | 'expense';
     merchant_group_id?: number | null;
     account_id?: number | null;
     credit_card_id?: number | null;
@@ -1304,7 +1316,8 @@ export async function updateTransaction(
     throw new Error('Transaction cannot be linked to both an account and a credit card');
   }
 
-  // Reverse old splits (add back to category balances)
+  // Reverse old splits (using old transaction_type)
+  const oldTransactionType = existingTransaction.transaction_type || 'expense';
   for (const split of existingTransaction.splits) {
     const { data: category } = await supabase
       .from('categories')
@@ -1313,10 +1326,15 @@ export async function updateTransaction(
       .single();
 
     if (category && !category.is_system) {
+      // Reverse the old transaction's impact
+      const oldBalanceChange = oldTransactionType === 'income'
+        ? -split.amount  // Reverse income: subtract
+        : split.amount;   // Reverse expense: add back
+
       await supabase
         .from('categories')
         .update({
-          current_balance: Number(category.current_balance) + Number(split.amount),
+          current_balance: Number(category.current_balance) + oldBalanceChange,
           updated_at: new Date().toISOString(),
         })
         .eq('id', split.category_id);
@@ -1327,6 +1345,7 @@ export async function updateTransaction(
   const newDate = data.date ?? existingTransaction.date;
   const newDescription = data.description ?? existingTransaction.description;
   const newMerchantGroupId = data.merchant_group_id !== undefined ? data.merchant_group_id : existingTransaction.merchant_group_id;
+  const newTransactionType = data.transaction_type ?? oldTransactionType;
   const newSplits = data.splits ?? existingTransaction.splits;
   const newTotalAmount = newSplits.reduce((sum, split) => sum + split.amount, 0);
 
@@ -1336,6 +1355,7 @@ export async function updateTransaction(
     .update({
       date: newDate,
       description: newDescription,
+      transaction_type: newTransactionType,
       merchant_group_id: newMerchantGroupId,
       account_id: newAccountId || null,
       credit_card_id: newCreditCardId || null,
@@ -1354,7 +1374,7 @@ export async function updateTransaction(
 
   if (deleteSplitsError) throw deleteSplitsError;
 
-  // Insert new splits and update category balances
+  // Insert new splits and update category balances (using new transaction_type)
   for (const split of newSplits) {
     // Insert split
     const { error: splitError } = await supabase
@@ -1375,10 +1395,15 @@ export async function updateTransaction(
       .single();
 
     if (category && !category.is_system) {
+      // Update category balance based on transaction type
+      const newBalanceChange = newTransactionType === 'income'
+        ? split.amount   // Income adds
+        : -split.amount;  // Expense subtracts
+
       const { error: balanceError } = await supabase
         .from('categories')
         .update({
-          current_balance: Number(category.current_balance) - split.amount,
+          current_balance: Number(category.current_balance) + newBalanceChange,
           updated_at: new Date().toISOString(),
         })
         .eq('id', split.category_id);
@@ -1398,7 +1423,8 @@ export async function deleteTransaction(id: number): Promise<void> {
   const transaction = await getTransactionById(id);
   if (!transaction) return;
 
-  // Reverse splits (add back to category balances)
+  // Reverse splits (reverse the transaction's impact on category balances)
+  const transactionType = transaction.transaction_type || 'expense';
   for (const split of transaction.splits) {
     const { data: category } = await supabase
       .from('categories')
@@ -1407,10 +1433,15 @@ export async function deleteTransaction(id: number): Promise<void> {
       .single();
 
     if (category && !category.is_system) {
+      // Reverse the transaction's impact based on transaction type
+      const balanceChange = transactionType === 'income'
+        ? -split.amount  // Reverse income: subtract
+        : split.amount;   // Reverse expense: add back
+
       await supabase
         .from('categories')
         .update({
-          current_balance: Number(category.current_balance) + Number(split.amount),
+          current_balance: Number(category.current_balance) + balanceChange,
           updated_at: new Date().toISOString(),
         })
         .eq('id', split.category_id);
@@ -1656,6 +1687,7 @@ export async function importTransactions(transactions: any[], isHistorical: bool
       date: txn.date,
       description: txn.description,
       total_amount: totalAmount,
+      transaction_type: txn.transaction_type || 'expense',
       merchant_group_id: merchantGroupIds[index],
       account_id: txn.account_id || null, // This is the bank account, not budget account
       credit_card_id: txn.credit_card_id || null,
@@ -1675,10 +1707,11 @@ export async function importTransactions(transactions: any[], isHistorical: bool
 
   // ===== STEP 4: Batch insert transaction splits =====
   const splitsData: any[] = [];
-  const categoryBalanceUpdates = new Map<number, number>(); // categoryId -> total amount to subtract
+  const categoryBalanceUpdates = new Map<number, number>(); // categoryId -> net change
 
   validTransactions.forEach((txn, txnIndex) => {
     const transactionId = createdTransactions[txnIndex].id;
+    const transactionType = txn.transaction_type || 'expense';
 
     txn.splits.forEach((split: any) => {
       splitsData.push({
@@ -1689,8 +1722,12 @@ export async function importTransactions(transactions: any[], isHistorical: bool
 
       // Accumulate balance updates (only for non-historical)
       if (!isHistorical) {
+        const balanceChange = transactionType === 'income'
+          ? split.amount
+          : -split.amount;
+        
         const currentTotal = categoryBalanceUpdates.get(split.categoryId) || 0;
-        categoryBalanceUpdates.set(split.categoryId, currentTotal + split.amount);
+        categoryBalanceUpdates.set(split.categoryId, currentTotal + balanceChange);
       }
     });
   });
@@ -1716,8 +1753,8 @@ export async function importTransactions(transactions: any[], isHistorical: bool
     const updatePromises = (categories || [])
       .filter(cat => !cat.is_system)
       .map(cat => {
-        const amountToSubtract = categoryBalanceUpdates.get(cat.id) || 0;
-        const newBalance = Number(cat.current_balance) - amountToSubtract;
+        const netChange = categoryBalanceUpdates.get(cat.id) || 0;
+        const newBalance = Number(cat.current_balance) + netChange;
 
         return supabase
           .from('categories')

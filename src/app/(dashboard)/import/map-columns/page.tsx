@@ -147,6 +147,8 @@ export default function MapColumnsPage() {
       descriptionColumn: findColumnForField('description'),
       debitColumn: findColumnForField('debit'),
       creditColumn: findColumnForField('credit'),
+      transactionTypeColumn: null,
+      amountSignConvention: 'positive_is_expense',
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
     };

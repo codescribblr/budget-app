@@ -28,13 +28,16 @@ export async function parseImageFile(file: File): Promise<ParsedTransaction[]> {
     const originalData = JSON.stringify(txn);
     // Use absolute amount in hash for consistency
     const hash = generateTransactionHash(txn.date, txn.description, Math.abs(txn.amount), originalData);
+    // Default to expense for image-parsed transactions, but check sign
+    const transaction_type: 'income' | 'expense' = txn.amount < 0 ? 'income' : 'expense';
 
     return {
       id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       date: txn.date,
       description: txn.description,
       merchant,
-      amount: txn.amount,
+      amount: Math.abs(txn.amount),
+      transaction_type,
       originalData,
       hash,
       isDuplicate: false,

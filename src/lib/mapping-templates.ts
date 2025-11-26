@@ -9,6 +9,8 @@ export interface ColumnMapping {
   descriptionColumn: number | null;
   debitColumn: number | null;
   creditColumn: number | null;
+  transactionTypeColumn: number | null; // NEW: Column with "INCOME", "EXPENSE", "DEBIT", "CREDIT", etc.
+  amountSignConvention: 'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit'; // NEW
   dateFormat: string | null;
   hasHeaders: boolean;
   skipRows?: number;
@@ -85,6 +87,8 @@ export async function loadTemplate(fingerprint: string): Promise<CSVImportTempla
       descriptionColumn: template.description_column ?? null,
       debitColumn: template.debit_column ?? null,
       creditColumn: template.credit_column ?? null,
+      transactionTypeColumn: template.transaction_type_column ?? null,
+      amountSignConvention: template.amount_sign_convention ?? 'positive_is_expense',
       dateFormat: template.date_format ?? null,
       hasHeaders: template.has_headers ?? true,
       skipRows: template.skip_rows ?? 0,
