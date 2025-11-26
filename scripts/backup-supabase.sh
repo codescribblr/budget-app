@@ -115,11 +115,22 @@ if pg_dump "$SUPABASE_DB_URL" \
   
   # Get file size
   FILE_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+  FILE_SIZE_BYTES=$(stat -f%z "$BACKUP_FILE" 2>/dev/null || stat -c%s "$BACKUP_FILE" 2>/dev/null || echo "0")
+  
+  # Calculate checksums for verification
+  SHA256_CHECKSUM=$(sha256sum "$BACKUP_FILE" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$BACKUP_FILE" 2>/dev/null | cut -d' ' -f1 || echo "")
+  MD5_CHECKSUM=$(md5sum "$BACKUP_FILE" 2>/dev/null | cut -d' ' -f1 || md5 "$BACKUP_FILE" 2>/dev/null | cut -d' ' -f4 || echo "")
   
   echo -e "${GREEN}✅ Backup completed successfully!${NC}"
   echo ""
   echo -e "   📁 File: ${BACKUP_FILE}"
-  echo -e "   📊 Size: ${FILE_SIZE}"
+  echo -e "   📊 Size: ${FILE_SIZE} (${FILE_SIZE_BYTES} bytes)"
+  if [ -n "$SHA256_CHECKSUM" ]; then
+    echo -e "   🔐 SHA256: ${SHA256_CHECKSUM}"
+  fi
+  if [ -n "$MD5_CHECKSUM" ]; then
+    echo -e "   🔐 MD5: ${MD5_CHECKSUM}"
+  fi
   echo ""
   
   # Count number of backups

@@ -141,6 +141,29 @@ if $PG_DUMP_CMD "$SUPABASE_DB_URL" \
   
   # Get file size
   FILE_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+  FILE_SIZE_BYTES=$(stat -f%z "$BACKUP_FILE" 2>/dev/null || stat -c%s "$BACKUP_FILE" 2>/dev/null || echo "0")
+  
+  # Calculate checksums for verification
+  SHA256_CHECKSUM=$(sha256sum "$BACKUP_FILE" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$BACKUP_FILE" 2>/dev/null | cut -d' ' -f1 || echo "")
+  MD5_CHECKSUM=$(md5sum "$BACKUP_FILE" 2>/dev/null | cut -d' ' -f1 || md5 "$BACKUP_FILE" 2>/dev/null | cut -d' ' -f4 || echo "")
+  
+  # Get database statistics for verification
+  TABLE_COUNT=""
+  ROW_COUNT=""
+  if command -v psql >/dev/null 2>&1 && [ -n "$SUPABASE_DB_URL" ]; then
+    # Count tables (excluding system schemas)
+    TABLE_COUNT=$(psql "$SUPABASE_DB_URL" -t -c "
+      SELECT COUNT(*) 
+      FROM information_schema.tables 
+      WHERE table_schema NOT IN ('pg_catalog', 'information_schema', 'auth', 'storage', 'realtime', 'extensions', 'graphql_public', 'pgbouncer', 'pgsodium', 'pgsodium_masks', 'supabase_functions', 'vault')
+    " 2>/dev/null | tr -d ' ' || echo "")
+    
+    # Get approximate row count (sum of table sizes)
+    ROW_COUNT=$(psql "$SUPABASE_DB_URL" -t -c "
+      SELECT COALESCE(SUM(n_live_tup), 0)::bigint
+      FROM pg_stat_user_tables
+    " 2>/dev/null | tr -d ' ' || echo "")
+  fi
   
   # Create metadata JSON
   cat > "$METADATA_FILE" <<EOF
@@ -154,8 +177,14 @@ if $PG_DUMP_CMD "$SUPABASE_DB_URL" \
   "git_ref": "$GIT_REF",
   "run_id": "$RUN_ID",
   "file_size": "$FILE_SIZE",
+  "file_size_bytes": "$FILE_SIZE_BYTES",
+  "sha256_checksum": "$SHA256_CHECKSUM",
+  "md5_checksum": "$MD5_CHECKSUM",
+  "table_count": "$TABLE_COUNT",
+  "row_count": "$ROW_COUNT",
   "pending_migrations": "$PENDING_MIGRATIONS",
-  "backup_type": "pre_migration"
+  "backup_type": "pre_migration",
+  "pg_dump_version": "$($PG_DUMP_CMD --version 2>/dev/null || echo 'unknown')"
 }
 EOF
   
