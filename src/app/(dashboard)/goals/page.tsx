@@ -12,6 +12,7 @@ import { PremiumFeatureGate } from '@/components/subscription/PremiumFeatureGate
 import type { GoalWithDetails } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
+import { handleApiError } from '@/lib/api-error-handler';
 import { Plus, Target, Calendar, TrendingUp } from 'lucide-react';
 import {
   Select,
