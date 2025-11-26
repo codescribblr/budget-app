@@ -119,8 +119,16 @@ export function parseDate(dateStr: string, detectedFormat?: string): DateParseRe
   // Check if this looks like a US date format (MM/dd or M/d with slashes)
   const looksLikeUSDate = /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(trimmed);
 
-  // Try detected format first if provided
-  if (detectedFormat) {
+  // If it looks like a US date and detected format is European, ignore detected format
+  // This prevents saved templates with wrong format from causing issues
+  const isEuropeanFormat = detectedFormat && (
+    detectedFormat.toLowerCase().startsWith('dd/') ||
+    detectedFormat.toLowerCase().startsWith('dd-') ||
+    detectedFormat.toLowerCase().startsWith('dd.')
+  );
+  
+  // Try detected format first if provided (unless it's European format for US-looking dates)
+  if (detectedFormat && !(looksLikeUSDate && isEuropeanFormat)) {
     const formatMap: Record<string, string> = {
       'MM/DD/YYYY': 'MM/dd/yyyy',
       'M/DD/YYYY': 'M/dd/yyyy',
@@ -279,8 +287,21 @@ export function detectDateFormat(values: string[]): string | null {
 
   if (formatScores.size === 0) return null;
 
+  // Check if all dates looked like US dates
+  const allLookedLikeUS = values.every(v => /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(v.trim()));
+  
+  // If all dates look like US dates, filter out European formats
+  const validFormats = allLookedLikeUS
+    ? Array.from(formatScores.entries()).filter(([fmt]) => {
+        const isUSFormat = (US_DATE_FORMATS as readonly string[]).includes(fmt);
+        return isUSFormat;
+      })
+    : Array.from(formatScores.entries());
+  
+  if (validFormats.length === 0) return null;
+
   // Return most common format
-  const sorted = Array.from(formatScores.entries()).sort((a, b) => b[1] - a[1]);
+  const sorted = validFormats.sort((a, b) => b[1] - a[1]);
   return sorted[0][0];
 }
 
