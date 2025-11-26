@@ -38,6 +38,8 @@ export default function MapColumnsPage() {
   const [analysis, setAnalysis] = useState<CSVAnalysisResult | null>(null);
   const [sampleData, setSampleData] = useState<string[][]>([]);
   const [fileName, setFileName] = useState<string>('');
+  const [transactionTypeColumn, setTransactionTypeColumn] = useState<number | null>(null);
+  const [amountSignConvention, setAmountSignConvention] = useState<'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit'>('positive_is_expense');
 
   useEffect(() => {
     // Check permissions - redirect if read-only user
@@ -147,16 +149,39 @@ export default function MapColumnsPage() {
       descriptionColumn: findColumnForField('description'),
       debitColumn: findColumnForField('debit'),
       creditColumn: findColumnForField('credit'),
-      transactionTypeColumn: null,
-      amountSignConvention: 'positive_is_expense',
+      transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
+      amountSignConvention,
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
     };
 
     // Validate required fields
-    if (mapping.dateColumn === null || mapping.amountColumn === null || mapping.descriptionColumn === null) {
-      setError('Please map Date, Amount, and Description columns before continuing.');
+    if (mapping.dateColumn === null || mapping.descriptionColumn === null) {
+      setError('Please map Date and Description columns before continuing.');
       return;
+    }
+
+    // Validate amount/convention requirements
+    if (amountSignConvention === 'separate_debit_credit') {
+      if (mapping.debitColumn === null || mapping.creditColumn === null) {
+        setError('For separate debit/credit columns, both Debit and Credit columns must be mapped.');
+        return;
+      }
+    } else if (amountSignConvention === 'separate_column') {
+      if (mapping.transactionTypeColumn === null) {
+        setError('Please select a Transaction Type column when using separate column convention.');
+        return;
+      }
+      if (mapping.amountColumn === null) {
+        setError('Please map Amount column when using separate column convention.');
+        return;
+      }
+    } else {
+      // positive_is_expense or positive_is_income
+      if (mapping.amountColumn === null) {
+        setError('Please map Amount column.');
+        return;
+      }
     }
 
     setIsProcessing(true);
@@ -329,6 +354,71 @@ export default function MapColumnsPage() {
             </Table>
           </div>
 
+          {/* Transaction Type Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Transaction Type Configuration</CardTitle>
+              <CardDescription>
+                Configure how to determine if transactions are income or expense
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="amount-sign-convention">Amount Sign Convention</Label>
+                <Select
+                  value={amountSignConvention}
+                  onValueChange={(value) => setAmountSignConvention(value as typeof amountSignConvention)}
+                >
+                  <SelectTrigger id="amount-sign-convention">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="positive_is_expense">Positive amounts are expenses (most common)</SelectItem>
+                    <SelectItem value="positive_is_income">Positive amounts are income</SelectItem>
+                    <SelectItem value="separate_column">Use separate transaction type column</SelectItem>
+                    <SelectItem value="separate_debit_credit">Use separate debit and credit columns</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {amountSignConvention === 'separate_debit_credit' && 'Debit amounts = expenses, Credit amounts = income'}
+                  {amountSignConvention === 'separate_column' && 'Select a column that contains "INCOME", "EXPENSE", "DEBIT", "CREDIT", etc.'}
+                  {amountSignConvention === 'positive_is_expense' && 'Positive amounts are expenses, negative amounts are income'}
+                  {amountSignConvention === 'positive_is_income' && 'Positive amounts are income, negative amounts are expenses'}
+                </p>
+              </div>
+
+              {amountSignConvention === 'separate_column' && (
+                <div>
+                  <Label htmlFor="transaction-type-column">Transaction Type Column</Label>
+                  <Select
+                    value={transactionTypeColumn?.toString() || ''}
+                    onValueChange={(value) => setTransactionTypeColumn(value ? parseInt(value) : null)}
+                  >
+                    <SelectTrigger id="transaction-type-column">
+                      <SelectValue placeholder="Select column" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {analysis.columns.map((col) => (
+                        <SelectItem key={col.columnIndex} value={col.columnIndex.toString()}>
+                          {col.headerName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {amountSignConvention === 'separate_debit_credit' && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-md">
+                  <p className="text-sm text-blue-900 dark:text-blue-100">
+                    <strong>Note:</strong> Both Debit and Credit columns must be mapped above. 
+                    Debit amounts will be treated as expenses, Credit amounts as income.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="flex items-center space-x-2 p-4 bg-muted/50 rounded-lg">
             <Checkbox
               id="save-template"
@@ -358,9 +448,21 @@ export default function MapColumnsPage() {
               <li className={findColumnForField('date') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                 Date {findColumnForField('date') !== null && '✓'}
               </li>
-              <li className={findColumnForField('amount') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                Amount {findColumnForField('amount') !== null && '✓'}
-              </li>
+              {(amountSignConvention !== 'separate_debit_credit' && (
+                <li className={findColumnForField('amount') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                  Amount {findColumnForField('amount') !== null && '✓'}
+                </li>
+              ))}
+              {amountSignConvention === 'separate_debit_credit' && (
+                <>
+                  <li className={findColumnForField('debit') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                    Debit Column {findColumnForField('debit') !== null && '✓'}
+                  </li>
+                  <li className={findColumnForField('credit') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                    Credit Column {findColumnForField('credit') !== null && '✓'}
+                  </li>
+                </>
+              )}
               <li className={findColumnForField('description') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                 Description {findColumnForField('description') !== null && '✓'}
               </li>
