@@ -76,6 +76,7 @@ export async function POST() {
     const { data: backup, error: insertError } = await supabase
       .from('user_backups')
       .insert({
+        user_id: user.id, // Required for backward compatibility and RLS
         account_id: accountId,
         created_by: user.id,
         backup_data: backupData,
