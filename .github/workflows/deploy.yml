@@ -18,7 +18,7 @@ jobs:
         run: |
           sudo apt-get update
           # Remove any existing PostgreSQL client to avoid conflicts
-          sudo apt-get remove -y postgresql-client postgresql-client-common 2>/dev/null || true
+          sudo apt-get remove -y postgresql-client postgresql-client-common postgresql-16 postgresql-client-16 2>/dev/null || true
           # Install PostgreSQL 15 client (matches Supabase server version)
           sudo apt-get install -y wget ca-certificates lsb-release gnupg
           # Add PostgreSQL official APT repository with modern GPG key handling
@@ -27,11 +27,10 @@ jobs:
           echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
           sudo apt-get install -y postgresql-client-15
-          # Verify pg_dump version
-          pg_dump --version
-          # Ensure PostgreSQL 15 binaries are in PATH (they should be by default)
-          export PATH="/usr/lib/postgresql/15/bin:$PATH"
+          # Ensure PostgreSQL 15 binaries are in PATH
           echo "/usr/lib/postgresql/15/bin" >> $GITHUB_PATH
+          # Verify pg_dump version (use full path to be sure)
+          /usr/lib/postgresql/15/bin/pg_dump --version || pg_dump --version
 
       - name: 🔍 Check for pending migrations
         id: check_migrations
