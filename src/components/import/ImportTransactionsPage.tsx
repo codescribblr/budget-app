@@ -24,7 +24,7 @@ export default function ImportTransactionsPage() {
         const transactions = JSON.parse(storedTransactions);
         setParsedTransactions(transactions);
         setFileName(storedFileName);
-        // Clear session storage
+        // Clear session storage (but keep csvDateFormat and csvTemplateId for the preview)
         sessionStorage.removeItem('parsedTransactions');
         sessionStorage.removeItem('parsedFileName');
       } catch (err) {
@@ -44,11 +44,19 @@ export default function ImportTransactionsPage() {
     // Also clear any session storage
     sessionStorage.removeItem('parsedTransactions');
     sessionStorage.removeItem('parsedFileName');
+    sessionStorage.removeItem('csvDateFormat');
+    sessionStorage.removeItem('csvTemplateId');
   };
 
   const handleImportComplete = () => {
     setParsedTransactions([]);
     setFileName('');
+    // Clear session storage
+    sessionStorage.removeItem('csvDateFormat');
+    sessionStorage.removeItem('csvTemplateId');
+    sessionStorage.removeItem('csvData');
+    sessionStorage.removeItem('csvFileName');
+    sessionStorage.removeItem('csvFingerprint');
   };
 
   if (parsedTransactions.length > 0) {

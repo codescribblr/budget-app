@@ -16,7 +16,7 @@ export { extractMerchant, generateTransactionHash };
 export async function parseCSVFile(
   file: File,
   options?: { skipTemplate?: boolean }
-): Promise<{ transactions: ParsedTransaction[]; templateId?: number; fingerprint?: string }> {
+): Promise<{ transactions: ParsedTransaction[]; templateId?: number; fingerprint?: string; dateFormat?: string | null }> {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       complete: async (results) => {
@@ -41,7 +41,7 @@ async function processCSVData(
   data: string[][],
   fileName: string,
   skipTemplate?: boolean
-): Promise<{ transactions: ParsedTransaction[]; templateId?: number; fingerprint: string }> {
+): Promise<{ transactions: ParsedTransaction[]; templateId?: number; fingerprint: string; dateFormat?: string | null }> {
   if (data.length === 0) {
     throw new Error('CSV file is empty');
   }
@@ -109,6 +109,7 @@ async function processCSVData(
     transactions,
     templateId,
     fingerprint: analysis.fingerprint,
+    dateFormat: mapping.dateFormat,
   };
 }
 
@@ -145,7 +146,16 @@ function parseRowWithMapping(
   }
 
   // Parse date
-  const dateResult = parseDate(dateValue, mapping.dateFormat || undefined);
+  let dateResult = parseDate(dateValue, mapping.dateFormat || undefined);
+  
+  // If parsing failed or confidence is very low, try without the detected format
+  if (!dateResult.date || dateResult.confidence < 0.5) {
+    const retryResult = parseDate(dateValue, undefined);
+    if (retryResult.date && retryResult.confidence > dateResult.confidence) {
+      dateResult = retryResult; // Use the better result
+    }
+  }
+  
   const date = dateResult.date ? normalizeDate(dateResult.date) : dateValue;
 
   const description = descriptionValue.trim();

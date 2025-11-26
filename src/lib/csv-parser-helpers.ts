@@ -134,7 +134,16 @@ export async function parseCSVWithMapping(
       }
 
       // Parse date
-      const dateResult = parseDate(dateValue, mapping.dateFormat || undefined);
+      let dateResult = parseDate(dateValue, mapping.dateFormat || undefined);
+      
+      // If parsing failed or confidence is very low, try without the detected format
+      if (!dateResult.date || dateResult.confidence < 0.5) {
+        const retryResult = parseDate(dateValue, undefined);
+        if (retryResult.date && retryResult.confidence > dateResult.confidence) {
+          dateResult = retryResult; // Use the better result
+        }
+      }
+      
       const date = dateResult.date ? normalizeDate(dateResult.date) : dateValue;
 
       const description = descriptionValue.trim();

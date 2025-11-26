@@ -143,18 +143,29 @@ export function parseDate(dateStr: string, detectedFormat?: string): DateParseRe
       'MM/DD/YY': 'MM/dd/yy',
       'M/D/YY': 'M/d/yy',
       'YYYY/MM/DD': 'yyyy/MM/dd',
+      // Also handle lowercase versions that might be stored
+      'mm/dd/yyyy': 'MM/dd/yyyy',
+      'm/dd/yyyy': 'M/dd/yyyy',
+      'mm/d/yyyy': 'MM/d/yyyy',
+      'm/d/yyyy': 'M/d/yyyy',
+      'mm/dd/yy': 'MM/dd/yy',
+      'm/d/yy': 'M/d/yy',
     };
 
-    const mappedFormat = formatMap[detectedFormat] || detectedFormat.toLowerCase();
-    const parsed = parse(trimmed, mappedFormat, new Date());
-    if (isValid(parsed)) {
-      const year = parsed.getFullYear();
-      if (year >= 1900 && year <= 2100) {
-        // Validate that parsed values match expected values
-        if (validateParsedDate(parsed, trimmed, mappedFormat)) {
-          return { date: parsed, format: mappedFormat, confidence: 1.0 };
+    const mappedFormat = formatMap[detectedFormat];
+    // Only use the detected format if it's in our known map
+    // Otherwise, fall through to try all formats below
+    if (mappedFormat) {
+      const parsed = parse(trimmed, mappedFormat, new Date());
+      if (isValid(parsed)) {
+        const year = parsed.getFullYear();
+        if (year >= 1900 && year <= 2100) {
+          // Validate that parsed values match expected values
+          if (validateParsedDate(parsed, trimmed, mappedFormat)) {
+            return { date: parsed, format: mappedFormat, confidence: 1.0 };
+          }
+          // If validation fails, fall through to try other formats
         }
-        // If validation fails, fall through to try other formats
       }
     }
   }

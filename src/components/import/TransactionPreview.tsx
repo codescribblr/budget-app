@@ -56,6 +56,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   const [importedCount, setImportedCount] = useState(0);
   const [templateId, setTemplateId] = useState<number | null>(null);
   const [isReprocessing, setIsReprocessing] = useState(false);
+  const [dateFormat, setDateFormat] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCategories();
@@ -66,6 +67,12 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     const storedTemplateId = sessionStorage.getItem('csvTemplateId');
     if (storedTemplateId) {
       setTemplateId(parseInt(storedTemplateId, 10));
+    }
+    
+    // Load date format from sessionStorage
+    const storedDateFormat = sessionStorage.getItem('csvDateFormat');
+    if (storedDateFormat) {
+      setDateFormat(storedDateFormat);
     }
   }, []);
 
@@ -365,9 +372,15 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
       // Update state
       setItems(processedTransactions);
       setTemplateId(null);
+      setDateFormat(result.dateFormat || null);
       
-      // Clear template from sessionStorage
+      // Clear old template from sessionStorage and save new date format
       sessionStorage.removeItem('csvTemplateId');
+      if (result.dateFormat) {
+        sessionStorage.setItem('csvDateFormat', result.dateFormat);
+      } else {
+        sessionStorage.removeItem('csvDateFormat');
+      }
       
     } catch (error) {
       console.error('Error re-processing:', error);
@@ -402,9 +415,12 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     <div className="space-y-4 max-w-full overflow-hidden">
       {templateId && (
         <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex flex-col gap-1 text-sm">
             <span className="text-blue-800 dark:text-blue-200">
-              Using saved template. If dates look wrong, delete the template and re-process.
+              Using saved template{dateFormat ? ` with date format: ${dateFormat}` : ''}
+            </span>
+            <span className="text-blue-700 dark:text-blue-300 text-xs">
+              If dates look wrong, delete the template and re-process.
             </span>
           </div>
           <div className="flex gap-2">
@@ -413,7 +429,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
               size="sm"
               onClick={handleDeleteTemplateAndReprocess}
               disabled={isReprocessing}
-              className="text-xs"
+              className="text-xs shrink-0"
             >
               {isReprocessing ? (
                 <>

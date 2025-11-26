@@ -80,6 +80,9 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           if (result.fingerprint) {
             sessionStorage.setItem('csvFingerprint', result.fingerprint);
           }
+          if (result.dateFormat) {
+            sessionStorage.setItem('csvDateFormat', result.dateFormat);
+          }
         } else {
           // Navigate to mapping page
           sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));

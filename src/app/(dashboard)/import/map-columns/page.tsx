@@ -199,6 +199,9 @@ export default function MapColumnsPage() {
       // Store transactions in sessionStorage and navigate back
       sessionStorage.setItem('parsedTransactions', JSON.stringify(processedTransactions));
       sessionStorage.setItem('parsedFileName', fileName);
+      if (mapping.dateFormat) {
+        sessionStorage.setItem('csvDateFormat', mapping.dateFormat);
+      }
       
       // Clear CSV data
       sessionStorage.removeItem('csvAnalysis');
