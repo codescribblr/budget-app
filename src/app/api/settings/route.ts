@@ -44,6 +44,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const body = await request.json();
     const { settings } = body;
 

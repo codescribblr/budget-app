@@ -5,6 +5,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/utils';
 import type { Category } from '@/lib/types';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
+import { handleApiError } from '@/lib/api-error-handler';
 
 interface TransferBetweenEnvelopesProps {
   categories: Category[];
@@ -12,6 +14,7 @@ interface TransferBetweenEnvelopesProps {
 }
 
 export default function TransferBetweenEnvelopes({ categories, onSuccess }: TransferBetweenEnvelopesProps) {
+  const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [fromCategoryId, setFromCategoryId] = useState<string>('');
   const [toCategoryId, setToCategoryId] = useState<string>('');
   const [amount, setAmount] = useState('');
@@ -46,7 +49,7 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
       setIsSubmitting(true);
 
       // Update both categories
-      await Promise.all([
+      const [fromResponse, toResponse] = await Promise.all([
         fetch(`/api/categories/${fromCategoryId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -63,6 +66,16 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
         }),
       ]);
 
+      if (!fromResponse.ok) {
+        await handleApiError(fromResponse, 'Failed to update source category');
+        throw new Error('Failed to update source category');
+      }
+
+      if (!toResponse.ok) {
+        await handleApiError(toResponse, 'Failed to update destination category');
+        throw new Error('Failed to update destination category');
+      }
+
       // Reset form
       setFromCategoryId('');
       setToCategoryId('');
@@ -71,7 +84,7 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
       alert('Transfer completed successfully!');
     } catch (error) {
       console.error('Error transferring funds:', error);
-      alert('Failed to transfer funds');
+      // Error toast already shown by handleApiError
     } finally {
       setIsSubmitting(false);
     }
@@ -79,11 +92,23 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
 
   return (
     <div className="space-y-6">
+      {!isEditor && !permissionsLoading && (
+        <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md">
+          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            You only have read access to this account. Only account owners and editors can transfer funds between envelopes.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-4">
           <div>
             <Label htmlFor="from-category">From Category</Label>
-            <Select value={fromCategoryId} onValueChange={setFromCategoryId}>
+            <Select 
+              value={fromCategoryId} 
+              onValueChange={setFromCategoryId}
+              disabled={!isEditor || permissionsLoading}
+            >
               <SelectTrigger id="from-category">
                 <SelectValue placeholder="Select source category" />
               </SelectTrigger>
@@ -115,7 +140,11 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
         <div className="space-y-4">
           <div>
             <Label htmlFor="to-category">To Category</Label>
-            <Select value={toCategoryId} onValueChange={setToCategoryId}>
+            <Select 
+              value={toCategoryId} 
+              onValueChange={setToCategoryId}
+              disabled={!isEditor || permissionsLoading}
+            >
               <SelectTrigger id="to-category">
                 <SelectValue placeholder="Select destination category" />
               </SelectTrigger>
@@ -154,6 +183,7 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           placeholder="0.00"
+          disabled={!isEditor || permissionsLoading}
         />
       </div>
 
@@ -184,7 +214,10 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
       )}
 
       <div className="flex justify-end">
-        <Button onClick={handleTransfer} disabled={isSubmitting}>
+        <Button 
+          onClick={handleTransfer} 
+          disabled={isSubmitting || !isEditor || permissionsLoading}
+        >
           {isSubmitting ? 'Transferring...' : 'Transfer Funds'}
         </Button>
       </div>

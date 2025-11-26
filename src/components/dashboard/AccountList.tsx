@@ -23,14 +23,16 @@ import { Label } from '@/components/ui/label';
 import { formatCurrency } from '@/lib/utils';
 import type { Account } from '@/lib/types';
 import { toast } from 'sonner';
+import { handleApiError } from '@/lib/api-error-handler';
 import { Check, X, MoreVertical, Edit, Trash2 } from 'lucide-react';
 
 interface AccountListProps {
   accounts: Account[];
   onUpdate: () => void;
+  disabled?: boolean;
 }
 
-export default function AccountList({ accounts, onUpdate }: AccountListProps) {
+export default function AccountList({ accounts, onUpdate, disabled = false }: AccountListProps) {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [accountName, setAccountName] = useState('');
   const [newBalance, setNewBalance] = useState('');
@@ -107,14 +109,17 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
       const response = await fetch(`/api/accounts/${accountToDelete.id}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete account');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to delete account');
+        throw new Error(errorMessage || 'Failed to delete account');
+      }
       toast.success('Account deleted');
       setDeleteDialogOpen(false);
       setAccountToDelete(null);
       onUpdate();
     } catch (error) {
       console.error('Error deleting account:', error);
-      toast.error('Failed to delete account');
+      // Error toast already shown above
     }
   };
 
@@ -154,7 +159,10 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to update balance');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to update balance');
+        throw new Error(errorMessage || 'Failed to update balance');
+      }
 
       toast.success('Balance updated');
       setEditingBalanceId(null);
@@ -162,16 +170,16 @@ export default function AccountList({ accounts, onUpdate }: AccountListProps) {
       onUpdate();
     } catch (error) {
       console.error('Error updating balance:', error);
-      toast.error('Failed to update balance');
+      // Error toast already shown above
     }
   };
 
-  const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+  const totalBalance = Array.isArray(accounts) ? accounts.reduce((sum, acc) => sum + acc.balance, 0) : 0;
 
   return (
     <>
       <div className="mb-3">
-        <Button onClick={openAddDialog} size="sm">
+        <Button onClick={openAddDialog} size="sm" disabled={disabled}>
           Add Account
         </Button>
       </div>

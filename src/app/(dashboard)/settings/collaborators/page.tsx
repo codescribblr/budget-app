@@ -54,8 +54,8 @@ interface Invitation {
   id: number
   email: string
   role: 'editor' | 'viewer'
-  expiresAt: string
-  invitedBy: string
+  expires_at: string
+  invited_by?: string
 }
 
 export default function CollaboratorsPage() {
@@ -71,6 +71,9 @@ export default function CollaboratorsPage() {
   const [inviting, setInviting] = useState(false)
   const [removingMember, setRemovingMember] = useState<string | null>(null)
   const [updatingRole, setUpdatingRole] = useState<string | null>(null)
+  const [cancellingInvitation, setCancellingInvitation] = useState<number | null>(null)
+  const [showCancelDialog, setShowCancelDialog] = useState(false)
+  const [invitationToCancel, setInvitationToCancel] = useState<number | null>(null)
 
   useEffect(() => {
     loadData()
@@ -78,8 +81,8 @@ export default function CollaboratorsPage() {
 
   const loadData = async () => {
     try {
-      // Get active account
-      const accountsResponse = await fetch('/api/accounts')
+      // Get active budget account
+      const accountsResponse = await fetch('/api/budget-accounts')
       if (accountsResponse.ok) {
         const accountsData = await accountsResponse.json()
         const activeId = accountsData.activeAccountId
@@ -103,8 +106,8 @@ export default function CollaboratorsPage() {
   const loadMembers = async (id: number) => {
     try {
       const [membersResponse, accountsResponse] = await Promise.all([
-        fetch(`/api/accounts/${id}/members`),
-        fetch('/api/accounts')
+        fetch(`/api/budget-accounts/${id}/members`),
+        fetch('/api/budget-accounts')
       ])
       
       if (membersResponse.ok) {
@@ -178,7 +181,7 @@ export default function CollaboratorsPage() {
 
     setRemovingMember(userId)
     try {
-      const response = await fetch(`/api/accounts/${accountId}/members/${userId}`, {
+      const response = await fetch(`/api/budget-accounts/${accountId}/members/${userId}`, {
         method: 'DELETE',
       })
 
@@ -203,7 +206,7 @@ export default function CollaboratorsPage() {
 
     setUpdatingRole(userId)
     try {
-      const response = await fetch(`/api/accounts/${accountId}/members/${userId}`, {
+      const response = await fetch(`/api/budget-accounts/${accountId}/members/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: newRole }),
@@ -225,22 +228,35 @@ export default function CollaboratorsPage() {
     }
   }
 
-  const handleCancelInvitation = async (invitationId: number) => {
+  const handleCancelInvitationClick = (invitationId: number) => {
+    setInvitationToCancel(invitationId)
+    setShowCancelDialog(true)
+  }
+
+  const handleCancelInvitation = async () => {
+    if (!invitationToCancel) return
+
+    setCancellingInvitation(invitationToCancel)
     try {
-      const response = await fetch(`/api/invitations/${invitationId}`, {
+      const response = await fetch(`/api/invitations/${invitationToCancel}`, {
         method: 'DELETE',
       })
 
       if (!response.ok) {
-        toast.error('Failed to cancel invitation')
+        const data = await response.json()
+        toast.error(data.error || 'Failed to cancel invitation')
         return
       }
 
-      toast.success('Invitation cancelled')
+      toast.success('Invitation revoked successfully')
+      setShowCancelDialog(false)
+      setInvitationToCancel(null)
       await loadInvitations()
     } catch (error) {
       console.error('Error cancelling invitation:', error)
       toast.error('Failed to cancel invitation')
+    } finally {
+      setCancellingInvitation(null)
     }
   }
 
@@ -372,16 +388,21 @@ export default function CollaboratorsPage() {
                         <Badge variant="outline">{invitation.role}</Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Expires {new Date(invitation.expiresAt).toLocaleDateString()}
+                        Expires {new Date(invitation.expires_at).toLocaleDateString()}
                       </p>
                     </div>
                     {isOwner && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleCancelInvitation(invitation.id)}
+                        onClick={() => handleCancelInvitationClick(invitation.id)}
+                        disabled={cancellingInvitation === invitation.id}
                       >
-                        <X className="h-4 w-4" />
+                        {cancellingInvitation === invitation.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <X className="h-4 w-4" />
+                        )}
                       </Button>
                     )}
                   </div>
@@ -469,6 +490,41 @@ export default function CollaboratorsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Invitation Confirmation Dialog */}
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke Invitation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to revoke this invitation? The user will not be able to access the account using this invitation link. 
+              If they haven't accepted yet, they will need a new invitation to join.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setShowCancelDialog(false)
+              setInvitationToCancel(null)
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelInvitation}
+              disabled={cancellingInvitation !== null}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cancellingInvitation !== null ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Revoking...
+                </>
+              ) : (
+                'Revoke Invitation'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

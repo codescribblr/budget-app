@@ -120,7 +120,7 @@ CREATE POLICY "Owners can update member permissions"
       WHERE ba.id = account_users.account_id
       AND ba.owner_id = auth.uid()
     )
-    AND (role = 'owner' OR OLD.role = 'owner')
+    AND role = 'owner'
   );
 
 CREATE POLICY "Owners can remove members"
@@ -165,20 +165,37 @@ CREATE POLICY "Owners can create invitations"
 -- =====================================================
 
 -- Create a budget_account for each existing user
+-- Use a subquery to get email to avoid the issue with the same table reference
 INSERT INTO budget_accounts (owner_id, name, created_at, updated_at)
 SELECT 
-  id as owner_id,
-  COALESCE((SELECT email FROM auth.users WHERE id = u.id), 'My Budget') as name,
+  u.id as owner_id,
+  COALESCE(u.email, 'My Budget') as name,
   NOW() as created_at,
   NOW() as updated_at
 FROM auth.users u
-ON CONFLICT DO NOTHING;
+WHERE NOT EXISTS (
+  SELECT 1 FROM budget_accounts ba
+  WHERE ba.owner_id = u.id
+  AND ba.deleted_at IS NULL
+);
 
 -- Add account_users entries for existing owners
+-- Ensure all budget_accounts have account_users entries for their owners
 INSERT INTO account_users (account_id, user_id, role, status, accepted_at, created_at, updated_at)
 SELECT ba.id, ba.owner_id, 'owner', 'active', NOW(), NOW(), NOW()
 FROM budget_accounts ba
-ON CONFLICT (account_id, user_id) DO NOTHING;
+WHERE ba.deleted_at IS NULL
+AND NOT EXISTS (
+  SELECT 1 FROM account_users au
+  WHERE au.account_id = ba.id
+  AND au.user_id = ba.owner_id
+)
+ON CONFLICT (account_id, user_id) DO UPDATE
+SET 
+  role = 'owner',
+  status = 'active',
+  accepted_at = COALESCE(account_users.accepted_at, NOW()),
+  updated_at = NOW();
 
 -- =====================================================
 -- STEP 4: Add account_id columns to all existing tables
@@ -198,8 +215,7 @@ ALTER TABLE merchant_category_rules ADD COLUMN IF NOT EXISTS account_id BIGINT R
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
 ALTER TABLE goals ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
 ALTER TABLE loans ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
-ALTER TABLE income_settings ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
-ALTER TABLE pre_tax_deductions ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
+-- Note: income_settings and pre_tax_deductions tables don't exist in this schema
 ALTER TABLE csv_import_templates ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
 ALTER TABLE category_monthly_funding ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
 ALTER TABLE user_backups ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES budget_accounts(id) ON DELETE CASCADE;
@@ -270,15 +286,7 @@ SET account_id = ba.id
 FROM budget_accounts ba
 WHERE ba.owner_id = l.user_id AND l.account_id IS NULL;
 
-UPDATE income_settings is
-SET account_id = ba.id
-FROM budget_accounts ba
-WHERE ba.owner_id = is.user_id AND is.account_id IS NULL;
-
-UPDATE pre_tax_deductions ptd
-SET account_id = ba.id
-FROM budget_accounts ba
-WHERE ba.owner_id = ptd.user_id AND ptd.account_id IS NULL;
+-- Note: income_settings and pre_tax_deductions tables don't exist in this schema
 
 UPDATE csv_import_templates cit
 SET account_id = ba.id
@@ -312,8 +320,7 @@ ALTER TABLE merchant_category_rules ALTER COLUMN account_id SET NOT NULL;
 ALTER TABLE settings ALTER COLUMN account_id SET NOT NULL;
 ALTER TABLE goals ALTER COLUMN account_id SET NOT NULL;
 ALTER TABLE loans ALTER COLUMN account_id SET NOT NULL;
-ALTER TABLE income_settings ALTER COLUMN account_id SET NOT NULL;
-ALTER TABLE pre_tax_deductions ALTER COLUMN account_id SET NOT NULL;
+-- Note: income_settings and pre_tax_deductions tables don't exist in this schema
 ALTER TABLE csv_import_templates ALTER COLUMN account_id SET NOT NULL;
 ALTER TABLE category_monthly_funding ALTER COLUMN account_id SET NOT NULL;
 ALTER TABLE user_backups ALTER COLUMN account_id SET NOT NULL;
@@ -331,8 +338,7 @@ CREATE INDEX IF NOT EXISTS idx_merchant_category_rules_account_id ON merchant_ca
 CREATE INDEX IF NOT EXISTS idx_settings_account_id ON settings(account_id);
 CREATE INDEX IF NOT EXISTS idx_goals_account_id ON goals(account_id);
 CREATE INDEX IF NOT EXISTS idx_loans_account_id ON loans(account_id);
-CREATE INDEX IF NOT EXISTS idx_income_settings_account_id ON income_settings(account_id);
-CREATE INDEX IF NOT EXISTS idx_pre_tax_deductions_account_id ON pre_tax_deductions(account_id);
+-- Note: income_settings and pre_tax_deductions tables don't exist in this schema
 CREATE INDEX IF NOT EXISTS idx_csv_import_templates_account_id ON csv_import_templates(account_id);
 CREATE INDEX IF NOT EXISTS idx_category_monthly_funding_account_id ON category_monthly_funding(account_id);
 CREATE INDEX IF NOT EXISTS idx_user_backups_account_id ON user_backups(account_id);
@@ -644,49 +650,8 @@ CREATE POLICY "Users can delete loans in their accounts"
   ON loans FOR DELETE
   USING (user_has_account_write_access(account_id));
 
--- Update RLS policies for income_settings
-DROP POLICY IF EXISTS "Users can view their own income settings" ON income_settings;
-DROP POLICY IF EXISTS "Users can insert their own income settings" ON income_settings;
-DROP POLICY IF EXISTS "Users can update their own income settings" ON income_settings;
-DROP POLICY IF EXISTS "Users can delete their own income settings" ON income_settings;
-
-CREATE POLICY "Users can view income settings in their accounts"
-  ON income_settings FOR SELECT
-  USING (user_has_account_access(account_id));
-
-CREATE POLICY "Users can insert income settings in their accounts"
-  ON income_settings FOR INSERT
-  WITH CHECK (user_has_account_write_access(account_id));
-
-CREATE POLICY "Users can update income settings in their accounts"
-  ON income_settings FOR UPDATE
-  USING (user_has_account_write_access(account_id));
-
-CREATE POLICY "Users can delete income settings in their accounts"
-  ON income_settings FOR DELETE
-  USING (user_has_account_write_access(account_id));
-
--- Update RLS policies for pre_tax_deductions
-DROP POLICY IF EXISTS "Users can view their own pre tax deductions" ON pre_tax_deductions;
-DROP POLICY IF EXISTS "Users can insert their own pre tax deductions" ON pre_tax_deductions;
-DROP POLICY IF EXISTS "Users can update their own pre tax deductions" ON pre_tax_deductions;
-DROP POLICY IF EXISTS "Users can delete their own pre tax deductions" ON pre_tax_deductions;
-
-CREATE POLICY "Users can view pre tax deductions in their accounts"
-  ON pre_tax_deductions FOR SELECT
-  USING (user_has_account_access(account_id));
-
-CREATE POLICY "Users can insert pre tax deductions in their accounts"
-  ON pre_tax_deductions FOR INSERT
-  WITH CHECK (user_has_account_write_access(account_id));
-
-CREATE POLICY "Users can update pre tax deductions in their accounts"
-  ON pre_tax_deductions FOR UPDATE
-  USING (user_has_account_write_access(account_id));
-
-CREATE POLICY "Users can delete pre tax deductions in their accounts"
-  ON pre_tax_deductions FOR DELETE
-  USING (user_has_account_write_access(account_id));
+-- Note: income_settings and pre_tax_deductions tables don't exist in this schema
+-- RLS policies for these tables are skipped
 
 -- Update RLS policies for csv_import_templates
 DROP POLICY IF EXISTS "Users can view their own csv import templates" ON csv_import_templates;

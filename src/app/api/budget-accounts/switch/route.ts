@@ -4,8 +4,8 @@ import { userHasAccountAccess } from '@/lib/account-context';
 import { cookies } from 'next/headers';
 
 /**
- * POST /api/accounts/switch
- * Switch active account
+ * POST /api/budget-accounts/switch
+ * Switch active budget account
  */
 export async function POST(request: NextRequest) {
   try {
@@ -40,14 +40,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, accountId });
   } catch (error: any) {
-    console.error('Error switching account:', error);
+    console.error('Error switching budget account:', error);
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     return NextResponse.json(
-      { error: 'Failed to switch account' },
+      { error: 'Failed to switch budget account' },
       { status: 500 }
     );
   }
 }
+
 

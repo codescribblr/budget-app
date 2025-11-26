@@ -5,6 +5,10 @@ import { importTransactions } from '@/lib/supabase-queries';
 
 export async function POST(request: Request) {
   try {
+    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const { transactions, isHistorical } = await request.json() as {
       transactions: ParsedTransaction[];
       isHistorical?: boolean;
@@ -21,11 +25,12 @@ export async function POST(request: Request) {
     const importedCount = await importTransactions(transactions, isHistorical || false);
 
     // Learn from the imported transactions
+    // Use description instead of merchant since that's what was used to create merchant groups
     const learningData = transactions
       .filter(txn => txn.splits.length > 0)
       .flatMap(txn =>
         txn.splits.map(split => ({
-          merchant: txn.merchant,
+          merchant: txn.description, // Use description to match the merchant group mapping
           categoryId: split.categoryId,
         }))
       );

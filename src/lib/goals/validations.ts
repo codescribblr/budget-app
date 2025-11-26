@@ -30,8 +30,8 @@ export function validateCreateGoal(data: CreateGoalRequest): { valid: boolean; e
   }
   
   if (data.goal_type === 'envelope') {
-    if (!data.monthly_contribution || data.monthly_contribution <= 0) {
-      return { valid: false, error: 'Monthly contribution must be greater than 0 for envelope goals' };
+    if (data.monthly_contribution === undefined || data.monthly_contribution === null || data.monthly_contribution < 0) {
+      return { valid: false, error: 'Monthly contribution must be 0 or greater for envelope goals' };
     }
     if (data.linked_account_id) {
       return { valid: false, error: 'Envelope goals cannot be linked to an account' };
@@ -45,6 +45,10 @@ export function validateCreateGoal(data: CreateGoalRequest): { valid: boolean; e
   }
   
   if (data.goal_type === 'account-linked') {
+    // Monthly contribution is required for all goals (can be 0)
+    if (data.monthly_contribution === undefined || data.monthly_contribution === null || data.monthly_contribution < 0) {
+      return { valid: false, error: 'Monthly contribution must be 0 or greater for account-linked goals' };
+    }
     // Must have either an existing account or create a new one
     if (!data.linked_account_id && !data.new_account_name) {
       return { valid: false, error: 'Account-linked goals must have a linked account or create a new account' };
@@ -75,8 +79,8 @@ export function validateCreateGoal(data: CreateGoalRequest): { valid: boolean; e
     if (data.linked_credit_card_id && data.linked_loan_id) {
       return { valid: false, error: 'Debt paydown goals cannot be linked to both a credit card and a loan' };
     }
-    if (!data.monthly_contribution || data.monthly_contribution <= 0) {
-      return { valid: false, error: 'Monthly contribution must be greater than 0 for debt paydown goals' };
+    if (data.monthly_contribution === undefined || data.monthly_contribution === null || data.monthly_contribution < 0) {
+      return { valid: false, error: 'Monthly contribution must be 0 or greater for debt paydown goals' };
     }
     if (data.linked_account_id) {
       return { valid: false, error: 'Debt paydown goals cannot be linked to an account' };
@@ -118,8 +122,8 @@ export function validateUpdateGoal(
     }
   }
   
-  if (data.monthly_contribution !== undefined && data.monthly_contribution <= 0) {
-    return { valid: false, error: 'Monthly contribution must be greater than 0' };
+  if (data.monthly_contribution !== undefined && data.monthly_contribution < 0) {
+    return { valid: false, error: 'Monthly contribution cannot be negative' };
   }
   
   // Warn if changing goal type with existing balance

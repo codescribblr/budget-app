@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getUserSubscription, isPremiumUser } from '@/lib/subscription-utils';
+import { checkWriteAccess } from '@/lib/api-helpers';
+import { getActiveAccountId } from '@/lib/account-context';
 
 /**
  * Feature definitions with metadata
@@ -88,14 +90,23 @@ export async function GET() {
     }
 
     // Check subscription status
-    const subscription = await getUserSubscription(user.id);
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
+
+    const subscription = await getUserSubscription(accountId);
     const hasPremium = isPremiumUser(subscription);
 
-    // Get user's feature flags
+    // Get account's feature flags
+
     const { data: userFlags, error: flagsError } = await supabase
       .from('user_feature_flags')
       .select('feature_name, enabled, enabled_at, disabled_at')
-      .eq('user_id', user.id);
+      .eq('account_id', accountId);
 
     if (flagsError) {
       console.error('Error fetching feature flags:', flagsError);
@@ -134,6 +145,10 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
+    // Check write access (viewers cannot toggle features)
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -156,7 +171,8 @@ export async function POST(request: Request) {
 
     // Check premium subscription if feature requires it
     if (enabled && feature.requiresPremium) {
-      const subscription = await getUserSubscription(user.id);
+      const accountId = await getActiveAccountId();
+      const subscription = await getUserSubscription(accountId);
       const hasPremium = isPremiumUser(subscription);
 
       if (!hasPremium) {
@@ -172,10 +188,18 @@ export async function POST(request: Request) {
 
     // Check dependencies if enabling
     if (enabled && feature.dependencies.length > 0) {
+      const accountId = await getActiveAccountId();
+      if (!accountId) {
+        return NextResponse.json(
+          { error: 'No active account. Please select an account first.' },
+          { status: 400 }
+        );
+      }
+
       const { data: userFlags } = await supabase
         .from('user_feature_flags')
         .select('feature_name, enabled')
-        .eq('user_id', user.id)
+        .eq('account_id', accountId)
         .in('feature_name', feature.dependencies);
 
       const missingDeps = feature.dependencies.filter(dep => {
@@ -197,10 +221,18 @@ export async function POST(request: Request) {
 
     // Check if disabling category_types - prevent if non-monthly_expense categories exist
     if (featureName === 'category_types' && !enabled) {
+      const accountId = await getActiveAccountId();
+      if (!accountId) {
+        return NextResponse.json(
+          { error: 'No active account. Please select an account first.' },
+          { status: 400 }
+        );
+      }
+
       const { data: categories, error: categoriesError } = await supabase
         .from('categories')
         .select('id, name, category_type')
-        .eq('user_id', user.id)
+        .eq('account_id', accountId)
         .neq('category_type', 'monthly_expense');
 
       if (categoriesError) {
@@ -225,17 +257,25 @@ export async function POST(request: Request) {
     }
 
     // Upsert the feature flag
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabase
       .from('user_feature_flags')
       .upsert({
-        user_id: user.id,
+        account_id: accountId,
         feature_name: featureName,
         enabled,
         enabled_at: enabled ? new Date().toISOString() : null,
         disabled_at: !enabled ? new Date().toISOString() : null,
         updated_at: new Date().toISOString(),
       }, {
-        onConflict: 'user_id,feature_name',
+        onConflict: 'account_id,feature_name',
       })
       .select()
       .single();
@@ -255,7 +295,7 @@ export async function POST(request: Request) {
         const { data: existingBuffer } = await supabase
           .from('categories')
           .select('id, is_system, is_buffer')
-          .eq('user_id', user.id)
+          .eq('account_id', accountId)
           .eq('name', 'Income Buffer')
           .single();
 
@@ -270,7 +310,7 @@ export async function POST(request: Request) {
                 notes: 'Special category for smoothing irregular income. Add large payments here and withdraw monthly.',
                 updated_at: new Date().toISOString()
               })
-              .eq('user_id', user.id)
+              .eq('account_id', accountId)
               .eq('name', 'Income Buffer');
 
             if (updateError) {
@@ -284,7 +324,8 @@ export async function POST(request: Request) {
           const { error: createError } = await supabase
             .from('categories')
             .insert({
-              user_id: user.id,
+              account_id: accountId,
+              user_id: user.id, // Required by categories table
               name: 'Income Buffer',
               monthly_amount: 0,
               current_balance: 0,
@@ -311,7 +352,7 @@ export async function POST(request: Request) {
             notes: 'Former Income Buffer category. You can delete this or repurpose it.',
             updated_at: new Date().toISOString()
           })
-          .eq('user_id', user.id)
+          .eq('account_id', accountId)
           .eq('name', 'Income Buffer')
           .eq('is_system', true);
 

@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { Loader2, Trash2, HardDrive, RotateCcw, Download, Upload } from 'lucide-react';
+import { handleApiError } from '@/lib/api-error-handler';
 
 interface Backup {
   id: number;
@@ -75,15 +76,15 @@ export default function DataBackup() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create backup');
+        const errorMessage = await handleApiError(response, 'Failed to create backup');
+        throw new Error(errorMessage || 'Failed to create backup');
       }
 
       toast.success('Backup created successfully');
       await fetchBackups();
     } catch (error: any) {
       console.error('Error creating backup:', error);
-      toast.error(error.message || 'Failed to create backup');
+      // Error toast already shown by handleApiError
     } finally {
       setIsCreating(false);
     }
@@ -97,13 +98,16 @@ export default function DataBackup() {
         method: 'DELETE',
       });
 
-      if (!response.ok) throw new Error('Failed to delete backup');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to delete backup');
+        throw new Error(errorMessage || 'Failed to delete backup');
+      }
 
       toast.success('Backup deleted successfully');
       await fetchBackups();
     } catch (error) {
       console.error('Error deleting backup:', error);
-      toast.error('Failed to delete backup');
+      // Error toast already shown by handleApiError
     } finally {
       setIsDeletingId(null);
     }
@@ -138,7 +142,10 @@ export default function DataBackup() {
         method: 'POST',
       });
 
-      if (!response.ok) throw new Error('Failed to restore backup');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to restore backup');
+        throw new Error(errorMessage || 'Failed to restore backup');
+      }
 
       setImportProgress('Restore complete! Refreshing page...');
 
@@ -238,7 +245,10 @@ export default function DataBackup() {
         body: JSON.stringify(backupData),
       });
 
-      if (!response.ok) throw new Error('Failed to import backup');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to import backup');
+        throw new Error(errorMessage || 'Failed to import backup');
+      }
 
       setImportProgress('Import complete! Refreshing page...');
 

@@ -11,9 +11,10 @@ import Papa from 'papaparse';
 
 interface FileUploadProps {
   onFileUploaded: (transactions: ParsedTransaction[], fileName: string) => void;
+  disabled?: boolean;
 }
 
-export default function FileUpload({ onFileUploaded }: FileUploadProps) {
+export default function FileUpload({ onFileUploaded, disabled = false }: FileUploadProps) {
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +24,11 @@ export default function FileUpload({ onFileUploaded }: FileUploadProps) {
 
   // Process a file (used by both file input and drag-drop)
   const processFile = async (file: File) => {
+    if (disabled) {
+      setError('You only have read access to this account. Only account owners and editors can import transactions.');
+      return;
+    }
+
     setIsProcessing(true);
     setError(null);
 
@@ -146,6 +152,11 @@ export default function FileUpload({ onFileUploaded }: FileUploadProps) {
       setIsDragging(false);
       dragCounterRef.current = 0;
 
+      if (disabled) {
+        setError('You only have read access to this account. Only account owners and editors can import transactions.');
+        return;
+      }
+
       const files = e.dataTransfer?.files;
       if (files && files.length > 0) {
         processFile(files[0]);
@@ -178,27 +189,32 @@ export default function FileUpload({ onFileUploaded }: FileUploadProps) {
         type="file"
         accept=".csv,.jpg,.jpeg,.png,.pdf,image/*"
         onChange={handleFileChange}
+        disabled={disabled}
         className="hidden"
       />
 
       <div className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
-        isDragging
+        isDragging && !disabled
           ? 'border-primary bg-primary/5 scale-105 shadow-lg'
+          : disabled
+          ? 'border-gray-200 dark:border-gray-800 opacity-50'
           : 'border-gray-300 dark:border-gray-700'
       }`}>
         <div className="space-y-4">
-          <div className="text-4xl">{isDragging ? '📥' : '📄 📷'}</div>
+          <div className="text-4xl">{isDragging && !disabled ? '📥' : '📄 📷'}</div>
           <div>
             <p className="text-lg font-medium">
-              {isDragging ? 'Drop file here' : 'Upload CSV or Image'}
+              {isDragging && !disabled ? 'Drop file here' : 'Upload CSV or Image'}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              {isDragging
+              {isDragging && !disabled
                 ? 'Release to upload'
+                : disabled
+                ? 'Read-only users cannot import transactions'
                 : 'Upload a CSV file or screenshot/photo of transactions'}
             </p>
           </div>
-          <Button onClick={handleButtonClick} disabled={isProcessing}>
+          <Button onClick={handleButtonClick} disabled={isProcessing || disabled}>
             {isProcessing ? 'Processing...' : 'Choose File'}
           </Button>
         </div>

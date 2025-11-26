@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTransactionById, updateTransaction, deleteTransaction } from '@/lib/supabase-queries';
+import { checkWriteAccess } from '@/lib/api-helpers';
 import type { UpdateTransactionRequest } from '@/lib/types';
 
 export async function GET(
@@ -41,6 +42,9 @@ export async function PATCH(
     if (isNaN(transactionId)) {
       return NextResponse.json({ error: 'Invalid transaction ID' }, { status: 400 });
     }
+
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
     
     const body = (await request.json()) as UpdateTransactionRequest;
     const transaction = await updateTransaction(transactionId, body);
@@ -70,6 +74,9 @@ export async function DELETE(
     if (isNaN(transactionId)) {
       return NextResponse.json({ error: 'Invalid transaction ID' }, { status: 400 });
     }
+
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
     
     await deleteTransaction(transactionId);
     return NextResponse.json({ success: true });

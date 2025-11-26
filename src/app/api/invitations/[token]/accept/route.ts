@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { userHasOwnAccount } from '@/lib/account-context';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 /**
  * POST /api/invitations/[token]/accept
@@ -14,10 +15,10 @@ export async function POST(
     const { supabase, user } = await getAuthenticatedUser();
     const { token } = await params;
 
-    // Find invitation
+    // Find invitation (don't join account yet - RLS might block it)
     const { data: invitation, error: inviteError } = await supabase
       .from('account_invitations')
-      .select('*, account:budget_accounts(id, name)')
+      .select('id, account_id, email, role, token, expires_at, invited_by')
       .eq('token', token)
       .is('accepted_at', null)
       .single();
@@ -62,8 +63,34 @@ export async function POST(
       );
     }
 
-    // Add user to account_users
-    const { error: memberError } = await supabase
+    // Fetch account details using service role to bypass RLS
+    // (user doesn't have access yet, so RLS would block the query)
+    const adminSupabase = createServiceRoleClient();
+    const { data: account, error: accountError } = await adminSupabase
+      .from('budget_accounts')
+      .select('id, name, owner_id')
+      .eq('id', invitation.account_id)
+      .single();
+
+    if (accountError) {
+      console.error('Error fetching account:', accountError);
+      throw accountError;
+    }
+
+    // Get owner email as fallback for account name
+    let accountName = account?.name || 'Unknown Account';
+    if (!account?.name && account?.owner_id) {
+      try {
+        const { data: owner } = await adminSupabase.auth.admin.getUserById(account.owner_id);
+        accountName = owner?.user?.email || accountName;
+      } catch (err) {
+        console.error('Error fetching owner email:', err);
+      }
+    }
+
+    // Add user to account_users using service role to bypass RLS
+    // (user doesn't have access yet, so RLS would block the insert)
+    const { error: memberError } = await adminSupabase
       .from('account_users')
       .insert({
         account_id: invitation.account_id,
@@ -76,11 +103,14 @@ export async function POST(
 
     if (memberError) throw memberError;
 
-    // Mark invitation as accepted
-    const { error: updateError } = await supabase
+    // Mark ALL invitations for this email/account as accepted
+    // (in case there were multiple invitations sent)
+    const { error: updateError } = await adminSupabase
       .from('account_invitations')
       .update({ accepted_at: new Date().toISOString() })
-      .eq('id', invitation.id);
+      .eq('account_id', invitation.account_id)
+      .eq('email', invitation.email.toLowerCase())
+      .is('accepted_at', null);
 
     if (updateError) throw updateError;
 
@@ -88,7 +118,11 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      account: invitation.account,
+      account: {
+        id: invitation.account_id,
+        name: accountName,
+      },
+      role: invitation.role,
       userHasOwnAccount: hasOwnAccount,
     });
   } catch (error: any) {

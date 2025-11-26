@@ -24,13 +24,15 @@ import { formatCurrency } from '@/lib/utils';
 import type { CreditCard } from '@/lib/types';
 import { toast } from 'sonner';
 import { Check, X, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { handleApiError } from '@/lib/api-error-handler';
 
 interface CreditCardListProps {
   creditCards: CreditCard[];
   onUpdate: () => void;
+  disabled?: boolean;
 }
 
-export default function CreditCardList({ creditCards, onUpdate }: CreditCardListProps) {
+export default function CreditCardList({ creditCards, onUpdate, disabled = false }: CreditCardListProps) {
   const [editingCard, setEditingCard] = useState<CreditCard | null>(null);
   const [cardName, setCardName] = useState('');
   const [creditLimit, setCreditLimit] = useState('');
@@ -49,7 +51,7 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
     if (!editingCard) return;
 
     try {
-      await fetch(`/api/credit-cards/${editingCard.id}`, {
+      const response = await fetch(`/api/credit-cards/${editingCard.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -58,6 +60,11 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
           include_in_totals: includeInTotals,
         }),
       });
+
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to update credit card');
+        throw new Error(errorMessage || 'Failed to update credit card');
+      }
 
       setIsEditDialogOpen(false);
       setEditingCard(null);
@@ -68,6 +75,7 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
       onUpdate();
     } catch (error) {
       console.error('Error updating credit card:', error);
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -78,7 +86,7 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
     }
 
     try {
-      await fetch('/api/credit-cards', {
+      const response = await fetch('/api/credit-cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -89,6 +97,11 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
         }),
       });
 
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to add credit card');
+        throw new Error(errorMessage || 'Failed to add credit card');
+      }
+
       setIsAddDialogOpen(false);
       setCardName('');
       setCreditLimit('');
@@ -97,6 +110,7 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
       onUpdate();
     } catch (error) {
       console.error('Error adding credit card:', error);
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -112,14 +126,17 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
       const response = await fetch(`/api/credit-cards/${cardToDelete.id}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete credit card');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to delete credit card');
+        throw new Error(errorMessage || 'Failed to delete credit card');
+      }
       toast.success('Credit card deleted');
       setDeleteDialogOpen(false);
       setCardToDelete(null);
       onUpdate();
     } catch (error) {
       console.error('Error deleting credit card:', error);
-      toast.error('Failed to delete credit card');
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -161,7 +178,10 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to update available credit');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to update available credit');
+        throw new Error(errorMessage || 'Failed to update available credit');
+      }
 
       toast.success('Available credit updated');
       setEditingAvailableId(null);
@@ -169,7 +189,7 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
       onUpdate();
     } catch (error) {
       console.error('Error updating available credit:', error);
-      toast.error('Failed to update available credit');
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -178,7 +198,7 @@ export default function CreditCardList({ creditCards, onUpdate }: CreditCardList
   return (
     <>
       <div className="mb-3">
-        <Button onClick={openAddDialog} size="sm">
+        <Button onClick={openAddDialog} size="sm" disabled={disabled}>
           Add Credit Card
         </Button>
       </div>

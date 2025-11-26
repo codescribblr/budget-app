@@ -23,6 +23,7 @@ import ImportProgressDialog from './ImportProgressDialog';
 import { generateTransactionHash } from '@/lib/csv-parser';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import { MoreVertical, Edit, X, Check } from 'lucide-react';
+import { handleApiError } from '@/lib/api-error-handler';
 
 interface TransactionPreviewProps {
   transactions: ParsedTransaction[];
@@ -282,7 +283,8 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
       });
 
       if (!response.ok) {
-        throw new Error('Failed to import transactions');
+        const errorMessage = await handleApiError(response, 'Failed to import transactions');
+        throw new Error(errorMessage || 'Failed to import transactions');
       }
 
       const result = await response.json();
@@ -296,6 +298,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
       console.error('Error importing transactions:', error);
       setProgressStatus('error');
       setProgressMessage(error instanceof Error ? error.message : 'An unexpected error occurred');
+      // Error toast already shown by handleApiError
     } finally {
       setIsImporting(false);
     }

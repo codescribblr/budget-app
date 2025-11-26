@@ -1,30 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '@/lib/supabase-queries';
-import { getUserAccounts, getActiveAccountId, userHasOwnAccount } from '@/lib/account-context';
+import { getAllAccounts, createAccount } from '@/lib/supabase-queries';
+import { checkWriteAccess } from '@/lib/api-helpers';
+import type { CreateAccountRequest } from '@/lib/types';
 
 /**
  * GET /api/accounts
- * Get all accounts user belongs to
+ * Get all bank accounts (checking, savings, etc.) for the active budget account
  */
 export async function GET() {
   try {
-    const { user } = await getAuthenticatedUser();
-    const accounts = await getUserAccounts();
-    const activeAccountId = await getActiveAccountId();
-    const hasOwnAccount = await userHasOwnAccount();
-
-    return NextResponse.json({
-      accounts,
-      activeAccountId,
-      hasOwnAccount,
-    });
+    const accounts = await getAllAccounts();
+    return NextResponse.json(accounts);
   } catch (error: any) {
-    console.error('Error fetching accounts:', error);
+    console.error('Error fetching bank accounts:', error);
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (error.message === 'No active account') {
+      return NextResponse.json({ error: 'No active account found' }, { status: 400 });
+    }
     return NextResponse.json(
-      { error: 'Failed to fetch accounts' },
+      { error: 'Failed to fetch bank accounts' },
       { status: 500 }
     );
   }
@@ -32,54 +28,26 @@ export async function GET() {
 
 /**
  * POST /api/accounts
- * Create a new account
+ * Create a new bank account (checking, savings, etc.)
  */
 export async function POST(request: NextRequest) {
   try {
-    const { supabase, user } = await getAuthenticatedUser();
-    const body = await request.json();
-    const { name } = body;
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
 
-    if (!name || typeof name !== 'string') {
-      return NextResponse.json(
-        { error: 'Account name is required' },
-        { status: 400 }
-      );
-    }
-
-    // Create the account
-    const { data: account, error: accountError } = await supabase
-      .from('budget_accounts')
-      .insert({
-        owner_id: user.id,
-        name: name.trim(),
-      })
-      .select('id, name, owner_id, created_at, updated_at')
-      .single();
-
-    if (accountError) throw accountError;
-
-    // Add user as owner in account_users
-    const { error: userError } = await supabase
-      .from('account_users')
-      .insert({
-        account_id: account.id,
-        user_id: user.id,
-        role: 'owner',
-        status: 'active',
-        accepted_at: new Date().toISOString(),
-      });
-
-    if (userError) throw userError;
-
-    return NextResponse.json({ account }, { status: 201 });
+    const body = (await request.json()) as CreateAccountRequest;
+    const account = await createAccount(body);
+    return NextResponse.json(account, { status: 201 });
   } catch (error: any) {
-    console.error('Error creating account:', error);
+    console.error('Error creating bank account:', error);
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (error.message === 'No active account') {
+      return NextResponse.json({ error: 'No active account found' }, { status: 400 });
+    }
     return NextResponse.json(
-      { error: 'Failed to create account' },
+      { error: 'Failed to create bank account' },
       { status: 500 }
     );
   }

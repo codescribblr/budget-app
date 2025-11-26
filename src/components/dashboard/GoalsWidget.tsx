@@ -13,7 +13,11 @@ import Link from 'next/link';
 import { parseLocalDate } from '@/lib/date-utils';
 import { useFeature } from '@/contexts/FeatureContext';
 
-export default function GoalsWidget() {
+interface GoalsWidgetProps {
+  disabled?: boolean;
+}
+
+export default function GoalsWidget({ disabled = false }: GoalsWidgetProps) {
   const router = useRouter();
   const goalsEnabled = useFeature('goals');
   const [goals, setGoals] = useState<GoalWithDetails[]>([]);
@@ -89,7 +93,7 @@ export default function GoalsWidget() {
             No active goals. Create your first goal to start tracking your progress.
           </p>
           <Link href="/goals">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" disabled={disabled}>
               Create Goal
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>

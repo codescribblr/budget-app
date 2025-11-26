@@ -33,6 +33,7 @@ import { toast } from 'sonner';
 import { Loader2, Search, Trash2, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { parseLocalDate } from '@/lib/date-utils';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 interface DuplicateGroup {
   amount: number;
@@ -52,6 +53,7 @@ interface DuplicateGroup {
 }
 
 export default function DuplicateTransactionFinder() {
+  const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [isSearching, setIsSearching] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
@@ -178,7 +180,7 @@ export default function DuplicateTransactionFinder() {
         <div className="flex items-center gap-4">
           <Button
             onClick={handleSearch}
-            disabled={isSearching}
+            disabled={isSearching || !isEditor || permissionsLoading}
           >
             {isSearching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             <Search className="mr-2 h-4 w-4" />
@@ -189,13 +191,16 @@ export default function DuplicateTransactionFinder() {
             <Button
               variant="destructive"
               onClick={() => setShowDeleteDialog(true)}
-              disabled={isDeleting}
+              disabled={isDeleting || !isEditor || permissionsLoading}
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete Selected ({selectedTransactions.size})
             </Button>
           )}
         </div>
+        {!isEditor && !permissionsLoading && (
+          <p className="text-sm text-muted-foreground">Only editors and owners can search for and delete duplicate transactions</p>
+        )}
 
         {duplicateGroups.length > 0 && (
           <div className="space-y-6">

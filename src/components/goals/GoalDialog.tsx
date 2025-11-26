@@ -13,6 +13,7 @@ import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { AlertCircle, Info } from 'lucide-react';
 import { parseLocalDate, formatLocalDate, getTodayLocal } from '@/lib/date-utils';
+import { handleApiError } from '@/lib/api-error-handler';
 
 interface GoalDialogProps {
   isOpen: boolean;
@@ -140,13 +141,17 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
     }
 
     if (goalType === 'envelope') {
-      if (!monthlyContribution || parseFloat(monthlyContribution) <= 0) {
-        toast.error('Please enter a valid monthly contribution');
+      if (monthlyContribution === '' || isNaN(parseFloat(monthlyContribution)) || parseFloat(monthlyContribution) < 0) {
+        toast.error('Please enter a valid monthly contribution (0 or greater)');
         return;
       }
     }
 
     if (goalType === 'account-linked') {
+      if (monthlyContribution === '' || isNaN(parseFloat(monthlyContribution)) || parseFloat(monthlyContribution) < 0) {
+        toast.error('Please enter a valid monthly contribution (0 or greater)');
+        return;
+      }
       if (accountOption === 'existing' && !linkedAccountId) {
         toast.error('Please select an account');
         return;
@@ -168,8 +173,8 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         toast.error('Please select either a credit card or a loan, not both');
         return;
       }
-      if (!monthlyContribution || parseFloat(monthlyContribution) <= 0) {
-        toast.error('Please enter a valid monthly payment amount');
+      if (monthlyContribution === '' || isNaN(parseFloat(monthlyContribution)) || parseFloat(monthlyContribution) < 0) {
+        toast.error('Please enter a valid monthly payment amount (0 or greater)');
         return;
       }
     }
@@ -192,8 +197,8 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         });
 
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to update goal');
+          const errorMessage = await handleApiError(response, 'Failed to update goal');
+          throw new Error(errorMessage || 'Failed to update goal');
         }
 
         const result = await response.json();
@@ -203,12 +208,16 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         toast.success('Goal updated');
       } else {
         // Create new goal
+        // Ensure monthly_contribution is always provided and valid (allow 0)
+        const monthlyContributionNum = monthlyContribution ? parseFloat(monthlyContribution) : 0;
+        const monthlyContributionValue = isNaN(monthlyContributionNum) || monthlyContributionNum < 0 ? 0 : monthlyContributionNum;
+        
         const requestData: CreateGoalRequest = {
           name,
           target_amount: goalType !== 'debt-paydown' ? parseFloat(targetAmount) : undefined,
           target_date: targetDate ? formatLocalDate(targetDate) : null,
           goal_type: goalType,
-          monthly_contribution: parseFloat(monthlyContribution),
+          monthly_contribution: monthlyContributionValue,
           starting_balance: goalType === 'envelope' && startingBalance
             ? parseFloat(startingBalance)
             : undefined,
@@ -240,8 +249,8 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
         });
 
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to create goal');
+          const errorMessage = await handleApiError(response, 'Failed to create goal');
+          throw new Error(errorMessage || 'Failed to create goal');
         }
 
         toast.success('Goal created');
@@ -399,7 +408,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
             <p className="text-xs text-muted-foreground mt-1">
               {goalType === 'debt-paydown' 
                 ? 'How much you plan to pay toward this debt each month'
-                : 'How much you plan to contribute each month'}
+                : 'How much you plan to contribute each month. You can enter 0 if you don\'t want to set up a contribution right now.'}
             </p>
           </div>
 

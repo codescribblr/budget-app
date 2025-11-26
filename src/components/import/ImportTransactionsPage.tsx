@@ -6,8 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import FileUpload from './FileUpload';
 import TransactionPreview from './TransactionPreview';
 import type { ParsedTransaction } from '@/lib/import-types';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 export default function ImportTransactionsPage() {
+  const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [isImporting, setIsImporting] = useState(false);
@@ -81,7 +83,15 @@ export default function ImportTransactionsPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <FileUpload onFileUploaded={handleFileUploaded} />
+        {!isEditor && !permissionsLoading ? (
+          <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              You only have read access to this account. Only account owners and editors can import transactions.
+            </p>
+          </div>
+        ) : (
+          <FileUpload onFileUploaded={handleFileUploaded} disabled={!isEditor || permissionsLoading} />
+        )}
       </CardContent>
     </Card>
   );

@@ -29,13 +29,15 @@ import type { Loan } from '@/lib/types';
 import { toast } from 'sonner';
 import { Check, X, MoreVertical, Edit, Trash2, Crown } from 'lucide-react';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
+import { handleApiError } from '@/lib/api-error-handler';
 
 interface LoanListProps {
   loans: Loan[];
   onUpdate: () => void;
+  disabled?: boolean;
 }
 
-export default function LoanList({ loans, onUpdate }: LoanListProps) {
+export default function LoanList({ loans, onUpdate, disabled = false }: LoanListProps) {
   const router = useRouter();
   const loansEnabled = useFeature('loans');
   const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
@@ -73,7 +75,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
     if (!editingLoan) return;
 
     try {
-      await fetch(`/api/loans/${editingLoan.id}`, {
+      const response = await fetch(`/api/loans/${editingLoan.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -89,6 +91,11 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
         }),
       });
 
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to update loan');
+        throw new Error(errorMessage || 'Failed to update loan');
+      }
+
       setIsEditDialogOpen(false);
       setEditingLoan(null);
       resetForm();
@@ -96,7 +103,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
       onUpdate();
     } catch (error) {
       console.error('Error updating loan:', error);
-      toast.error('Failed to update loan');
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -107,7 +114,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
     }
 
     try {
-      await fetch('/api/loans', {
+      const response = await fetch('/api/loans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -123,13 +130,18 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
         }),
       });
 
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to add loan');
+        throw new Error(errorMessage || 'Failed to add loan');
+      }
+
       setIsAddDialogOpen(false);
       resetForm();
       toast.success('Loan added');
       onUpdate();
     } catch (error) {
       console.error('Error adding loan:', error);
-      toast.error('Failed to add loan');
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -145,14 +157,17 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
       const response = await fetch(`/api/loans/${loanToDelete.id}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete loan');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to delete loan');
+        throw new Error(errorMessage || 'Failed to delete loan');
+      }
       toast.success('Loan deleted');
       setDeleteDialogOpen(false);
       setLoanToDelete(null);
       onUpdate();
     } catch (error) {
       console.error('Error deleting loan:', error);
-      toast.error('Failed to delete loan');
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -197,7 +212,10 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to update balance');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to update balance');
+        throw new Error(errorMessage || 'Failed to update balance');
+      }
 
       toast.success('Balance updated');
       setEditingBalanceId(null);
@@ -205,7 +223,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
       onUpdate();
     } catch (error) {
       console.error('Error updating balance:', error);
-      toast.error('Failed to update balance');
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -233,7 +251,7 @@ export default function LoanList({ loans, onUpdate }: LoanListProps) {
   return (
     <>
       <div className="mb-3">
-        <Button onClick={openAddDialog} size="sm">
+        <Button onClick={openAddDialog} size="sm" disabled={disabled}>
           Add Loan
         </Button>
       </div>

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId, userHasAccountWriteAccess } from '@/lib/account-context';
+import { sendInvitationEmail } from '@/lib/email-utils';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { randomUUID } from 'crypto';
 
 /**
  * GET /api/invitations
- * Get pending invitations for current account
+ * Get pending invitations for the current active account
+ * Only account owners can view invitations for their account
  */
 export async function GET() {
   try {
@@ -29,23 +32,68 @@ export async function GET() {
 
     const { data: invitations, error } = await supabase
       .from('account_invitations')
-      .select(`
-        id,
-        email,
-        role,
-        token,
-        invited_by,
-        expires_at,
-        created_at,
-        inviter:auth.users!account_invitations_invited_by_fkey(email)
-      `)
+      .select('id, email, role, token, invited_by, expires_at, created_at')
       .eq('account_id', accountId)
       .is('accepted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    return NextResponse.json({ invitations: invitations || [] });
+    // Filter out invitations for users who are already members
+    const adminSupabase = createServiceRoleClient();
+    const filteredInvitations = [];
+    
+    for (const invitation of (invitations || [])) {
+      let isMember = false;
+      
+      try {
+        // Find user by email
+        const { data: users } = await adminSupabase.auth.admin.listUsers();
+        const targetUser = users?.users?.find(
+          (u) => u.email?.toLowerCase() === invitation.email.toLowerCase()
+        );
+        
+        if (targetUser) {
+          // Check if user is owner
+          const { data: account } = await adminSupabase
+            .from('budget_accounts')
+            .select('owner_id')
+            .eq('id', accountId)
+            .single();
+          
+          if (account?.owner_id === targetUser.id) {
+            isMember = true;
+          } else {
+            // Check if user is in account_users
+            const { data: member } = await adminSupabase
+              .from('account_users')
+              .select('id')
+              .eq('account_id', accountId)
+              .eq('user_id', targetUser.id)
+              .eq('status', 'active')
+              .single();
+            
+            if (member) {
+              isMember = true;
+              // Mark invitation as accepted since user is already a member
+              await supabase
+                .from('account_invitations')
+                .update({ accepted_at: new Date().toISOString() })
+                .eq('id', invitation.id);
+            }
+          }
+        }
+      } catch (err) {
+        // If check fails, include invitation (better to show than hide)
+        console.error(`Error checking membership for invitation ${invitation.id}:`, err);
+      }
+      
+      if (!isMember) {
+        filteredInvitations.push(invitation);
+      }
+    }
+
+    return NextResponse.json({ invitations: filteredInvitations });
   } catch (error: any) {
     console.error('Error fetching invitations:', error);
     if (error.message === 'Unauthorized') {
@@ -99,18 +147,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user is already a member
-    const { data: existingMember } = await supabase
-      .from('account_users')
-      .select('id')
-      .eq('account_id', accountId)
-      .eq('user_id', (await supabase.auth.admin.getUserByEmail(email)).data.user?.id || '')
-      .eq('status', 'active')
-      .single();
+    // Check if user is already a member by looking up user by email
+    // Use service role client to check all users
+    const adminSupabase = createServiceRoleClient();
+    let userAlreadyMember = false;
+    
+    try {
+      // Find user by email
+      const { data: users } = await adminSupabase.auth.admin.listUsers();
+      const targetUser = users?.users?.find(
+        (u) => u.email?.toLowerCase() === email.toLowerCase()
+      );
+      
+      if (targetUser) {
+        // Check if user is already a member (either as owner or in account_users)
+        const { data: account } = await adminSupabase
+          .from('budget_accounts')
+          .select('owner_id')
+          .eq('id', accountId)
+          .single();
+        
+        if (account?.owner_id === targetUser.id) {
+          userAlreadyMember = true;
+        } else {
+          const { data: member } = await adminSupabase
+            .from('account_users')
+            .select('id')
+            .eq('account_id', accountId)
+            .eq('user_id', targetUser.id)
+            .eq('status', 'active')
+            .single();
+          
+          if (member) {
+            userAlreadyMember = true;
+          }
+        }
+      }
+    } catch (err) {
+      // If we can't check, continue - we'll catch it when they try to accept
+      console.error('Error checking if user is already a member:', err);
+    }
 
-    if (existingMember) {
+    if (userAlreadyMember) {
       return NextResponse.json(
-        { error: 'User is already a member of this account' },
+        { error: 'This user is already a member of this account' },
         { status: 400 }
       );
     }
@@ -128,6 +208,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Invitation already sent to this email' },
         { status: 400 }
+      );
+    }
+
+    // Get account name
+    const { data: account } = await supabase
+      .from('budget_accounts')
+      .select('name')
+      .eq('id', accountId)
+      .single();
+
+    if (!account) {
+      return NextResponse.json(
+        { error: 'Account not found' },
+        { status: 404 }
       );
     }
 
@@ -151,7 +245,21 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    // TODO: Send invitation email
+    // Send invitation email
+    try {
+      await sendInvitationEmail(
+        email.toLowerCase(),
+        token,
+        account.name,
+        user.user_metadata?.name || user.email?.split('@')[0] || 'Someone',
+        user.email || '',
+        role
+      );
+    } catch (emailError: any) {
+      // Log error but don't fail the invitation creation
+      console.error('Error sending invitation email:', emailError);
+      // In production, you might want to queue this for retry
+    }
 
     return NextResponse.json({ invitation }, { status: 201 });
   } catch (error: any) {

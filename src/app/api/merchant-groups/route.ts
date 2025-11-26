@@ -16,6 +16,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const body = await request.json();
     const { display_name } = body;
 

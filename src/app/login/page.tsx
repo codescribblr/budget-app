@@ -45,6 +45,26 @@ function LoginForm() {
         return;
       }
 
+      // Always check for pending invitations sent to user's email first (unless already going to an invite)
+      if (!redirectTo.startsWith('/invite/')) {
+        try {
+          const inviteResponse = await fetch('/api/invitations/my-invitations');
+          if (inviteResponse.ok) {
+            const inviteData = await inviteResponse.json();
+            // If there are pending invitations, redirect to the first one
+            if (inviteData.invitations && inviteData.invitations.length > 0) {
+              const firstInvite = inviteData.invitations[0];
+              router.push(`/invite/${firstInvite.token}`);
+              router.refresh();
+              return;
+            }
+          }
+        } catch (err) {
+          // If check fails, continue with normal redirect
+          console.error('Error checking invitations:', err);
+        }
+      }
+
       // Redirect to the original page or dashboard
       router.push(redirectTo);
       router.refresh();
@@ -183,7 +203,10 @@ function LoginForm() {
             
             <div className="text-sm text-center text-muted-foreground">
               Don't have an account?{' '}
-              <Link href="/signup" className="text-primary hover:underline font-medium">
+              <Link 
+                href={`/signup${searchParams.toString() ? `?${searchParams.toString()}` : ''}`}
+                className="text-primary hover:underline font-medium"
+              >
                 Sign up
               </Link>
             </div>

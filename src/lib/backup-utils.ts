@@ -1,12 +1,44 @@
 import { getAuthenticatedUser } from './supabase-queries';
+import { getActiveAccountId, userHasAccountWriteAccess, userHasOwnAccount } from './account-context';
 
-export interface UserBackupData {
-  version: string;
+export interface AccountBackupData {
+  version: string; // "2.0" for account-based backups
   created_at: string;
+  created_by: string; // User ID of account owner who created backup
+  
+  // Account structure
+  account: {
+    id: number;
+    name: string;
+    owner_id: string;
+    created_at: string;
+    updated_at: string;
+  };
+  
+  // Collaborators
+  account_users: Array<{
+    user_id: string;
+    role: 'owner' | 'editor' | 'viewer';
+    status: 'active' | 'invited' | 'removed';
+    invited_by: string | null;
+    invited_at: string;
+    accepted_at: string | null;
+  }>;
+  
+  // Pending invitations
+  account_invitations: Array<{
+    email: string;
+    role: 'editor' | 'viewer';
+    token: string;
+    invited_by: string;
+    expires_at: string;
+  }>;
+  
+  // Account data (all filtered by account_id)
   accounts: any[];
   categories: any[];
   credit_cards: any[];
-  loans?: any[]; // Added in version 1.2
+  loans?: any[];
   transactions: any[];
   transaction_splits: any[];
   imported_transactions: any[];
@@ -18,19 +50,81 @@ export interface UserBackupData {
   income_settings: any[];
   pre_tax_deductions: any[];
   settings: any[];
-  goals?: any[]; // Added in version 1.1
-  csv_import_templates?: any[]; // Added in version 1.1
-  category_monthly_funding?: any[]; // Added in version 1.3
-  user_feature_flags?: any[]; // Added in version 1.3
+  goals?: any[];
+  csv_import_templates?: any[];
+  category_monthly_funding?: any[];
+  user_feature_flags?: any[]; // User-specific, not account-specific
+}
+
+// Legacy interface for backward compatibility
+export interface UserBackupData {
+  version: string;
+  created_at: string;
+  accounts: any[];
+  categories: any[];
+  credit_cards: any[];
+  loans?: any[];
+  transactions: any[];
+  transaction_splits: any[];
+  imported_transactions: any[];
+  imported_transaction_links: any[];
+  merchant_groups: any[];
+  merchant_mappings: any[];
+  merchant_category_rules: any[];
+  pending_checks: any[];
+  income_settings: any[];
+  pre_tax_deductions: any[];
+  settings: any[];
+  goals?: any[];
+  csv_import_templates?: any[];
+  category_monthly_funding?: any[];
+  user_feature_flags?: any[];
 }
 
 /**
- * Export all user data to a JSON backup
+ * Export all account data to a JSON backup (account-based)
+ * Only account owners can create backups
  */
-export async function exportUserData(): Promise<UserBackupData> {
+export async function exportAccountData(): Promise<AccountBackupData> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
-  // Fetch all user data in parallel
+  // Verify user has write access (owners and editors can create backups)
+  const hasWriteAccess = await userHasAccountWriteAccess(accountId);
+  if (!hasWriteAccess) {
+    throw new Error('Unauthorized: Only account owners and editors can create backups');
+  }
+
+  // Fetch account structure
+  const { data: account, error: accountError } = await supabase
+    .from('budget_accounts')
+    .select('*')
+    .eq('id', accountId)
+    .single();
+
+  if (accountError || !account) {
+    throw new Error('Account not found');
+  }
+
+  // Fetch collaborators
+  const { data: accountUsers, error: usersError } = await supabase
+    .from('account_users')
+    .select('*')
+    .eq('account_id', accountId);
+
+  if (usersError) throw usersError;
+
+  // Fetch pending invitations
+  const { data: invitations, error: invitationsError } = await supabase
+    .from('account_invitations')
+    .select('*')
+    .eq('account_id', accountId)
+    .is('accepted_at', null);
+
+  if (invitationsError) throw invitationsError;
+
+  // Fetch all account data (filtered by account_id)
   const [
     { data: accounts },
     { data: categories },
@@ -52,36 +146,59 @@ export async function exportUserData(): Promise<UserBackupData> {
     { data: category_monthly_funding },
     { data: user_feature_flags },
   ] = await Promise.all([
-    supabase.from('accounts').select('*').eq('user_id', user.id),
-    supabase.from('categories').select('*').eq('user_id', user.id),
-    supabase.from('credit_cards').select('*').eq('user_id', user.id),
-    supabase.from('loans').select('*').eq('user_id', user.id),
-    supabase.from('transactions').select('*').eq('user_id', user.id),
+    supabase.from('accounts').select('*').eq('account_id', accountId),
+    supabase.from('categories').select('*').eq('account_id', accountId),
+    supabase.from('credit_cards').select('*').eq('account_id', accountId),
+    supabase.from('loans').select('*').eq('account_id', accountId),
+    supabase.from('transactions').select('*').eq('budget_account_id', accountId),
     supabase
       .from('transaction_splits')
-      .select('*, transactions!inner(user_id)')
-      .eq('transactions.user_id', user.id),
-    supabase.from('imported_transactions').select('*').eq('user_id', user.id),
+      .select('*, transactions!inner(budget_account_id)')
+      .eq('transactions.budget_account_id', accountId),
+    supabase.from('imported_transactions').select('*').eq('account_id', accountId),
     supabase
       .from('imported_transaction_links')
-      .select('*, imported_transactions!inner(user_id)')
-      .eq('imported_transactions.user_id', user.id),
-    supabase.from('merchant_groups').select('*').eq('user_id', user.id),
-    supabase.from('merchant_mappings').select('*').eq('user_id', user.id),
-    supabase.from('merchant_category_rules').select('*').eq('user_id', user.id),
-    supabase.from('pending_checks').select('*').eq('user_id', user.id),
-    supabase.from('income_settings').select('*').eq('user_id', user.id),
-    supabase.from('pre_tax_deductions').select('*').eq('user_id', user.id),
-    supabase.from('settings').select('*').eq('user_id', user.id),
-    supabase.from('goals').select('*').eq('user_id', user.id),
-    supabase.from('csv_import_templates').select('*').eq('user_id', user.id),
-    supabase.from('category_monthly_funding').select('*').eq('user_id', user.id),
-    supabase.from('user_feature_flags').select('*').eq('user_id', user.id),
+      .select('*, imported_transactions!inner(account_id)')
+      .eq('imported_transactions.account_id', accountId),
+    supabase.from('merchant_groups').select('*').eq('account_id', accountId),
+    supabase.from('merchant_mappings').select('*').eq('account_id', accountId),
+    supabase.from('merchant_category_rules').select('*').eq('account_id', accountId),
+    supabase.from('pending_checks').select('*').eq('account_id', accountId),
+    supabase.from('income_settings').select('*').eq('account_id', accountId),
+    supabase.from('pre_tax_deductions').select('*').eq('account_id', accountId),
+    supabase.from('settings').select('*').eq('account_id', accountId),
+    supabase.from('goals').select('*').eq('account_id', accountId),
+    supabase.from('csv_import_templates').select('*').eq('account_id', accountId),
+    supabase.from('category_monthly_funding').select('*').eq('account_id', accountId),
+    supabase.from('user_feature_flags').select('*').eq('account_id', accountId),
   ]);
 
   return {
-    version: '1.3',
+    version: '2.0',
     created_at: new Date().toISOString(),
+    created_by: user.id,
+    account: {
+      id: account.id,
+      name: account.name,
+      owner_id: account.owner_id,
+      created_at: account.created_at,
+      updated_at: account.updated_at,
+    },
+    account_users: (accountUsers || []).map((au: any) => ({
+      user_id: au.user_id,
+      role: au.role,
+      status: au.status,
+      invited_by: au.invited_by,
+      invited_at: au.invited_at,
+      accepted_at: au.accepted_at,
+    })),
+    account_invitations: (invitations || []).map((inv: any) => ({
+      email: inv.email,
+      role: inv.role,
+      token: inv.token,
+      invited_by: inv.invited_by,
+      expires_at: inv.expires_at,
+    })),
     accounts: accounts || [],
     categories: categories || [],
     credit_cards: credit_cards || [],
@@ -101,6 +218,39 @@ export async function exportUserData(): Promise<UserBackupData> {
     csv_import_templates: csv_import_templates || [],
     category_monthly_funding: category_monthly_funding || [],
     user_feature_flags: user_feature_flags || [],
+  };
+}
+
+/**
+ * Export all user data to a JSON backup (legacy - for backward compatibility)
+ * @deprecated Use exportAccountData instead
+ */
+export async function exportUserData(): Promise<UserBackupData> {
+  // For backward compatibility, call exportAccountData and convert
+  const accountData = await exportAccountData();
+  
+  return {
+    version: accountData.version,
+    created_at: accountData.created_at,
+    accounts: accountData.accounts,
+    categories: accountData.categories,
+    credit_cards: accountData.credit_cards,
+    loans: accountData.loans,
+    transactions: accountData.transactions,
+    transaction_splits: accountData.transaction_splits,
+    imported_transactions: accountData.imported_transactions,
+    imported_transaction_links: accountData.imported_transaction_links,
+    merchant_groups: accountData.merchant_groups,
+    merchant_mappings: accountData.merchant_mappings,
+    merchant_category_rules: accountData.merchant_category_rules,
+    pending_checks: accountData.pending_checks,
+    income_settings: accountData.income_settings,
+    pre_tax_deductions: accountData.pre_tax_deductions,
+    settings: accountData.settings,
+    goals: accountData.goals,
+    csv_import_templates: accountData.csv_import_templates,
+    category_monthly_funding: accountData.category_monthly_funding,
+    user_feature_flags: accountData.user_feature_flags,
   };
 }
 
@@ -554,9 +704,9 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert user feature flags (batch)
   if (backupData.user_feature_flags && backupData.user_feature_flags.length > 0) {
-    const userFeatureFlagsToInsert = backupData.user_feature_flags.map(({ id, ...flag }) => ({
+    const userFeatureFlagsToInsert = backupData.user_feature_flags.map(({ id, user_id, ...flag }) => ({
       ...flag,
-      user_id: user.id,
+      account_id: accountId,
     }));
 
     const { error } = await supabase

@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
+import { handleApiError } from '@/lib/api-error-handler';
 
 interface AddToBufferDialogProps {
   open: boolean;
@@ -53,8 +54,8 @@ export function AddToBufferDialog({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to add to buffer');
+        const errorMessage = await handleApiError(response, 'Failed to add to buffer');
+        throw new Error(errorMessage || 'Failed to add to buffer');
       }
 
       const data = await response.json();
@@ -63,7 +64,8 @@ export function AddToBufferDialog({
       onOpenChange(false);
       onSuccess();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to add to buffer');
+      console.error('Error adding to buffer:', error);
+      // Error toast already shown by handleApiError
     } finally {
       setIsSubmitting(false);
     }

@@ -57,27 +57,34 @@ export async function getActiveAccountId(): Promise<number | null> {
   }
   
   // Fallback: Get user's primary account
-  // Get user's accounts (both owned and shared)
+  // First check if user owns any accounts (owners aren't in account_users)
+  const { data: ownedAccounts } = await supabase
+    .from('budget_accounts')
+    .select('id')
+    .eq('owner_id', user.id)
+    .is('deleted_at', null)
+    .limit(1);
+  
+  if (ownedAccounts && ownedAccounts.length > 0) {
+    return ownedAccounts[0].id;
+  }
+  
+  // If no owned accounts, check shared accounts
   const { data: accountUsers } = await supabase
     .from('account_users')
     .select('account_id, role')
     .eq('user_id', user.id)
     .eq('status', 'active')
-    .order('role', { ascending: true }); // owners first
+    .order('role', { ascending: true }) // owners first (though owners shouldn't be here)
+    .limit(1);
   
-  // If no shared accounts, check if user owns any accounts
-  if (!accountUsers || accountUsers.length === 0) {
-    const { data: ownedAccounts } = await supabase
-      .from('budget_accounts')
-      .select('id')
-      .eq('owner_id', user.id)
-      .is('deleted_at', null)
-      .limit(1);
-    
-    return ownedAccounts?.[0]?.id || null;
+  if (accountUsers && accountUsers.length > 0) {
+    return accountUsers[0].account_id;
   }
   
-  return accountUsers[0].account_id;
+  // No accounts found - don't auto-create one
+  // User should either accept an invitation or create their own account
+  return null;
 }
 
 /**
@@ -119,53 +126,58 @@ export async function setActiveAccountId(accountId: number): Promise<void> {
 export async function getUserAccounts(): Promise<AccountMembership[]> {
   const { supabase, user } = await getAuthenticatedUser();
   
-  // Get shared accounts
-  const { data: accountUsers } = await supabase
-    .from('account_users')
-    .select(`
-      account_id,
-      role,
-      account:budget_accounts (
-        id,
-        name,
-        owner_id
-      )
-    `)
-    .eq('user_id', user.id)
-    .eq('status', 'active');
-  
-  // Get owned accounts
+  // Get owned accounts first (owners might not be in account_users)
   const { data: ownedAccounts } = await supabase
     .from('budget_accounts')
     .select('id, name, owner_id')
     .eq('owner_id', user.id)
     .is('deleted_at', null);
   
-  const memberships: AccountMembership[] = [];
+  // Get account_users entries for this user
+  const { data: accountUsers } = await supabase
+    .from('account_users')
+    .select('account_id, role')
+    .eq('user_id', user.id)
+    .eq('status', 'active');
   
-  // Add shared accounts
-  if (accountUsers) {
-    for (const au of accountUsers) {
-      if (au.account) {
-        memberships.push({
-          accountId: au.account_id,
-          role: au.role as 'owner' | 'editor' | 'viewer',
-          accountName: au.account.name,
-          isOwner: au.account.owner_id === user.id,
-        });
-      }
+  const memberships: AccountMembership[] = [];
+  const ownedAccountIds = new Set<number>();
+  
+  // Add owned accounts first
+  if (ownedAccounts && ownedAccounts.length > 0) {
+    for (const account of ownedAccounts) {
+      ownedAccountIds.add(account.id);
+      memberships.push({
+        accountId: account.id,
+        role: 'owner',
+        accountName: account.name || 'My Budget',
+        isOwner: true,
+      });
     }
   }
   
-  // Add owned accounts (avoid duplicates)
-  if (ownedAccounts) {
-    for (const account of ownedAccounts) {
-      if (!memberships.find(m => m.accountId === account.id)) {
+  // Add shared accounts (where user is a member but not owner)
+  if (accountUsers && accountUsers.length > 0) {
+    for (const au of accountUsers) {
+      // Skip if already added as owned account
+      if (ownedAccountIds.has(au.account_id)) {
+        continue;
+      }
+      
+      // Fetch account details separately to avoid RLS join issues
+      const { data: account } = await supabase
+        .from('budget_accounts')
+        .select('id, name, owner_id')
+        .eq('id', au.account_id)
+        .is('deleted_at', null)
+        .single();
+      
+      if (account) {
         memberships.push({
-          accountId: account.id,
-          role: 'owner',
-          accountName: account.name,
-          isOwner: true,
+          accountId: au.account_id,
+          role: au.role as 'owner' | 'editor' | 'viewer',
+          accountName: account.name || 'Unknown Account',
+          isOwner: account.owner_id === user.id,
         });
       }
     }

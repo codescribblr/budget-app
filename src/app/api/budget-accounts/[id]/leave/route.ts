@@ -3,8 +3,8 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getUserAccountCount } from '@/lib/account-context';
 
 /**
- * DELETE /api/accounts/[id]/leave
- * Leave account (non-owners)
+ * DELETE /api/budget-accounts/[id]/leave
+ * Leave budget account (non-owners)
  */
 export async function DELETE(
   request: NextRequest,
@@ -142,14 +142,15 @@ export async function DELETE(
       { status: 400 }
     );
   } catch (error: any) {
-    console.error('Error leaving account:', error);
+    console.error('Error leaving budget account:', error);
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     return NextResponse.json(
-      { error: 'Failed to leave account' },
+      { error: 'Failed to leave budget account' },
       { status: 500 }
     );
   }
 }
+
 

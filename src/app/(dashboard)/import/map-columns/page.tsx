@@ -23,11 +23,13 @@ import { CheckCircle2, AlertCircle, XCircle, ArrowLeft } from 'lucide-react';
 import { saveTemplate } from '@/lib/mapping-templates';
 import { parseCSVWithMapping, processTransactions } from '@/lib/csv-parser-helpers';
 import type { ParsedTransaction } from '@/lib/import-types';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'ignore';
 
 export default function MapColumnsPage() {
   const router = useRouter();
+  const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [mappings, setMappings] = useState<Record<number, FieldType>>({});
   const [shouldSaveTemplate, setShouldSaveTemplate] = useState(false);
   const [templateName, setTemplateName] = useState('');
@@ -38,6 +40,14 @@ export default function MapColumnsPage() {
   const [fileName, setFileName] = useState<string>('');
 
   useEffect(() => {
+    // Check permissions - redirect if read-only user
+    if (!permissionsLoading && !isEditor) {
+      router.push('/import');
+      return;
+    }
+  }, [isEditor, permissionsLoading, router]);
+
+  useEffect(() => {
     // Load CSV data from sessionStorage
     const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
     const csvDataStr = sessionStorage.getItem('csvData');
@@ -45,6 +55,12 @@ export default function MapColumnsPage() {
 
     if (!csvAnalysisStr || !csvDataStr || !fileNameStr) {
       // No data found, redirect back to import
+      router.push('/import');
+      return;
+    }
+    
+    // Also redirect if read-only user
+    if (!permissionsLoading && !isEditor) {
       router.push('/import');
       return;
     }

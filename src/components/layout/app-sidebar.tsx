@@ -2,8 +2,6 @@
 
 import * as React from "react"
 import { usePathname, useRouter } from "next/navigation"
-import Image from "next/image"
-import { useTheme } from "next-themes"
 import {
   LayoutDashboard,
   Receipt,
@@ -34,7 +32,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
-import SignOutButton from "@/components/auth/SignOutButton"
+import { UserMenu } from "@/components/layout/user-menu"
+import { AccountSwitcher } from "@/components/layout/account-switcher"
 import { useFeature } from "@/contexts/FeatureContext"
 
 const navigationSections = [
@@ -77,16 +76,7 @@ export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { state } = useSidebar()
-  const { resolvedTheme } = useTheme()
-  const [mounted, setMounted] = React.useState(false)
   const incomeBufferEnabled = useFeature('income_buffer')
-
-  React.useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Use default icon during SSR to prevent hydration mismatch
-  const logoSrc = mounted && resolvedTheme === "dark" ? "/icon-darkmode.svg" : "/icon.svg"
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -99,23 +89,8 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="h-16 border-b border-sidebar-border p-0">
-        <div className="flex h-full items-center gap-2 px-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden">
-            <Image
-              src={logoSrc}
-              alt="Budget App"
-              width={32}
-              height={32}
-              className="h-8 w-8"
-              priority
-            />
-          </div>
-          {state === "expanded" && (
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold">Budget App</span>
-              <span className="text-xs text-muted-foreground">Envelope Budgeting</span>
-            </div>
-          )}
+        <div className="flex h-full items-center px-2">
+          <AccountSwitcher />
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -150,12 +125,7 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <div className="flex items-center gap-2 px-2 py-2">
-              <ThemeToggle />
-              {state === "expanded" && (
-                <SignOutButton />
-              )}
-            </div>
+            <UserMenu />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

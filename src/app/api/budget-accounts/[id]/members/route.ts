@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { userHasAccountAccess } from '@/lib/account-context';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 /**
- * GET /api/accounts/[id]/members
- * Get all members of an account
+ * GET /api/budget-accounts/[id]/members
+ * Get all members of a budget account
  */
 export async function GET(
   request: NextRequest,
@@ -32,33 +33,62 @@ export async function GET(
     }
 
     // Get account owner
-    const { data: account } = await supabase
+    const { data: account, error: accountError } = await supabase
       .from('budget_accounts')
-      .select('owner_id')
+      .select('owner_id, created_at')
       .eq('id', accountId)
       .single();
+
+    if (accountError || !account) {
+      return NextResponse.json(
+        { error: 'Account not found' },
+        { status: 404 }
+      );
+    }
 
     // Get all members
     const { data: members, error } = await supabase
       .from('account_users')
-      .select(`
-        user_id,
-        role,
-        status,
-        accepted_at,
-        created_at,
-        user:auth.users!account_users_user_id_fkey(email)
-      `)
+      .select('user_id, role, status, accepted_at, created_at')
       .eq('account_id', accountId)
       .eq('status', 'active')
       .order('created_at', { ascending: true });
 
     if (error) throw error;
 
+    // Collect all user IDs (including owner)
+    const userIds = new Set<string>();
+    if (account?.owner_id) {
+      userIds.add(account.owner_id);
+    }
+    (members || []).forEach((member: any) => {
+      userIds.add(member.user_id);
+    });
+
+    // Fetch user emails using Auth Admin API (requires service role client)
+    const adminSupabase = createServiceRoleClient();
+    const userEmailMap = new Map<string, string>();
+    for (const userId of userIds) {
+      try {
+        const { data: userData, error: userError } = await adminSupabase.auth.admin.getUserById(userId);
+        if (userError) {
+          console.error(`Error fetching user ${userId}:`, userError);
+          continue;
+        }
+        if (userData?.user?.email) {
+          userEmailMap.set(userId, userData.user.email);
+        } else {
+          console.warn(`No email found for user ${userId}`);
+        }
+      } catch (err) {
+        console.error(`Exception fetching user ${userId}:`, err);
+      }
+    }
+
     // Format members
     const formattedMembers = (members || []).map((member: any) => ({
       userId: member.user_id,
-      email: member.user?.email || 'Unknown',
+      email: userEmailMap.get(member.user_id) || 'Unknown',
       role: member.role,
       isOwner: account?.owner_id === member.user_id,
       joinedAt: member.accepted_at || member.created_at,
@@ -68,10 +98,9 @@ export async function GET(
     if (account?.owner_id) {
       const ownerInList = formattedMembers.find(m => m.userId === account.owner_id);
       if (!ownerInList) {
-        const { data: ownerData } = await supabase.auth.admin.getUserById(account.owner_id);
         formattedMembers.unshift({
           userId: account.owner_id,
-          email: ownerData?.user?.email || 'Unknown',
+          email: userEmailMap.get(account.owner_id) || 'Unknown',
           role: 'owner',
           isOwner: true,
           joinedAt: account.created_at,

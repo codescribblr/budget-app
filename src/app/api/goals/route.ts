@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAllGoals, createGoal, getAuthenticatedUser } from '@/lib/supabase-queries';
 import { validateCreateGoal } from '@/lib/goals/validations';
 import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
+import { getActiveAccountId } from '@/lib/account-context';
 import type { CreateGoalRequest } from '@/lib/types';
 
 /**
@@ -11,7 +12,14 @@ import type { CreateGoalRequest } from '@/lib/types';
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getAuthenticatedUser();
-    await requirePremiumSubscription(user.id);
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
+    await requirePremiumSubscription(accountId);
 
     const status = request.nextUrl.searchParams.get('status');
     const goals = await getAllGoals();
@@ -47,7 +55,18 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getAuthenticatedUser();
-    await requirePremiumSubscription(user.id);
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
+    await requirePremiumSubscription(accountId);
+
+    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
 
     const data: CreateGoalRequest = await request.json();
 
@@ -73,8 +92,29 @@ export async function POST(request: NextRequest) {
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    
+    // Extract more specific error messages from database errors
+    let errorMessage = 'Failed to create goal';
+    if (error.code === '23502') {
+      // NOT NULL constraint violation
+      const columnMatch = error.message?.match(/column "(\w+)"/);
+      if (columnMatch) {
+        const columnName = columnMatch[1];
+        const friendlyNames: Record<string, string> = {
+          'monthly_contribution': 'Monthly contribution',
+          'target_amount': 'Target amount',
+          'name': 'Goal name',
+        };
+        errorMessage = `${friendlyNames[columnName] || columnName} is required`;
+      } else {
+        errorMessage = 'Required field is missing';
+      }
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to create goal', message: error.message },
+      { error: errorMessage },
       { status: 500 }
     );
   }

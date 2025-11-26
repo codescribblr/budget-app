@@ -1,5 +1,6 @@
 import { AppLayout } from "@/components/layout/app-layout"
 import { FeatureProvider } from "@/contexts/FeatureContext"
+import { AccountSelectionGuard } from "@/components/account-selection/AccountSelectionGuard"
 
 export default function DashboardLayout({
   children,
@@ -8,7 +9,9 @@ export default function DashboardLayout({
 }) {
   return (
     <FeatureProvider>
-      <AppLayout>{children}</AppLayout>
+      <AccountSelectionGuard>
+        <AppLayout>{children}</AppLayout>
+      </AccountSelectionGuard>
     </FeatureProvider>
   )
 }

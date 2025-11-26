@@ -12,6 +12,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import type { PreTaxDeductionItem } from '@/lib/types';
 import { toast } from 'sonner';
+import { handleApiError } from '@/lib/api-error-handler';
 
 type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly' | 'quarterly' | 'annually';
 
@@ -21,6 +22,7 @@ interface PreTaxDeductionsSectionProps {
   payFrequency: PayFrequency;
   includeExtraPaychecks: boolean;
   onChange: (items: PreTaxDeductionItem[]) => void;
+  disabled?: boolean;
 }
 
 export default function PreTaxDeductionsSection({
@@ -29,6 +31,7 @@ export default function PreTaxDeductionsSection({
   payFrequency,
   includeExtraPaychecks,
   onChange,
+  disabled = false,
 }: PreTaxDeductionsSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PreTaxDeductionItem | null>(null);
@@ -139,14 +142,15 @@ export default function PreTaxDeductionsSection({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save pre-tax deductions');
+        const errorMessage = await handleApiError(response, 'Failed to save pre-tax deductions');
+        throw new Error(errorMessage || 'Failed to save pre-tax deductions');
       }
 
       toast.success('Pre-tax deductions saved');
       return true;
     } catch (error) {
       console.error('Error saving pre-tax deductions:', error);
-      toast.error('Failed to save pre-tax deductions');
+      // Error toast already shown by handleApiError
       return false;
     }
   };
@@ -209,7 +213,11 @@ export default function PreTaxDeductionsSection({
                 Enter amounts per paycheck. Total monthly: {formatCurrency(totalMonthly)}
               </CardDescription>
             </div>
-            <Button onClick={() => handleOpenDialog()} size="sm">
+            <Button 
+              onClick={() => handleOpenDialog()} 
+              size="sm"
+              disabled={disabled}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Add Deduction
             </Button>
@@ -252,6 +260,7 @@ export default function PreTaxDeductionsSection({
                           variant="ghost"
                           size="sm"
                           onClick={() => handleOpenDialog(item)}
+                          disabled={disabled}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -259,6 +268,7 @@ export default function PreTaxDeductionsSection({
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDelete(item.id)}
+                          disabled={disabled}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -343,7 +353,10 @@ export default function PreTaxDeductionsSection({
             <Button variant="outline" onClick={handleCloseDialog}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={!formData.name || formData.value <= 0}>
+            <Button 
+              onClick={handleSave} 
+              disabled={!formData.name || formData.value <= 0 || disabled}
+            >
               {editingItem ? 'Save Changes' : 'Add Deduction'}
             </Button>
           </DialogFooter>

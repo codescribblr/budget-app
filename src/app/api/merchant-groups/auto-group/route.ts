@@ -9,6 +9,10 @@ import { clusterMerchants, calculateConfidence } from '@/lib/merchant-grouping';
  */
 export async function POST(request: Request) {
   try {
+    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const body = await request.json();
     const { threshold = 0.85, dryRun = false } = body;
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
+import { checkOwnerAccess } from '@/lib/api-helpers';
 import {
   DEFAULT_CATEGORIES,
   DEFAULT_ACCOUNTS,
@@ -10,12 +11,26 @@ import {
 /**
  * POST /api/user/import-defaults
  * 
- * Imports default categories, accounts, credit cards, and settings for the user.
+ * Imports default categories, accounts, credit cards, and settings for the active account.
  * This gives new users a starting point for their budget.
+ * Only account owners can perform this action.
  */
 export async function POST() {
   try {
+    // Check if user is account owner
+    const ownerCheck = await checkOwnerAccess();
+    if (ownerCheck) return ownerCheck;
+
     const { supabase, user } = await getAuthenticatedUser();
+    const { getActiveAccountId } = await import('@/lib/account-context');
+    const accountId = await getActiveAccountId();
+    
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
 
     let categoriesCount = 0;
     let accountsCount = 0;
@@ -27,7 +42,7 @@ export async function POST() {
       const { error } = await supabase
         .from('categories')
         .insert({
-          user_id: user.id,
+          account_id: accountId,
           name: category.name,
           monthly_amount: category.monthly_amount,
           current_balance: 0, // Start with 0 balance
@@ -47,7 +62,7 @@ export async function POST() {
       const { error } = await supabase
         .from('accounts')
         .insert({
-          user_id: user.id,
+          account_id: accountId,
           name: account.name,
           balance: account.balance,
           account_type: account.account_type,
@@ -68,7 +83,7 @@ export async function POST() {
       const { error } = await supabase
         .from('credit_cards')
         .insert({
-          user_id: user.id,
+          account_id: accountId,
           name: card.name,
           credit_limit: card.credit_limit,
           available_credit: card.available_credit,
@@ -89,7 +104,7 @@ export async function POST() {
       const { error } = await supabase
         .from('settings')
         .insert({
-          user_id: user.id,
+          account_id: accountId,
           key: setting.key,
           value: setting.value,
         });

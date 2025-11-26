@@ -14,9 +14,11 @@ import {
 } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Loader2, Key } from 'lucide-react';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 export default function PasswordPage() {
   const supabase = createClient();
+  const { isOwner, isLoading: permissionsLoading } = useAccountPermissions();
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -86,11 +88,14 @@ export default function PasswordPage() {
         </div>
         <Button
           onClick={handleUpdatePassword}
-          disabled={isUpdatingPassword || !newPassword || !confirmPassword}
+          disabled={isUpdatingPassword || !newPassword || !confirmPassword || !isOwner || permissionsLoading}
         >
           {isUpdatingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Update Password
         </Button>
+        {!isOwner && !permissionsLoading && (
+          <p className="text-sm text-muted-foreground">Only account owners can change passwords</p>
+        )}
       </CardContent>
     </Card>
   );

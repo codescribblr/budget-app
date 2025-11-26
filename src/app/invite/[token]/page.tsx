@@ -39,25 +39,47 @@ export default function AcceptInvitationPage() {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
-        // User not logged in - redirect to login with return URL
+        // User not logged in - check if user exists and redirect accordingly
+        const checkResponse = await fetch(`/api/invitations/${token}/check`)
+        
+        if (!checkResponse.ok) {
+          const checkData = await checkResponse.json()
+          setError(checkData.error || "This invitation is no longer valid. Please contact the account owner for a new invitation.")
+          setLoading(false)
+          return
+        }
+
+        const checkData = await checkResponse.json()
+        
+        // If user doesn't exist, redirect to signup
+        if (!checkData.userExists) {
+          router.push(`/signup?redirectTo=/invite/${token}&email=${encodeURIComponent(checkData.email)}`)
+          return
+        }
+        
+        // If user exists, redirect to login
         router.push(`/login?redirectTo=/invite/${token}`)
         return
       }
 
-      // Fetch invitation details
-      const response = await fetch(`/api/invitations/${token}/accept`, {
-        method: 'GET',
-      })
+      // Fetch invitation details using GET endpoint (not accept endpoint)
+      const response = await fetch(`/api/invitations/${token}`)
 
       if (response.status === 404) {
-        setError("Invitation not found or already accepted")
+        setError("This invitation has been revoked or is no longer valid. Please contact the account owner for a new invitation.")
         setLoading(false)
         return
       }
 
       if (!response.ok) {
         const data = await response.json()
-        setError(data.error || "Failed to load invitation")
+        if (response.status === 400 && data.error?.includes('expired')) {
+          setError("This invitation has expired. Please contact the account owner for a new invitation.")
+        } else if (response.status === 403) {
+          setError(data.error || "You don't have permission to accept this invitation.")
+        } else {
+          setError(data.error || "Failed to load invitation")
+        }
         setLoading(false)
         return
       }
@@ -122,14 +144,32 @@ export default function AcceptInvitationPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <XCircle className="h-5 w-5 text-destructive" />
-              Error
+              Invitation Not Available
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">{error}</p>
-            <Link href="/dashboard">
-              <Button>Go to Dashboard</Button>
-            </Link>
+          <CardContent className="space-y-4">
+            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm text-destructive font-medium mb-2">This invitation is no longer valid</p>
+              <p className="text-sm text-muted-foreground">{error}</p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Possible reasons:
+              </p>
+              <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                <li>The invitation has been revoked by the account owner</li>
+                <li>The invitation has expired</li>
+                <li>The invitation has already been accepted</li>
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <Link href="/dashboard" className="flex-1">
+                <Button variant="outline" className="w-full">Go to Dashboard</Button>
+              </Link>
+              <Link href="/login" className="flex-1">
+                <Button className="w-full">Sign In</Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -148,7 +188,7 @@ export default function AcceptInvitationPage() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-4">
-              You've been added to <strong>{invitation?.account.name}</strong> as a {invitation?.role}.
+              You've been added to <strong>{invitation?.account?.name || 'Unknown Account'}</strong> as a {invitation?.role}.
             </p>
             {!invitation?.userHasOwnAccount && (
               <p className="text-sm text-muted-foreground mb-4">
@@ -176,7 +216,7 @@ export default function AcceptInvitationPage() {
             <>
               <div className="space-y-2">
                 <p className="text-sm font-medium">Account:</p>
-                <p className="text-lg font-semibold">{invitation.account.name}</p>
+                <p className="text-lg font-semibold">{invitation.account?.name || 'Unknown Account'}</p>
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-medium">Role:</p>

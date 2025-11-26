@@ -8,6 +8,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { Category, Account, CreditCard } from '@/lib/types';
 import { formatLocalDate, getTodayLocal } from '@/lib/date-utils';
+import { handleApiError } from '@/lib/api-error-handler';
 
 interface AddTransactionDialogProps {
   isOpen: boolean;
@@ -34,11 +35,19 @@ export default function AddTransactionDialog({
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [selectedCreditCardId, setSelectedCreditCardId] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       fetchAccounts();
       fetchCreditCards();
+      // Reset form when dialog opens
+      setDate(getTodayLocal());
+      setDescription('');
+      setSplits([{ category_id: 0, amount: '' }]);
+      setSelectedAccountId(null);
+      setSelectedCreditCardId(null);
+      setIsSubmitting(false);
     }
   }, [isOpen]);
 
@@ -93,6 +102,11 @@ export default function AddTransactionDialog({
   };
 
   const handleSubmit = async () => {
+    // Prevent double submission
+    if (isSubmitting) {
+      return;
+    }
+
     // Validation
     if (!description.trim()) {
       alert('Please enter a description');
@@ -105,8 +119,10 @@ export default function AddTransactionDialog({
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
-      await fetch('/api/transactions', {
+      const response = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -121,17 +137,25 @@ export default function AddTransactionDialog({
         }),
       });
 
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to add transaction');
+        throw new Error(errorMessage || 'Failed to add transaction');
+      }
+
       // Reset form
       setDate(getTodayLocal());
       setDescription('');
       setSplits([{ category_id: 0, amount: '' }]);
       setSelectedAccountId(null);
       setSelectedCreditCardId(null);
+      setIsSubmitting(false);
       onSuccess();
       onClose();
     } catch (error) {
       console.error('Error adding transaction:', error);
-      alert('Failed to add transaction');
+      setIsSubmitting(false);
+      // Error toast already shown by handleApiError
+      // Button will be re-enabled so user can try again
     }
   };
 
@@ -261,10 +285,12 @@ export default function AddTransactionDialog({
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>Add Transaction</Button>
+            <Button onClick={handleSubmit} disabled={isSubmitting}>
+              {isSubmitting ? 'Adding...' : 'Add Transaction'}
+            </Button>
           </div>
         </div>
       </DialogContent>
