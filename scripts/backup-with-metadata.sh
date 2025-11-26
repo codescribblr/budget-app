@@ -78,24 +78,47 @@ if [ -n "$PENDING_MIGRATIONS" ]; then
 fi
 echo ""
 
-# Find the correct pg_dump binary (prefer PostgreSQL 17, then 16, then 15+)
+# Detect server version and find matching pg_dump binary
 PG_DUMP_CMD="pg_dump"
-if command -v pg_dump-17 >/dev/null 2>&1; then
-  PG_DUMP_CMD="pg_dump-17"
-elif [ -f "/usr/lib/postgresql/17/bin/pg_dump" ]; then
-  PG_DUMP_CMD="/usr/lib/postgresql/17/bin/pg_dump"
-elif command -v pg_dump-16 >/dev/null 2>&1; then
-  PG_DUMP_CMD="pg_dump-16"
-elif [ -f "/usr/lib/postgresql/16/bin/pg_dump" ]; then
-  PG_DUMP_CMD="/usr/lib/postgresql/16/bin/pg_dump"
-elif command -v pg_dump-15 >/dev/null 2>&1; then
-  PG_DUMP_CMD="pg_dump-15"
-elif [ -f "/usr/lib/postgresql/15/bin/pg_dump" ]; then
-  PG_DUMP_CMD="/usr/lib/postgresql/15/bin/pg_dump"
+SERVER_VERSION=""
+
+# Try to detect server version by querying the database
+if command -v psql >/dev/null 2>&1 && [ -n "$SUPABASE_DB_URL" ]; then
+  SERVER_VERSION=$(psql "$SUPABASE_DB_URL" -t -c "SELECT substring(version() from 'PostgreSQL ([0-9]+)')" 2>/dev/null | tr -d ' ' || echo "")
+  if [ -n "$SERVER_VERSION" ]; then
+    echo -e "${BLUE}🔍 Detected PostgreSQL server version: $SERVER_VERSION${NC}"
+  fi
+fi
+
+# Find pg_dump binary matching server version, or fallback to available versions
+if [ -n "$SERVER_VERSION" ]; then
+  # Try to use the matching version
+  if command -v "pg_dump-$SERVER_VERSION" >/dev/null 2>&1; then
+    PG_DUMP_CMD="pg_dump-$SERVER_VERSION"
+  elif [ -f "/usr/lib/postgresql/$SERVER_VERSION/bin/pg_dump" ]; then
+    PG_DUMP_CMD="/usr/lib/postgresql/$SERVER_VERSION/bin/pg_dump"
+  fi
+fi
+
+# Fallback to checking available versions in order (newest first)
+if [ "$PG_DUMP_CMD" = "pg_dump" ]; then
+  for VERSION in 17 16 15 14 13; do
+    if command -v "pg_dump-$VERSION" >/dev/null 2>&1; then
+      PG_DUMP_CMD="pg_dump-$VERSION"
+      break
+    elif [ -f "/usr/lib/postgresql/$VERSION/bin/pg_dump" ]; then
+      PG_DUMP_CMD="/usr/lib/postgresql/$VERSION/bin/pg_dump"
+      break
+    fi
+  done
 fi
 
 # Verify pg_dump version
-echo -e "${BLUE}Using: $($PG_DUMP_CMD --version)${NC}"
+if command -v "$PG_DUMP_CMD" >/dev/null 2>&1 || [ -f "$PG_DUMP_CMD" ]; then
+  echo -e "${BLUE}Using: $($PG_DUMP_CMD --version 2>/dev/null || echo 'unknown version')${NC}"
+else
+  echo -e "${YELLOW}⚠️  Warning: Could not find pg_dump, using default${NC}"
+fi
 
 # Create the backup using pg_dump
 ERROR_OUTPUT=$(mktemp)

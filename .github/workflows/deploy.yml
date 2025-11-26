@@ -14,28 +14,65 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: 🗄️ Install PostgreSQL client
+      - name: 🗄️ Install PostgreSQL client (matching server version)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           sudo apt-get update
-          # Remove any existing PostgreSQL client to avoid conflicts
-          sudo apt-get remove -y postgresql-client postgresql-client-common postgresql-15 postgresql-client-15 postgresql-16 postgresql-client-16 2>/dev/null || true
-          # Install PostgreSQL 17 client (matches Supabase server version 17.6)
-          sudo apt-get install -y wget ca-certificates lsb-release gnupg
+          # Install basic tools and PostgreSQL repository setup
+          sudo apt-get install -y wget ca-certificates lsb-release gnupg curl
+          
           # Add PostgreSQL official APT repository with modern GPG key handling
           sudo mkdir -p /etc/apt/keyrings
           wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg
           echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
-          sudo apt-get install -y postgresql-client-17
-          # Ensure PostgreSQL 17 binaries are in PATH
-          echo "/usr/lib/postgresql/17/bin" >> $GITHUB_PATH
-          # Verify pg_dump is available and show version
-          if [ -f "/usr/lib/postgresql/17/bin/pg_dump" ]; then
-            /usr/lib/postgresql/17/bin/pg_dump --version
-          elif command -v pg_dump >/dev/null 2>&1; then
-            pg_dump --version
+          
+          # Install a basic PostgreSQL client to query server version
+          # Try to install a recent version that can connect (we'll upgrade to exact match after)
+          sudo apt-get install -y postgresql-client-17 || sudo apt-get install -y postgresql-client-16 || sudo apt-get install -y postgresql-client-15
+          
+          # Detect server version by querying the database
+          echo "🔍 Detecting PostgreSQL server version..."
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "⚠️  SUPABASE_DB_URL not set, defaulting to PostgreSQL 17"
+            SERVER_VERSION="17"
           else
-            echo "Warning: pg_dump not found, but continuing..."
+            # Query server version - extract major version number (e.g., "17.6" -> "17")
+            SERVER_VERSION=$(psql "$SUPABASE_DB_URL" -t -c "SELECT substring(version() from 'PostgreSQL ([0-9]+)')" 2>/dev/null | tr -d ' ' || echo "")
+            
+            if [ -z "$SERVER_VERSION" ]; then
+              echo "⚠️  Could not detect server version, defaulting to PostgreSQL 17"
+              SERVER_VERSION="17"
+            else
+              echo "✅ Detected PostgreSQL server version: $SERVER_VERSION"
+            fi
+          fi
+          
+          # Remove any existing PostgreSQL clients to avoid conflicts
+          sudo apt-get remove -y postgresql-client postgresql-client-common postgresql-15 postgresql-client-15 postgresql-16 postgresql-client-16 postgresql-17 postgresql-client-17 2>/dev/null || true
+          
+          # Install the matching PostgreSQL client version
+          echo "📦 Installing PostgreSQL client version $SERVER_VERSION..."
+          if sudo apt-get install -y "postgresql-client-$SERVER_VERSION"; then
+            echo "✅ Successfully installed PostgreSQL client version $SERVER_VERSION"
+          else
+            echo "❌ Failed to install PostgreSQL client version $SERVER_VERSION"
+            echo "⚠️  Falling back to PostgreSQL 17"
+            sudo apt-get install -y postgresql-client-17
+            SERVER_VERSION="17"
+          fi
+          
+          # Ensure PostgreSQL binaries are in PATH
+          echo "/usr/lib/postgresql/$SERVER_VERSION/bin" >> $GITHUB_PATH
+          
+          # Verify pg_dump is available and show version
+          if [ -f "/usr/lib/postgresql/$SERVER_VERSION/bin/pg_dump" ]; then
+            echo "✅ Using: $(/usr/lib/postgresql/$SERVER_VERSION/bin/pg_dump --version)"
+          elif command -v pg_dump >/dev/null 2>&1; then
+            echo "✅ Using: $(pg_dump --version)"
+          else
+            echo "⚠️  Warning: pg_dump not found, but continuing..."
           fi
 
       - name: 🔍 Check for pending migrations
