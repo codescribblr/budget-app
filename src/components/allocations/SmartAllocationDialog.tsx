@@ -10,6 +10,7 @@ import { formatCurrency } from '@/lib/utils';
 import { calculateSmartAllocation, type AllocationPlan } from '@/lib/smart-allocation';
 import type { Category } from '@/lib/types';
 import { toast } from 'sonner';
+import { handleApiError } from '@/lib/api-error-handler';
 import { Loader2, Sparkles, Info } from 'lucide-react';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
 
@@ -141,8 +142,8 @@ export function SmartAllocationDialog({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to apply allocation');
+        const errorMessage = await handleApiError(response, 'Failed to apply allocation');
+        throw new Error(errorMessage || 'Failed to apply allocation');
       }
 
       const result = await response.json();
@@ -154,7 +155,7 @@ export function SmartAllocationDialog({
       setEditedAllocations({});
     } catch (error) {
       console.error('Error applying allocation:', error);
-      toast.error('Failed to apply allocation', { duration: 8000 });
+      // Error toast already shown by handleApiError
     } finally {
       setApplying(false);
     }

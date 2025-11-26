@@ -96,27 +96,25 @@ export default function MerchantsPage() {
   };
 
   const handleMergeSuccess = async (targetGroupId: number, mergedGroupIds: number[]) => {
-    // Remove merged groups from local state
-    setMerchantGroups(prevGroups =>
-      prevGroups.filter(g => !mergedGroupIds.includes(g.id) || g.id === targetGroupId)
-    );
-
-    // Fetch fresh stats for just the target group
+    // Refetch all groups to ensure we have the complete updated list
+    // This handles both updating existing groups and adding newly created groups
     try {
       const response = await fetch('/api/merchant-groups');
       if (response.ok) {
         const allGroups = await response.json();
-        const updatedTargetGroup = allGroups.find((g: MerchantGroupWithStats) => g.id === targetGroupId);
-
-        if (updatedTargetGroup) {
-          // Update just the target group with fresh stats
-          setMerchantGroups(prevGroups =>
-            prevGroups.map(g => g.id === targetGroupId ? updatedTargetGroup : g)
-          );
-        }
+        setMerchantGroups(allGroups);
+      } else {
+        // If fetch fails, at least remove merged groups from local state
+        setMerchantGroups(prevGroups =>
+          prevGroups.filter(g => !mergedGroupIds.includes(g.id))
+        );
       }
     } catch (error) {
       console.error('Error fetching updated group stats:', error);
+      // If fetch fails, at least remove merged groups from local state
+      setMerchantGroups(prevGroups =>
+        prevGroups.filter(g => !mergedGroupIds.includes(g.id))
+      );
     }
   };
 

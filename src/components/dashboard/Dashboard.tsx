@@ -25,8 +25,10 @@ import PendingCheckList from './PendingCheckList';
 import SummaryCards from './SummaryCards';
 import GoalsWidget from './GoalsWidget';
 import IncomeBufferCard from './IncomeBufferCard';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 export default function Dashboard() {
+  const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
@@ -54,21 +56,22 @@ export default function Dashboard() {
 
       const [categoriesData, accountsData, creditCardsData, loansData, pendingChecksData, summaryData, bufferData] =
         await Promise.all([
-          categoriesRes.json(),
-          accountsRes.json(),
-          creditCardsRes.json(),
-          loansRes.json(),
-          pendingChecksRes.json(),
-          summaryRes.json(),
-          bufferRes.json(),
+          categoriesRes.ok ? categoriesRes.json() : [],
+          accountsRes.ok ? accountsRes.json() : [],
+          creditCardsRes.ok ? creditCardsRes.json() : [],
+          loansRes.ok ? loansRes.json() : [],
+          pendingChecksRes.ok ? pendingChecksRes.json() : [],
+          summaryRes.ok ? summaryRes.json() : null,
+          bufferRes.ok ? bufferRes.json() : null,
         ]);
 
-      setCategories(categoriesData);
-      setAccounts(accountsData);
-      setCreditCards(creditCardsData);
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+      // Bank accounts API returns an array directly
+      setAccounts(Array.isArray(accountsData) ? accountsData : []);
+      setCreditCards(Array.isArray(creditCardsData) ? creditCardsData : []);
       // Handle 403 (premium required) by setting empty array
-      setLoans(loansRes.status === 403 ? [] : loansData);
-      setPendingChecks(pendingChecksData);
+      setLoans(loansRes.status === 403 ? [] : (Array.isArray(loansData) ? loansData : []));
+      setPendingChecks(Array.isArray(pendingChecksData) ? pendingChecksData : []);
       setSummary(summaryData);
       setBufferStatus(bufferData);
 
@@ -129,7 +132,12 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden">
-            <CategoryList categories={categories} summary={summary} onUpdate={fetchData} />
+            <CategoryList 
+              categories={categories} 
+              summary={summary} 
+              onUpdate={fetchData} 
+              disabled={!isEditor || permissionsLoading}
+            />
           </CardContent>
         </Card>
 
@@ -142,7 +150,11 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <AccountList accounts={accounts} onUpdate={fetchData} />
+              <AccountList 
+                accounts={accounts} 
+                onUpdate={fetchData} 
+                disabled={!isEditor || permissionsLoading}
+              />
             </CardContent>
           </Card>
 
@@ -154,7 +166,11 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <CreditCardList creditCards={creditCards} onUpdate={fetchData} />
+              <CreditCardList 
+                creditCards={creditCards} 
+                onUpdate={fetchData} 
+                disabled={!isEditor || permissionsLoading}
+              />
             </CardContent>
           </Card>
 
@@ -175,7 +191,11 @@ export default function Dashboard() {
               </CardHeader>
               <CollapsibleContent>
                 <CardContent>
-                  <PendingCheckList pendingChecks={pendingChecks} onUpdate={fetchData} />
+                  <PendingCheckList 
+                    pendingChecks={pendingChecks} 
+                    onUpdate={fetchData} 
+                    disabled={!isEditor || permissionsLoading}
+                  />
                 </CardContent>
               </CollapsibleContent>
             </Card>
@@ -189,13 +209,17 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <LoanList loans={loans} onUpdate={fetchData} />
+              <LoanList 
+                loans={loans} 
+                onUpdate={fetchData} 
+                disabled={!isEditor || permissionsLoading}
+              />
             </CardContent>
           </Card>
 
           {bufferStatus?.enabled && <IncomeBufferCard />}
 
-          <GoalsWidget />
+          <GoalsWidget disabled={!isEditor || permissionsLoading} />
         </div>
       </div>
 

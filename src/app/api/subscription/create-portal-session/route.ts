@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getUserSubscription } from '@/lib/subscription-utils';
+import { getActiveAccountId } from '@/lib/account-context';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -10,8 +11,16 @@ export async function POST(request: Request) {
     const { user } = await getAuthenticatedUser();
     const { returnUrl } = await request.json();
 
-    // Get user's subscription
-    const subscription = await getUserSubscription(user.id);
+    // Get account's subscription
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
+
+    const subscription = await getUserSubscription(accountId);
 
     if (!subscription?.stripe_customer_id) {
       return NextResponse.json(

@@ -19,6 +19,10 @@ export async function GET() {
 
 export async function DELETE(request: Request) {
   try {
+    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const { id } = await request.json();
     await deleteMerchantMapping(id);
     return NextResponse.json({ success: true });

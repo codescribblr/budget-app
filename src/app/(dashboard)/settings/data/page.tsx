@@ -23,9 +23,11 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Loader2, Database, Download, Trash2 } from 'lucide-react';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 export default function DataPage() {
   const router = useRouter();
+  const { isOwner, isLoading: permissionsLoading } = useAccountPermissions();
 
   const [showClearDataDialog, setShowClearDataDialog] = useState(false);
   const [showImportDefaultsDialog, setShowImportDefaultsDialog] = useState(false);
@@ -100,10 +102,14 @@ export default function DataPage() {
             <Button
               variant="outline"
               onClick={() => setShowImportDefaultsDialog(true)}
+              disabled={!isOwner || permissionsLoading}
             >
               <Download className="mr-2 h-4 w-4" />
               Import Defaults
             </Button>
+            {!isOwner && !permissionsLoading && (
+              <p className="text-sm text-muted-foreground mt-2">Only account owners can import default data</p>
+            )}
           </div>
 
           <Separator />
@@ -116,10 +122,14 @@ export default function DataPage() {
             <Button
               variant="destructive"
               onClick={() => setShowClearDataDialog(true)}
+              disabled={!isOwner || permissionsLoading}
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Clear All Data
             </Button>
+            {!isOwner && !permissionsLoading && (
+              <p className="text-sm text-muted-foreground mt-2">Only account owners can clear all data</p>
+            )}
           </div>
         </CardContent>
       </Card>

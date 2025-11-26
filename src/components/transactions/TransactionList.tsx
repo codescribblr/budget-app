@@ -24,6 +24,7 @@ import EditTransactionDialog from './EditTransactionDialog';
 import { toast } from 'sonner';
 import { parseLocalDate } from '@/lib/date-utils';
 import { MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { handleApiError } from '@/lib/api-error-handler';
 
 interface TransactionListProps {
   transactions: TransactionWithSplits[];
@@ -49,14 +50,17 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
       const response = await fetch(`/api/transactions/${transactionToDelete.id}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete transaction');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to delete transaction');
+        throw new Error(errorMessage || 'Failed to delete transaction');
+      }
       toast.success('Transaction deleted');
       setDeleteDialogOpen(false);
       setTransactionToDelete(null);
       onUpdate();
     } catch (error) {
       console.error('Error deleting transaction:', error);
-      toast.error('Failed to delete transaction');
+      // Error toast already shown by handleApiError
     }
   };
 

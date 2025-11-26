@@ -23,10 +23,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { Loader2, Trash2 } from 'lucide-react';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 export default function AccountPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { isOwner, isLoading: permissionsLoading } = useAccountPermissions();
 
   const [showDeleteAccountDialog, setShowDeleteAccountDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -70,10 +72,14 @@ export default function AccountPage() {
             <Button
               variant="destructive"
               onClick={() => setShowDeleteAccountDialog(true)}
+              disabled={!isOwner || permissionsLoading}
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete Account
             </Button>
+            {!isOwner && !permissionsLoading && (
+              <p className="text-sm text-muted-foreground mt-2">Only account owners can delete accounts</p>
+            )}
           </div>
         </CardContent>
       </Card>

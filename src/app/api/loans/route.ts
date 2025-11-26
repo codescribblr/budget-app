@@ -1,12 +1,20 @@
 import { NextResponse } from 'next/server';
 import { getAllLoans, createLoan, getAuthenticatedUser } from '@/lib/supabase-queries';
 import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
+import { getActiveAccountId } from '@/lib/account-context';
 import type { CreateLoanRequest } from '@/lib/types';
 
 export async function GET() {
   try {
     const { user } = await getAuthenticatedUser();
-    await requirePremiumSubscription(user.id);
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
+    await requirePremiumSubscription(accountId);
 
     const loans = await getAllLoans();
     return NextResponse.json(loans);
@@ -28,7 +36,18 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const { user } = await getAuthenticatedUser();
-    await requirePremiumSubscription(user.id);
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
+    await requirePremiumSubscription(accountId);
+
+    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
 
     const body: CreateLoanRequest = await request.json();
 

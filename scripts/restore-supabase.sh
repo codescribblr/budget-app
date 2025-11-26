@@ -4,8 +4,14 @@
 # Restores a database from a SQL backup file
 #
 # Usage:
-#   ./scripts/restore-supabase.sh <backup_file>
+#   ./scripts/restore-supabase.sh <backup_file> [env-file-path]
 #   ./scripts/restore-supabase.sh database/backups/backup_20250114_153045.sql
+#   ./scripts/restore-supabase.sh database/backups/backup_production_20250114_153045.sql .env.production
+#
+# Examples:
+#   ./scripts/restore-supabase.sh backup.sql                    # Uses .env.local (default)
+#   ./scripts/restore-supabase.sh backup.sql .env.production   # Uses .env.production
+#   ./scripts/restore-supabase.sh backup.sql .env.staging      # Uses .env.staging
 #
 # Environment Variables Required:
 #   SUPABASE_DB_URL - PostgreSQL connection string
@@ -27,24 +33,28 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}🔄 Supabase Database Restore${NC}\n"
 
-# Load environment variables from .env.local if it exists
-if [ -f ".env.local" ]; then
-  echo -e "${BLUE}📄 Loading database URL from .env.local${NC}"
-  set -a  # automatically export all variables
-  source .env.local
-  set +a  # stop automatically exporting
-  echo ""
+# Parse command line arguments
+BACKUP_FILE="$1"
+ENV_FILE="${2:-.env.local}"
+ENV_NAME="local"
+
+# Extract environment name from filename
+if [[ "$ENV_FILE" == *".env."* ]]; then
+  ENV_NAME=$(echo "$ENV_FILE" | sed 's/.*\.env\.//')
+elif [[ "$ENV_FILE" == ".env" ]]; then
+  ENV_NAME="default"
 fi
 
 # Check if backup file is provided
-if [ -z "$1" ]; then
+if [ -z "$BACKUP_FILE" ]; then
   echo -e "${RED}❌ Error: No backup file specified${NC}"
   echo ""
   echo "Usage:"
-  echo "  ./scripts/restore-supabase.sh <backup_file>"
+  echo "  ./scripts/restore-supabase.sh <backup_file> [env-file-path]"
   echo ""
-  echo "Example:"
+  echo "Examples:"
   echo "  ./scripts/restore-supabase.sh database/backups/backup_20250114_153045.sql"
+  echo "  ./scripts/restore-supabase.sh database/backups/backup_production_20250114_153045.sql .env.production"
   echo ""
   
   # List available backups
@@ -59,13 +69,34 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
-BACKUP_FILE="$1"
-
 # Validate backup file exists
 if [ ! -f "$BACKUP_FILE" ]; then
   echo -e "${RED}❌ Error: Backup file not found: ${BACKUP_FILE}${NC}"
   exit 1
 fi
+
+# Validate that the env file exists
+if [ ! -f "$ENV_FILE" ]; then
+  echo -e "${RED}❌ Error: Environment file not found: ${ENV_FILE}${NC}"
+  echo ""
+  echo "Usage:"
+  echo "  ./scripts/restore-supabase.sh <backup_file> [env-file-path]"
+  echo ""
+  echo "Examples:"
+  echo "  ./scripts/restore-supabase.sh backup.sql                    # Uses .env.local (default)"
+  echo "  ./scripts/restore-supabase.sh backup.sql .env.production   # Uses .env.production"
+  echo "  ./scripts/restore-supabase.sh backup.sql .env.staging      # Uses .env.staging"
+  echo ""
+  exit 1
+fi
+
+# Load environment variables from the specified file
+echo -e "${BLUE}📄 Loading database URL from ${ENV_FILE}${NC}"
+echo -e "${BLUE}   Environment: ${ENV_NAME}${NC}"
+set -a  # automatically export all variables
+source "$ENV_FILE"
+set +a  # stop automatically exporting
+echo ""
 
 # Validate environment variables
 if [ -z "$SUPABASE_DB_URL" ]; then

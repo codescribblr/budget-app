@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getGoalById, getAuthenticatedUser } from '@/lib/supabase-queries';
 import { calculateGoalProgress } from '@/lib/goals/calculations';
 import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
+import { getActiveAccountId } from '@/lib/account-context';
 
 /**
  * GET /api/goals/[id]/progress
@@ -13,7 +14,14 @@ export async function GET(
 ) {
   try {
     const { user } = await getAuthenticatedUser();
-    await requirePremiumSubscription(user.id);
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
+    await requirePremiumSubscription(accountId);
 
     const { id } = await params;
     const goalId = parseInt(id);

@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { checkWriteAccess } from '@/lib/api-helpers';
+import { getActiveAccountId } from '@/lib/account-context';
 
 export async function POST(request: Request) {
   try {
+    // Check write access
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const { transactionIds } = await request.json();
 
     if (!Array.isArray(transactionIds) || transactionIds.length === 0) {
@@ -13,6 +19,14 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createClient();
+    const accountId = await getActiveAccountId();
+    
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
 
     // Check authentication
     const { data: { user } } = await supabase.auth.getUser();
@@ -29,7 +43,7 @@ export async function POST(request: Request) {
           .from('transactions')
           .select(`
             id,
-            user_id,
+            budget_account_id,
             date,
             description,
             total_amount,
@@ -40,7 +54,7 @@ export async function POST(request: Request) {
             )
           `)
           .eq('id', transactionId)
-          .eq('user_id', user.id)
+          .eq('budget_account_id', accountId)
           .single();
 
         if (fetchError || !transaction) {
@@ -95,7 +109,7 @@ export async function POST(request: Request) {
           .from('transactions')
           .delete()
           .eq('id', transactionId)
-          .eq('user_id', user.id);
+          .eq('budget_account_id', accountId);
 
         if (deleteError) {
           console.error(`Error deleting transaction ${transactionId}:`, deleteError);

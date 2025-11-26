@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
 import { HelpPanel, HelpSection } from '@/components/ui/help-panel';
 import { HELP_CONTENT } from '@/lib/help-content';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,13 +40,39 @@ const LEVEL_LABELS = {
 
 export default function FeaturesSettings() {
   const router = useRouter();
-  const { features, loading, hasPremium, toggleFeature } = useFeatures();
+  const { features, loading, hasPremium, toggleFeature, refreshFeatures } = useFeatures();
+  const { isOwner, isLoading: permissionsLoading } = useAccountPermissions();
   const [togglingFeature, setTogglingFeature] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     feature: Feature | null;
     action: 'enable' | 'disable';
   }>({ open: false, feature: null, action: 'enable' });
+  
+  // Check if user has premium but features aren't enabled
+  const premiumFeaturesNotEnabled = hasPremium && features.some(
+    f => f.requiresPremium && !f.enabled
+  );
+  
+  // Debug logging (remove in production)
+  React.useEffect(() => {
+    if (!loading) {
+      console.log('[Features Settings] State:', {
+        hasPremium,
+        isOwner,
+        permissionsLoading,
+        loading,
+        premiumFeaturesNotEnabled,
+        featuresCount: features.length,
+        premiumFeatures: features.filter(f => f.requiresPremium).map(f => ({
+          name: f.name,
+          enabled: f.enabled,
+          requiresPremium: f.requiresPremium,
+        })),
+        shouldShowButton: hasPremium && isOwner && !loading && premiumFeaturesNotEnabled,
+      });
+    }
+  }, [hasPremium, isOwner, loading, permissionsLoading, premiumFeaturesNotEnabled, features]);
 
   const handleToggle = async (feature: Feature, enabled: boolean) => {
     // Check if premium required and user doesn't have premium
@@ -124,6 +151,42 @@ export default function FeaturesSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Show button to enable premium features if user has premium but features aren't enabled */}
+          {hasPremium && isOwner && !loading && premiumFeaturesNotEnabled && (
+            <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-yellow-800 dark:text-yellow-200">
+                    Premium features not enabled
+                  </p>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                    You have a premium subscription, but some premium features haven't been enabled yet. Click below to enable all premium features.
+                  </p>
+                </div>
+                <Button
+                  onClick={async () => {
+                    try {
+                      const response = await fetch('/api/features/enable-premium', {
+                        method: 'POST',
+                      });
+                      if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Failed to enable features');
+                      }
+                      toast.success('Premium features enabled successfully');
+                      refreshFeatures();
+                    } catch (error: any) {
+                      toast.error(error.message || 'Failed to enable premium features');
+                    }
+                  }}
+                  className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:from-yellow-500 hover:to-orange-600"
+                >
+                  Enable All Premium Features
+                </Button>
+              </div>
+            </div>
+          )}
+          
           {(['basic', 'intermediate', 'advanced', 'power'] as const).map((level) => {
             const levelFeatures = groupedFeatures[level] || [];
             if (levelFeatures.length === 0) return null;
@@ -196,7 +259,7 @@ export default function FeaturesSettings() {
                           <Switch
                             checked={feature.enabled}
                             onCheckedChange={(checked) => handleToggle(feature, checked)}
-                            disabled={togglingFeature === feature.key || isPremiumLocked}
+                            disabled={togglingFeature === feature.key || isPremiumLocked || !isOwner || permissionsLoading}
                           />
                           {isPremiumLocked && (
                             <Button
@@ -207,6 +270,9 @@ export default function FeaturesSettings() {
                             >
                               Upgrade to enable →
                             </Button>
+                          )}
+                          {!isOwner && !permissionsLoading && (
+                            <p className="text-xs text-muted-foreground">Only account owners can manage features</p>
                           )}
                         </div>
                       </div>

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import type { MerchantGroup, MerchantMapping, MerchantGroupWithStats } from '@/lib/types';
+import { getActiveAccountId } from '@/lib/account-context';
 
 /**
  * Get all merchant groups for the current user
@@ -10,10 +11,14 @@ export async function getMerchantGroups(): Promise<MerchantGroup[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) return [];
+
   const { data, error } = await supabase
     .from('merchant_groups')
     .select('*')
     .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .order('display_name');
 
   if (error) throw error;
@@ -29,11 +34,15 @@ export async function getMerchantGroupsWithStats(): Promise<MerchantGroupWithSta
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) return [];
+
   // Get all merchant groups
   const { data: groups, error: groupsError } = await supabase
     .from('merchant_groups')
     .select('*')
     .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .order('display_name');
 
   if (groupsError) throw groupsError;
@@ -43,7 +52,8 @@ export async function getMerchantGroupsWithStats(): Promise<MerchantGroupWithSta
   const { data: mappings, error: mappingsError } = await supabase
     .from('merchant_mappings')
     .select('merchant_group_id, pattern, is_automatic')
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .eq('account_id', accountId);
 
   if (mappingsError) throw mappingsError;
 
@@ -51,7 +61,7 @@ export async function getMerchantGroupsWithStats(): Promise<MerchantGroupWithSta
   const { data: transactions, error: transactionsError } = await supabase
     .from('transactions')
     .select('description, total_amount')
-    .eq('user_id', user.id);
+    .eq('budget_account_id', accountId);
 
   if (transactionsError) throw transactionsError;
 
@@ -94,11 +104,15 @@ export async function getMerchantGroupStats(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) return [];
+
   // Get all merchant mappings
   const { data: mappings, error: mappingsError } = await supabase
     .from('merchant_mappings')
     .select('merchant_group_id, pattern')
     .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .not('merchant_group_id', 'is', null);
 
   if (mappingsError) throw mappingsError;
@@ -116,7 +130,7 @@ export async function getMerchantGroupStats(
   let query = supabase
     .from('transactions')
     .select('id, description, total_amount')
-    .eq('user_id', user.id);
+    .eq('budget_account_id', accountId);
 
   if (transactionIds && transactionIds.length > 0) {
     query = query.in('id', transactionIds);
@@ -158,6 +172,7 @@ export async function getMerchantGroupStats(
     .from('merchant_groups')
     .select('id, display_name')
     .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .in('id', groupIds);
 
   if (groupsError) throw groupsError;
@@ -186,11 +201,15 @@ export async function getMerchantGroup(id: number): Promise<MerchantGroup | null
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) return null;
+
   const { data, error } = await supabase
     .from('merchant_groups')
     .select('*')
     .eq('id', id)
     .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .single();
 
   if (error) {
@@ -203,6 +222,7 @@ export async function getMerchantGroup(id: number): Promise<MerchantGroup | null
 
 /**
  * Create a new merchant group
+ * Handles duplicate key errors gracefully (can happen during parallel imports)
  */
 export async function createMerchantGroup(displayName: string): Promise<MerchantGroup> {
   const supabase = await createClient();
@@ -210,16 +230,37 @@ export async function createMerchantGroup(displayName: string): Promise<Merchant
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
   const { data, error } = await supabase
     .from('merchant_groups')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       display_name: displayName,
     })
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    // Handle duplicate key error (can happen during parallel imports)
+    if (error.code === '23505') {
+      // Fetch the existing group
+      const { data: existing, error: fetchError } = await supabase
+        .from('merchant_groups')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('account_id', accountId)
+        .eq('display_name', displayName)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (!existing) throw error; // If we can't find it, throw original error
+      return existing;
+    }
+    throw error;
+  }
   return data;
 }
 
@@ -274,10 +315,14 @@ export async function getMerchantMappings(): Promise<MerchantMapping[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) return [];
+
   const { data, error } = await supabase
     .from('merchant_mappings')
     .select('*')
     .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .order('pattern');
 
   if (error) throw error;
@@ -295,12 +340,16 @@ export async function getMerchantMappingByPattern(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) return null;
+
   const { data, error } = await supabase
     .from('merchant_mappings')
     .select('*')
     .eq('pattern', pattern)
     .eq('user_id', user.id)
-    .single();
+    .eq('account_id', accountId)
+    .maybeSingle();
 
   if (error) {
     if (error.code === 'PGRST116') return null; // Not found
@@ -319,11 +368,15 @@ export async function getMappingsForGroup(groupId: number): Promise<MerchantMapp
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) return [];
+
   const { data, error } = await supabase
     .from('merchant_mappings')
     .select('*')
     .eq('merchant_group_id', groupId)
     .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .order('pattern');
 
   if (error) throw error;
@@ -345,10 +398,14 @@ export async function createMerchantMapping(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
   const { data, error } = await supabase
     .from('merchant_mappings')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       pattern,
       normalized_pattern: normalizedPattern,
       merchant_group_id: merchantGroupId,
@@ -420,13 +477,17 @@ export async function getMerchantGroupForDescription(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) return null;
+
   // First, check for exact pattern match
   const { data: mapping, error: mappingError } = await supabase
     .from('merchant_mappings')
     .select('merchant_group_id')
     .eq('pattern', description)
     .eq('user_id', user.id)
-    .single();
+    .eq('account_id', accountId)
+    .maybeSingle();
 
   if (mappingError && mappingError.code !== 'PGRST116') {
     throw mappingError;
@@ -469,11 +530,15 @@ export async function getOrCreateMerchantGroup(
 
   const normalized = normalizeMerchantName(description);
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
   // Get all existing groups with their normalized patterns
   const { data: allMappings, error: mappingsError } = await supabase
     .from('merchant_mappings')
     .select('merchant_group_id, normalized_pattern')
     .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .not('merchant_group_id', 'is', null);
 
   if (mappingsError) throw mappingsError;
@@ -491,6 +556,7 @@ export async function getOrCreateMerchantGroup(
     .from('merchant_groups')
     .select('*')
     .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .in('id', Array.from(groupPatterns.keys()));
 
   if (groupsError) throw groupsError;

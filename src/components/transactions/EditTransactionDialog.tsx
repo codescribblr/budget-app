@@ -8,6 +8,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { Category, TransactionWithSplits, MerchantGroup, Account, CreditCard } from '@/lib/types';
 import { parseLocalDate, formatLocalDate, getTodayLocal } from '@/lib/date-utils';
+import { handleApiError } from '@/lib/api-error-handler';
 
 interface EditTransactionDialogProps {
   isOpen: boolean;
@@ -38,6 +39,7 @@ export default function EditTransactionDialog({
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [selectedCreditCardId, setSelectedCreditCardId] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (transaction) {
@@ -52,6 +54,7 @@ export default function EditTransactionDialog({
           amount: split.amount.toString(),
         }))
       );
+      setIsSubmitting(false);
     }
   }, [transaction]);
 
@@ -125,6 +128,11 @@ export default function EditTransactionDialog({
   };
 
   const handleSubmit = async () => {
+    // Prevent double submission
+    if (isSubmitting) {
+      return;
+    }
+
     // Validation
     if (!description.trim()) {
       alert('Please enter a description');
@@ -137,8 +145,10 @@ export default function EditTransactionDialog({
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
-      await fetch(`/api/transactions/${transaction.id}`, {
+      const response = await fetch(`/api/transactions/${transaction.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -154,11 +164,19 @@ export default function EditTransactionDialog({
         }),
       });
 
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to update transaction');
+        throw new Error(errorMessage || 'Failed to update transaction');
+      }
+
+      setIsSubmitting(false);
       onSuccess();
       onClose();
     } catch (error) {
       console.error('Error updating transaction:', error);
-      alert('Failed to update transaction');
+      setIsSubmitting(false);
+      // Error toast already shown by handleApiError
+      // Button will be re-enabled so user can try again
     }
   };
 
@@ -308,10 +326,12 @@ export default function EditTransactionDialog({
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>Save Changes</Button>
+            <Button onClick={handleSubmit} disabled={isSubmitting}>
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </Button>
           </div>
         </div>
       </DialogContent>

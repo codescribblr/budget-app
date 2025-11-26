@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCreditCardById, updateCreditCard, deleteCreditCard } from '@/lib/supabase-queries';
+import { checkWriteAccess } from '@/lib/api-helpers';
 import type { UpdateCreditCardRequest } from '@/lib/types';
 
 export async function GET(
@@ -8,7 +9,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const creditCard = await getCreditCardById(parseInt(id));
+    const creditCardId = parseInt(id);
+    
+    if (isNaN(creditCardId)) {
+      return NextResponse.json({ error: 'Invalid credit card ID' }, { status: 400 });
+    }
+    
+    const creditCard = await getCreditCardById(creditCardId);
 
     if (!creditCard) {
       return NextResponse.json({ error: 'Credit card not found' }, { status: 404 });
@@ -30,8 +37,17 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const creditCardId = parseInt(id);
+    
+    if (isNaN(creditCardId)) {
+      return NextResponse.json({ error: 'Invalid credit card ID' }, { status: 400 });
+    }
+    
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const body = (await request.json()) as UpdateCreditCardRequest;
-    const creditCard = await updateCreditCard(parseInt(id), body);
+    const creditCard = await updateCreditCard(creditCardId, body);
 
     if (!creditCard) {
       return NextResponse.json({ error: 'Credit card not found' }, { status: 404 });
@@ -53,7 +69,16 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await deleteCreditCard(parseInt(id));
+    const creditCardId = parseInt(id);
+    
+    if (isNaN(creditCardId)) {
+      return NextResponse.json({ error: 'Invalid credit card ID' }, { status: 400 });
+    }
+    
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
+    await deleteCreditCard(creditCardId);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting credit card:', error);

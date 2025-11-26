@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllCreditCards, createCreditCard } from '@/lib/supabase-queries';
+import { checkWriteAccess } from '@/lib/api-helpers';
 import type { CreateCreditCardRequest } from '@/lib/types';
 
 export async function GET() {
@@ -11,12 +12,18 @@ export async function GET() {
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    return NextResponse.json({ error: 'Failed to fetch credit cards' }, { status: 500 });
+    if (error.message === 'No active account') {
+      return NextResponse.json({ error: 'No active account. Please select an account first.' }, { status: 400 });
+    }
+    return NextResponse.json({ error: error.message || 'Failed to fetch credit cards' }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const body = (await request.json()) as CreateCreditCardRequest;
     const creditCard = await createCreditCard(body);
     return NextResponse.json(creditCard, { status: 201 });

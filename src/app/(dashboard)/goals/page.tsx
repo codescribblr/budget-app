@@ -115,7 +115,8 @@ export default function GoalsPage() {
           return;
         }
         
-        throw new Error(errorData.error || 'Failed to delete goal');
+        const errorMessage = await handleApiError(response, errorData.error || 'Failed to delete goal');
+        throw new Error(errorMessage || 'Failed to delete goal');
       }
       
       toast.success('Goal deleted successfully');
@@ -141,12 +142,15 @@ export default function GoalsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!response.ok) throw new Error('Failed to update goal status');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to update goal status');
+        throw new Error(errorMessage || 'Failed to update goal status');
+      }
       toast.success('Goal status updated');
       fetchGoals();
     } catch (error) {
       console.error('Error updating goal status:', error);
-      toast.error('Failed to update goal status');
+      // Error toast already shown by handleApiError
     }
   };
 

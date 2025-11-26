@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getActiveAccountId } from '@/lib/account-context';
 
 export async function GET() {
   try {
@@ -9,6 +10,14 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
     }
 
     // Get all transactions with their splits and categories
@@ -28,7 +37,7 @@ export async function GET() {
           category:categories(name)
         )
       `)
-      .eq('user_id', user.id)
+      .eq('budget_account_id', accountId)
       .order('date', { ascending: false });
 
     if (error) {

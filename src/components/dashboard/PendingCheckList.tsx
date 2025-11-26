@@ -24,13 +24,15 @@ import { formatCurrency } from '@/lib/utils';
 import type { PendingCheck } from '@/lib/types';
 import { toast } from 'sonner';
 import { MoreVertical, Trash2 } from 'lucide-react';
+import { handleApiError } from '@/lib/api-error-handler';
 
 interface PendingCheckListProps {
   pendingChecks: PendingCheck[];
   onUpdate: () => void;
+  disabled?: boolean;
 }
 
-export default function PendingCheckList({ pendingChecks, onUpdate }: PendingCheckListProps) {
+export default function PendingCheckList({ pendingChecks, onUpdate, disabled = false }: PendingCheckListProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newDescription, setNewDescription] = useState('');
   const [newAmount, setNewAmount] = useState('');
@@ -49,20 +51,23 @@ export default function PendingCheckList({ pendingChecks, onUpdate }: PendingChe
       const response = await fetch(`/api/pending-checks/${checkToDelete.id}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete pending check');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to delete pending check');
+        throw new Error(errorMessage || 'Failed to delete pending check');
+      }
       toast.success('Pending check deleted');
       setDeleteDialogOpen(false);
       setCheckToDelete(null);
       onUpdate();
     } catch (error) {
       console.error('Error deleting pending check:', error);
-      toast.error('Failed to delete pending check');
+      // Error toast already shown by handleApiError
     }
   };
 
   const handleAddCheck = async () => {
     try {
-      await fetch('/api/pending-checks', {
+      const response = await fetch('/api/pending-checks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -71,12 +76,18 @@ export default function PendingCheckList({ pendingChecks, onUpdate }: PendingChe
         }),
       });
 
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to add pending check');
+        throw new Error(errorMessage || 'Failed to add pending check');
+      }
+
       setIsAddDialogOpen(false);
       setNewDescription('');
       setNewAmount('');
       onUpdate();
     } catch (error) {
       console.error('Error adding pending check:', error);
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -86,7 +97,7 @@ export default function PendingCheckList({ pendingChecks, onUpdate }: PendingChe
     <>
       <div className="space-y-4">
         <div className="mb-3">
-          <Button onClick={() => setIsAddDialogOpen(true)} size="sm">
+          <Button onClick={() => setIsAddDialogOpen(true)} size="sm" disabled={disabled}>
             Add Pending Check
           </Button>
         </div>

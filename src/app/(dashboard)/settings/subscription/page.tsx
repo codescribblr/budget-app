@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Crown, Check, X, Sparkles, CreditCard } from 'lucide-react';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 const PREMIUM_FEATURES = [
   'Monthly Funding Tracking',
@@ -34,6 +35,7 @@ function SubscriptionPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { subscription, loading, isPremium, isTrialing, trialDaysRemaining, refreshSubscription } = useSubscription();
+  const { isOwner, isLoading: permissionsLoading } = useAccountPermissions();
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -41,7 +43,30 @@ function SubscriptionPageContent() {
   useEffect(() => {
     if (searchParams.get('success') === 'true') {
       setSuccess('Successfully started your 60-day free trial!');
-      refreshSubscription();
+      
+      // Try to sync subscription from Stripe as fallback
+      const syncSubscription = async () => {
+        try {
+          const response = await fetch('/api/subscription/sync', {
+            method: 'POST',
+          });
+          if (response.ok) {
+            console.log('Subscription synced successfully');
+          }
+        } catch (err) {
+          console.error('Error syncing subscription:', err);
+        }
+      };
+
+      // Wait a moment for webhook to process, then refresh
+      setTimeout(() => {
+        refreshSubscription();
+        syncSubscription();
+      }, 2000);
+      // Also refresh again after a longer delay in case webhook is slow
+      setTimeout(() => {
+        refreshSubscription();
+      }, 5000);
     } else if (searchParams.get('canceled') === 'true') {
       setError('Checkout was canceled. You can try again anytime.');
     }
@@ -175,7 +200,7 @@ function SubscriptionPageContent() {
             {isPremium ? (
               <Button
                 onClick={handleManageSubscription}
-                disabled={actionLoading}
+                disabled={actionLoading || !isOwner || permissionsLoading}
                 className="w-full"
               >
                 {actionLoading ? (
@@ -193,7 +218,7 @@ function SubscriptionPageContent() {
             ) : (
               <Button
                 onClick={handleStartTrial}
-                disabled={actionLoading}
+                disabled={actionLoading || !isOwner || permissionsLoading}
                 className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
                 size="lg"
               >
@@ -209,6 +234,9 @@ function SubscriptionPageContent() {
                   </>
                 )}
               </Button>
+            )}
+            {!isOwner && !permissionsLoading && (
+              <p className="text-sm text-muted-foreground mt-2 text-center">Only account owners can manage subscriptions</p>
             )}
           </div>
         </CardContent>
@@ -265,7 +293,7 @@ function SubscriptionPageContent() {
                 </ul>
                 <Button
                   onClick={handleStartTrial}
-                  disabled={actionLoading}
+                  disabled={actionLoading || !isOwner || permissionsLoading}
                   className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
                   size="lg"
                 >

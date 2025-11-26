@@ -11,6 +11,8 @@ import { Target, Info, Sparkles, Wallet } from 'lucide-react';
 import { SmartAllocationDialog } from '@/components/allocations/SmartAllocationDialog';
 import { AddToBufferDialog } from './AddToBufferDialog';
 import { useFeature } from '@/contexts/FeatureContext';
+import { handleApiError } from '@/lib/api-error-handler';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 interface AllocateIncomeProps {
   categories: Category[];
@@ -19,6 +21,7 @@ interface AllocateIncomeProps {
 }
 
 export default function AllocateIncome({ categories, currentSavings, onSuccess }: AllocateIncomeProps) {
+  const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [allocations, setAllocations] = useState<{ [key: number]: number }>({});
   const [goalAllocations, setGoalAllocations] = useState<{ [key: number]: number }>({});
   const [allGoals, setAllGoals] = useState<GoalWithDetails[]>([]);
@@ -195,31 +198,41 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
       // Update all categories with allocations
       const categoryUpdates = categories
         .filter(cat => allocations[cat.id] > 0)
-        .map(cat =>
-          fetch(`/api/categories/${cat.id}`, {
+        .map(async cat => {
+          const response = await fetch(`/api/categories/${cat.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               current_balance: cat.current_balance + allocations[cat.id],
             }),
-          })
-        );
+          });
+          if (!response.ok) {
+            await handleApiError(response, 'Failed to update category');
+            throw new Error('Failed to update category');
+          }
+          return response;
+        });
       
       // Update goal categories with allocations
       const goalUpdates = envelopeGoals
         .filter(goal => goal.linked_category_id !== null && goalAllocations[goal.linked_category_id] > 0)
-        .map(goal => {
+        .map(async goal => {
           if (!goal.linked_category_id) return null;
           const category = categories.find(c => c.id === goal.linked_category_id);
           if (!category) return null;
           const allocation = goalAllocations[goal.linked_category_id];
-          return fetch(`/api/categories/${goal.linked_category_id}`, {
+          const response = await fetch(`/api/categories/${goal.linked_category_id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               current_balance: category.current_balance + allocation,
             }),
           });
+          if (!response.ok) {
+            await handleApiError(response, 'Failed to update goal category');
+            throw new Error('Failed to update goal category');
+          }
+          return response;
         })
         .filter((update): update is Promise<Response> => update !== null);
 
@@ -232,7 +245,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
       alert(`Successfully allocated ${formatCurrency(totalAllocated)} to envelopes!`);
     } catch (error) {
       console.error('Error allocating funds:', error);
-      alert('Failed to allocate funds');
+      // Error toast already shown by handleApiError
     } finally {
       setIsSubmitting(false);
     }
@@ -240,6 +253,14 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
 
   return (
     <div className="space-y-6">
+      {!isEditor && !permissionsLoading && (
+        <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md">
+          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            You only have read access to this account. Only account owners and editors can allocate funds to envelopes.
+          </p>
+        </div>
+      )}
+
       <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
         <div className="flex justify-between items-center">
           <div>
@@ -259,6 +280,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
             variant="default"
             onClick={() => setIsSmartAllocationOpen(true)}
             className="bg-purple-600 hover:bg-purple-700"
+            disabled={!isEditor || permissionsLoading}
           >
             <Sparkles className="mr-2 h-4 w-4" />
             Smart Allocation
@@ -269,21 +291,38 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
             variant="default"
             onClick={() => setIsAddToBufferOpen(true)}
             className="bg-blue-600 hover:bg-blue-700"
+            disabled={!isEditor || permissionsLoading}
           >
             <Wallet className="mr-2 h-4 w-4" />
             Add to Income Buffer
           </Button>
         )}
-        <Button variant="outline" onClick={handleUseMonthlyAmounts}>
+        <Button 
+          variant="outline" 
+          onClick={handleUseMonthlyAmounts}
+          disabled={!isEditor || permissionsLoading}
+        >
           Use Monthly Amounts
         </Button>
-        <Button variant="outline" onClick={handleUseProportional}>
+        <Button 
+          variant="outline" 
+          onClick={handleUseProportional}
+          disabled={!isEditor || permissionsLoading}
+        >
           Distribute Proportionally
         </Button>
-        <Button variant="outline" onClick={handleAllocateAll}>
+        <Button 
+          variant="outline" 
+          onClick={handleAllocateAll}
+          disabled={!isEditor || permissionsLoading}
+        >
           Split Evenly
         </Button>
-        <Button variant="outline" onClick={handleClearAllocations}>
+        <Button 
+          variant="outline" 
+          onClick={handleClearAllocations}
+          disabled={!isEditor || permissionsLoading}
+        >
           Clear All
         </Button>
       </div>
@@ -334,6 +373,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
                       onChange={(e) => handleAllocationChange(category.id, e.target.value)}
                       placeholder="0.00"
                       className="w-28 text-right"
+                      disabled={!isEditor || permissionsLoading}
                     />
                   </TableCell>
                   <TableCell className="text-right font-semibold">
@@ -401,6 +441,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
                             onChange={(e) => handleGoalAllocationChange(goal.linked_category_id!, e.target.value)}
                             placeholder="0.00"
                             className="w-28 text-right"
+                            disabled={!isEditor || permissionsLoading}
                           />
                         </TableCell>
                         <TableCell className="text-right font-semibold">
@@ -503,7 +544,10 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={handleAllocate} disabled={isSubmitting}>
+        <Button 
+          onClick={handleAllocate} 
+          disabled={isSubmitting || !isEditor || permissionsLoading}
+        >
           {isSubmitting ? 'Allocating...' : 'Allocate to Envelopes'}
         </Button>
       </div>

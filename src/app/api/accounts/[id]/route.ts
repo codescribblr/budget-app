@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccountById, updateAccount, deleteAccount } from '@/lib/supabase-queries';
+import { checkWriteAccess } from '@/lib/api-helpers';
 import type { UpdateAccountRequest } from '@/lib/types';
 
 export async function GET(
@@ -41,6 +42,9 @@ export async function PATCH(
     if (isNaN(accountId)) {
       return NextResponse.json({ error: 'Invalid account ID' }, { status: 400 });
     }
+
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
     
     const body = (await request.json()) as UpdateAccountRequest;
     const account = await updateAccount(accountId, body);
@@ -70,6 +74,9 @@ export async function DELETE(
     if (isNaN(accountId)) {
       return NextResponse.json({ error: 'Invalid account ID' }, { status: 400 });
     }
+
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
     
     await deleteAccount(accountId);
     return NextResponse.json({ success: true });

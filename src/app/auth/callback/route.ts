@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -39,9 +40,37 @@ export async function GET(request: NextRequest) {
       }
     )
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { data: { user }, error } = await supabase.auth.exchangeCodeForSession(code)
 
-    if (!error) {
+    if (!error && user) {
+      // Always check for pending invitations sent to user's email first (unless already going to an invite)
+      if (!next.startsWith('/invite/')) {
+        try {
+          const adminSupabase = createServiceRoleClient();
+          const { data: invitations } = await adminSupabase
+            .from('account_invitations')
+            .select('token')
+            .eq('email', user.email?.toLowerCase() || '')
+            .is('accepted_at', null)
+            .order('created_at', { ascending: true })
+            .limit(1);
+
+          // If user has pending invites, redirect to accept the first one
+          if (invitations && invitations.length > 0) {
+            const newRedirectUrl = isLocalEnv
+              ? `${origin}/invite/${invitations[0].token}`
+              : forwardedHost
+              ? `https://${forwardedHost}/invite/${invitations[0].token}`
+              : `${origin}/invite/${invitations[0].token}`;
+            
+            return NextResponse.redirect(newRedirectUrl);
+          }
+        } catch (err) {
+          // If check fails, continue with normal redirect
+          console.error('Error checking invitations in callback:', err);
+        }
+      }
+
       return response
     }
   }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPendingCheckById, updatePendingCheck, deletePendingCheck } from '@/lib/supabase-queries';
+import { checkWriteAccess } from '@/lib/api-helpers';
 import type { UpdatePendingCheckRequest } from '@/lib/types';
 
 export async function GET(
@@ -8,7 +9,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const pendingCheck = await getPendingCheckById(parseInt(id));
+    const pendingCheckId = parseInt(id);
+    
+    if (isNaN(pendingCheckId)) {
+      return NextResponse.json({ error: 'Invalid pending check ID' }, { status: 400 });
+    }
+    
+    const pendingCheck = await getPendingCheckById(pendingCheckId);
 
     if (!pendingCheck) {
       return NextResponse.json({ error: 'Pending check not found' }, { status: 404 });
@@ -30,8 +37,17 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const pendingCheckId = parseInt(id);
+    
+    if (isNaN(pendingCheckId)) {
+      return NextResponse.json({ error: 'Invalid pending check ID' }, { status: 400 });
+    }
+    
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const body = (await request.json()) as UpdatePendingCheckRequest;
-    const pendingCheck = await updatePendingCheck(parseInt(id), body);
+    const pendingCheck = await updatePendingCheck(pendingCheckId, body);
 
     if (!pendingCheck) {
       return NextResponse.json({ error: 'Pending check not found' }, { status: 404 });
@@ -53,7 +69,16 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await deletePendingCheck(parseInt(id));
+    const pendingCheckId = parseInt(id);
+    
+    if (isNaN(pendingCheckId)) {
+      return NextResponse.json({ error: 'Invalid pending check ID' }, { status: 400 });
+    }
+    
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
+    await deletePendingCheck(pendingCheckId);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting pending check:', error);

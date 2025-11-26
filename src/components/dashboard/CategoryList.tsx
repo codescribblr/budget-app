@@ -26,6 +26,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { Category, DashboardSummary } from '@/lib/types';
 import { toast } from 'sonner';
 import { Check, X, Settings, GripVertical, Save, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { handleApiError } from '@/lib/api-error-handler';
 import { useFeature } from '@/contexts/FeatureContext';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -53,6 +54,7 @@ interface CategoryListProps {
   categories: Category[];
   summary: DashboardSummary | null;
   onUpdate: () => void;
+  disabled?: boolean;
 }
 
 interface SortableRowProps {
@@ -72,6 +74,7 @@ interface SortableRowProps {
   handleDeleteCategory: (category: Category) => void;
   getBudgetStatusColor: (percentUsed: number) => string;
   getProgressBarColor: (percentUsed: number) => string;
+  disabled?: boolean;
 }
 
 function SortableRow({
@@ -91,6 +94,7 @@ function SortableRow({
   handleDeleteCategory,
   getBudgetStatusColor,
   getProgressBarColor,
+  disabled = false,
 }: SortableRowProps) {
   const {
     attributes,
@@ -183,6 +187,7 @@ function SortableRow({
               onChange={(e) => setEditingBalanceValue(e.target.value)}
               className="w-28 h-8 text-right"
               autoFocus
+              disabled={disabled}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   saveInlineBalance(category.id);
@@ -196,6 +201,7 @@ function SortableRow({
               size="sm"
               className="h-8 w-8 p-0"
               onClick={() => saveInlineBalance(category.id)}
+              disabled={disabled}
             >
               <Check className="h-4 w-4 text-green-600" />
             </Button>
@@ -210,9 +216,9 @@ function SortableRow({
           </div>
         ) : (
           <span
-            className={`cursor-pointer hover:bg-muted px-2 py-1 rounded ${category.current_balance < 0 ? 'text-red-600' : ''}`}
+            className={`${disabled ? 'cursor-default' : 'cursor-pointer hover:bg-muted'} px-2 py-1 rounded ${category.current_balance < 0 ? 'text-red-600' : ''}`}
             onClick={() => startEditingBalance(category)}
-            title="Click to edit balance"
+            title={disabled ? undefined : "Click to edit balance"}
           >
             {formatCurrency(category.current_balance)}
           </span>
@@ -222,16 +228,16 @@ function SortableRow({
         {!isReorderMode && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={disabled}>
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => openEditDialog(category)}>
+              <DropdownMenuItem onClick={() => openEditDialog(category)} disabled={disabled}>
                 <Edit className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleDeleteCategory(category)} className="text-red-600">
+              <DropdownMenuItem onClick={() => handleDeleteCategory(category)} className="text-red-600" disabled={disabled}>
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete
               </DropdownMenuItem>
@@ -243,7 +249,7 @@ function SortableRow({
   );
 }
 
-export default function CategoryList({ categories, summary, onUpdate }: CategoryListProps) {
+export default function CategoryList({ categories, summary, onUpdate, disabled = false }: CategoryListProps) {
   // Feature flags
   const categoryTypesEnabled = useFeature('category_types');
   const prioritySystemEnabled = useFeature('priority_system');
@@ -328,7 +334,7 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
     if (!editingCategory) return;
 
     try {
-      await fetch(`/api/categories/${editingCategory.id}`, {
+      const response = await fetch(`/api/categories/${editingCategory.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -345,11 +351,17 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
         }),
       });
 
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to update category');
+        throw new Error(errorMessage || 'Failed to update category');
+      }
+
       setIsEditDialogOpen(false);
       resetFormFields();
       onUpdate();
     } catch (error) {
       console.error('Error updating category:', error);
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -360,7 +372,7 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
     }
 
     try {
-      await fetch('/api/categories', {
+      const response = await fetch('/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -377,11 +389,17 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
         }),
       });
 
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to add category');
+        throw new Error(errorMessage || 'Failed to add category');
+      }
+
       setIsAddDialogOpen(false);
       resetFormFields();
       onUpdate();
     } catch (error) {
       console.error('Error adding category:', error);
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -415,14 +433,17 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
       const response = await fetch(`/api/categories/${categoryToDelete.id}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete category');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to delete category');
+        throw new Error(errorMessage || 'Failed to delete category');
+      }
       toast.success('Category deleted');
       setDeleteDialogOpen(false);
       setCategoryToDelete(null);
       onUpdate();
     } catch (error) {
       console.error('Error deleting category:', error);
-      toast.error('Failed to delete category');
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -449,6 +470,7 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
 
   // Inline balance editing handlers
   const startEditingBalance = (category: Category) => {
+    if (disabled) return;
     setEditingBalanceId(category.id);
     setEditingBalanceValue(category.current_balance.toString());
   };
@@ -468,7 +490,10 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to update balance');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to update balance');
+        throw new Error(errorMessage || 'Failed to update balance');
+      }
 
       toast.success('Balance updated');
       setEditingBalanceId(null);
@@ -476,7 +501,7 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
       onUpdate();
     } catch (error) {
       console.error('Error updating balance:', error);
-      toast.error('Failed to update balance');
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -527,7 +552,10 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
         body: JSON.stringify({ categoryOrders }),
       });
 
-      if (!response.ok) throw new Error('Failed to save category order');
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to save category order');
+        throw new Error(errorMessage || 'Failed to save category order');
+      }
 
       toast.success('Category order saved');
       setIsReorderMode(false);
@@ -535,7 +563,7 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
       onUpdate();
     } catch (error) {
       console.error('Error saving category order:', error);
-      toast.error('Failed to save category order');
+      // Error toast already shown by handleApiError
     } finally {
       setIsSaving(false);
     }
@@ -546,7 +574,7 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
       <div className="flex flex-col h-full">
         {/* Action Buttons */}
         <div className="mb-3 flex gap-2 justify-between">
-          <Button onClick={openAddDialog} size="sm" disabled={isReorderMode}>
+          <Button onClick={openAddDialog} size="sm" disabled={isReorderMode || disabled}>
             Add Category
           </Button>
 
@@ -555,7 +583,7 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
               onClick={handleEnterReorderMode}
               size="sm"
               variant="outline"
-              disabled={envelopeCategories.length <= 1}
+              disabled={envelopeCategories.length <= 1 || disabled}
             >
               <GripVertical className="mr-2 h-4 w-4" />
               Reorder
@@ -565,7 +593,7 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
               <Button
                 onClick={handleSaveReorder}
                 size="sm"
-                disabled={isSaving}
+                disabled={isSaving || disabled}
               >
                 <Save className="mr-2 h-4 w-4" />
                 {isSaving ? 'Saving...' : 'Save'}
@@ -632,6 +660,7 @@ export default function CategoryList({ categories, summary, onUpdate }: Category
                         handleDeleteCategory={handleDeleteCategory}
                         getBudgetStatusColor={getBudgetStatusColor}
                         getProgressBarColor={getProgressBarColor}
+                        disabled={disabled}
                       />
                     );
                   })}

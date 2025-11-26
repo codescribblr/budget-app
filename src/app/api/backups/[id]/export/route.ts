@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
+import { getActiveAccountId } from '@/lib/account-context';
 
 /**
  * GET /api/backups/[id]/export
@@ -18,12 +19,17 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid backup ID' }, { status: 400 });
     }
 
-    // Fetch the backup data
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json({ error: 'No active account' }, { status: 400 });
+    }
+
+    // Fetch the backup data (RLS ensures user has access)
     const { data: backup, error: fetchError } = await supabase
       .from('user_backups')
       .select('backup_data')
       .eq('id', backupId)
-      .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .single();
 
     if (fetchError) throw fetchError;

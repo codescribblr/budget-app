@@ -113,16 +113,19 @@ export default function TransactionsPage() {
       ]);
 
       const [transactionsData, categoriesData, merchantGroupsData] = await Promise.all([
-        transactionsRes.json(),
-        categoriesRes.json(),
-        merchantGroupsRes.json(),
+        transactionsRes.ok ? transactionsRes.json() : [],
+        categoriesRes.ok ? categoriesRes.json() : [],
+        merchantGroupsRes.ok ? merchantGroupsRes.json() : [],
       ]);
 
-      setTransactions(transactionsData);
-      setCategories(categoriesData);
-      setMerchantGroups(merchantGroupsData);
+      setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+      setMerchantGroups(Array.isArray(merchantGroupsData) ? merchantGroupsData : []);
     } catch (error) {
       console.error('Error fetching data:', error);
+      setTransactions([]);
+      setCategories([]);
+      setMerchantGroups([]);
     } finally {
       setLoading(false);
     }
@@ -213,6 +216,10 @@ export default function TransactionsPage() {
 
   // Filter transactions based on all filters and search query
   const filteredTransactions = useMemo(() => {
+    // Ensure transactions is always an array
+    if (!Array.isArray(transactions)) {
+      return [];
+    }
     let filtered = transactions;
 
     // Apply merchant filter if present

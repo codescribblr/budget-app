@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 interface AutoGroupPreview {
   display_name: string;
@@ -31,6 +32,7 @@ interface AutoGroupResult {
 }
 
 export default function MerchantGroupsSettings() {
+  const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [isRunning, setIsRunning] = useState(false);
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -185,7 +187,7 @@ export default function MerchantGroupsSettings() {
           <div className="flex gap-2 pt-4 flex-wrap">
             <Button
               onClick={handlePreview}
-              disabled={isRunning || isBackfilling}
+              disabled={isRunning || isBackfilling || !isEditor || permissionsLoading}
               variant="outline"
             >
               {isRunning ? (
@@ -202,7 +204,7 @@ export default function MerchantGroupsSettings() {
             </Button>
             <Button
               onClick={handleRunAutoGroup}
-              disabled={isRunning || isBackfilling}
+              disabled={isRunning || isBackfilling || !isEditor || permissionsLoading}
             >
               {isRunning ? (
                 <>
@@ -219,7 +221,7 @@ export default function MerchantGroupsSettings() {
             {!isLoadingCount && unlinkedCount !== null && unlinkedCount > 0 && (
               <Button
                 onClick={handleBackfill}
-                disabled={isRunning || isBackfilling}
+                disabled={isRunning || isBackfilling || !isEditor || permissionsLoading}
                 variant="secondary"
               >
                 {isBackfilling ? (
@@ -236,6 +238,9 @@ export default function MerchantGroupsSettings() {
               </Button>
             )}
           </div>
+          {!isEditor && !permissionsLoading && (
+            <p className="text-sm text-muted-foreground">Only editors and owners can manage merchant groups</p>
+          )}
 
           <p className="text-xs text-muted-foreground">
             Note: Auto-grouping is safe and reversible. You can always manually adjust or remove

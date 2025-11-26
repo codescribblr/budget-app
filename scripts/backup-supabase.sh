@@ -4,7 +4,12 @@
 # Creates a full SQL dump of your Supabase database
 #
 # Usage:
-#   ./scripts/backup-supabase.sh
+#   ./scripts/backup-supabase.sh [env-file-path]
+#
+# Examples:
+#   ./scripts/backup-supabase.sh                    # Uses .env.local (default)
+#   ./scripts/backup-supabase.sh .env.production    # Uses .env.production
+#   ./scripts/backup-supabase.sh .env.staging       # Uses .env.staging
 #
 # Environment Variables Required:
 #   SUPABASE_DB_URL - PostgreSQL connection string
@@ -24,20 +29,45 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Parse command line arguments
+ENV_FILE="${1:-.env.local}"
+ENV_NAME="local"
+
+# Extract environment name from filename
+if [[ "$ENV_FILE" == *".env."* ]]; then
+  ENV_NAME=$(echo "$ENV_FILE" | sed 's/.*\.env\.//')
+elif [[ "$ENV_FILE" == ".env" ]]; then
+  ENV_NAME="default"
+fi
+
 # Configuration
 BACKUP_DIR="database/backups"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_FILE="${BACKUP_DIR}/backup_${TIMESTAMP}.sql"
+BACKUP_FILE="${BACKUP_DIR}/backup_${ENV_NAME}_${TIMESTAMP}.sql"
 
 echo -e "${BLUE}🗄️  Supabase Database Backup${NC}\n"
 
-# Load environment variables from .env.local if it exists
-if [ -f ".env.local" ]; then
-  echo -e "${BLUE}📄 Loading database URL from .env.local${NC}"
-  set -a  # automatically export all variables
-  source .env.local
-  set +a  # stop automatically exporting
+# Validate that the env file exists
+if [ ! -f "$ENV_FILE" ]; then
+  echo -e "${RED}❌ Error: Environment file not found: ${ENV_FILE}${NC}"
+  echo ""
+  echo "Usage:"
+  echo "  ./scripts/backup-supabase.sh [env-file-path]"
+  echo ""
+  echo "Examples:"
+  echo "  ./scripts/backup-supabase.sh                    # Uses .env.local (default)"
+  echo "  ./scripts/backup-supabase.sh .env.production    # Uses .env.production"
+  echo "  ./scripts/backup-supabase.sh .env.staging       # Uses .env.staging"
+  echo ""
+  exit 1
 fi
+
+# Load environment variables from the specified file
+echo -e "${BLUE}📄 Loading database URL from ${ENV_FILE}${NC}"
+echo -e "${BLUE}   Environment: ${ENV_NAME}${NC}"
+set -a  # automatically export all variables
+source "$ENV_FILE"
+set +a  # stop automatically exporting
 
 # Validate environment variables
 if [ -z "$SUPABASE_DB_URL" ]; then

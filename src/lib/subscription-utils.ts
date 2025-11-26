@@ -1,5 +1,6 @@
 import { createClient } from './supabase/server';
 import type Stripe from 'stripe';
+import { getActiveAccountId } from './account-context';
 
 /**
  * Custom error for premium subscription requirements
@@ -13,7 +14,7 @@ export class PremiumRequiredError extends Error {
 
 export interface UserSubscription {
   id: number;
-  user_id: string;
+  account_id: number;
   tier: 'free' | 'premium';
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'unpaid';
   stripe_customer_id: string | null;
@@ -30,15 +31,19 @@ export interface UserSubscription {
 }
 
 /**
- * Get user's subscription from database
+ * Get account's subscription from database
  */
-export async function getUserSubscription(userId: string): Promise<UserSubscription | null> {
+export async function getUserSubscription(accountId: number | null): Promise<UserSubscription | null> {
   const supabase = await createClient();
+  
+  if (!accountId) {
+    return null;
+  }
   
   const { data, error } = await supabase
     .from('user_subscriptions')
     .select('*')
-    .eq('user_id', userId)
+    .eq('account_id', accountId)
     .maybeSingle();
   
   if (error) {
@@ -87,8 +92,8 @@ export function getTrialDaysRemaining(subscription: UserSubscription | null): nu
 /**
  * Require premium subscription (throws PremiumRequiredError if not premium)
  */
-export async function requirePremiumSubscription(userId: string): Promise<UserSubscription> {
-  const subscription = await getUserSubscription(userId);
+export async function requirePremiumSubscription(accountId: number | null): Promise<UserSubscription> {
+  const subscription = await getUserSubscription(accountId);
 
   if (!isPremiumUser(subscription)) {
     throw new PremiumRequiredError('Premium subscription required');
@@ -98,7 +103,7 @@ export async function requirePremiumSubscription(userId: string): Promise<UserSu
 }
 
 /**
- * Get or create Stripe customer for user
+ * Get or create Stripe customer for account
  */
 export async function getOrCreateStripeCustomer(
   userId: string,
@@ -106,12 +111,17 @@ export async function getOrCreateStripeCustomer(
   stripe: Stripe
 ): Promise<string> {
   const supabase = await createClient();
+  const accountId = await getActiveAccountId();
   
-  // Check if customer already exists
+  if (!accountId) {
+    throw new Error('No active account');
+  }
+  
+  // Check if customer already exists for this account
   const { data: subscription } = await supabase
     .from('user_subscriptions')
     .select('stripe_customer_id')
-    .eq('user_id', userId)
+    .eq('account_id', accountId)
     .maybeSingle();
   
   if (subscription?.stripe_customer_id) {
@@ -121,19 +131,23 @@ export async function getOrCreateStripeCustomer(
   // Create new Stripe customer
   const customer = await stripe.customers.create({
     email,
-    metadata: { user_id: userId }
+    metadata: { 
+      user_id: userId,
+      account_id: accountId.toString()
+    }
   });
   
-  // Store customer ID
+  // Store customer ID (create free subscription if doesn't exist)
   await supabase
     .from('user_subscriptions')
     .upsert({
-      user_id: userId,
+      account_id: accountId,
+      user_id: userId, // Keep for backwards compatibility
       stripe_customer_id: customer.id,
       tier: 'free',
       status: 'active',
     }, {
-      onConflict: 'user_id'
+      onConflict: 'account_id'
     });
   
   return customer.id;

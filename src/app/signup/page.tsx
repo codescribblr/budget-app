@@ -14,8 +14,11 @@ function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const plan = searchParams.get('plan'); // 'premium' or null (free)
+  const redirectTo = searchParams.get('redirectTo');
+  const inviteEmail = searchParams.get('email'); // Pre-fill email from invite
+  const isInviteSignup = redirectTo?.startsWith('/invite/');
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(inviteEmail || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -43,11 +46,16 @@ function SignupForm() {
 
     try {
       const supabase = createClient();
+      // Preserve redirectTo through email confirmation
+      const callbackUrl = redirectTo 
+        ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`
+        : `${window.location.origin}/auth/callback`;
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: callbackUrl,
         },
       });
 
@@ -63,6 +71,33 @@ function SignupForm() {
         setLoading(false);
       } else {
         // Auto-login successful
+        // Always check for pending invitations sent to user's email first (unless already going to an invite)
+        if (!redirectTo || !redirectTo.startsWith('/invite/')) {
+          try {
+            const inviteResponse = await fetch('/api/invitations/my-invitations');
+            if (inviteResponse.ok) {
+              const inviteData = await inviteResponse.json();
+              // If there are pending invitations, redirect to the first one
+              if (inviteData.invitations && inviteData.invitations.length > 0) {
+                const firstInvite = inviteData.invitations[0];
+                router.push(`/invite/${firstInvite.token}`);
+                router.refresh();
+                return;
+              }
+            }
+          } catch (err) {
+            // If check fails, continue with normal redirect
+            console.error('Error checking invitations:', err);
+          }
+        }
+
+        // If coming from invite and no pending invites found, redirect to accept invitation
+        if (isInviteSignup && redirectTo) {
+          router.push(redirectTo);
+          router.refresh();
+          return;
+        }
+
         // If premium plan selected, redirect to checkout
         if (plan === 'premium') {
           // Create checkout session
@@ -81,12 +116,12 @@ function SignupForm() {
             window.location.href = url;
           } else {
             // If checkout fails, still redirect to dashboard
-            router.push('/dashboard');
+            router.push(redirectTo || '/dashboard');
             router.refresh();
           }
         } else {
-          // Free plan - redirect to dashboard
-          router.push('/dashboard');
+          // Free plan - redirect to dashboard or redirectTo
+          router.push(redirectTo || '/dashboard');
           router.refresh();
         }
       }
@@ -243,7 +278,10 @@ function SignupForm() {
             
             <div className="text-sm text-center text-muted-foreground">
               Already have an account?{' '}
-              <Link href="/login" className="text-primary hover:underline font-medium">
+              <Link 
+                href={`/login${searchParams.toString() ? `?${searchParams.toString()}` : ''}`}
+                className="text-primary hover:underline font-medium"
+              >
                 Sign in
               </Link>
             </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { setupPremiumFeatures } from '@/lib/premium-feature-setup';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -36,25 +37,42 @@ export async function POST(request: Request) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
-        const userId = session.metadata?.user_id;
         const subscriptionId = session.subscription as string;
+        
+        // Try to get metadata from session first, then from subscription if needed
+        let userId = session.metadata?.user_id;
+        let accountId = session.metadata?.account_id;
+        
+        // If metadata not in session, try to get it from the subscription
+        if (!userId || !accountId) {
+          try {
+            const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+            userId = subscription.metadata?.user_id || userId;
+            accountId = subscription.metadata?.account_id || accountId;
+          } catch (err) {
+            console.error('❌ Error retrieving subscription for metadata:', err);
+          }
+        }
 
-        if (!userId) {
-          console.error('❌ No user_id in checkout session metadata');
+        if (!userId || !accountId) {
+          console.error('❌ Missing user_id or account_id in checkout session or subscription metadata');
+          console.error('Session metadata:', session.metadata);
           break;
         }
 
-        console.log(`📝 Processing checkout for user ${userId}, subscription ${subscriptionId}`);
+        console.log(`📝 Processing checkout for user ${userId}, account ${accountId}, subscription ${subscriptionId}`);
 
         // Get subscription details
         const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
         console.log(`📝 Subscription status: ${subscription.status}`);
 
         // Create or update subscription record
+        // Note: user_id is kept for backwards compatibility but can be null
         const { data: subData, error: subError } = await supabase
           .from('user_subscriptions')
           .upsert({
-            user_id: userId,
+            account_id: parseInt(accountId),
+            user_id: userId, // Keep for backwards compatibility
             tier: 'premium',
             status: subscription.status,
             stripe_customer_id: session.customer as string,
@@ -66,7 +84,7 @@ export async function POST(request: Request) {
             current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
             updated_at: new Date().toISOString(),
           }, {
-            onConflict: 'user_id',
+            onConflict: 'account_id',
           })
           .select();
 
@@ -91,7 +109,8 @@ export async function POST(request: Request) {
 
         const now = new Date().toISOString();
         const featureFlagsToInsert = premiumFeatures.map(featureName => ({
-          user_id: userId,
+          account_id: parseInt(accountId),
+          user_id: userId, // Include for backwards compatibility (can be null after migration)
           feature_name: featureName,
           enabled: true,
           enabled_at: now,
@@ -103,7 +122,7 @@ export async function POST(request: Request) {
         const { data: featuresData, error: featuresError } = await supabase
           .from('user_feature_flags')
           .upsert(featureFlagsToInsert, {
-            onConflict: 'user_id,feature_name',
+            onConflict: 'account_id,feature_name',
           })
           .select();
 
@@ -114,42 +133,10 @@ export async function POST(request: Request) {
 
         console.log(`✅ Enabled ${featuresData?.length || 0} premium features`);
 
-        // Create Income Buffer category (special initialization for income_buffer feature)
-        const { data: existingBuffer, error: bufferCheckError } = await supabase
-          .from('categories')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('name', 'Income Buffer')
-          .maybeSingle();
+        // Perform setup actions for premium features (e.g., create Income Buffer category)
+        await setupPremiumFeatures(supabase, parseInt(accountId), userId);
 
-        if (bufferCheckError) {
-          console.error('❌ Error checking for Income Buffer:', bufferCheckError);
-        }
-
-        if (!existingBuffer && !bufferCheckError) {
-          const { error: bufferCreateError } = await supabase
-            .from('categories')
-            .insert({
-              user_id: userId,
-              name: 'Income Buffer',
-              monthly_amount: 0,
-              current_balance: 0,
-              sort_order: -1,
-              is_system: true,
-              is_buffer: true,
-              category_type: 'target_balance',
-              priority: 10,
-              notes: 'Special category for smoothing irregular income. Add large payments here and withdraw monthly.',
-            });
-
-          if (bufferCreateError) {
-            console.error('❌ Error creating Income Buffer category:', bufferCreateError);
-          } else {
-            console.log(`✅ Income Buffer category created`);
-          }
-        }
-
-        console.log(`✅ Subscription created for user ${userId} with all premium features enabled`);
+        console.log(`✅ Subscription created for account ${accountId} with all premium features enabled`);
         // TODO: Send welcome email
         break;
       }

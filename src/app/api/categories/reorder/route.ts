@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateCategoriesOrder } from '@/lib/supabase-queries';
+import { checkWriteAccess } from '@/lib/api-helpers';
 
 export async function PATCH(request: NextRequest) {
   try {
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const body = await request.json();
     const { categoryOrders } = body as {
       categoryOrders: Array<{ id: number; sort_order: number }>;

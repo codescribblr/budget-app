@@ -1,5 +1,6 @@
 import { createClient } from './supabase/server';
 import type { MerchantCategoryRule } from './types';
+import { getActiveAccountId } from './account-context';
 
 /**
  * Normalize merchant name for consistent matching
@@ -16,19 +17,40 @@ export function normalizeMerchant(merchant: string): string {
 
 /**
  * Get the merchant group ID for a given merchant description
+ * Searches by both exact pattern match and normalized pattern match
  */
 export async function getMerchantGroupId(merchant: string): Promise<number | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) return null;
+
+  const normalized = normalizeMerchant(merchant);
+
   // Check if this merchant has a mapping to a group
-  const { data: mapping } = await supabase
+  // Try exact pattern match first
+  let { data: mapping } = await supabase
     .from('merchant_mappings')
     .select('merchant_group_id')
     .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .eq('pattern', merchant)
     .maybeSingle();
+
+  // If no exact match, try normalized pattern match
+  if (!mapping) {
+    const { data: normalizedMapping } = await supabase
+      .from('merchant_mappings')
+      .select('merchant_group_id')
+      .eq('user_id', user.id)
+      .eq('account_id', accountId)
+      .eq('normalized_pattern', normalized)
+      .maybeSingle();
+    
+    mapping = normalizedMapping;
+  }
 
   return mapping?.merchant_group_id || null;
 }
@@ -43,6 +65,9 @@ export async function findBestCategoryForMerchant(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
+
+  const accountId = await getActiveAccountId();
+  if (!accountId) return null;
 
   const normalized = normalizeMerchant(merchant);
 
@@ -60,6 +85,7 @@ export async function findBestCategoryForMerchant(
         categories!inner (id)
       `)
       .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .eq('merchant_group_id', merchantGroupId)
       .order('usage_count', { ascending: false })
       .order('confidence_score', { ascending: false });
@@ -86,6 +112,7 @@ export async function findBestCategoryForMerchant(
       categories!inner (id)
     `)
     .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .not('pattern', 'is', null)
     .order('usage_count', { ascending: false })
     .order('confidence_score', { ascending: false });
@@ -165,6 +192,9 @@ export async function learnFromTransaction(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) return;
+
   const normalized = normalizeMerchant(merchant);
   const now = new Date().toISOString();
 
@@ -177,6 +207,7 @@ export async function learnFromTransaction(
       .from('merchant_category_rules')
       .select('id, confidence_score, usage_count')
       .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .eq('merchant_group_id', merchantGroupId)
       .eq('category_id', categoryId)
       .maybeSingle();
@@ -197,6 +228,7 @@ export async function learnFromTransaction(
         .from('merchant_category_rules')
         .insert({
           user_id: user.id,
+          account_id: accountId,
           merchant_group_id: merchantGroupId,
           category_id: categoryId,
           confidence_score: 50, // Start with medium confidence for group rules
@@ -210,6 +242,7 @@ export async function learnFromTransaction(
       .from('merchant_category_rules')
       .select('id, confidence_score, usage_count')
       .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .eq('pattern', merchant)
       .eq('category_id', categoryId)
       .maybeSingle();
@@ -230,6 +263,7 @@ export async function learnFromTransaction(
         .from('merchant_category_rules')
         .insert({
           user_id: user.id,
+          account_id: accountId,
           pattern: merchant,
           normalized_pattern: normalized,
           category_id: categoryId,
@@ -260,10 +294,14 @@ export async function getAllCategoryRules(): Promise<MerchantCategoryRule[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) return [];
+
   const { data, error } = await supabase
     .from('merchant_category_rules')
     .select('*')
     .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .order('usage_count', { ascending: false });
 
   if (error) throw error;

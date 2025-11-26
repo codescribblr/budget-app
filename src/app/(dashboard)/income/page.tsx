@@ -14,6 +14,8 @@ import { DollarSign, TrendingUp, Calculator, Save } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import PreTaxDeductionsSection from '@/components/income/PreTaxDeductionsSection';
 import type { PreTaxDeductionItem } from '@/lib/types';
+import { useAccountPermissions } from '@/hooks/use-account-permissions';
+import { handleApiError } from '@/lib/api-error-handler';
 
 type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly' | 'quarterly' | 'annually';
 
@@ -33,6 +35,7 @@ interface BudgetSummary {
 }
 
 export default function IncomePage() {
+  const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
 
   // Current settings
   const [currentSettings, setCurrentSettings] = useState<IncomeSettings>({
@@ -253,14 +256,15 @@ export default function IncomePage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save settings');
+        const errorMessage = await handleApiError(response, 'Failed to save income settings');
+        throw new Error(errorMessage || 'Failed to save income settings');
       }
 
       toast.success('Income settings saved successfully');
       setScenarioSettings(currentSettings);
     } catch (error) {
       console.error('Error saving settings:', error);
-      toast.error('Failed to save income settings');
+      // Error toast already shown by handleApiError
     } finally {
       setIsSaving(false);
     }
@@ -295,6 +299,14 @@ export default function IncomePage() {
 
         {/* Current Settings Tab */}
         <TabsContent value="current" className="space-y-6">
+          {!isEditor && !permissionsLoading && (
+            <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                You only have read access to this account. Only account owners and editors can modify income settings.
+              </p>
+            </div>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -320,6 +332,7 @@ export default function IncomePage() {
                         annual_income: parseFloat(e.target.value) || 0,
                       })
                     }
+                    disabled={!isEditor || permissionsLoading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -335,6 +348,7 @@ export default function IncomePage() {
                         tax_rate: parseFloat(e.target.value) || 0,
                       })
                     }
+                    disabled={!isEditor || permissionsLoading}
                   />
                   <p className="text-xs text-muted-foreground">
                     e.g., 0.2122 for 21.22%
@@ -358,6 +372,7 @@ export default function IncomePage() {
                           pay_frequency: value,
                         })
                       }
+                      disabled={!isEditor || permissionsLoading}
                     >
                       <SelectTrigger id="pay_frequency">
                         <SelectValue />
@@ -386,6 +401,7 @@ export default function IncomePage() {
                               include_extra_paychecks: checked === true,
                             })
                           }
+                          disabled={!isEditor || permissionsLoading}
                         />
                         <div className="grid gap-1.5 leading-none">
                           <label
@@ -407,7 +423,10 @@ export default function IncomePage() {
               </div>
 
               <div className="flex justify-end">
-                <Button onClick={handleSaveSettings} disabled={isSaving}>
+                <Button 
+                  onClick={handleSaveSettings} 
+                  disabled={isSaving || !isEditor || permissionsLoading}
+                >
                   <Save className="mr-2 h-4 w-4" />
                   {isSaving ? 'Saving...' : 'Save Settings'}
                 </Button>
@@ -422,6 +441,7 @@ export default function IncomePage() {
             payFrequency={currentSettings.pay_frequency}
             includeExtraPaychecks={currentSettings.include_extra_paychecks}
             onChange={setPreTaxDeductionItems}
+            disabled={!isEditor || permissionsLoading}
           />
 
           {/* Current Budget Summary */}

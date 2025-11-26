@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getGoalById, updateGoal, deleteGoal, getAuthenticatedUser } from '@/lib/supabase-queries';
 import { validateUpdateGoal } from '@/lib/goals/validations';
 import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
+import { getActiveAccountId } from '@/lib/account-context';
 import type { UpdateGoalRequest, Goal } from '@/lib/types';
 
 /**
@@ -14,7 +15,14 @@ export async function GET(
 ) {
   try {
     const { user } = await getAuthenticatedUser();
-    await requirePremiumSubscription(user.id);
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
+    await requirePremiumSubscription(accountId);
 
     const { id } = await params;
     const goalId = parseInt(id);
@@ -64,7 +72,14 @@ export async function PATCH(
 ) {
   try {
     const { user } = await getAuthenticatedUser();
-    await requirePremiumSubscription(user.id);
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
+    await requirePremiumSubscription(accountId);
 
     const { id } = await params;
     const goalId = parseInt(id);
@@ -75,6 +90,10 @@ export async function PATCH(
         { status: 400 }
       );
     }
+
+    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
     
     const data: UpdateGoalRequest = await request.json();
     
@@ -140,7 +159,14 @@ export async function DELETE(
 ) {
   try {
     const { user } = await getAuthenticatedUser();
-    await requirePremiumSubscription(user.id);
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
+    await requirePremiumSubscription(accountId);
 
     const { id } = await params;
     const goalId = parseInt(id);
@@ -151,6 +177,10 @@ export async function DELETE(
         { status: 400 }
       );
     }
+
+    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
     
     // Check if should delete category
     const deleteCategoryParam = request.nextUrl.searchParams.get('deleteCategory');

@@ -8,6 +8,10 @@ import { getMerchantGroupForDescription } from '@/lib/db/merchant-groups';
  */
 export async function POST() {
   try {
+    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     

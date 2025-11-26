@@ -19,6 +19,7 @@ import {
 import { Trash2, TrendingUp, Store, Edit2 } from 'lucide-react';
 import type { MerchantCategoryRule, Category } from '@/lib/types';
 import { toast } from 'sonner';
+import { handleApiError } from '@/lib/api-error-handler';
 
 interface CategoryWithRules extends Category {
   rules: MerchantCategoryRule[];
@@ -46,27 +47,47 @@ export default function CategoryRulesPage() {
 
       // Fetch categories
       const categoriesResponse = await fetch('/api/categories');
+      if (!categoriesResponse.ok) {
+        const errorData = await categoriesResponse.json();
+        throw new Error(errorData.error || 'Failed to fetch categories');
+      }
       const categoriesData = await categoriesResponse.json();
+      if (!Array.isArray(categoriesData)) {
+        throw new Error('Invalid response: categories is not an array');
+      }
 
       // Fetch category rules
       const rulesResponse = await fetch('/api/category-rules');
+      if (!rulesResponse.ok) {
+        const errorData = await rulesResponse.json();
+        throw new Error(errorData.error || 'Failed to fetch category rules');
+      }
       const rulesData = await rulesResponse.json();
 
       // Fetch merchant groups
       const groupsResponse = await fetch('/api/merchant-groups');
+      if (!groupsResponse.ok) {
+        const errorData = await groupsResponse.json();
+        throw new Error(errorData.error || 'Failed to fetch merchant groups');
+      }
       const groupsData = await groupsResponse.json();
 
       // Create a map of merchant group IDs to display names
       const groupMap = new Map<number, string>();
-      groupsData.forEach((group: any) => {
-        groupMap.set(group.id, group.display_name);
-      });
+      if (Array.isArray(groupsData)) {
+        groupsData.forEach((group: any) => {
+          groupMap.set(group.id, group.display_name);
+        });
+      }
 
       setCategories(categoriesData);
       setRules(rulesData.rules || []);
       setMerchantGroups(groupMap);
     } catch (error) {
       console.error('Error fetching data:', error);
+      setCategories([]); // Set empty array on error
+      setRules([]);
+      setMerchantGroups(new Map());
     } finally {
       setLoading(false);
     }
@@ -94,7 +115,8 @@ export default function CategoryRulesPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update rule');
+        const errorMessage = await handleApiError(response, 'Failed to update rule');
+        throw new Error(errorMessage || 'Failed to update rule');
       }
 
       // Update local state
@@ -124,7 +146,7 @@ export default function CategoryRulesPage() {
       setEditingRuleId(null);
     } catch (error) {
       console.error('Error updating rule:', error);
-      toast.error('Failed to update rule category');
+      // Error toast already shown by handleApiError
       setFadingOutRules(prev => {
         const next = new Set(prev);
         next.delete(ruleId);
@@ -154,16 +176,17 @@ export default function CategoryRulesPage() {
         setRuleToDelete(null);
         await fetchData();
       } else {
-        throw new Error('Failed to delete rule');
+        const errorMessage = await handleApiError(response, 'Failed to delete rule');
+        throw new Error(errorMessage || 'Failed to delete rule');
       }
     } catch (error) {
       console.error('Error deleting rule:', error);
-      toast.error('Failed to delete rule');
+      // Error toast already shown by handleApiError
     }
   };
 
   // Group rules by category
-  const categoriesWithRules: CategoryWithRules[] = categories
+  const categoriesWithRules: CategoryWithRules[] = Array.isArray(categories) ? categories
     .map(category => {
       const categoryRules = rules.filter(rule => rule.category_id === category.id);
       const totalUsage = categoryRules.reduce((sum, rule) => sum + rule.usage_count, 0);
@@ -175,7 +198,7 @@ export default function CategoryRulesPage() {
       };
     })
     .filter(category => category.rules.length > 0)
-    .sort((a, b) => b.totalUsage - a.totalUsage);
+    .sort((a, b) => b.totalUsage - a.totalUsage) : [];
 
   if (loading) {
     return <LoadingSpinner />;

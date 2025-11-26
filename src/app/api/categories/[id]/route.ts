@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCategoryById, updateCategory, deleteCategory } from '@/lib/supabase-queries';
+import { checkWriteAccess } from '@/lib/api-helpers';
 import type { UpdateCategoryRequest } from '@/lib/types';
 
 export async function GET(
@@ -41,6 +42,9 @@ export async function PATCH(
     if (isNaN(categoryId)) {
       return NextResponse.json({ error: 'Invalid category ID' }, { status: 400 });
     }
+
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
     
     const body = (await request.json()) as UpdateCategoryRequest;
     const category = await updateCategory(categoryId, body);
@@ -70,6 +74,9 @@ export async function DELETE(
     if (isNaN(categoryId)) {
       return NextResponse.json({ error: 'Invalid category ID' }, { status: 400 });
     }
+
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
     
     await deleteCategory(categoryId);
     return NextResponse.json({ success: true });

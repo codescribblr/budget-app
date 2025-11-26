@@ -15,6 +15,7 @@ import type {
   UpdateGoalRequest,
 } from './types';
 import { calculateGoalProgress, calculateGoalStatus } from './goals/calculations';
+import { getActiveAccountId } from './account-context';
 
 // =====================================================
 // HELPER: Get authenticated user
@@ -36,10 +37,17 @@ export async function getAuthenticatedUser() {
 
 export async function getAllCategories(excludeGoals: boolean = false): Promise<Category[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) {
+    // Return empty array instead of throwing - allows UI to handle gracefully
+    console.warn('No active account found for getAllCategories');
+    return [];
+  }
   
   let query = supabase
     .from('categories')
-    .select('*');
+    .select('*')
+    .eq('account_id', accountId);
   
   // Exclude goal categories when fetching for transactions
   if (excludeGoals) {
@@ -54,11 +62,14 @@ export async function getAllCategories(excludeGoals: boolean = false): Promise<C
 
 export async function getCategoryById(id: number): Promise<Category | null> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
   const { data, error } = await supabase
     .from('categories')
     .select('*')
     .eq('id', id)
+    .eq('budget_account_id', accountId)
     .single();
   
   if (error) {
@@ -112,10 +123,14 @@ export async function createCategory(data: {
     targetBalance = data.target_balance ?? null;
   }
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
   const { data: category, error } = await supabase
     .from('categories')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       name: data.name,
       monthly_amount: monthlyAmount,
       current_balance: data.current_balance ?? 0,
@@ -152,6 +167,8 @@ export async function updateCategory(
   }>
 ): Promise<Category | null> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const updateData: any = { updated_at: new Date().toISOString() };
 
@@ -205,6 +222,7 @@ export async function updateCategory(
     .from('categories')
     .update(updateData)
     .eq('id', id)
+    .eq('account_id', accountId)
     .select()
     .single();
 
@@ -218,11 +236,14 @@ export async function updateCategory(
 
 export async function deleteCategory(id: number): Promise<void> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const { error } = await supabase
     .from('categories')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('account_id', accountId);
 
   if (error) throw error;
 }
@@ -261,10 +282,13 @@ export async function updateCategoriesOrder(
 
 export async function getAllAccounts(): Promise<Account[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
   const { data, error } = await supabase
     .from('accounts')
     .select('*')
+    .eq('account_id', accountId)
     .order('name');
   
   if (error) throw error;
@@ -297,10 +321,14 @@ export async function createAccount(data: {
 }): Promise<Account> {
   const { supabase, user } = await getAuthenticatedUser();
 
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
   const { data: account, error } = await supabase
     .from('accounts')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       name: data.name,
       balance: data.balance ?? 0,
       account_type: data.account_type ?? 'checking',
@@ -358,10 +386,16 @@ export async function deleteAccount(id: number): Promise<void> {
 
 export async function getAllCreditCards(): Promise<CreditCard[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) {
+    console.warn('No active account found for getAllCreditCards');
+    return [];
+  }
   
   const { data, error } = await supabase
     .from('credit_cards')
     .select('*')
+    .eq('account_id', accountId)
     .order('name');
   
   if (error) throw error;
@@ -393,6 +427,8 @@ export async function createCreditCard(data: {
   sort_order?: number;
 }): Promise<CreditCard> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const creditLimit = data.credit_limit ?? 0;
   const availableCredit = data.available_credit ?? 0;
@@ -402,6 +438,7 @@ export async function createCreditCard(data: {
     .from('credit_cards')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       name: data.name,
       credit_limit: creditLimit,
       available_credit: availableCredit,
@@ -477,26 +514,35 @@ export async function deleteCreditCard(id: number): Promise<void> {
 
 export async function getAllLoans(): Promise<Loan[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const { data, error } = await supabase
     .from('loans')
     .select('*')
+    .eq('account_id', accountId)
     .order('sort_order');
 
   if (error) throw error;
   return data || [];
 }
 
-export async function getLoanById(id: number): Promise<Loan> {
+export async function getLoanById(id: number): Promise<Loan | null> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const { data, error } = await supabase
     .from('loans')
     .select('*')
     .eq('id', id)
+    .eq('account_id', accountId)
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST116') return null; // Not found
+    throw error;
+  }
   return data;
 }
 
@@ -512,11 +558,14 @@ export async function createLoan(loan: {
   include_in_net_worth?: boolean;
 }): Promise<Loan> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   // Get the max sort_order
   const { data: maxData } = await supabase
     .from('loans')
     .select('sort_order')
+    .eq('account_id', accountId)
     .order('sort_order', { ascending: false })
     .limit(1);
 
@@ -526,6 +575,7 @@ export async function createLoan(loan: {
     .from('loans')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       ...loan,
       sort_order: nextSortOrder,
     })
@@ -594,10 +644,16 @@ export async function deleteLoan(id: number): Promise<void> {
 
 export async function getAllPendingChecks(): Promise<PendingCheck[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) {
+    console.warn('No active account found for getAllPendingChecks');
+    return [];
+  }
 
   const { data, error } = await supabase
     .from('pending_checks')
     .select('*')
+    .eq('account_id', accountId)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -606,11 +662,14 @@ export async function getAllPendingChecks(): Promise<PendingCheck[]> {
 
 export async function getPendingCheckById(id: number): Promise<PendingCheck | null> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const { data, error } = await supabase
     .from('pending_checks')
     .select('*')
     .eq('id', id)
+    .eq('account_id', accountId)
     .single();
 
   if (error) {
@@ -626,11 +685,14 @@ export async function createPendingCheck(data: {
   amount: number;
 }): Promise<PendingCheck> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const { data: check, error } = await supabase
     .from('pending_checks')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       description: data.description,
       amount: data.amount,
     })
@@ -682,11 +744,16 @@ export async function deletePendingCheck(id: number): Promise<void> {
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) {
+    throw new Error('No active account');
+  }
 
   // Get all categories
   const { data: categories, error: catError } = await supabase
     .from('categories')
     .select('*')
+    .eq('account_id', accountId)
     .order('sort_order');
 
   if (catError) throw catError;
@@ -694,21 +761,24 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   // Get all accounts
   const { data: accounts, error: accError } = await supabase
     .from('accounts')
-    .select('*');
+    .select('*')
+    .eq('account_id', accountId);
 
   if (accError) throw accError;
 
   // Get all credit cards
   const { data: creditCards, error: ccError } = await supabase
     .from('credit_cards')
-    .select('*');
+    .select('*')
+    .eq('account_id', accountId);
 
   if (ccError) throw ccError;
 
   // Get all pending checks
   const { data: pendingChecks, error: pcError } = await supabase
     .from('pending_checks')
-    .select('*');
+    .select('*')
+    .eq('account_id', accountId);
 
   if (pcError) throw pcError;
 
@@ -716,7 +786,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const { data: settings, error: settingsError } = await supabase
     .from('settings')
     .select('*')
-    .eq('user_id', user.id);
+    .eq('account_id', accountId);
 
   if (settingsError) throw settingsError;
 
@@ -871,6 +941,11 @@ function calculateMonthlyNetIncome(settingsObj: Record<string, string>): number 
 
 export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) {
+    console.warn('No active account found for getAllTransactions');
+    return [];
+  }
 
   // Get all transactions with merchant group, account, and credit card info
   const { data: transactions, error: txError } = await supabase
@@ -887,6 +962,7 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
         name
       )
     `)
+    .eq('budget_account_id', accountId)
     .order('date', { ascending: false })
     .order('created_at', { ascending: false });
 
@@ -950,6 +1026,8 @@ export async function searchTransactions(
   limit: number = 10
 ): Promise<TransactionWithSplits[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   // Search transactions by description or merchant name
   // Note: We search description directly, but merchant name requires a workaround
@@ -968,6 +1046,7 @@ export async function searchTransactions(
         name
       )
     `)
+    .eq('budget_account_id', accountId)
     .ilike('description', `%${query}%`)
     .order('date', { ascending: false })
     .order('created_at', { ascending: false })
@@ -1030,6 +1109,8 @@ export async function searchTransactions(
 
 export async function getTransactionById(id: number): Promise<TransactionWithSplits | null> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   // Get transaction with merchant group, account, and credit card info
   const { data: transaction, error: txError } = await supabase
@@ -1047,6 +1128,7 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
       )
     `)
     .eq('id', id)
+    .eq('budget_account_id', accountId)
     .single();
 
   if (txError) {
@@ -1100,6 +1182,8 @@ export async function createTransaction(data: {
   splits: { category_id: number; amount: number }[];
 }): Promise<TransactionWithSplits> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   // Validate that only one of account_id or credit_card_id is set
   if (data.account_id !== null && data.account_id !== undefined && 
@@ -1126,12 +1210,13 @@ export async function createTransaction(data: {
     .from('transactions')
     .insert({
       user_id: user.id,
+      budget_account_id: accountId,
       date: data.date,
       description: data.description,
       total_amount: totalAmount,
       merchant_group_id: merchantGroupId,
       is_historical: isHistorical,
-      account_id: data.account_id || null,
+      account_id: data.account_id || null, // This is bank account, not budget account
       credit_card_id: data.credit_card_id || null,
     })
     .select()
@@ -1342,6 +1427,8 @@ export async function deleteTransaction(id: number): Promise<void> {
 
 export async function getAllMerchantMappings(): Promise<any[]> {
   const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const { data, error } = await supabase
     .from('merchant_mappings')
@@ -1352,6 +1439,7 @@ export async function getAllMerchantMappings(): Promise<any[]> {
         name
       )
     `)
+    .eq('account_id', accountId)
     .order('confidence_score', { ascending: false })
     .order('last_used', { ascending: false });
 
@@ -1443,6 +1531,8 @@ export async function checkDuplicateHash(hash: string): Promise<boolean> {
 
 export async function importTransactions(transactions: any[], isHistorical: boolean = false): Promise<number> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const importDate = new Date().toISOString();
 
@@ -1456,6 +1546,7 @@ export async function importTransactions(transactions: any[], isHistorical: bool
   // ===== STEP 1: Batch insert imported_transactions =====
   const importedTransactionsData = validTransactions.map(txn => ({
     user_id: user.id,
+    account_id: accountId,
     import_date: importDate,
     source_type: 'CSV Import',
     source_identifier: 'Unknown',
@@ -1476,12 +1567,12 @@ export async function importTransactions(transactions: any[], isHistorical: bool
     if (importError.code === '23505') {
       console.log('Duplicate hashes detected, filtering and retrying...');
 
-      // Get existing hashes for this user
+      // Get existing hashes for this account
       const hashes = validTransactions.map(txn => txn.hash);
       const { data: existingHashes } = await supabase
         .from('imported_transactions')
         .select('hash')
-        .eq('user_id', user.id)
+        .eq('account_id', accountId)
         .in('hash', hashes);
 
       const existingHashSet = new Set(existingHashes?.map(h => h.hash) || []);
@@ -1548,11 +1639,12 @@ export async function importTransactions(transactions: any[], isHistorical: bool
     const totalAmount = txn.splits.reduce((sum: number, split: any) => sum + split.amount, 0);
     return {
       user_id: user.id,
+      budget_account_id: accountId,
       date: txn.date,
       description: txn.description,
       total_amount: totalAmount,
       merchant_group_id: merchantGroupIds[index],
-      account_id: txn.account_id || null,
+      account_id: txn.account_id || null, // This is the bank account, not budget account
       credit_card_id: txn.credit_card_id || null,
       is_historical: isHistorical,
     };
@@ -1644,6 +1736,8 @@ export async function importTransactions(transactions: any[], isHistorical: bool
 
 export async function getAllGoals(): Promise<GoalWithDetails[]> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
   const { data: goals, error } = await supabase
     .from('goals')
@@ -1654,7 +1748,7 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
       linked_credit_card:credit_cards!goals_linked_credit_card_id_fkey(*),
       linked_loan:loans!goals_linked_loan_id_fkey(*)
     `)
-    .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .order('sort_order')
     .order('created_at', { ascending: false });
   
@@ -1716,6 +1810,8 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
 
 export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
   const { data: goal, error } = await supabase
     .from('goals')
@@ -1727,7 +1823,7 @@ export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
       linked_loan:loans!goals_linked_loan_id_fkey(*)
     `)
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .single();
   
   if (error) {
@@ -1772,6 +1868,8 @@ export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
 
 export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetails> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
   let linkedCategoryId: number | null = null;
   let linkedAccountId: number | null = null;
@@ -1790,16 +1888,16 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
     
     // Handle credit card debt paydown
     if (data.linked_credit_card_id) {
-      // Verify credit card exists and belongs to user
+      // Verify credit card exists and belongs to account
       const { data: creditCard, error: ccError } = await supabase
         .from('credit_cards')
         .select('*')
         .eq('id', data.linked_credit_card_id)
-        .eq('user_id', user.id)
+        .eq('account_id', accountId)
         .single();
 
       if (ccError || !creditCard) {
-        throw new Error('Credit card not found or does not belong to user');
+        throw new Error('Credit card not found or does not belong to this account');
       }
 
       // Check if credit card is already linked to another goal
@@ -1807,7 +1905,7 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
         .from('goals')
         .select('id')
         .eq('linked_credit_card_id', data.linked_credit_card_id)
-        .eq('user_id', user.id)
+        .eq('account_id', accountId)
         .eq('status', 'active')
         .single();
 
@@ -1828,16 +1926,16 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
 
     // Handle loan debt paydown
     if (data.linked_loan_id) {
-      // Verify loan exists and belongs to user
+      // Verify loan exists and belongs to account
       const { data: loan, error: loanError } = await supabase
         .from('loans')
         .select('*')
         .eq('id', data.linked_loan_id)
-        .eq('user_id', user.id)
+        .eq('account_id', accountId)
         .single();
 
       if (loanError || !loan) {
-        throw new Error('Loan not found or does not belong to user');
+        throw new Error('Loan not found or does not belong to this account');
       }
 
       // Check if loan is already linked to another goal
@@ -1845,7 +1943,7 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
         .from('goals')
         .select('id')
         .eq('linked_loan_id', data.linked_loan_id)
-        .eq('user_id', user.id)
+        .eq('account_id', accountId)
         .eq('status', 'active')
         .single();
 
@@ -1871,6 +1969,7 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
       .from('categories')
       .insert({
         user_id: user.id,
+        account_id: accountId,
         name: data.name,
         monthly_amount: data.monthly_contribution,
         current_balance: data.starting_balance || 0,
@@ -1896,6 +1995,7 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
         .from('accounts')
         .insert({
           user_id: user.id,
+          account_id: accountId,
           name: data.new_account_name.trim(),
           balance: data.new_account_balance || 0,
           account_type: data.new_account_type || 'savings',
@@ -1912,16 +2012,16 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
     }
     // Option 2: Link to existing account
     else if (data.linked_account_id) {
-      // Verify account exists and belongs to user
+      // Verify account exists and belongs to account
       const { data: account, error: accError } = await supabase
         .from('accounts')
         .select('*')
         .eq('id', data.linked_account_id)
-        .eq('user_id', user.id)
+        .eq('account_id', accountId)
         .single();
       
       if (accError || !account) {
-        throw new Error('Account not found or does not belong to user');
+        throw new Error('Account not found or does not belong to this account');
       }
       
       // Check if account is already linked to another goal
@@ -1929,7 +2029,7 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
         .from('goals')
         .select('id')
         .eq('linked_account_id', data.linked_account_id)
-        .eq('user_id', user.id)
+        .eq('account_id', accountId)
         .single();
       
       if (existingGoal) {
@@ -1954,15 +2054,19 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
   }
   
   // Create goal
+  // Ensure monthly_contribution is provided (default to 0 if not provided)
+  const monthlyContribution = data.monthly_contribution ?? 0;
+  
   const { data: goal, error: goalError } = await supabase
     .from('goals')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       name: data.name,
       target_amount: targetAmount,
       target_date: data.target_date || null,
       goal_type: data.goal_type,
-      monthly_contribution: data.monthly_contribution,
+      monthly_contribution: monthlyContribution,
       linked_account_id: linkedAccountId,
       linked_category_id: linkedCategoryId,
       linked_credit_card_id: linkedCreditCardId,
@@ -1983,10 +2087,19 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
   
   // Update account's linked_goal_id if account-linked
   if (linkedAccountId) {
-    await supabase
+    const { error: linkError } = await supabase
       .from('accounts')
       .update({ linked_goal_id: goal.id })
       .eq('id', linkedAccountId);
+    
+    if (linkError) {
+      // Log error but don't fail goal creation
+      // This can happen if PostgREST schema cache is stale (PGRST204)
+      console.error('Warning: Failed to link goal to account:', linkError);
+      console.error('This may be a PostgREST schema cache issue. The goal was created successfully.');
+      // The goal is still created, just not linked to the account
+      // User can manually link it later or refresh the schema cache
+    }
   }
   
   // Fetch full goal details
@@ -1999,13 +2112,15 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
 
 export async function updateGoal(id: number, data: UpdateGoalRequest): Promise<GoalWithDetails> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
-  // Verify goal belongs to user
+  // Verify goal belongs to account
   const { data: existingGoal } = await supabase
     .from('goals')
     .select('*')
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .single();
   
   if (!existingGoal) {
@@ -2028,7 +2143,7 @@ export async function updateGoal(id: number, data: UpdateGoalRequest): Promise<G
     .from('goals')
     .update(updateData)
     .eq('id', id)
-    .eq('user_id', user.id);
+    .eq('account_id', accountId);
   
   if (error) throw error;
   
@@ -2049,10 +2164,12 @@ export async function updateGoal(id: number, data: UpdateGoalRequest): Promise<G
 
 export async function deleteGoal(id: number, deleteCategory: boolean = false): Promise<void> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
   
   // Get goal details
   const goal = await getGoalById(id);
-  if (!goal || goal.user_id !== user.id) {
+  if (!goal) {
     throw new Error('Goal not found');
   }
   
@@ -2080,7 +2197,7 @@ export async function deleteGoal(id: number, deleteCategory: boolean = false): P
       .from('categories')
       .update({ is_goal: false })
       .eq('id', goal.linked_category_id)
-      .eq('user_id', user.id); // Ensure user owns the category
+      .eq('account_id', accountId); // Ensure category belongs to account
     
     if (updateCategoryError) {
       throw new Error(`Failed to update category: ${updateCategoryError.message}`);
@@ -2093,7 +2210,7 @@ export async function deleteGoal(id: number, deleteCategory: boolean = false): P
     .from('goals')
     .delete()
     .eq('id', id)
-    .eq('user_id', user.id);
+    .eq('account_id', accountId);
   
   if (error) throw error;
   
@@ -2104,7 +2221,7 @@ export async function deleteGoal(id: number, deleteCategory: boolean = false): P
       .from('categories')
       .select('name')
       .eq('id', categoryIdToDelete)
-      .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .single();
     
     const categoryName = category?.name || 'the category';
@@ -2114,7 +2231,7 @@ export async function deleteGoal(id: number, deleteCategory: boolean = false): P
       .from('categories')
       .delete()
       .eq('id', categoryIdToDelete)
-      .eq('user_id', user.id); // Ensure user owns the category
+      .eq('account_id', accountId); // Ensure category belongs to account
     
     if (deleteCategoryError) {
       // Goal was already deleted, so we can't rollback
@@ -2142,11 +2259,13 @@ export async function getFundedThisMonth(
   month: string
 ): Promise<number> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   const { data, error } = await supabase
     .from('category_monthly_funding')
     .select('funded_amount')
-    .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .eq('category_id', categoryId)
     .eq('month', month)
     .maybeSingle();
@@ -2166,6 +2285,8 @@ export async function recordMonthlyFunding(
   targetAmount?: number
 ): Promise<void> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   // Get current funded amount
   const currentFunded = await getFundedThisMonth(categoryId, month);
@@ -2176,13 +2297,14 @@ export async function recordMonthlyFunding(
     .from('category_monthly_funding')
     .upsert({
       user_id: user.id,
+      account_id: accountId,
       category_id: categoryId,
       month,
       funded_amount: newFundedAmount,
       target_amount: targetAmount,
       updated_at: new Date().toISOString(),
     }, {
-      onConflict: 'user_id,category_id,month',
+      onConflict: 'account_id,category_id,month',
     });
 
   if (error) throw error;
@@ -2196,12 +2318,14 @@ export async function getOrCreateMonthlyFunding(
   month: string
 ): Promise<{ funded_amount: number; target_amount: number | null }> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   // Try to get existing record
   const { data: existing, error: fetchError } = await supabase
     .from('category_monthly_funding')
     .select('funded_amount, target_amount')
-    .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .eq('category_id', categoryId)
     .eq('month', month)
     .maybeSingle();
@@ -2217,6 +2341,7 @@ export async function getOrCreateMonthlyFunding(
     .from('category_monthly_funding')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       category_id: categoryId,
       month,
       funded_amount: 0,
@@ -2234,11 +2359,16 @@ export async function getOrCreateMonthlyFunding(
  */
 export async function isFeatureEnabled(featureName: string): Promise<boolean> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+
+  if (!accountId) {
+    return false;
+  }
 
   const { data, error } = await supabase
     .from('user_feature_flags')
     .select('enabled')
-    .eq('user_id', user.id)
+    .eq('account_id', accountId)
     .eq('feature_name', featureName)
     .maybeSingle();
 

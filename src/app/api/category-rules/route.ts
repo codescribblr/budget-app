@@ -19,6 +19,10 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
+    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const { id, categoryId } = await request.json();
     await updateRuleCategory(id, categoryId);
     return NextResponse.json({ success: true });
@@ -36,6 +40,10 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const accessCheck = await checkWriteAccess();
+    if (accessCheck) return accessCheck;
+
     const { id } = await request.json();
     await deleteCategoryRule(id);
     return NextResponse.json({ success: true });
