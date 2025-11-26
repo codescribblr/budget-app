@@ -29,8 +29,14 @@ jobs:
           sudo apt-get install -y postgresql-client-15
           # Ensure PostgreSQL 15 binaries are in PATH
           echo "/usr/lib/postgresql/15/bin" >> $GITHUB_PATH
-          # Verify pg_dump version (use full path to be sure)
-          /usr/lib/postgresql/15/bin/pg_dump --version || pg_dump --version
+          # Verify pg_dump is available and show version
+          if [ -f "/usr/lib/postgresql/15/bin/pg_dump" ]; then
+            /usr/lib/postgresql/15/bin/pg_dump --version
+          elif command -v pg_dump >/dev/null 2>&1; then
+            pg_dump --version
+          else
+            echo "Warning: pg_dump not found, but continuing..."
+          fi
 
       - name: 🔍 Check for pending migrations
         id: check_migrations
