@@ -14,19 +14,20 @@ export interface DateParseResult {
 
 /**
  * Common date format patterns
+ * US formats (MM/dd) are prioritized over European formats (dd/MM)
  */
 export const DATE_FORMATS = [
   'MM/dd/yyyy',
-  'dd/MM/yyyy',
+  'MM-dd-yyyy',
+  'MM/dd/yy',
   'yyyy-MM-dd',
-  'dd-MM-yyyy',
-  'dd.MM.yyyy',
+  'yyyy/MM/dd',
   'MMM dd, yyyy',
   'MMM d, yyyy',
-  'MM/dd/yy',
+  'dd/MM/yyyy',
+  'dd-MM-yyyy',
+  'dd.MM.yyyy',
   'dd/MM/yy',
-  'yyyy/MM/dd',
-  'MM-dd-yyyy',
   'dd-MM-yy',
 ] as const;
 
@@ -66,7 +67,54 @@ export function parseDate(dateStr: string, detectedFormat?: string): DateParseRe
         // Validate that the parsed date makes sense
         const year = parsed.getFullYear();
         if (year >= 1900 && year <= 2100) {
-          return { date: parsed, format: fmt, confidence: 0.9 };
+          // Additional validation for numeric date formats to prevent mis-parsing
+          // This prevents issues like parsing "11/25/2025" as dd/MM/yyyy (day=11, month=25)
+          const month = parsed.getMonth() + 1; // getMonth() returns 0-11
+          const day = parsed.getDate();
+          
+          // Only validate numeric formats (skip text-based formats like "MMM dd, yyyy")
+          if (!fmt.includes('MMM')) {
+            // Extract expected values from the string based on format
+            const parts = trimmed.split(/[\/\-\s,\.]+/).filter(p => p.trim() !== '');
+            if (parts.length >= 3) {
+              let expectedMonth: number | null = null;
+              let expectedDay: number | null = null;
+              
+              // Check if all parts are numeric
+              const allNumeric = parts.every(p => /^\d+$/.test(p.trim()));
+              
+              if (allNumeric) {
+                if (fmt.startsWith('MM') && !fmt.startsWith('MMM')) {
+                  // US format: MM/dd/yyyy or MM-dd-yyyy
+                  expectedMonth = parseInt(parts[0], 10);
+                  expectedDay = parseInt(parts[1], 10);
+                } else if (fmt.startsWith('dd')) {
+                  // European format: dd/MM/yyyy or dd-MM-yyyy
+                  expectedDay = parseInt(parts[0], 10);
+                  expectedMonth = parseInt(parts[1], 10);
+                } else if (fmt.startsWith('yyyy')) {
+                  // ISO format: yyyy-MM-dd or yyyy/MM/dd
+                  expectedMonth = parseInt(parts[1], 10);
+                  expectedDay = parseInt(parts[2], 10);
+                }
+                
+                // Validate that parsed values match expected values
+                if (expectedMonth !== null && expectedDay !== null) {
+                  // Check if month is valid (1-12) and day is reasonable (1-31)
+                  if (expectedMonth >= 1 && expectedMonth <= 12 && expectedDay >= 1 && expectedDay <= 31) {
+                    if (month === expectedMonth && day === expectedDay) {
+                      return { date: parsed, format: fmt, confidence: 0.9 };
+                    }
+                    // If values don't match, this format is wrong - continue to next
+                    continue;
+                  }
+                }
+              }
+            }
+          }
+          
+          // If we can't validate, but date is valid, accept it
+          return { date: parsed, format: fmt, confidence: 0.8 };
         }
       }
     } catch {
