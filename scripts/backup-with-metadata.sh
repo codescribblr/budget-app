@@ -78,9 +78,20 @@ if [ -n "$PENDING_MIGRATIONS" ]; then
 fi
 echo ""
 
+# Find the correct pg_dump binary (prefer PostgreSQL 15+)
+PG_DUMP_CMD="pg_dump"
+if command -v pg_dump-15 >/dev/null 2>&1; then
+  PG_DUMP_CMD="pg_dump-15"
+elif [ -f "/usr/lib/postgresql/15/bin/pg_dump" ]; then
+  PG_DUMP_CMD="/usr/lib/postgresql/15/bin/pg_dump"
+fi
+
+# Verify pg_dump version
+echo -e "${BLUE}Using: $($PG_DUMP_CMD --version)${NC}"
+
 # Create the backup using pg_dump
 ERROR_OUTPUT=$(mktemp)
-if pg_dump "$SUPABASE_DB_URL" \
+if $PG_DUMP_CMD "$SUPABASE_DB_URL" \
   --clean \
   --if-exists \
   --no-owner \
