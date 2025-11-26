@@ -68,7 +68,18 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
 
         if (highConfidence) {
           // Auto-import with detected mapping
-          transactions = await parseCSVFile(file);
+          const result = await parseCSVFile(file);
+          transactions = result.transactions;
+          
+          // Store CSV data and template info for potential re-processing
+          sessionStorage.setItem('csvData', JSON.stringify(rawData));
+          sessionStorage.setItem('csvFileName', file.name);
+          if (result.templateId) {
+            sessionStorage.setItem('csvTemplateId', result.templateId.toString());
+          }
+          if (result.fingerprint) {
+            sessionStorage.setItem('csvFingerprint', result.fingerprint);
+          }
         } else {
           // Navigate to mapping page
           sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));

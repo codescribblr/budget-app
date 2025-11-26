@@ -11,14 +11,18 @@ export { extractMerchant, generateTransactionHash };
 
 /**
  * Parse CSV file with intelligent column detection
+ * Returns transactions and template info if a template was used
  */
-export async function parseCSVFile(file: File): Promise<ParsedTransaction[]> {
+export async function parseCSVFile(
+  file: File,
+  options?: { skipTemplate?: boolean }
+): Promise<{ transactions: ParsedTransaction[]; templateId?: number; fingerprint?: string }> {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       complete: async (results) => {
         try {
-          const transactions = await processCSVData(results.data as string[][], file.name);
-          resolve(transactions);
+          const result = await processCSVData(results.data as string[][], file.name, options?.skipTemplate);
+          resolve(result);
         } catch (error) {
           reject(error);
         }
@@ -33,7 +37,11 @@ export async function parseCSVFile(file: File): Promise<ParsedTransaction[]> {
 /**
  * Process CSV data with intelligent detection
  */
-async function processCSVData(data: string[][], fileName: string): Promise<ParsedTransaction[]> {
+async function processCSVData(
+  data: string[][],
+  fileName: string,
+  skipTemplate?: boolean
+): Promise<{ transactions: ParsedTransaction[]; templateId?: number; fingerprint: string }> {
   if (data.length === 0) {
     throw new Error('CSV file is empty');
   }
@@ -41,19 +49,24 @@ async function processCSVData(data: string[][], fileName: string): Promise<Parse
   // Analyze CSV structure
   const analysis = analyzeCSV(data);
 
-  // Check for saved template
+  // Check for saved template (unless skipping)
   let mapping: ColumnMapping | null = null;
-  try {
-    const template = await loadTemplate(analysis.fingerprint);
-    if (template) {
-      mapping = template.mapping;
-      // Update template usage
-      if (template.id) {
-        await updateTemplateUsage(template.id).catch(console.warn);
+  let templateId: number | undefined;
+  
+  if (!skipTemplate) {
+    try {
+      const template = await loadTemplate(analysis.fingerprint);
+      if (template) {
+        mapping = template.mapping;
+        templateId = template.id;
+        // Update template usage
+        if (template.id) {
+          await updateTemplateUsage(template.id).catch(console.warn);
+        }
       }
+    } catch (error) {
+      console.warn('Failed to load template:', error);
     }
-  } catch (error) {
-    console.warn('Failed to load template:', error);
   }
 
   // If no template found, use analysis results
@@ -92,7 +105,11 @@ async function processCSVData(data: string[][], fileName: string): Promise<Parse
     }
   }
 
-  return transactions;
+  return {
+    transactions,
+    templateId,
+    fingerprint: analysis.fingerprint,
+  };
 }
 
 /**
