@@ -64,16 +64,19 @@ export async function POST(request: Request) {
     });
 
     // Find the most recent active/trialing subscription
-    const activeSubscription = subscriptions.data.find(
+    const foundSubscription = subscriptions.data.find(
       sub => ['active', 'trialing'].includes(sub.status)
     ) || subscriptions.data[0];
 
-    if (!activeSubscription) {
+    if (!foundSubscription) {
       return NextResponse.json(
         { error: 'No active subscription found in Stripe.' },
         { status: 404 }
       );
     }
+
+    // Type assertion to ensure TypeScript recognizes Stripe.Subscription properties
+    const activeSubscription = foundSubscription as Stripe.Subscription;
 
     // Get account_id from subscription metadata
     const subscriptionAccountId = activeSubscription.metadata?.account_id;
@@ -112,8 +115,8 @@ export async function POST(request: Request) {
         stripe_price_id: activeSubscription.items.data[0]?.price.id,
         trial_start: activeSubscription.trial_start ? new Date(activeSubscription.trial_start * 1000).toISOString() : null,
         trial_end: activeSubscription.trial_end ? new Date(activeSubscription.trial_end * 1000).toISOString() : null,
-        current_period_start: activeSubscription.current_period_start ? new Date(activeSubscription.current_period_start * 1000).toISOString() : null,
-        current_period_end: activeSubscription.current_period_end ? new Date(activeSubscription.current_period_end * 1000).toISOString() : null,
+        current_period_start: (activeSubscription as any).current_period_start ? new Date((activeSubscription as any).current_period_start * 1000).toISOString() : null,
+        current_period_end: (activeSubscription as any).current_period_end ? new Date((activeSubscription as any).current_period_end * 1000).toISOString() : null,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'account_id',

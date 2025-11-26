@@ -274,6 +274,8 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
  */
 export async function importUserDataFromFile(backupData: UserBackupData): Promise<void> {
   const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
 
   console.log('[Import] Starting import for user:', user.id);
 
