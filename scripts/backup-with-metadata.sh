@@ -148,14 +148,18 @@ EOF
 else
   echo -e "${RED}❌ Backup failed${NC}"
   
+  # Always show error details for debugging
+  echo -e "${YELLOW}Error details:${NC}"
+  cat "$ERROR_OUTPUT"
+  echo ""
+  
   # Check for version mismatch error
-  if grep -q "server version mismatch" "$ERROR_OUTPUT"; then
-    echo -e "${YELLOW}   Error: PostgreSQL version mismatch${NC}"
+  if grep -qi "server version mismatch\|version mismatch" "$ERROR_OUTPUT"; then
+    echo -e "${YELLOW}   Error: PostgreSQL version mismatch detected${NC}"
+    echo -e "${BLUE}   Client version: $($PG_DUMP_CMD --version 2>/dev/null || echo 'unknown')${NC}"
+    echo -e "${BLUE}   This usually means the pg_dump client version doesn't match the server version${NC}"
   else
     echo -e "${RED}   Check your SUPABASE_DB_URL and database connection${NC}"
-    echo ""
-    echo -e "${YELLOW}Error details:${NC}"
-    cat "$ERROR_OUTPUT"
   fi
   
   # Remove empty backup file if it was created
