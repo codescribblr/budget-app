@@ -101,6 +101,8 @@ function validateParsedDate(
       // Values must match exactly
       return month === expectedMonth && day === expectedDay;
     }
+    // If expected month or day is invalid, reject this format
+    return false;
   }
   
   return true; // Can't validate, accept it

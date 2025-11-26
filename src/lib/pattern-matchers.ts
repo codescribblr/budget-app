@@ -9,15 +9,18 @@ export interface DatePattern {
 }
 
 export const DATE_PATTERNS: DatePattern[] = [
+  // US formats first (MM/dd) - prioritize these for ambiguous patterns
   { regex: /^\d{1,2}\/\d{1,2}\/\d{2,4}$/, format: 'MM/DD/YYYY' },
+  { regex: /^\d{1,2}-\d{1,2}-\d{2,4}$/, format: 'MM-DD-YYYY' },
+  { regex: /^\d{1,2}\/\d{1,2}\/\d{2}$/, format: 'MM/DD/YY' },
+  // ISO and other unambiguous formats
   { regex: /^\d{4}-\d{2}-\d{2}$/, format: 'YYYY-MM-DD' },
+  { regex: /^\d{4}\/\d{2}\/\d{2}$/, format: 'YYYY/MM/DD' },
+  { regex: /^[A-Za-z]{3}\s+\d{1,2},?\s+\d{4}$/, format: 'MMM DD, YYYY' },
+  // European formats last (dd/MM) - only use if US formats don't work
   { regex: /^\d{2}-\d{2}-\d{4}$/, format: 'DD-MM-YYYY' },
   { regex: /^\d{2}\.\d{2}\.\d{4}$/, format: 'DD.MM.YYYY' },
   { regex: /^\d{1,2}\.\d{1,2}\.\d{2,4}$/, format: 'DD.MM.YYYY' },
-  { regex: /^[A-Za-z]{3}\s+\d{1,2},?\s+\d{4}$/, format: 'MMM DD, YYYY' },
-  { regex: /^\d{1,2}\/\d{1,2}\/\d{2}$/, format: 'MM/DD/YY' },
-  { regex: /^\d{4}\/\d{2}\/\d{2}$/, format: 'YYYY/MM/DD' },
-  { regex: /^\d{1,2}-\d{1,2}-\d{2,4}$/, format: 'MM-DD-YYYY' },
 ];
 
 export const AMOUNT_PATTERNS = [
