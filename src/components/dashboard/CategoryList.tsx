@@ -335,6 +335,10 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
     if (!editingCategory) return;
 
     // Optimistic update
+    const monthlyTargetValue = newMonthlyTarget ? parseFloat(newMonthlyTarget) : undefined;
+    const annualTargetValue = newAnnualTarget ? parseFloat(newAnnualTarget) : undefined;
+    const targetBalanceValue = newTargetBalance ? parseFloat(newTargetBalance) : undefined;
+    
     const updatedCategory: Category = {
       ...editingCategory,
       name: newName,
@@ -344,9 +348,9 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
       is_system: newIsSystem,
       category_type: newCategoryType,
       priority: newPriority,
-      monthly_target: parseFloat(newMonthlyTarget) || null,
-      annual_target: parseFloat(newAnnualTarget) || null,
-      target_balance: parseFloat(newTargetBalance) || null,
+      monthly_target: monthlyTargetValue && !isNaN(monthlyTargetValue) ? monthlyTargetValue : undefined,
+      annual_target: annualTargetValue && !isNaN(annualTargetValue) ? annualTargetValue : undefined,
+      target_balance: targetBalanceValue && !isNaN(targetBalanceValue) ? targetBalanceValue : undefined,
     };
     const updatedCategories = categories.map(cat => 
       cat.id === editingCategory.id ? updatedCategory : cat
@@ -367,9 +371,9 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
           is_system: newIsSystem,
           category_type: newCategoryType,
           priority: newPriority,
-          monthly_target: parseFloat(newMonthlyTarget) || null,
-          annual_target: parseFloat(newAnnualTarget) || null,
-          target_balance: parseFloat(newTargetBalance) || null,
+          monthly_target: monthlyTargetValue && !isNaN(monthlyTargetValue) ? monthlyTargetValue : null,
+          annual_target: annualTargetValue && !isNaN(annualTargetValue) ? annualTargetValue : null,
+          target_balance: targetBalanceValue && !isNaN(targetBalanceValue) ? targetBalanceValue : null,
         }),
       });
 
@@ -405,6 +409,10 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
       return;
     }
 
+    const monthlyTargetValue = newMonthlyTarget ? parseFloat(newMonthlyTarget) : undefined;
+    const annualTargetValue = newAnnualTarget ? parseFloat(newAnnualTarget) : undefined;
+    const targetBalanceValue = newTargetBalance ? parseFloat(newTargetBalance) : undefined;
+
     try {
       const response = await fetch('/api/categories', {
         method: 'POST',
@@ -417,9 +425,9 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
           is_system: newIsSystem,
           category_type: newCategoryType,
           priority: newPriority,
-          monthly_target: parseFloat(newMonthlyTarget) || null,
-          annual_target: parseFloat(newAnnualTarget) || null,
-          target_balance: parseFloat(newTargetBalance) || null,
+          monthly_target: monthlyTargetValue && !isNaN(monthlyTargetValue) ? monthlyTargetValue : null,
+          annual_target: annualTargetValue && !isNaN(annualTargetValue) ? annualTargetValue : null,
+          target_balance: targetBalanceValue && !isNaN(targetBalanceValue) ? targetBalanceValue : null,
         }),
       });
 
