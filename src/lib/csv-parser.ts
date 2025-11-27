@@ -197,22 +197,41 @@ function parseRowWithMapping(
     // Use amount column with sign convention
     if (mapping.amountColumn !== null) {
       amount = parseAmount(row[mapping.amountColumn]);
+      
+      if (convention === 'positive_is_expense') {
+        transaction_type = amount >= 0 ? 'expense' : 'income';
+      } else { // positive_is_income
+        transaction_type = amount >= 0 ? 'income' : 'expense';
+      }
+      amount = Math.abs(amount); // Normalize to positive
     } else if (mapping.debitColumn !== null && mapping.creditColumn !== null) {
+      // Fallback to debit/credit columns: debit=expense, credit=income
       const debit = parseAmount(row[mapping.debitColumn] || '0');
       const credit = parseAmount(row[mapping.creditColumn] || '0');
-      amount = debit || credit; // Use whichever is non-zero
+      
+      if (debit > 0 && credit > 0) {
+        console.warn(`Row has both debit and credit values, using debit. Row: ${row.join(',')}`);
+        amount = debit;
+        transaction_type = 'expense';
+      } else if (debit > 0) {
+        amount = debit;
+        transaction_type = 'expense';
+      } else if (credit > 0) {
+        amount = credit;
+        transaction_type = 'income';
+      } else {
+        // Both are zero, skip this row
+        return null;
+      }
     } else if (mapping.debitColumn !== null) {
       amount = parseAmount(row[mapping.debitColumn]);
+      transaction_type = 'expense'; // Debit column = expense
+      amount = Math.abs(amount);
     } else if (mapping.creditColumn !== null) {
       amount = parseAmount(row[mapping.creditColumn]);
+      transaction_type = 'income'; // Credit column = income
+      amount = Math.abs(amount);
     }
-
-    if (convention === 'positive_is_expense') {
-      transaction_type = amount >= 0 ? 'expense' : 'income';
-    } else { // positive_is_income
-      transaction_type = amount >= 0 ? 'income' : 'expense';
-    }
-    amount = Math.abs(amount); // Normalize to positive
   }
 
   // Validate required fields

@@ -13,13 +13,15 @@ BEGIN;
 
 -- Step 1: Update transactions table
 -- Mark negative amounts as income, positive as expense
+-- Note: All existing rows have transaction_type = 'expense' (the default), so this updates all rows on first run
+-- The WHERE clause makes the migration idempotent - it won't re-process already migrated rows
 UPDATE transactions
 SET transaction_type = CASE 
   WHEN total_amount < 0 THEN 'income'
   ELSE 'expense'
 END,
 total_amount = ABS(total_amount)
-WHERE transaction_type = 'expense'; -- Only update rows that haven't been migrated yet
+WHERE total_amount < 0 OR (transaction_type = 'expense' AND total_amount >= 0); -- Update negative amounts or unmigrated positive rows
 
 -- Step 2: Update transaction_splits amounts to be positive
 -- This ensures consistency: all amounts stored as positive, type determines behavior

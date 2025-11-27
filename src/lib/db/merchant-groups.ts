@@ -73,7 +73,7 @@ export async function getMerchantGroupsWithStats(): Promise<MerchantGroupWithSta
     // Find transactions matching this group's patterns
     const groupTransactions = transactions?.filter(t => patterns.has(t.description)) || [];
     const netTotal = groupTransactions.reduce((sum, t) => {
-      const multiplier = t.transaction_type === 'income' ? -1 : 1;
+      const multiplier = (t.transaction_type || 'expense') === 'income' ? -1 : 1;
       return sum + (Number(t.total_amount) * multiplier);
     }, 0);
     
@@ -162,7 +162,7 @@ export async function getMerchantGroupStats(
 
       current.transaction_count++;
       // Expenses add, income subtracts
-      const amount = (t as any).transaction_type === 'income'
+      const amount = ((t as any).transaction_type || 'expense') === 'income'
         ? -(t.total_amount)
         : t.total_amount;
       current.total_amount += amount;

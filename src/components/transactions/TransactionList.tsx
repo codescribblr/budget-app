@@ -206,9 +206,7 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
                     ? 'text-green-600' 
                     : 'text-red-600'
                 }`}>
-                  <span className={transaction.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'}>
-                    {formatCurrency(transaction.total_amount)}
-                  </span>
+                  {formatCurrency(transaction.total_amount)}
                 </TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>

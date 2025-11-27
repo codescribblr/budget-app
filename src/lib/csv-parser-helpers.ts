@@ -172,7 +172,7 @@ export async function parseCSVWithMapping(
       }
 
       // Validate required fields
-      if (!dateValue || !descriptionValue || !amount || isNaN(amount) || amount === 0) {
+      if (!dateValue || !descriptionValue || isNaN(amount) || amount === 0) {
         continue;
       }
 
