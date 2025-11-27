@@ -42,6 +42,7 @@ interface DuplicateGroup {
     date: string;
     description: string;
     total_amount: number;
+    transaction_type: 'income' | 'expense';
     created_at: string;
     splits: Array<{
       id: number;

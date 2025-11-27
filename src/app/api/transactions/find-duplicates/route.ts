@@ -28,6 +28,7 @@ export async function GET() {
         date,
         description,
         total_amount,
+        transaction_type,
         merchant_group_id,
         created_at,
         splits:transaction_splits(
@@ -65,8 +66,11 @@ export async function GET() {
         // Skip if already processed
         if (processedIds.has(txn2.id)) continue;
 
-        // Check if amounts match
-        if (Math.abs(txn1.total_amount - txn2.total_amount) < 0.01) {
+        const txn1SignedAmount = txn1.transaction_type === 'income' ? -txn1.total_amount : txn1.total_amount;
+        const txn2SignedAmount = txn2.transaction_type === 'income' ? -txn2.total_amount : txn2.total_amount;
+
+        // Check if signed amounts match (prevents income vs expense collisions)
+        if (Math.abs(txn1SignedAmount - txn2SignedAmount) < 0.01) {
           const txn2Date = new Date(txn2.date);
           const daysDiff = Math.abs((txn1Date.getTime() - txn2Date.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -88,6 +92,7 @@ export async function GET() {
             date: txn.date,
             description: txn.description,
             total_amount: txn.total_amount,
+            transaction_type: txn.transaction_type,
             merchant_group_id: txn.merchant_group_id,
             created_at: txn.created_at,
             splits: txn.splits.map((split: any) => ({

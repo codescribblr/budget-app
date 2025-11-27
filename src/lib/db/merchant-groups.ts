@@ -60,7 +60,7 @@ export async function getMerchantGroupsWithStats(): Promise<MerchantGroupWithSta
   // Get transactions to calculate stats
   const { data: transactions, error: transactionsError } = await supabase
     .from('transactions')
-    .select('description, total_amount')
+    .select('description, total_amount, transaction_type')
     .eq('budget_account_id', accountId);
 
   if (transactionsError) throw transactionsError;
@@ -72,11 +72,15 @@ export async function getMerchantGroupsWithStats(): Promise<MerchantGroupWithSta
     
     // Find transactions matching this group's patterns
     const groupTransactions = transactions?.filter(t => patterns.has(t.description)) || [];
+    const netTotal = groupTransactions.reduce((sum, t) => {
+      const multiplier = t.transaction_type === 'income' ? -1 : 1;
+      return sum + (Number(t.total_amount) * multiplier);
+    }, 0);
     
     return {
       ...group,
       transaction_count: groupTransactions.length,
-      total_amount: groupTransactions.reduce((sum, t) => sum + t.total_amount, 0),
+      total_amount: netTotal,
       unique_patterns: patterns.size,
       has_manual_mappings: groupMappings.some(m => !m.is_automatic),
     };

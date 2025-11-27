@@ -27,8 +27,9 @@ export default function CategorySpendingTrends({ transactions, categories }: Cat
       transaction.splits.forEach(split => {
         const category = categories.find(c => c.id === split.category_id);
         if (category && !category.is_system) {
+          const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
           const current = categoryTotals.get(split.category_id) || 0;
-          categoryTotals.set(split.category_id, current + split.amount);
+          categoryTotals.set(split.category_id, current + signedAmount);
         }
       });
     });
@@ -60,8 +61,9 @@ export default function CategorySpendingTrends({ transactions, categories }: Cat
 
       transaction.splits.forEach(split => {
         if (selectedCategories.includes(split.category_id)) {
+          const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
           const current = monthCategories.get(split.category_id) || 0;
-          monthCategories.set(split.category_id, current + split.amount);
+          monthCategories.set(split.category_id, current + signedAmount);
         }
       });
     });

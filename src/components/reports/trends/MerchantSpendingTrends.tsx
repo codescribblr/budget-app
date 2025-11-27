@@ -30,7 +30,8 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
       const nonSystemTotal = transaction.splits.reduce((sum, split) => {
         const category = categories.find(c => c.id === split.category_id);
         if (category && !category.is_system) {
-          return sum + split.amount;
+          const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
+          return sum + signedAmount;
         }
         return sum;
       }, 0);
@@ -62,7 +63,8 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
       const nonSystemTotal = transaction.splits.reduce((sum, split) => {
         const category = categories.find(c => c.id === split.category_id);
         if (category && !category.is_system) {
-          return sum + split.amount;
+          const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
+          return sum + signedAmount;
         }
         return sum;
       }, 0);

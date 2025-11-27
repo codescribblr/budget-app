@@ -346,6 +346,8 @@ export function CommandPalette() {
                       month: 'short',
                       day: 'numeric',
                     })
+                    const amountClass = transaction.transaction_type === 'income' ? 'text-green-500' : 'text-red-500'
+                    const formattedAmount = `$${transaction.total_amount.toFixed(2)}`
                     return (
                       <CommandItem
                         key={transaction.id}
@@ -364,8 +366,8 @@ export function CommandPalette() {
                         <span className="truncate">{displayName}</span>
                         <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
                           <span>{date}</span>
-                          <span className={transaction.total_amount < 0 ? 'text-red-500' : ''}>
-                            ${Math.abs(transaction.total_amount).toFixed(2)}
+                          <span className={amountClass}>
+                            {formattedAmount}
                           </span>
                         </span>
                       </CommandItem>

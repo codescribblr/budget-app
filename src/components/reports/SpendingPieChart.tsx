@@ -104,8 +104,9 @@ export default function SpendingPieChart({
       transactions.forEach(transaction => {
         transaction.splits.forEach(split => {
           if (split.category_id === selectedCategoryId) {
+            const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
             const current = merchantSpending.get(transaction.description) || 0;
-            merchantSpending.set(transaction.description, current + split.amount);
+            merchantSpending.set(transaction.description, current + signedAmount);
           }
         });
       });
@@ -151,8 +152,9 @@ export default function SpendingPieChart({
 
     transactions.forEach(transaction => {
       transaction.splits.forEach(split => {
+        const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
         const current = categorySpending.get(split.category_id) || 0;
-        categorySpending.set(split.category_id, current + split.amount);
+        categorySpending.set(split.category_id, current + signedAmount);
       });
     });
 
