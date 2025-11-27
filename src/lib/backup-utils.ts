@@ -269,30 +269,31 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
 /**
  * Import user data from an uploaded file backup
  * This remaps all user_id fields to the current authenticated user
+ * and sets all account_id fields to the current active account
  * and remaps all IDs and foreign key references to avoid conflicts
- * WARNING: This will DELETE all existing user data and replace it with the backup
+ * WARNING: This will DELETE all existing account data and replace it with the backup
  */
 export async function importUserDataFromFile(backupData: UserBackupData): Promise<void> {
   const { supabase, user } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
-  console.log('[Import] Starting import for user:', user.id);
+  console.log('[Import] Starting import for user:', user.id, 'account:', accountId);
 
-  // Step 1: Delete all existing user data
-  const { data: userTransactions } = await supabase
+  // Step 1: Delete all existing account data
+  const { data: accountTransactions } = await supabase
     .from('transactions')
     .select('id')
-    .eq('user_id', user.id);
+    .eq('budget_account_id', accountId);
 
-  const transactionIds = userTransactions?.map(t => t.id) || [];
+  const transactionIds = accountTransactions?.map(t => t.id) || [];
 
-  const { data: userImportedTransactions } = await supabase
+  const { data: accountImportedTransactions } = await supabase
     .from('imported_transactions')
     .select('id')
-    .eq('user_id', user.id);
+    .eq('account_id', accountId);
 
-  const importedTransactionIds = userImportedTransactions?.map(t => t.id) || [];
+  const importedTransactionIds = accountImportedTransactions?.map(t => t.id) || [];
 
   if (transactionIds.length > 0) {
     await supabase.from('transaction_splits').delete().in('transaction_id', transactionIds);
@@ -302,25 +303,25 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     await supabase.from('imported_transaction_links').delete().in('imported_transaction_id', importedTransactionIds);
   }
 
-  await supabase.from('transactions').delete().eq('user_id', user.id);
-  await supabase.from('imported_transactions').delete().eq('user_id', user.id);
-  await supabase.from('merchant_category_rules').delete().eq('user_id', user.id);
-  await supabase.from('merchant_mappings').delete().eq('user_id', user.id);
-  await supabase.from('merchant_groups').delete().eq('user_id', user.id);
-  await supabase.from('pending_checks').delete().eq('user_id', user.id);
-  await supabase.from('pre_tax_deductions').delete().eq('user_id', user.id);
-  await supabase.from('income_settings').delete().eq('user_id', user.id);
-  await supabase.from('settings').delete().eq('user_id', user.id);
-  await supabase.from('csv_import_templates').delete().eq('user_id', user.id);
-  await supabase.from('goals').delete().eq('user_id', user.id);
-  await supabase.from('loans').delete().eq('user_id', user.id);
-  await supabase.from('credit_cards').delete().eq('user_id', user.id);
-  await supabase.from('category_monthly_funding').delete().eq('user_id', user.id);
-  await supabase.from('user_feature_flags').delete().eq('user_id', user.id);
-  await supabase.from('categories').delete().eq('user_id', user.id);
-  await supabase.from('accounts').delete().eq('user_id', user.id);
+  await supabase.from('transactions').delete().eq('budget_account_id', accountId);
+  await supabase.from('imported_transactions').delete().eq('account_id', accountId);
+  await supabase.from('merchant_category_rules').delete().eq('account_id', accountId);
+  await supabase.from('merchant_mappings').delete().eq('account_id', accountId);
+  await supabase.from('merchant_groups').delete().eq('account_id', accountId);
+  await supabase.from('pending_checks').delete().eq('account_id', accountId);
+  await supabase.from('pre_tax_deductions').delete().eq('account_id', accountId);
+  await supabase.from('income_settings').delete().eq('account_id', accountId);
+  await supabase.from('settings').delete().eq('account_id', accountId);
+  await supabase.from('csv_import_templates').delete().eq('account_id', accountId);
+  await supabase.from('goals').delete().eq('account_id', accountId);
+  await supabase.from('loans').delete().eq('account_id', accountId);
+  await supabase.from('credit_cards').delete().eq('account_id', accountId);
+  await supabase.from('category_monthly_funding').delete().eq('account_id', accountId);
+  await supabase.from('user_feature_flags').delete().eq('account_id', accountId);
+  await supabase.from('categories').delete().eq('account_id', accountId);
+  await supabase.from('accounts').delete().eq('account_id', accountId);
 
-  console.log('[Import] Deleted existing user data');
+  console.log('[Import] Deleted existing account data');
 
   // Step 2: Insert data and build ID mappings (using batch inserts for performance)
   const accountIdMap = new Map<number, number>();
@@ -333,9 +334,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert accounts (batch)
   if (backupData.accounts && backupData.accounts.length > 0) {
-    const accountsToInsert = backupData.accounts.map(({ id, ...account }) => ({
+    const accountsToInsert = backupData.accounts.map(({ id, account_id, user_id, ...account }) => ({
       ...account,
       user_id: user.id,
+      account_id: accountId,
     }));
 
     const { data, error } = await supabase
@@ -357,9 +359,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert categories (batch)
   if (backupData.categories && backupData.categories.length > 0) {
-    const categoriesToInsert = backupData.categories.map(({ id, ...category }) => ({
+    const categoriesToInsert = backupData.categories.map(({ id, account_id, user_id, ...category }) => ({
       ...category,
       user_id: user.id,
+      account_id: accountId,
     }));
 
     const { data, error } = await supabase
@@ -380,9 +383,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert credit cards (batch)
   if (backupData.credit_cards && backupData.credit_cards.length > 0) {
-    const creditCardsToInsert = backupData.credit_cards.map(({ id, ...creditCard }) => ({
+    const creditCardsToInsert = backupData.credit_cards.map(({ id, account_id, user_id, ...creditCard }) => ({
       ...creditCard,
       user_id: user.id,
+      account_id: accountId,
     }));
 
     const { data, error } = await supabase
@@ -403,9 +407,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert loans (batch)
   if (backupData.loans && backupData.loans.length > 0) {
-    const loansToInsert = backupData.loans.map(({ id, ...loan }) => ({
+    const loansToInsert = backupData.loans.map(({ id, account_id, user_id, ...loan }) => ({
       ...loan,
       user_id: user.id,
+      account_id: accountId,
     }));
 
     const { data, error } = await supabase
@@ -426,9 +431,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert goals (batch with remapped foreign keys)
   if (backupData.goals && backupData.goals.length > 0) {
-    const goalsToInsert = backupData.goals.map(({ id, linked_account_id, linked_category_id, linked_credit_card_id, linked_loan_id, ...goal }) => ({
+    const goalsToInsert = backupData.goals.map(({ id, account_id, user_id, linked_account_id, linked_category_id, linked_credit_card_id, linked_loan_id, ...goal }) => ({
       ...goal,
       user_id: user.id,
+      account_id: accountId,
       linked_account_id: linked_account_id ? (accountIdMap.get(linked_account_id) || null) : null,
       linked_category_id: linked_category_id ? (categoryIdMap.get(linked_category_id) || null) : null,
       linked_credit_card_id: linked_credit_card_id ? (creditCardIdMap.get(linked_credit_card_id) || null) : null,
@@ -448,9 +454,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert merchant groups (batch)
   if (backupData.merchant_groups && backupData.merchant_groups.length > 0) {
-    const merchantGroupsToInsert = backupData.merchant_groups.map(({ id, ...group }) => ({
+    const merchantGroupsToInsert = backupData.merchant_groups.map(({ id, account_id, user_id, ...group }) => ({
       ...group,
       user_id: user.id,
+      account_id: accountId,
     }));
 
     const { data, error } = await supabase
@@ -471,9 +478,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert merchant mappings (batch with remapped merchant_group_id)
   if (backupData.merchant_mappings && backupData.merchant_mappings.length > 0) {
-    const merchantMappingsToInsert = backupData.merchant_mappings.map(({ id, merchant_group_id, category_id, ...mapping }) => ({
+    const merchantMappingsToInsert = backupData.merchant_mappings.map(({ id, account_id, user_id, merchant_group_id, category_id, ...mapping }) => ({
       ...mapping,
       user_id: user.id,
+      account_id: accountId,
       merchant_group_id: merchant_group_id ? (merchantGroupIdMap.get(merchant_group_id) || null) : null,
     }));
 
@@ -490,9 +498,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert merchant category rules (batch with remapped IDs)
   if (backupData.merchant_category_rules && backupData.merchant_category_rules.length > 0) {
-    const merchantCategoryRulesToInsert = backupData.merchant_category_rules.map(({ id, merchant_group_id, category_id, ...rule }) => ({
+    const merchantCategoryRulesToInsert = backupData.merchant_category_rules.map(({ id, account_id, user_id, merchant_group_id, category_id, ...rule }) => ({
       ...rule,
       user_id: user.id,
+      account_id: accountId,
       merchant_group_id: merchant_group_id ? (merchantGroupIdMap.get(merchant_group_id) || null) : null,
       category_id: category_id ? (categoryIdMap.get(category_id) || null) : null,
     }));
@@ -510,9 +519,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert transactions (batch with remapped foreign keys)
   if (backupData.transactions && backupData.transactions.length > 0) {
-    const transactionsToInsert = backupData.transactions.map(({ id, merchant_group_id, account_id, credit_card_id, ...transaction }) => ({
+    const transactionsToInsert = backupData.transactions.map(({ id, budget_account_id, user_id, merchant_group_id, account_id, credit_card_id, ...transaction }) => ({
       ...transaction,
       user_id: user.id,
+      budget_account_id: accountId,
       merchant_group_id: merchant_group_id ? (merchantGroupIdMap.get(merchant_group_id) || null) : null,
       account_id: account_id ? (accountIdMap.get(account_id) || null) : null,
       credit_card_id: credit_card_id ? (creditCardIdMap.get(credit_card_id) || null) : null,
@@ -555,9 +565,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert imported transactions (batch)
   if (backupData.imported_transactions && backupData.imported_transactions.length > 0) {
-    const importedTransactionsToInsert = backupData.imported_transactions.map(({ id, ...importedTx }) => ({
+    const importedTransactionsToInsert = backupData.imported_transactions.map(({ id, account_id, user_id, ...importedTx }) => ({
       ...importedTx,
       user_id: user.id,
+      account_id: accountId,
     }));
 
     const { data, error } = await supabase
@@ -597,9 +608,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert pending checks (batch)
   if (backupData.pending_checks && backupData.pending_checks.length > 0) {
-    const pendingChecksToInsert = backupData.pending_checks.map(({ id, ...check }) => ({
+    const pendingChecksToInsert = backupData.pending_checks.map(({ id, account_id, user_id, ...check }) => ({
       ...check,
       user_id: user.id,
+      account_id: accountId,
     }));
 
     const { error } = await supabase
@@ -615,9 +627,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert income settings (batch)
   if (backupData.income_settings && backupData.income_settings.length > 0) {
-    const incomeSettingsToInsert = backupData.income_settings.map(({ id, ...income }) => ({
+    const incomeSettingsToInsert = backupData.income_settings.map(({ id, account_id, user_id, ...income }) => ({
       ...income,
       user_id: user.id,
+      account_id: accountId,
     }));
 
     const { error } = await supabase
@@ -633,9 +646,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert pre-tax deductions (batch)
   if (backupData.pre_tax_deductions && backupData.pre_tax_deductions.length > 0) {
-    const preTaxDeductionsToInsert = backupData.pre_tax_deductions.map(({ id, ...deduction }) => ({
+    const preTaxDeductionsToInsert = backupData.pre_tax_deductions.map(({ id, account_id, user_id, ...deduction }) => ({
       ...deduction,
       user_id: user.id,
+      account_id: accountId,
     }));
 
     const { error } = await supabase
@@ -651,9 +665,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert settings (batch)
   if (backupData.settings && backupData.settings.length > 0) {
-    const settingsToInsert = backupData.settings.map(({ id, ...setting }) => ({
+    const settingsToInsert = backupData.settings.map(({ id, account_id, user_id, ...setting }) => ({
       ...setting,
       user_id: user.id,
+      account_id: accountId,
     }));
 
     const { error } = await supabase
@@ -669,9 +684,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert CSV import templates (batch)
   if (backupData.csv_import_templates && backupData.csv_import_templates.length > 0) {
-    const csvImportTemplatesToInsert = backupData.csv_import_templates.map(({ id, ...template }) => ({
+    const csvImportTemplatesToInsert = backupData.csv_import_templates.map(({ id, account_id, user_id, ...template }) => ({
       ...template,
       user_id: user.id,
+      account_id: accountId,
     }));
 
     const { error } = await supabase
@@ -687,9 +703,10 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert category monthly funding (batch with remapped category_id)
   if (backupData.category_monthly_funding && backupData.category_monthly_funding.length > 0) {
-    const categoryMonthlyFundingToInsert = backupData.category_monthly_funding.map(({ id, category_id, ...funding }) => ({
+    const categoryMonthlyFundingToInsert = backupData.category_monthly_funding.map(({ id, account_id, user_id, category_id, ...funding }) => ({
       ...funding,
       user_id: user.id,
+      account_id: accountId,
       category_id: category_id ? (categoryIdMap.get(category_id) || null) : null,
     }));
 

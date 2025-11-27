@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Import the data (remaps user_id to current user)
+    // Import the data (remaps user_id to current user and account_id to active account)
     await importUserDataFromFile(backupData);
 
     return NextResponse.json({ success: true });

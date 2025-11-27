@@ -68,6 +68,7 @@ export default function TransactionsPage() {
   const merchantFilter = searchParams.get('merchant');
   const merchantGroupIdParam = searchParams.get('merchantGroupId');
   const categoryIdParam = searchParams.get('categoryId');
+  const transactionTypeParam = searchParams.get('transactionType');
   const startDateParam = searchParams.get('startDate');
   const endDateParam = searchParams.get('endDate');
   const searchQueryParam = searchParams.get('q');
@@ -247,6 +248,13 @@ export default function TransactionsPage() {
       });
     }
 
+    // Apply transaction type filter if present
+    if (transactionTypeParam && (transactionTypeParam === 'income' || transactionTypeParam === 'expense')) {
+      filtered = filtered.filter(transaction => {
+        return transaction.transaction_type === transactionTypeParam;
+      });
+    }
+
     // Apply date range filter if present (inclusive of both start and end dates)
     if (startDateParam || endDateParam) {
       filtered = filtered.filter(transaction => {
@@ -298,7 +306,7 @@ export default function TransactionsPage() {
 
       return false;
     });
-  }, [transactions, categories, searchQuery, merchantFilter, merchantGroupIdParam, categoryIdParam, startDateParam, endDateParam]);
+  }, [transactions, categories, searchQuery, merchantFilter, merchantGroupIdParam, categoryIdParam, transactionTypeParam, startDateParam, endDateParam]);
 
   // Calculate pagination
   const totalTransactions = filteredTransactions.length;
@@ -331,6 +339,7 @@ export default function TransactionsPage() {
   const updateFilters = (updates: {
     categoryId?: string | null;
     merchantGroupId?: string | null;
+    transactionType?: string | null;
     startDate?: string | null;
     endDate?: string | null;
   }) => {
@@ -368,6 +377,10 @@ export default function TransactionsPage() {
     updateFilters({ merchantGroupId });
   };
 
+  const handleTransactionTypeChange = (transactionType: string | null) => {
+    updateFilters({ transactionType });
+  };
+
   const handleDateRangeChange = (start: Date | undefined, end: Date | undefined) => {
     setStartDateObj(start);
     setEndDateObj(end);
@@ -377,7 +390,7 @@ export default function TransactionsPage() {
     });
   };
 
-  const hasFilters = merchantFilter || merchantGroupIdParam || categoryIdParam || startDateParam || endDateParam;
+  const hasFilters = merchantFilter || merchantGroupIdParam || categoryIdParam || transactionTypeParam || startDateParam || endDateParam;
   const selectedCategory = categoryIdParam ? categories.find(c => c.id === parseInt(categoryIdParam)) : null;
 
   return (
@@ -401,6 +414,11 @@ export default function TransactionsPage() {
                 {selectedCategory && (
                   <Badge variant="secondary">
                     Category: {selectedCategory.name}
+                  </Badge>
+                )}
+                {transactionTypeParam && (
+                  <Badge variant="secondary">
+                    Type: {transactionTypeParam === 'income' ? 'Income' : 'Expense'}
                   </Badge>
                 )}
                 {(startDateParam || endDateParam) && (
@@ -515,6 +533,44 @@ export default function TransactionsPage() {
                       {group.display_name}
                     </DropdownMenuCheckboxItem>
                   ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Transaction Type Filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Type</span>
+                    <span className="sm:hidden">Type</span>
+                    {transactionTypeParam && <Badge variant="secondary" className="ml-2">1</Badge>}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[200px]">
+                  <DropdownMenuLabel>Filter by type</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    checked={!transactionTypeParam}
+                    onCheckedChange={() => handleTransactionTypeChange(null)}
+                  >
+                    All Types
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={transactionTypeParam === 'income'}
+                    onCheckedChange={(checked) => {
+                      handleTransactionTypeChange(checked ? 'income' : null);
+                    }}
+                  >
+                    Income
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={transactionTypeParam === 'expense'}
+                    onCheckedChange={(checked) => {
+                      handleTransactionTypeChange(checked ? 'expense' : null);
+                    }}
+                  >
+                    Expense
+                  </DropdownMenuCheckboxItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 

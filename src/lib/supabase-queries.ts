@@ -1208,9 +1208,13 @@ export async function createTransaction(data: {
     throw new Error('Transaction cannot be linked to both an account and a credit card');
   }
 
-  const totalAmount = data.splits.reduce((sum, split) => sum + split.amount, 0);
+  const totalAmount = data.splits.reduce((sum, split) => sum + Math.abs(split.amount || 0), 0);
+  // Ensure total_amount is always positive - if negative, convert to income
+  const absTotalAmount = Math.abs(totalAmount);
   const isHistorical = data.is_historical || false;
-  const transactionType = data.transaction_type || 'expense';
+  const finalTransactionType = totalAmount < 0 
+    ? 'income' 
+    : (data.transaction_type || 'expense');
 
   // Auto-assign merchant group first
   let merchantGroupId: number | null = null;
@@ -1231,8 +1235,8 @@ export async function createTransaction(data: {
       budget_account_id: accountId,
       date: data.date,
       description: data.description,
-      total_amount: totalAmount,
-      transaction_type: transactionType,
+      total_amount: absTotalAmount,
+      transaction_type: finalTransactionType,
       merchant_group_id: merchantGroupId,
       is_historical: isHistorical,
       account_id: data.account_id || null, // This is bank account, not budget account
@@ -1245,13 +1249,16 @@ export async function createTransaction(data: {
 
   // Create splits and update category balances (skip balance updates for historical transactions)
   for (const split of data.splits) {
+    // Ensure split amounts are always positive
+    const absSplitAmount = Math.abs(split.amount || 0);
+    
     // Insert split
     const { error: splitError } = await supabase
       .from('transaction_splits')
       .insert({
         transaction_id: transaction.id,
         category_id: split.category_id,
-        amount: split.amount,
+        amount: absSplitAmount,
       });
 
     if (splitError) throw splitError;
@@ -1266,9 +1273,9 @@ export async function createTransaction(data: {
 
       if (category && !category.is_system) {
         // Update category balance based on transaction type
-        const balanceChange = transactionType === 'income' 
-          ? split.amount  // Income adds to balance
-          : -split.amount; // Expense subtracts from balance
+        const balanceChange = finalTransactionType === 'income' 
+          ? absSplitAmount  // Income adds to balance
+          : -absSplitAmount; // Expense subtracts from balance
 
         const { error: balanceError } = await supabase
           .from('categories')
@@ -1679,15 +1686,24 @@ export async function importTransactions(transactions: any[], isHistorical: bool
   const merchantGroupIds = await Promise.all(merchantGroupPromises);
 
   // ===== STEP 3: Batch insert transactions =====
+  // Note: CSV parser already normalizes amounts to positive and sets transaction_type correctly
+  // based on the mapping convention (positive_is_expense, positive_is_income, separate_column, etc.)
+  // We trust the transaction_type from the parser - it respects the user's mapping selection
   const transactionsData = validTransactions.map((txn, index) => {
-    const totalAmount = txn.splits.reduce((sum: number, split: any) => sum + split.amount, 0);
+    const totalAmount = txn.splits.reduce((sum: number, split: any) => sum + (split.amount || 0), 0);
+    // Ensure total_amount is always positive (safeguard - CSV parser already does this, but be defensive)
+    const absTotalAmount = Math.abs(totalAmount);
+    // Always trust the transaction_type from CSV parser - it's already correctly determined
+    // based on the user's selected mapping convention
+    const transactionType = txn.transaction_type || 'expense';
+    
     return {
       user_id: user.id,
       budget_account_id: accountId,
       date: txn.date,
       description: txn.description,
-      total_amount: totalAmount,
-      transaction_type: txn.transaction_type || 'expense',
+      total_amount: absTotalAmount,
+      transaction_type: transactionType,
       merchant_group_id: merchantGroupIds[index],
       account_id: txn.account_id || null, // This is the bank account, not budget account
       credit_card_id: txn.credit_card_id || null,
@@ -1711,20 +1727,23 @@ export async function importTransactions(transactions: any[], isHistorical: bool
 
   validTransactions.forEach((txn, txnIndex) => {
     const transactionId = createdTransactions[txnIndex].id;
-    const transactionType = txn.transaction_type || 'expense';
+    const transactionType = transactionsData[txnIndex].transaction_type;
 
     txn.splits.forEach((split: any) => {
+      // CSV parser already normalizes amounts to positive, but add safeguard for edge cases
+      const absSplitAmount = Math.abs(split.amount || 0);
+      
       splitsData.push({
         transaction_id: transactionId,
         category_id: split.categoryId,
-        amount: split.amount,
+        amount: absSplitAmount,
       });
 
       // Accumulate balance updates (only for non-historical)
       if (!isHistorical) {
         const balanceChange = transactionType === 'income'
-          ? split.amount
-          : -split.amount;
+          ? absSplitAmount
+          : -absSplitAmount;
         
         const currentTotal = categoryBalanceUpdates.get(split.categoryId) || 0;
         categoryBalanceUpdates.set(split.categoryId, currentTotal + balanceChange);

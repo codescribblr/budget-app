@@ -393,6 +393,7 @@ export async function getMappingsForGroup(groupId: number): Promise<MerchantMapp
 
 /**
  * Create a new merchant mapping
+ * Handles duplicate key errors gracefully (can happen during parallel imports)
  */
 export async function createMerchantMapping(
   pattern: string,
@@ -423,7 +424,24 @@ export async function createMerchantMapping(
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    // Handle duplicate key error (can happen during parallel imports)
+    if (error.code === '23505') {
+      // Fetch the existing mapping
+      const { data: existing, error: fetchError } = await supabase
+        .from('merchant_mappings')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('account_id', accountId)
+        .eq('pattern', pattern)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (!existing) throw error; // If we can't find it, throw original error
+      return existing;
+    }
+    throw error;
+  }
   return data;
 }
 
@@ -579,7 +597,14 @@ export async function getOrCreateMerchantGroup(
   const match = findBestMatch(description, groupsWithPatterns, 0.85);
 
   if (match) {
-    // Found a similar group - create mapping
+    // Found a similar group - check if mapping already exists (race condition check)
+    const existingMapping = await getMerchantMappingByPattern(description);
+    if (existingMapping) {
+      const group = await getMerchantGroup(existingMapping.merchant_group_id || match.groupId);
+      return { group, isNew: false, confidence: calculateConfidence(match.similarity) };
+    }
+
+    // Create mapping
     const confidence = calculateConfidence(match.similarity);
     await createMerchantMapping(
       description,
@@ -593,7 +618,14 @@ export async function getOrCreateMerchantGroup(
     return { group, isNew: false, confidence };
   }
 
-  // No match found - create new group
+  // No match found - check if mapping already exists (race condition check)
+  const existingMapping = await getMerchantMappingByPattern(description);
+  if (existingMapping && existingMapping.merchant_group_id) {
+    const group = await getMerchantGroup(existingMapping.merchant_group_id);
+    return { group, isNew: false, confidence: 1.0 };
+  }
+
+  // Create new group
   const displayName = extractDisplayName(description);
   const newGroup = await createMerchantGroup(displayName);
 
