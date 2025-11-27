@@ -41,6 +41,7 @@ export async function POST(request: Request) {
           account_id: accountId.toString(),
         },
       },
+      allow_promotion_codes: true, // Enable promotion code field in checkout
       success_url: successUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/settings/subscription?success=true`,
       cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/settings/subscription?canceled=true`,
       metadata: {
