@@ -28,6 +28,7 @@ export async function POST(request: Request) {
       customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
+      payment_method_collection: 'if_required', // Only collect payment method if required after discounts
       line_items: [
         {
           price: process.env.STRIPE_PREMIUM_PRICE_ID!,
