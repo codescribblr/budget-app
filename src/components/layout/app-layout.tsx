@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { CommandPalette } from "@/components/layout/command-palette"
 import { CommandPaletteTrigger } from "@/components/layout/command-palette-trigger"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <Separator orientation="vertical" className="mr-2 h-4" />
             <div className="flex flex-1 items-center gap-3 justify-end">
               <CommandPaletteTrigger />
+              <ThemeToggle />
             </div>
           </header>
           <main className="flex flex-1 flex-col gap-4 p-4 md:p-6">

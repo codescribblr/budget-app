@@ -31,7 +31,6 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { UserMenu } from "@/components/layout/user-menu"
 import { AccountSwitcher } from "@/components/layout/account-switcher"
 import { useFeature } from "@/contexts/FeatureContext"
