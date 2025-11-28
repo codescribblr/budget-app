@@ -18,6 +18,9 @@ import {
   Wallet,
   CreditCard as CreditCardIcon,
   Building2,
+  Mail,
+  HelpCircle,
+  Sparkles,
 } from "lucide-react"
 import { useFeature } from "@/contexts/FeatureContext"
 
@@ -71,11 +74,15 @@ const navigationItems = [
   { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureFlag: "income_buffer" },
   { label: "Reports", path: "/reports", icon: FileText },
   { label: "Trends", path: "/reports/trends", icon: TrendingUp },
+  { label: "Category Reports", path: "/reports/categories", icon: Mail },
   { label: "Income", path: "/income", icon: DollarSign },
   { label: "Goals", path: "/goals", icon: Target },
   { label: "Merchants", path: "/merchants", icon: Store },
   { label: "Category Rules", path: "/category-rules", icon: FolderTree },
   { label: "Settings", path: "/settings", icon: Settings },
+  { label: "Help Center", path: "/help", icon: HelpCircle },
+  { label: "Budget Setup Wizard", path: "/help/wizards/budget-setup", icon: Sparkles },
+  { label: "Income Buffer Wizard", path: "/help/wizards/income-buffer", icon: Sparkles },
 ]
 
 export function CommandPalette() {

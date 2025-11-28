@@ -7,3 +7,4 @@ ALTER TABLE user_feature_flags
 ALTER COLUMN user_id DROP NOT NULL;
 
 
+

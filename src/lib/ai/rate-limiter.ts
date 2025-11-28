@@ -23,6 +23,19 @@ class AIRateLimiter {
       .gte('timestamp', today.toISOString());
 
     if (error) {
+      // Check if table doesn't exist (migration not run)
+      if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+        console.warn('AI usage tracking table not found. Migration may not have been run. Allowing request.');
+        // Fail open - allow the request if table doesn't exist yet
+        const defaultLimit = featureType in USER_LIMITS.daily 
+          ? USER_LIMITS.daily[featureType as keyof typeof USER_LIMITS.daily] 
+          : 0;
+        return {
+          allowed: true,
+          remaining: defaultLimit,
+          resetAt: this.getResetTime(),
+        };
+      }
       console.error('Error checking rate limit:', error);
       // Fail open - allow the request if we can't check
       const defaultLimit = featureType in USER_LIMITS.daily 
@@ -75,6 +88,11 @@ class AIRateLimiter {
     });
 
     if (error) {
+      // Check if table doesn't exist (migration not run)
+      if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+        console.warn('AI usage tracking table not found. Migration may not have been run. Skipping usage recording.');
+        return;
+      }
       console.error('Error recording AI usage:', error);
       // Don't throw - usage tracking failure shouldn't break the feature
     }
@@ -95,6 +113,11 @@ class AIRateLimiter {
       .gte('timestamp', today.toISOString());
 
     if (error) {
+      // Check if table doesn't exist (migration not run)
+      if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+        console.warn('AI usage tracking table not found. Migration may not have been run. Returning default stats.');
+        return this.getDefaultStats();
+      }
       console.error('Error fetching usage stats:', error);
       return this.getDefaultStats();
     }

@@ -109,6 +109,16 @@ Only return the JSON array, no other text.`;
       };
     } catch (error: any) {
       console.error('Error categorizing transactions:', error);
+      
+      // Check for quota/rate limit errors
+      if (error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('Quota exceeded')) {
+        const retryAfter = error.message?.match(/retry in ([\d.]+)s/i)?.[1];
+        throw new Error(
+          `AI service quota exceeded. ${retryAfter ? `Please retry in ${Math.ceil(parseFloat(retryAfter))} seconds.` : 'Please try again later.'} ` +
+          `If this persists, check your Google Gemini API key configuration in Google AI Studio.`
+        );
+      }
+      
       throw new Error(`Failed to categorize transactions: ${error.message}`);
     }
   }
@@ -224,6 +234,16 @@ Only return the JSON object, no other text.`;
       };
     } catch (error: any) {
       console.error('Error generating insights:', error);
+      
+      // Check for quota/rate limit errors
+      if (error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('Quota exceeded')) {
+        const retryAfter = error.message?.match(/retry in ([\d.]+)s/i)?.[1];
+        throw new Error(
+          `AI service quota exceeded. ${retryAfter ? `Please retry in ${Math.ceil(parseFloat(retryAfter))} seconds.` : 'Please try again later.'} ` +
+          `If this persists, check your Google Gemini API key configuration in Google AI Studio.`
+        );
+      }
+      
       throw new Error(`Failed to generate insights: ${error.message}`);
     }
   }
@@ -290,6 +310,16 @@ Respond in a friendly, professional tone.`;
       };
     } catch (error: any) {
       console.error('Error handling chat:', error);
+      
+      // Check for quota/rate limit errors
+      if (error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('Quota exceeded')) {
+        const retryAfter = error.message?.match(/retry in ([\d.]+)s/i)?.[1];
+        throw new Error(
+          `AI service quota exceeded. ${retryAfter ? `Please retry in ${Math.ceil(parseFloat(retryAfter))} seconds.` : 'Please try again later.'} ` +
+          `If this persists, check your Google Gemini API key configuration in Google AI Studio.`
+        );
+      }
+      
       throw new Error(`Failed to process chat query: ${error.message}`);
     }
   }
