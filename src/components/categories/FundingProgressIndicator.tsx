@@ -141,7 +141,7 @@ export function FundingProgressIndicator({
         <div className="space-y-1">
           <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">
-              {ytdSpentPercent.toFixed(0)}% of annual total spent
+              {ytdSpentPercent.toFixed(0)}% of annual
             </span>
             <span className="text-muted-foreground">
               {formatCurrency(ytdSpent)} / {formatCurrency(annualTarget)}
