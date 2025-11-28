@@ -21,8 +21,9 @@ CREATE TABLE IF NOT EXISTS ai_usage_tracking (
 );
 
 -- Indexes for AI Usage Tracking
-CREATE INDEX IF NOT EXISTS idx_ai_usage_user_date ON ai_usage_tracking(user_id, DATE(timestamp));
-CREATE INDEX IF NOT EXISTS idx_ai_usage_account_date ON ai_usage_tracking(account_id, DATE(timestamp));
+-- Note: Indexing on timestamp directly (DATE() function is not IMMUTABLE)
+CREATE INDEX IF NOT EXISTS idx_ai_usage_user_timestamp ON ai_usage_tracking(user_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_account_timestamp ON ai_usage_tracking(account_id, timestamp);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_feature ON ai_usage_tracking(feature_type, timestamp);
 
 -- AI Categorization History
@@ -86,37 +87,44 @@ ALTER TABLE ai_insights_cache ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_ai_preferences ENABLE ROW LEVEL SECURITY;
 
 -- Users can view their own AI usage
-CREATE POLICY IF NOT EXISTS ai_usage_user_select ON ai_usage_tracking
+DROP POLICY IF EXISTS ai_usage_user_select ON ai_usage_tracking;
+CREATE POLICY ai_usage_user_select ON ai_usage_tracking
   FOR SELECT
   USING (user_id = auth.uid());
 
 -- Users can view their own categorization history
-CREATE POLICY IF NOT EXISTS ai_cat_user_select ON ai_categorization_history
+DROP POLICY IF EXISTS ai_cat_user_select ON ai_categorization_history;
+CREATE POLICY ai_cat_user_select ON ai_categorization_history
   FOR SELECT
   USING (user_id = auth.uid());
 
 -- Users can update categorization feedback
-CREATE POLICY IF NOT EXISTS ai_cat_user_update ON ai_categorization_history
+DROP POLICY IF EXISTS ai_cat_user_update ON ai_categorization_history;
+CREATE POLICY ai_cat_user_update ON ai_categorization_history
   FOR UPDATE
   USING (user_id = auth.uid());
 
 -- Users can insert categorization history
-CREATE POLICY IF NOT EXISTS ai_cat_user_insert ON ai_categorization_history
+DROP POLICY IF EXISTS ai_cat_user_insert ON ai_categorization_history;
+CREATE POLICY ai_cat_user_insert ON ai_categorization_history
   FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
 -- Users can view their own insights
-CREATE POLICY IF NOT EXISTS ai_insights_user_select ON ai_insights_cache
+DROP POLICY IF EXISTS ai_insights_user_select ON ai_insights_cache;
+CREATE POLICY ai_insights_user_select ON ai_insights_cache
   FOR SELECT
   USING (user_id = auth.uid());
 
 -- Users can insert their own insights
-CREATE POLICY IF NOT EXISTS ai_insights_user_insert ON ai_insights_cache
+DROP POLICY IF EXISTS ai_insights_user_insert ON ai_insights_cache;
+CREATE POLICY ai_insights_user_insert ON ai_insights_cache
   FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
 -- Users can manage their AI preferences
-CREATE POLICY IF NOT EXISTS ai_prefs_user_all ON user_ai_preferences
+DROP POLICY IF EXISTS ai_prefs_user_all ON user_ai_preferences;
+CREATE POLICY ai_prefs_user_all ON user_ai_preferences
   FOR ALL
   USING (user_id = auth.uid());
 
