@@ -9,12 +9,16 @@ interface FundingProgressIndicatorProps {
   category: Category;
   spent: number;
   fundedThisMonth?: number;
+  ytdSpent?: number; // Year-to-date spent (for accumulation categories on dashboard)
+  showSpentForAccumulation?: boolean; // If true, show spent instead of funded for accumulation categories
 }
 
 export function FundingProgressIndicator({
   category,
   spent,
   fundedThisMonth = 0,
+  ytdSpent,
+  showSpentForAccumulation = false,
 }: FundingProgressIndicatorProps) {
   const monthlyFundingEnabled = useFeature('monthly_funding_tracking');
   const categoryTypesEnabled = useFeature('category_types');
@@ -127,30 +131,56 @@ export function FundingProgressIndicator({
   }
 
   function renderAccumulationProgress() {
-    // For accumulation, show YTD funded vs annual target
     const annualTarget = category.annual_target || (budget * 12);
-    const ytdFunded = fundedThisMonth; // TODO: Calculate actual YTD from API
-    const ytdPercent = annualTarget > 0 ? (ytdFunded / annualTarget) * 100 : 0;
+    
+    if (showSpentForAccumulation && ytdSpent !== undefined) {
+      // Dashboard: Show YTD spent vs annual target
+      const ytdSpentPercent = annualTarget > 0 ? (ytdSpent / annualTarget) * 100 : 0;
+      
+      return (
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">
+              {ytdSpentPercent.toFixed(0)}% of annual total spent
+            </span>
+            <span className="text-muted-foreground">
+              {formatCurrency(ytdSpent)} / {formatCurrency(annualTarget)}
+            </span>
+          </div>
+          <div className="relative">
+            <Progress value={Math.min(ytdSpentPercent, 100)} className="h-2" />
+            <div
+              className="absolute top-0 left-0 h-2 rounded-full transition-all bg-purple-500"
+              style={{ width: `${Math.min(ytdSpentPercent, 100)}%` }}
+            />
+          </div>
+        </div>
+      );
+    } else {
+      // Allocation page: Show YTD funded vs annual target
+      const ytdFunded = fundedThisMonth; // TODO: Calculate actual YTD from API
+      const ytdPercent = annualTarget > 0 ? (ytdFunded / annualTarget) * 100 : 0;
 
-    return (
-      <div className="space-y-1">
-        <div className="flex justify-between text-xs">
-          <span className="text-muted-foreground">
-            {ytdPercent.toFixed(0)}% of annual
-          </span>
-          <span className="text-muted-foreground">
-            {formatCurrency(ytdFunded)} / {formatCurrency(annualTarget)}
-          </span>
+      return (
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">
+              {ytdPercent.toFixed(0)}% of annual funding
+            </span>
+            <span className="text-muted-foreground">
+              {formatCurrency(ytdFunded)} / {formatCurrency(annualTarget)}
+            </span>
+          </div>
+          <div className="relative">
+            <Progress value={Math.min(ytdPercent, 100)} className="h-2" />
+            <div
+              className="absolute top-0 left-0 h-2 rounded-full transition-all bg-purple-500"
+              style={{ width: `${Math.min(ytdPercent, 100)}%` }}
+            />
+          </div>
         </div>
-        <div className="relative">
-          <Progress value={Math.min(ytdPercent, 100)} className="h-2" />
-          <div
-            className="absolute top-0 left-0 h-2 rounded-full transition-all bg-purple-500"
-            style={{ width: `${Math.min(ytdPercent, 100)}%` }}
-          />
-        </div>
-      </div>
-    );
+      );
+    }
   }
 
   function renderTargetBalanceProgress() {

@@ -61,6 +61,7 @@ interface CategoryListProps {
 interface SortableRowProps {
   category: Category;
   spent: number;
+  ytdSpent?: number;
   budget: number;
   remaining: number;
   percentUsed: number;
@@ -81,6 +82,7 @@ interface SortableRowProps {
 function SortableRow({
   category,
   spent,
+  ytdSpent,
   budget,
   remaining,
   percentUsed,
@@ -134,7 +136,12 @@ function SortableRow({
       </TableCell>
       <TableCell>
         {category.category_type === 'accumulation' || category.category_type === 'target_balance' ? (
-          <FundingProgressIndicator category={category} spent={spent} />
+          <FundingProgressIndicator 
+            category={category} 
+            spent={spent}
+            ytdSpent={category.category_type === 'accumulation' ? ytdSpent : undefined}
+            showSpentForAccumulation={category.category_type === 'accumulation'}
+          />
         ) : budget > 0 ? (
           <div className="space-y-1">
             <div className="flex justify-between text-xs">
@@ -276,6 +283,7 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
 
   // Monthly spending state
   const [monthlySpending, setMonthlySpending] = useState<Record<number, number>>({});
+  const [ytdSpending, setYtdSpending] = useState<Record<number, number>>({});
   const [loadingSpending, setLoadingSpending] = useState(true);
 
   // Delete confirmation dialog state
@@ -287,23 +295,32 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
   const [reorderedCategories, setReorderedCategories] = useState<Category[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch monthly spending on mount and when categories change
+  // Fetch monthly and YTD spending on mount and when categories change
   useEffect(() => {
-    const fetchMonthlySpending = async () => {
+    const fetchSpending = async () => {
       try {
         setLoadingSpending(true);
-        const response = await fetch('/api/categories/monthly-spending');
-        if (!response.ok) throw new Error('Failed to fetch monthly spending');
-        const data = await response.json();
-        setMonthlySpending(data);
+        const [monthlyResponse, ytdResponse] = await Promise.all([
+          fetch('/api/categories/monthly-spending'),
+          fetch('/api/categories/ytd-spending'),
+        ]);
+        
+        if (!monthlyResponse.ok) throw new Error('Failed to fetch monthly spending');
+        if (!ytdResponse.ok) throw new Error('Failed to fetch YTD spending');
+        
+        const monthlyData = await monthlyResponse.json();
+        const ytdData = await ytdResponse.json();
+        
+        setMonthlySpending(monthlyData);
+        setYtdSpending(ytdData);
       } catch (error) {
-        console.error('Error fetching monthly spending:', error);
+        console.error('Error fetching spending:', error);
       } finally {
         setLoadingSpending(false);
       }
     };
 
-    fetchMonthlySpending();
+    fetchSpending();
   }, [categories]);
 
   // Filter out system categories (like Transfer) and buffer category from envelope display
@@ -709,6 +726,7 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
                 <TableBody>
                   {(isReorderMode ? reorderedCategories : envelopeCategories).map((category) => {
                     const spent = monthlySpending[category.id] || 0;
+                    const ytdSpent = ytdSpending[category.id] || 0;
                     const budget = category.monthly_amount;
                     const remaining = budget - spent;
                     const percentUsed = budget > 0 ? (spent / budget) * 100 : 0;
@@ -718,6 +736,7 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
                         key={category.id}
                         category={category}
                         spent={spent}
+                        ytdSpent={ytdSpent}
                         budget={budget}
                         remaining={remaining}
                         percentUsed={percentUsed}
