@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -22,6 +22,7 @@ import CategoryTransactionList from '../CategoryTransactionList';
 export default function CategoryReportDetail() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const categoryId = params?.id ? parseInt(params.id as string) : null;
   const categoryTypesEnabled = useFeature('category_types');
 
@@ -35,6 +36,37 @@ export default function CategoryReportDetail() {
   const [endDate, setEndDate] = useState('');
   const [dateRange, setDateRange] = useState('current-month');
   const [isInitialized, setIsInitialized] = useState(false);
+
+  // Update URL when filters change
+  const updateURL = useCallback((start: string, end: string, range: string) => {
+    if (!categoryId) return;
+    const params = new URLSearchParams();
+
+    if (start) params.set('startDate', start);
+    if (end) params.set('endDate', end);
+    if (range) params.set('dateRange', range);
+
+    router.push(`/reports/categories/${categoryId}?${params.toString()}`, { scroll: false });
+  }, [router, categoryId]);
+
+  // Initialize from URL parameters on mount
+  useEffect(() => {
+    const startDateParam = searchParams.get('startDate');
+    const endDateParam = searchParams.get('endDate');
+    const dateRangeParam = searchParams.get('dateRange');
+
+    if (startDateParam || endDateParam || dateRangeParam) {
+      // Load from URL
+      if (startDateParam) setStartDate(startDateParam);
+      if (endDateParam) setEndDate(endDateParam);
+      if (dateRangeParam) setDateRange(dateRangeParam);
+    } else {
+      // No URL params, use default (current-month)
+      setDateRange('current-month');
+    }
+
+    setIsInitialized(true);
+  }, []); // Only run on mount
 
   // Fetch category, categories, and transactions
   useEffect(() => {
@@ -64,19 +96,21 @@ export default function CategoryReportDetail() {
         console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
-        setIsInitialized(true);
       }
     };
 
     fetchData();
   }, [categoryId]);
 
-  // Initialize date range
+  // Update dates when date range preset changes
   useEffect(() => {
+    // Don't run until initialized
     if (!isInitialized) return;
 
+    // Only update if dateRange is from a preset (not 'custom')
     if (dateRange === 'custom') return;
 
+    // Set date range based on selection
     const today = new Date();
     const end = today.toISOString().split('T')[0];
     let newStartDate = '';
@@ -121,7 +155,8 @@ export default function CategoryReportDetail() {
 
     setStartDate(newStartDate);
     setEndDate(newEndDate);
-  }, [dateRange, isInitialized]);
+    updateURL(newStartDate, newEndDate, dateRange);
+  }, [dateRange, isInitialized, updateURL]);
 
   // Filter transactions by date and category
   const filteredTransactions = useMemo(() => {
@@ -248,6 +283,7 @@ export default function CategoryReportDetail() {
                   const newStartDate = formatLocalDate(date);
                   setStartDate(newStartDate);
                   setDateRange('custom');
+                  updateURL(newStartDate, endDate, 'custom');
                 }}
                 placeholder="Select start date"
               />
@@ -261,6 +297,7 @@ export default function CategoryReportDetail() {
                   const newEndDate = formatLocalDate(date);
                   setEndDate(newEndDate);
                   setDateRange('custom');
+                  updateURL(startDate, newEndDate, 'custom');
                 }}
                 placeholder="Select end date"
               />
