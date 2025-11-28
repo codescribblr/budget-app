@@ -25,6 +25,7 @@ import PendingCheckList from './PendingCheckList';
 import SummaryCards from './SummaryCards';
 import GoalsWidget from './GoalsWidget';
 import IncomeBufferCard from './IncomeBufferCard';
+import { AIInsightsWidget } from '@/components/ai/AIInsightsWidget';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 // Helper function to calculate summary from local state
@@ -361,6 +362,8 @@ export default function Dashboard() {
           </Card>
 
           {bufferStatus?.enabled && <IncomeBufferCard />}
+
+          <AIInsightsWidget />
 
           <GoalsWidget disabled={!isEditor || permissionsLoading} />
         </div>
