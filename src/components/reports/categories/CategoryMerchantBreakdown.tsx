@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label';
 interface CategoryMerchantBreakdownProps {
   transactions: TransactionWithSplits[];
   category: Category;
+  startDate?: string;
+  endDate?: string;
 }
 
 const COLORS = [
@@ -17,7 +19,7 @@ const COLORS = [
   '#82CA9D', '#FFC658', '#FF6B9D', '#C084FC', '#FB923C',
 ];
 
-export default function CategoryMerchantBreakdown({ transactions, category }: CategoryMerchantBreakdownProps) {
+export default function CategoryMerchantBreakdown({ transactions, category, startDate = '', endDate = '' }: CategoryMerchantBreakdownProps) {
   // Find top merchants for this specific category
   const topMerchants = useMemo(() => {
     const merchantTotals = new Map<string, number>();

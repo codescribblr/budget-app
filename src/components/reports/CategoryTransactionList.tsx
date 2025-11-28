@@ -174,7 +174,7 @@ export default function CategoryTransactionList({
             >
               {isLoadingMore ? (
                 <>
-                  <LoadingSpinner className="mr-2 h-4 w-4" />
+                  <LoadingSpinner className="mr-2" size="sm" showText={false} />
                   Loading...
                 </>
               ) : (
