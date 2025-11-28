@@ -137,11 +137,11 @@ export default function CategoryReportStats({
     <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2 md:gap-3 lg:gap-4">
       {/* Total Transactions */}
       <Card>
-        <CardHeader className="pb-0.5 md:pb-2 pt-3 md:pt-6">
+        <CardHeader className="pb-1 md:pb-2">
           <CardDescription className="text-xs md:text-sm">Transactions</CardDescription>
-          <CardTitle className="!text-sm md:!text-lg lg:!text-xl xl:!text-2xl">{stats.transactionCount}</CardTitle>
+          <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">{stats.transactionCount}</CardTitle>
         </CardHeader>
-        <CardContent className="pt-0 pb-1.5 md:pb-4">
+        <CardContent className="pt-0 pb-2 md:pb-4">
           <p className="text-xs text-muted-foreground">
             {stats.transactionCount === 1 ? 'transaction' : 'transactions'} in period
           </p>
@@ -150,13 +150,13 @@ export default function CategoryReportStats({
 
       {/* Net Spending */}
       <Card>
-        <CardHeader className="pb-0.5 md:pb-2 pt-3 md:pt-6">
+        <CardHeader className="pb-1 md:pb-2">
           <CardDescription className="text-xs md:text-sm">Net Spending</CardDescription>
-          <CardTitle className={`!text-sm md:!text-lg lg:!text-xl xl:!text-2xl ${stats.netSpending >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+          <CardTitle className={`text-sm md:text-lg lg:text-xl xl:text-2xl ${stats.netSpending >= 0 ? 'text-red-600' : 'text-green-600'}`}>
             {formatCurrency(stats.netSpending)}
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-0 pb-1.5 md:pb-4">
+        <CardContent className="pt-0 pb-2 md:pb-4">
           <div className="text-xs text-muted-foreground space-y-0.5 md:space-y-1">
             <div>Spent: {formatCurrency(stats.totalSpent)}</div>
             {stats.totalIncome > 0 && (
@@ -168,13 +168,13 @@ export default function CategoryReportStats({
 
       {/* Average Amount */}
       <Card>
-        <CardHeader className="pb-0.5 md:pb-2 pt-3 md:pt-6">
+        <CardHeader className="pb-1 md:pb-2">
           <CardDescription className="text-xs md:text-sm">Average</CardDescription>
-          <CardTitle className="!text-sm md:!text-lg lg:!text-xl xl:!text-2xl">
+          <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
             {formatCurrency(stats.averageAmount)}
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-0 pb-1.5 md:pb-4">
+        <CardContent className="pt-0 pb-2 md:pb-4">
           <div className="text-xs text-muted-foreground space-y-0.5 md:space-y-1">
             {stats.largestExpense > 0 && (
               <div>Largest: {formatCurrency(stats.largestExpense)}</div>
@@ -186,13 +186,13 @@ export default function CategoryReportStats({
       {/* Category Type Specific Stats */}
       {category.category_type === 'accumulation' && stats.annualTarget && (
         <Card>
-          <CardHeader className="pb-0.5 md:pb-2 pt-3 md:pt-6">
+          <CardHeader className="pb-1 md:pb-2">
             <CardDescription className="text-xs md:text-sm">Annual Progress</CardDescription>
-            <CardTitle className="!text-sm md:!text-lg lg:!text-xl xl:!text-2xl">
+            <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
               {stats.ytdProgress?.toFixed(0)}%
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0 pb-1.5 md:pb-4">
+          <CardContent className="pt-0 pb-2 md:pb-4">
             <div className="text-xs text-muted-foreground space-y-0.5 md:space-y-1">
               <div>YTD: {formatCurrency(stats.ytdSpent || 0)}</div>
               <div>Target: {formatCurrency(stats.annualTarget)}</div>
@@ -206,13 +206,13 @@ export default function CategoryReportStats({
 
       {category.category_type === 'monthly_expense' && stats.monthlyBudget !== undefined && (
         <Card>
-          <CardHeader className="pb-0.5 md:pb-2 pt-3 md:pt-6">
+          <CardHeader className="pb-1 md:pb-2">
             <CardDescription className="text-xs md:text-sm">Budget Status</CardDescription>
-            <CardTitle className={`!text-sm md:!text-lg lg:!text-xl xl:!text-2xl ${stats.variance! >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <CardTitle className={`text-sm md:text-lg lg:text-xl xl:text-2xl ${stats.variance! >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {stats.budgetProgress?.toFixed(0)}%
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0 pb-1.5 md:pb-4">
+          <CardContent className="pt-0 pb-2 md:pb-4">
             <div className="text-xs text-muted-foreground space-y-0.5 md:space-y-1">
               <div>Budget: {formatCurrency(stats.monthlyBudget)}</div>
               <div>Variance: {formatCurrency(stats.variance!)}</div>
@@ -223,13 +223,13 @@ export default function CategoryReportStats({
 
       {category.category_type === 'target_balance' && stats.targetBalance !== undefined && (
         <Card>
-          <CardHeader className="pb-0.5 md:pb-2 pt-3 md:pt-6">
+          <CardHeader className="pb-1 md:pb-2">
             <CardDescription className="text-xs md:text-sm">Target Progress</CardDescription>
-            <CardTitle className="!text-sm md:!text-lg lg:!text-xl xl:!text-2xl">
+            <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
               {stats.balanceProgress?.toFixed(0)}%
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0 pb-1.5 md:pb-4">
+          <CardContent className="pt-0 pb-2 md:pb-4">
             <div className="text-xs text-muted-foreground space-y-0.5 md:space-y-1">
               <div>Current: {formatCurrency(stats.currentBalance || 0)}</div>
               <div>Target: {formatCurrency(stats.targetBalance)}</div>
@@ -241,13 +241,13 @@ export default function CategoryReportStats({
       {/* Current Balance (always show) */}
       {category.category_type !== 'target_balance' && (
         <Card>
-          <CardHeader className="pb-0.5 md:pb-2 pt-3 md:pt-6">
+          <CardHeader className="pb-1 md:pb-2">
             <CardDescription className="text-xs md:text-sm">Current Balance</CardDescription>
-            <CardTitle className={`!text-sm md:!text-lg lg:!text-xl xl:!text-2xl ${(category.current_balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <CardTitle className={`text-sm md:text-lg lg:text-xl xl:text-2xl ${(category.current_balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatCurrency(category.current_balance || 0)}
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0 pb-1.5 md:pb-4">
+          <CardContent className="pt-0 pb-2 md:pb-4">
             <p className="text-xs text-muted-foreground">
               Available balance
             </p>

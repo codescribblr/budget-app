@@ -285,7 +285,7 @@ export default function ReportsPage() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3">
+      <div className="flex flex-wrap items-center gap-2 md:gap-3">
         <Select value={dateRange} onValueChange={setDateRange}>
           <SelectTrigger id="date-range" className="w-[140px] md:w-[160px]">
             <SelectValue />
