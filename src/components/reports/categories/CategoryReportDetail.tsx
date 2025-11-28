@@ -141,6 +141,13 @@ export default function CategoryReportDetail() {
         newStartDate = quarterAgo.toISOString().split('T')[0];
         newEndDate = end;
         break;
+      case 'current-year':
+        // Current calendar year (January 1 to December 31)
+        const currentYearStart = new Date(today.getFullYear(), 0, 1);
+        const currentYearEnd = new Date(today.getFullYear(), 11, 31);
+        newStartDate = currentYearStart.toISOString().split('T')[0];
+        newEndDate = currentYearEnd.toISOString().split('T')[0];
+        break;
       case 'year':
         const yearAgo = new Date(today);
         yearAgo.setFullYear(yearAgo.getFullYear() - 1);
@@ -268,6 +275,7 @@ export default function CategoryReportDetail() {
                   <SelectItem value="last-month">Last Month</SelectItem>
                   <SelectItem value="week">Last 7 Days</SelectItem>
                   <SelectItem value="quarter">Last Quarter</SelectItem>
+                  <SelectItem value="current-year">Current Year</SelectItem>
                   <SelectItem value="year">Last Year</SelectItem>
                   <SelectItem value="all">All Time</SelectItem>
                   <SelectItem value="custom">Custom Range</SelectItem>
