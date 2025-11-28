@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ChevronDown, Menu } from 'lucide-react';
 import SignOutButton from '@/components/auth/SignOutButton';
+import { AIUsageIndicator } from '@/components/ai/AIUsageIndicator';
 import { ReactNode } from 'react';
 
 interface AppHeaderProps {
@@ -128,7 +129,7 @@ export default function AppHeader({
                     <button
                       onClick={() => handleNavigation('/reports')}
                       className={`w-full text-left px-4 py-3 transition-colors border-b ${
-                        isActive('/reports') && !isActive('/reports/trends')
+                        isActive('/reports') && !isActive('/reports/trends') && !isActive('/reports/categories')
                           ? 'bg-gray-800 text-white hover:bg-gray-700'
                           : 'hover:bg-accent'
                       }`}
@@ -146,6 +147,19 @@ export default function AppHeader({
                       <span className="flex items-center">
                         <span className="mr-2 text-muted-foreground">└</span>
                         Trends
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => handleNavigation('/reports/categories')}
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/reports/categories')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
+                      }`}
+                    >
+                      <span className="flex items-center">
+                        <span className="mr-2 text-muted-foreground">└</span>
+                        Category Reports
                       </span>
                     </button>
                     <button
@@ -187,6 +201,42 @@ export default function AppHeader({
                       }`}
                     >
                       Settings
+                    </button>
+                    <button
+                      onClick={() => handleNavigation('/help')}
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/help') && !isActive('/help/wizards')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
+                      }`}
+                    >
+                      Help Center
+                    </button>
+                    <button
+                      onClick={() => handleNavigation('/help/wizards/budget-setup')}
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/help/wizards')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
+                      }`}
+                    >
+                      <span className="flex items-center">
+                        <span className="mr-2 text-muted-foreground">└</span>
+                        Budget Setup Wizard
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => handleNavigation('/help/wizards/income-buffer')}
+                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                        isActive('/help/wizards/income-buffer')
+                          ? 'bg-gray-800 text-white hover:bg-gray-700'
+                          : 'hover:bg-accent'
+                      }`}
+                    >
+                      <span className="flex items-center">
+                        <span className="mr-2 text-muted-foreground">└</span>
+                        Income Buffer Wizard
+                      </span>
                     </button>
 
                     <div className="mt-4 px-4">
@@ -234,7 +284,7 @@ export default function AppHeader({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    variant={getButtonVariant('/reports')}
+                    variant={getButtonVariant('/reports') || isActive('/reports/trends') || isActive('/reports/categories') ? 'secondary' : 'outline'}
                     size="sm"
                     className="md:size-default"
                   >
@@ -248,6 +298,9 @@ export default function AppHeader({
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => window.location.href = '/reports/trends'}>
                     Trends
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => window.location.href = '/reports/categories'}>
+                    Category Reports
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -283,6 +336,30 @@ export default function AppHeader({
               >
                 Settings
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={getButtonVariant('/help') || isActive('/help/wizards') ? 'secondary' : 'outline'}
+                    size="sm"
+                    className="md:size-default"
+                  >
+                    Help & Support
+                    <ChevronDown className="ml-1 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => window.location.href = '/help'}>
+                    Help Center
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => window.location.href = '/help/wizards/budget-setup'}>
+                    Budget Setup Wizard
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => window.location.href = '/help/wizards/income-buffer'}>
+                    Income Buffer Wizard
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <AIUsageIndicator />
               <SignOutButton />
             </div>
           </>
