@@ -257,9 +257,9 @@ export default function CategoryReportDetail() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 md:gap-3">
+      <div className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3">
         <Select value={dateRange} onValueChange={setDateRange}>
-          <SelectTrigger id="date-range" className="w-[140px] md:w-[160px]">
+          <SelectTrigger id="date-range" className="w-full sm:w-[160px] md:w-[160px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -273,28 +273,32 @@ export default function CategoryReportDetail() {
             <SelectItem value="custom">Custom Range</SelectItem>
           </SelectContent>
         </Select>
-        <DatePicker
-          id="start-date"
-          date={parseLocalDate(startDate)}
-          onDateChange={(date) => {
-            const newStartDate = formatLocalDate(date);
-            setStartDate(newStartDate);
-            setDateRange('custom');
-            updateURL(newStartDate, endDate, 'custom');
-          }}
-          placeholder="Start date"
-        />
-        <DatePicker
-          id="end-date"
-          date={parseLocalDate(endDate)}
-          onDateChange={(date) => {
-            const newEndDate = formatLocalDate(date);
-            setEndDate(newEndDate);
-            setDateRange('custom');
-            updateURL(startDate, newEndDate, 'custom');
-          }}
-          placeholder="End date"
-        />
+        <div className="w-[calc(50%-0.25rem)] sm:w-auto md:w-auto">
+          <DatePicker
+            id="start-date"
+            date={parseLocalDate(startDate)}
+            onDateChange={(date) => {
+              const newStartDate = formatLocalDate(date);
+              setStartDate(newStartDate);
+              setDateRange('custom');
+              updateURL(newStartDate, endDate, 'custom');
+            }}
+            placeholder="Start date"
+          />
+        </div>
+        <div className="w-[calc(50%-0.25rem)] sm:w-auto md:w-auto">
+          <DatePicker
+            id="end-date"
+            date={parseLocalDate(endDate)}
+            onDateChange={(date) => {
+              const newEndDate = formatLocalDate(date);
+              setEndDate(newEndDate);
+              setDateRange('custom');
+              updateURL(startDate, newEndDate, 'custom');
+            }}
+            placeholder="End date"
+          />
+        </div>
       </div>
 
       {/* Category Stats */}

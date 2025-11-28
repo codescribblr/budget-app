@@ -100,21 +100,21 @@ export default function CategoryTransactionSizeDistribution({ transactions, cate
 
   return (
     <div>
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="p-4 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">Total Transactions</div>
-          <div className="text-2xl font-bold">{totalTransactions}</div>
+      <div className="grid grid-cols-3 gap-2 md:gap-4 mb-4 md:mb-6">
+        <div className="p-2 md:p-4 bg-muted rounded-lg">
+          <div className="text-xs md:text-sm text-muted-foreground">Total Transactions</div>
+          <div className="text-base md:text-2xl font-bold">{totalTransactions}</div>
         </div>
-        <div className="p-4 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">Most Common</div>
-          <div className="text-2xl font-bold">{mostCommonBucket?.bucket || '—'}</div>
+        <div className="p-2 md:p-4 bg-muted rounded-lg">
+          <div className="text-xs md:text-sm text-muted-foreground">Most Common</div>
+          <div className="text-base md:text-2xl font-bold">{mostCommonBucket?.bucket || '—'}</div>
           <div className="text-xs text-muted-foreground">
             {mostCommonBucket?.count || 0} transactions
           </div>
         </div>
-        <div className="p-4 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">Average Size</div>
-          <div className="text-2xl font-bold">{formatCurrency(averageTransactionSize)}</div>
+        <div className="p-2 md:p-4 bg-muted rounded-lg">
+          <div className="text-xs md:text-sm text-muted-foreground">Average Size</div>
+          <div className="text-base md:text-2xl font-bold">{formatCurrency(averageTransactionSize)}</div>
         </div>
       </div>
 

@@ -81,19 +81,19 @@ export default function CategoryDayOfWeekSpending({ transactions, category }: Ca
 
   return (
     <div>
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="p-4 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">Total Spent</div>
-          <div className="text-2xl font-bold">{formatCurrency(totalSpent)}</div>
+      <div className="grid grid-cols-3 gap-2 md:gap-4 mb-4 md:mb-6">
+        <div className="p-2 md:p-4 bg-muted rounded-lg">
+          <div className="text-xs md:text-sm text-muted-foreground">Total Spent</div>
+          <div className="text-base md:text-2xl font-bold">{formatCurrency(totalSpent)}</div>
         </div>
-        <div className="p-4 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">Highest Day</div>
-          <div className="text-2xl font-bold">{formatCurrency(highestDay?.total || 0)}</div>
+        <div className="p-2 md:p-4 bg-muted rounded-lg">
+          <div className="text-xs md:text-sm text-muted-foreground">Highest Day</div>
+          <div className="text-base md:text-2xl font-bold">{formatCurrency(highestDay?.total || 0)}</div>
           <div className="text-xs text-muted-foreground">{highestDay?.day}</div>
         </div>
-        <div className="p-4 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">Lowest Day</div>
-          <div className="text-2xl font-bold">{formatCurrency(lowestDay?.total || 0)}</div>
+        <div className="p-2 md:p-4 bg-muted rounded-lg">
+          <div className="text-xs md:text-sm text-muted-foreground">Lowest Day</div>
+          <div className="text-base md:text-2xl font-bold">{formatCurrency(lowestDay?.total || 0)}</div>
           <div className="text-xs text-muted-foreground">{lowestDay?.day}</div>
         </div>
       </div>
