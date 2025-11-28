@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAIUsage } from '@/hooks/use-ai-usage';
+import { useRotatingLoadingMessage } from '@/hooks/use-rotating-loading-message';
 
 interface AICategorizeButtonProps {
   transactionIds: number[];
@@ -19,6 +20,7 @@ export function AICategorizeButton({
 }: AICategorizeButtonProps) {
   const [loading, setLoading] = useState(false);
   const { stats, refreshStats } = useAIUsage();
+  const loadingMessage = useRotatingLoadingMessage(3000, loading);
 
   const handleCategorize = async () => {
     if (transactionIds.length === 0) {
@@ -82,7 +84,7 @@ export function AICategorizeButton({
       {loading ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin" />
-          Categorizing...
+          <span className="max-w-[200px] truncate">{loadingMessage}</span>
         </>
       ) : (
         <>

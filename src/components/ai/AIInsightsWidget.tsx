@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Brain, RefreshCw, Loader2 } from 'lucide-react';
+import { Brain, RefreshCw, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAIUsage } from '@/hooks/use-ai-usage';
+import { useRotatingLoadingMessage } from '@/hooks/use-rotating-loading-message';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { MonthlyInsights } from '@/lib/ai/types';
 
@@ -15,6 +16,7 @@ export function AIInsightsWidget() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const { stats, refreshStats } = useAIUsage();
+  const loadingMessage = useRotatingLoadingMessage(3000, generating);
 
   const fetchInsights = async (regenerate = false) => {
     setLoading(true);
@@ -89,7 +91,7 @@ export function AIInsightsWidget() {
               {generating ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
+                  <span className="max-w-[200px] truncate">{loadingMessage}</span>
                 </>
               ) : (
                 <>
@@ -104,6 +106,10 @@ export function AIInsightsWidget() {
       <CardContent>
         {loading ? (
           <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground italic py-4">
+              <Sparkles className="h-4 w-4 animate-pulse text-purple-500" />
+              {loadingMessage}
+            </div>
             <Skeleton className="h-20 w-full" />
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-16 w-full" />

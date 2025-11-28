@@ -9,13 +9,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Sparkles } from 'lucide-react';
 import { useAIChat } from '@/hooks/use-ai-chat';
 import { useAIUsage } from '@/hooks/use-ai-usage';
+import { useRotatingLoadingMessage } from '@/hooks/use-rotating-loading-message';
 import { toast } from 'sonner';
-import { Skeleton } from '@/components/ui/skeleton';
 
 export function AIChatInterface() {
   const [input, setInput] = useState('');
   const { messages, sendMessage, loading, error, clearMessages } = useAIChat();
   const { stats, refreshStats } = useAIUsage();
+  const loadingMessage = useRotatingLoadingMessage(3000, loading);
 
   const remainingQueries = stats ? stats.chat.limit - stats.chat.used : 0;
 
@@ -86,8 +87,13 @@ export function AIChatInterface() {
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="bg-muted rounded-lg p-3">
-                    <Skeleton className="h-4 w-32" />
+                  <div className="bg-muted rounded-lg p-3 max-w-[80%]">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 animate-pulse text-purple-500" />
+                      <p className="text-sm text-muted-foreground italic">
+                        {loadingMessage}
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
