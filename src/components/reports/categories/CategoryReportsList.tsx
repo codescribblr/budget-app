@@ -66,20 +66,23 @@ export default function CategoryReportsList() {
     const now = new Date();
     const currentYear = now.getFullYear();
     const ytdStartDate = `${currentYear}-01-01`;
+    const currentMonth = now.getMonth() + 1; // 1-12
 
     categories
       .filter(cat => !cat.is_system && !cat.is_buffer)
       .forEach(category => {
-        // Get all transactions for this category
-        const categoryTransactions = transactions.filter(t =>
-          t.splits.some(split => split.category_id === category.id)
-        );
+        // Get only YTD transactions (current calendar year)
+        const ytdTransactions = transactions.filter(t => {
+          const hasCategorySplit = t.splits.some(split => split.category_id === category.id);
+          const isYTD = t.date >= ytdStartDate;
+          return hasCategorySplit && isYTD;
+        });
 
-        // Calculate spending (expenses add, income subtracts)
+        // Calculate spending (expenses add, income subtracts) for YTD
         let totalSpent = 0;
         let lastTransactionDate: string | null = null;
 
-        categoryTransactions.forEach(transaction => {
+        ytdTransactions.forEach(transaction => {
           const split = transaction.splits.find(s => s.category_id === category.id);
           if (split) {
             const amount = transaction.transaction_type === 'expense'
@@ -94,41 +97,40 @@ export default function CategoryReportsList() {
           }
         });
 
-        const transactionCount = categoryTransactions.length;
-        const averageAmount = transactionCount > 0 ? totalSpent / transactionCount : 0;
+        const transactionCount = ytdTransactions.length;
         const monthlyBudget = category.monthly_amount || 0;
+        
+        // Calculate average based on category type
+        let averageAmount = 0;
+        if (categoryTypesEnabled && category.category_type) {
+          if (category.category_type === 'monthly_expense') {
+            // Monthly average: divide by number of months in current year
+            averageAmount = currentMonth > 0 ? totalSpent / currentMonth : 0;
+          } else {
+            // Annual average for accumulation and target_balance: divide by 12
+            averageAmount = totalSpent / 12;
+          }
+        } else {
+          // Fallback: per-transaction average
+          averageAmount = transactionCount > 0 ? totalSpent / transactionCount : 0;
+        }
+        
         const variance = monthlyBudget - totalSpent;
 
-        // For accumulation categories, calculate YTD spent
+        // For accumulation categories, calculate YTD spent and target
         let ytdSpent: number | undefined;
         let annualTarget: number | undefined;
 
         if (categoryTypesEnabled && category.category_type === 'accumulation') {
           annualTarget = category.annual_target || (monthlyBudget * 12);
-          
-          // Calculate YTD spent
-          const ytdTransactions = categoryTransactions.filter(t => {
-            const transactionDate = t.date;
-            return transactionDate >= ytdStartDate;
-          });
-
-          ytdSpent = 0;
-          ytdTransactions.forEach(transaction => {
-            const split = transaction.splits.find(s => s.category_id === category.id);
-            if (split) {
-              const amount = transaction.transaction_type === 'expense'
-                ? split.amount
-                : -split.amount;
-              ytdSpent! += amount;
-            }
-          });
+          ytdSpent = totalSpent; // Already calculated as YTD above
         }
 
         stats.push({
           category,
-          totalSpent,
+          totalSpent, // This is now YTD total
           transactionCount,
-          averageAmount,
+          averageAmount, // Monthly or annual average based on type
           lastTransactionDate,
           currentBalance: category.current_balance || 0,
           monthlyBudget,
@@ -199,7 +201,7 @@ export default function CategoryReportsList() {
         <CardHeader>
           <CardTitle>All Categories</CardTitle>
           <CardDescription>
-            Click on a category to view detailed reports and analytics
+            Showing year-to-date (YTD) statistics for {new Date().getFullYear()}. Click on a category to view detailed reports and analytics.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -209,8 +211,18 @@ export default function CategoryReportsList() {
                 <TableRow>
                   <TableHead>Category</TableHead>
                   <TableHead className="text-right">Transactions</TableHead>
-                  <TableHead className="text-right">Total Spent</TableHead>
-                  <TableHead className="text-right">Average</TableHead>
+                  <TableHead className="text-right">
+                    <div className="flex flex-col">
+                      <span>Total Spent</span>
+                      <span className="text-xs font-normal text-muted-foreground">(YTD)</span>
+                    </div>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <div className="flex flex-col">
+                      <span>Average</span>
+                      <span className="text-xs font-normal text-muted-foreground">(per month/year)</span>
+                    </div>
+                  </TableHead>
                   {categoryTypesEnabled && (
                     <>
                       <TableHead className="text-right">Budget</TableHead>
@@ -241,7 +253,18 @@ export default function CategoryReportsList() {
                       {formatCurrency(stat.totalSpent)}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">
-                      {stat.transactionCount > 0 ? formatCurrency(stat.averageAmount) : '—'}
+                      {stat.transactionCount > 0 ? (
+                        <div className="flex flex-col items-end">
+                          <span>{formatCurrency(stat.averageAmount)}</span>
+                          {categoryTypesEnabled && stat.category.category_type && (
+                            <span className="text-xs">
+                              {stat.category.category_type === 'monthly_expense' ? '/month' : '/year'}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        '—'
+                      )}
                     </TableCell>
                     {categoryTypesEnabled && (
                       <>

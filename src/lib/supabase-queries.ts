@@ -69,7 +69,7 @@ export async function getCategoryById(id: number): Promise<Category | null> {
     .from('categories')
     .select('*')
     .eq('id', id)
-    .eq('budget_account_id', accountId)
+    .eq('account_id', accountId)
     .single();
   
   if (error) {
