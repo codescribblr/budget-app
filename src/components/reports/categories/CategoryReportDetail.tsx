@@ -236,34 +236,35 @@ export default function CategoryReportDetail() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
       <div>
         <Button
           variant="ghost"
           onClick={() => router.push('/reports/categories')}
-          className="mb-4"
+          className="mb-2 md:mb-4"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Categories
+          <span className="hidden sm:inline">Back to Categories</span>
+          <span className="sm:hidden">Back</span>
         </Button>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl md:text-3xl font-bold">{category.name}</h1>
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
+          <h1 className="text-xl md:text-2xl lg:text-3xl font-bold">{category.name}</h1>
           {getCategoryTypeBadge()}
         </div>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-sm md:text-base text-muted-foreground mt-1">
           Detailed reports and analytics for this category
         </p>
       </div>
 
       {/* Filters */}
       <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>Filter the report data by date range</CardDescription>
+        <CardHeader className="pb-3 md:pb-6">
+          <CardTitle className="text-lg md:text-xl">Filters</CardTitle>
+          <CardDescription className="text-xs md:text-sm">Filter the report data by date range</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
             <div>
               <Label htmlFor="date-range">Quick Select</Label>
               <Select value={dateRange} onValueChange={setDateRange}>

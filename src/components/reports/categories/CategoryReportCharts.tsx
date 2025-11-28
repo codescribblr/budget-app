@@ -42,13 +42,13 @@ export default function CategoryReportCharts({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="space-y-4 md:space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Monthly Spending Trend */}
         <Card>
-          <CardHeader>
-            <CardTitle>Monthly Spending Trend</CardTitle>
-            <CardDescription>Spending over time for this category</CardDescription>
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="text-base md:text-lg">Monthly Spending Trend</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Spending over time for this category</CardDescription>
           </CardHeader>
           <CardContent>
             <CategoryMonthlyTrend
@@ -62,9 +62,9 @@ export default function CategoryReportCharts({
 
         {/* Merchant Breakdown */}
         <Card>
-          <CardHeader>
-            <CardTitle>Top Merchants</CardTitle>
-            <CardDescription>Spending by merchant over time for this category</CardDescription>
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="text-base md:text-lg">Top Merchants</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Spending by merchant over time for this category</CardDescription>
           </CardHeader>
           <CardContent>
             <CategoryMerchantBreakdown
@@ -77,12 +77,12 @@ export default function CategoryReportCharts({
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Day of Week Spending Pattern */}
         <Card>
-          <CardHeader>
-            <CardTitle>Spending by Day of Week</CardTitle>
-            <CardDescription>Which days of the week you spend the most in this category</CardDescription>
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="text-base md:text-lg">Spending by Day of Week</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Which days of the week you spend the most in this category</CardDescription>
           </CardHeader>
           <CardContent>
             <CategoryDayOfWeekSpending
@@ -94,9 +94,9 @@ export default function CategoryReportCharts({
 
         {/* Transaction Size Distribution */}
         <Card>
-          <CardHeader>
-            <CardTitle>Transaction Size Distribution</CardTitle>
-            <CardDescription>Distribution of transaction amounts in this category</CardDescription>
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="text-base md:text-lg">Transaction Size Distribution</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Distribution of transaction amounts in this category</CardDescription>
           </CardHeader>
           <CardContent>
             <CategoryTransactionSizeDistribution
@@ -107,12 +107,12 @@ export default function CategoryReportCharts({
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Week of Month Spending Pattern */}
         <Card>
-          <CardHeader>
-            <CardTitle>Spending by Week of Month</CardTitle>
-            <CardDescription>Which week of the month you spend the most in this category</CardDescription>
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="text-base md:text-lg">Spending by Week of Month</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Which week of the month you spend the most in this category</CardDescription>
           </CardHeader>
           <CardContent>
             <CategoryWeekOfMonthSpending

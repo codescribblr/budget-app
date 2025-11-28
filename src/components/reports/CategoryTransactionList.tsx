@@ -92,16 +92,67 @@ export default function CategoryTransactionList({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Transactions</CardTitle>
-        <CardDescription>
+      <CardHeader className="pb-3 md:pb-6">
+        <CardTitle className="text-lg md:text-xl">Transactions</CardTitle>
+        <CardDescription className="text-xs md:text-sm">
           {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''} for{' '}
           {selectedCategory?.name || 'this category'}
           {startDate || endDate ? ' in selected time period' : ''}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-3">
+          {displayedTransactions.map((transaction) => {
+            const categorySplit = transaction.splits.find(
+              split => split.category_id === selectedCategoryId
+            );
+            const categoryAmount = categorySplit?.amount || 0;
+            const isExpense = transaction.transaction_type === 'expense';
+
+            return (
+              <div key={transaction.id} className="border rounded-lg p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm mb-1 truncate" title={transaction.description}>
+                      {transaction.description}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{formatDate(transaction.date)}</div>
+                  </div>
+                  <div className={`font-semibold text-sm whitespace-nowrap ${isExpense ? 'text-red-600' : 'text-green-600'}`}>
+                    {isExpense ? '-' : '+'}{formatCurrency(categoryAmount)}
+                  </div>
+                </div>
+
+                {transaction.merchant_name && (
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Merchant: </span>
+                    <span>{transaction.merchant_name}</span>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-1">
+                  {transaction.splits.map((split) => {
+                    const category = categories.find(c => c.id === split.category_id);
+                    const isSelectedCategory = split.category_id === selectedCategoryId;
+                    return (
+                      <Badge
+                        key={split.id}
+                        variant={isSelectedCategory ? 'default' : 'secondary'}
+                        className="text-xs"
+                      >
+                        {category?.name || 'Unknown'}: {formatCurrency(split.amount)}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -114,7 +165,6 @@ export default function CategoryTransactionList({
             </TableHeader>
             <TableBody>
               {displayedTransactions.map((transaction) => {
-                // Get the amount for this specific category
                 const categorySplit = transaction.splits.find(
                   split => split.category_id === selectedCategoryId
                 );
@@ -166,11 +216,13 @@ export default function CategoryTransactionList({
         </div>
 
         {hasMore && (
-          <div className="flex justify-center mt-6">
+          <div className="flex justify-center mt-4 md:mt-6">
             <Button
               onClick={handleLoadMore}
               disabled={isLoadingMore}
               variant="outline"
+              size="sm"
+              className="md:size-default"
             >
               {isLoadingMore ? (
                 <>
@@ -185,7 +237,7 @@ export default function CategoryTransactionList({
         )}
 
         {!hasMore && displayedTransactions.length > TRANSACTIONS_PER_PAGE && (
-          <div className="text-center text-sm text-muted-foreground mt-4">
+          <div className="text-center text-xs md:text-sm text-muted-foreground mt-3 md:mt-4">
             Showing all {filteredTransactions.length} transactions
           </div>
         )}
