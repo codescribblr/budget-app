@@ -15,6 +15,7 @@ import type { TransactionWithSplits, Category } from '@/lib/types';
 import SpendingByCategory from './SpendingByCategory';
 import SpendingPieChart from './SpendingPieChart';
 import TransactionsByMerchant from './TransactionsByMerchant';
+import CategoryTransactionList from './CategoryTransactionList';
 import { X } from 'lucide-react';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 
@@ -432,6 +433,19 @@ export default function ReportsPage() {
           endDate={endDate}
         />
       </div>
+
+      {/* Category Transaction List - Only show when a category is selected */}
+      {selectedCategoryId && (
+        <div className="grid grid-cols-1 gap-6">
+          <CategoryTransactionList
+            transactions={filteredTransactions}
+            categories={categories}
+            selectedCategoryId={selectedCategoryId}
+            startDate={startDate}
+            endDate={endDate}
+          />
+        </div>
+      )}
     </div>
   );
 }
