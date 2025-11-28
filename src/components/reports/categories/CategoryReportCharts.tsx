@@ -7,6 +7,8 @@ import CategoryMonthlyTrend from './CategoryMonthlyTrend';
 import CategoryMerchantBreakdown from './CategoryMerchantBreakdown';
 import CategoryDayOfWeekSpending from './CategoryDayOfWeekSpending';
 import CategoryTransactionSizeDistribution from './CategoryTransactionSizeDistribution';
+import CategoryWeekOfMonthSpending from './CategoryWeekOfMonthSpending';
+import CategoryRecurringTransactions from './CategoryRecurringTransactions';
 
 interface CategoryReportChartsProps {
   category: Category;
@@ -99,6 +101,25 @@ export default function CategoryReportCharts({
             />
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Week of Month Spending Pattern */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Spending by Week of Month</CardTitle>
+            <CardDescription>Which week of the month you spend the most in this category</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CategoryWeekOfMonthSpending
+              transactions={categoryTransactions}
+              category={category}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Recurring Transactions */}
+        <CategoryRecurringTransactions />
       </div>
     </div>
   );
