@@ -3,8 +3,8 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Category, TransactionWithSplits } from '@/lib/types';
-import CategorySpendingTrend from '../trends/CategorySpendingTrends';
-import MonthlySpendingTrend from '../trends/MonthlySpendingTrend';
+import CategoryMonthlyTrend from './CategoryMonthlyTrend';
+import CategoryMerchantBreakdown from './CategoryMerchantBreakdown';
 
 interface CategoryReportChartsProps {
   category: Category;
@@ -46,23 +46,23 @@ export default function CategoryReportCharts({
           <CardDescription>Spending over time for this category</CardDescription>
         </CardHeader>
         <CardContent>
-          <MonthlySpendingTrend
+          <CategoryMonthlyTrend
             transactions={categoryTransactions}
-            categories={[category]}
+            category={category}
           />
         </CardContent>
       </Card>
 
-      {/* Category Spending Trends */}
+      {/* Merchant Breakdown */}
       <Card>
         <CardHeader>
-          <CardTitle>Spending Patterns</CardTitle>
-          <CardDescription>Detailed spending analysis</CardDescription>
+          <CardTitle>Top Merchants</CardTitle>
+          <CardDescription>Spending by merchant over time for this category</CardDescription>
         </CardHeader>
         <CardContent>
-          <CategorySpendingTrend
+          <CategoryMerchantBreakdown
             transactions={categoryTransactions}
-            categories={[category]}
+            category={category}
           />
         </CardContent>
       </Card>
