@@ -49,26 +49,29 @@ export default function CategoryMerchantBreakdown({ transactions, category, star
   const [selectedMerchants, setSelectedMerchants] = useState<string[]>(topMerchants);
 
   const chartData = useMemo(() => {
-    // Calculate number of months in the date range
-    let monthCount = 0;
+    // Calculate number of days in the date range
+    let daysInRange = 0;
     if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      monthCount = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+      const start = new Date(startDate + 'T00:00:00');
+      const end = new Date(endDate + 'T00:00:00');
+      // Calculate difference in milliseconds, convert to days
+      const diffTime = end.getTime() - start.getTime();
+      daysInRange = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
     } else if (transactions.length > 0) {
       // Calculate from transaction dates if no date range provided
       const dates = transactions
         .map(t => t.date)
         .sort();
       if (dates.length > 0) {
-        const firstDate = new Date(dates[0]);
-        const lastDate = new Date(dates[dates.length - 1]);
-        monthCount = (lastDate.getFullYear() - firstDate.getFullYear()) * 12 + (lastDate.getMonth() - firstDate.getMonth()) + 1;
+        const firstDate = new Date(dates[0] + 'T00:00:00');
+        const lastDate = new Date(dates[dates.length - 1] + 'T00:00:00');
+        const diffTime = lastDate.getTime() - firstDate.getTime();
+        daysInRange = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       }
     }
 
-    // If less than 2 months, show daily data instead
-    const useDailyView = monthCount < 2;
+    // If less than 60 days (roughly 2 months), show daily data instead
+    const useDailyView = daysInRange < 60;
 
     if (useDailyView) {
       // Group by day and merchant
