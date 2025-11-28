@@ -286,14 +286,13 @@ export default function ReportsPage() {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>Filter your spending data</CardDescription>
+        <CardHeader className="pb-2 md:pb-3">
+          <CardTitle className="text-sm md:text-base font-semibold">Filters</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+        <CardContent className="pt-3 md:pt-4">
+          <div className="space-y-3 md:space-y-4">
             {/* Date Range Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3">
               <div>
                 <Label htmlFor="date-range">Quick Select</Label>
                 <Select value={dateRange} onValueChange={setDateRange}>
@@ -342,10 +341,10 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <Separator />
+            <Separator className="my-2 md:my-3" />
 
             {/* Category Filter */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
               <div>
                 <Label htmlFor="category-filter">Filter by Category</Label>
                 <Select
@@ -388,10 +387,10 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <Separator />
+            <Separator className="my-2 md:my-3" />
 
             {/* System Category Toggle */}
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 pt-1">
               <Checkbox
                 id="include-system"
                 checked={includeSystemCategories}

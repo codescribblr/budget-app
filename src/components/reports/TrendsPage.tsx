@@ -88,14 +88,13 @@ export default function TrendsPage() {
 
       {/* Filters Section */}
       <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>Filter your trend data</CardDescription>
+        <CardHeader className="pb-2 md:pb-3">
+          <CardTitle className="text-sm md:text-base font-semibold">Filters</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+        <CardContent className="pt-3 md:pt-4">
+          <div className="space-y-2 md:space-y-3">
             {/* Time Range Filter */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3">
               <div>
                 <Label htmlFor="time-range">Time Range</Label>
                 <Select value={timeRange} onValueChange={setTimeRange}>

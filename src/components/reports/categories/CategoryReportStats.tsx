@@ -139,7 +139,7 @@ export default function CategoryReportStats({
       <Card>
         <CardHeader className="pb-2">
           <CardDescription className="text-xs md:text-sm">Transactions</CardDescription>
-          <CardTitle className="text-xl md:text-2xl">{stats.transactionCount}</CardTitle>
+          <CardTitle className="text-base md:text-xl lg:text-2xl">{stats.transactionCount}</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
           <p className="text-xs text-muted-foreground">
@@ -152,7 +152,7 @@ export default function CategoryReportStats({
       <Card>
         <CardHeader className="pb-2">
           <CardDescription className="text-xs md:text-sm">Net Spending</CardDescription>
-          <CardTitle className={`text-xl md:text-2xl ${stats.netSpending >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+          <CardTitle className={`text-base md:text-xl lg:text-2xl ${stats.netSpending >= 0 ? 'text-red-600' : 'text-green-600'}`}>
             {formatCurrency(stats.netSpending)}
           </CardTitle>
         </CardHeader>
@@ -170,7 +170,7 @@ export default function CategoryReportStats({
       <Card>
         <CardHeader className="pb-2">
           <CardDescription className="text-xs md:text-sm">Average</CardDescription>
-          <CardTitle className="text-xl md:text-2xl">
+          <CardTitle className="text-base md:text-xl lg:text-2xl">
             {formatCurrency(stats.averageAmount)}
           </CardTitle>
         </CardHeader>
@@ -188,7 +188,7 @@ export default function CategoryReportStats({
         <Card>
           <CardHeader className="pb-2">
             <CardDescription className="text-xs md:text-sm">Annual Progress</CardDescription>
-            <CardTitle className="text-xl md:text-2xl">
+            <CardTitle className="text-base md:text-xl lg:text-2xl">
               {stats.ytdProgress?.toFixed(0)}%
             </CardTitle>
           </CardHeader>
@@ -208,7 +208,7 @@ export default function CategoryReportStats({
         <Card>
           <CardHeader className="pb-2">
             <CardDescription className="text-xs md:text-sm">Budget Status</CardDescription>
-            <CardTitle className={`text-xl md:text-2xl ${stats.variance! >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <CardTitle className={`text-base md:text-xl lg:text-2xl ${stats.variance! >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {stats.budgetProgress?.toFixed(0)}%
             </CardTitle>
           </CardHeader>
@@ -225,7 +225,7 @@ export default function CategoryReportStats({
         <Card>
           <CardHeader className="pb-2">
             <CardDescription className="text-xs md:text-sm">Target Progress</CardDescription>
-            <CardTitle className="text-xl md:text-2xl">
+            <CardTitle className="text-base md:text-xl lg:text-2xl">
               {stats.balanceProgress?.toFixed(0)}%
             </CardTitle>
           </CardHeader>
@@ -243,7 +243,7 @@ export default function CategoryReportStats({
         <Card>
           <CardHeader className="pb-2">
             <CardDescription className="text-xs md:text-sm">Current Balance</CardDescription>
-            <CardTitle className={`text-xl md:text-2xl ${(category.current_balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <CardTitle className={`text-base md:text-xl lg:text-2xl ${(category.current_balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatCurrency(category.current_balance || 0)}
             </CardTitle>
           </CardHeader>
