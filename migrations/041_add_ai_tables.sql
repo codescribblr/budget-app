@@ -92,6 +92,15 @@ CREATE POLICY ai_usage_user_select ON ai_usage_tracking
   FOR SELECT
   USING (user_id = auth.uid());
 
+-- Users can insert their own AI usage (must match their user_id and have access to account_id)
+DROP POLICY IF EXISTS ai_usage_user_insert ON ai_usage_tracking;
+CREATE POLICY ai_usage_user_insert ON ai_usage_tracking
+  FOR INSERT
+  WITH CHECK (
+    user_id = auth.uid() 
+    AND user_has_account_access(account_id)
+  );
+
 -- Users can view their own categorization history
 DROP POLICY IF EXISTS ai_cat_user_select ON ai_categorization_history;
 CREATE POLICY ai_cat_user_select ON ai_categorization_history
