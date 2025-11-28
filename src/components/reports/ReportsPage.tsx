@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
@@ -285,127 +284,95 @@ export default function ReportsPage() {
         </div>
       )}
 
-      <Card>
-        <CardHeader className="pb-2 md:pb-3">
-          <CardTitle className="text-sm md:text-base font-semibold">Filters</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-3 md:pt-4">
-          <div className="space-y-3 md:space-y-4">
-            {/* Date Range Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3">
-              <div>
-                <Label htmlFor="date-range">Quick Select</Label>
-                <Select value={dateRange} onValueChange={setDateRange}>
-                  <SelectTrigger id="date-range">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="current-month">Current Month</SelectItem>
-                    <SelectItem value="last-month">Last Month</SelectItem>
-                    <SelectItem value="week">Last 7 Days</SelectItem>
-                    <SelectItem value="quarter">Last Quarter</SelectItem>
-                    <SelectItem value="current-year">Current Year</SelectItem>
-                    <SelectItem value="year">Last Year</SelectItem>
-                    <SelectItem value="all">All Time</SelectItem>
-                    <SelectItem value="custom">Custom Range</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="start-date">Start Date</Label>
-                <DatePicker
-                  id="start-date"
-                  date={parseLocalDate(startDate)}
-                  onDateChange={(date) => {
-                    const newStartDate = formatLocalDate(date);
-                    setStartDate(newStartDate);
-                    setDateRange('custom');
-                    updateURL(newStartDate, endDate, 'custom', selectedCategoryId);
-                  }}
-                  placeholder="Select start date"
-                />
-              </div>
-              <div>
-                <Label htmlFor="end-date">End Date</Label>
-                <DatePicker
-                  id="end-date"
-                  date={parseLocalDate(endDate)}
-                  onDateChange={(date) => {
-                    const newEndDate = formatLocalDate(date);
-                    setEndDate(newEndDate);
-                    setDateRange('custom');
-                    updateURL(startDate, newEndDate, 'custom', selectedCategoryId);
-                  }}
-                  placeholder="Select end date"
-                />
-              </div>
-            </div>
-
-            <Separator className="my-2 md:my-3" />
-
-            {/* Category Filter */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
-              <div>
-                <Label htmlFor="category-filter">Filter by Category</Label>
-                <Select
-                  value={selectedCategoryId?.toString() || 'all'}
-                  onValueChange={(value) => {
-                    const newCategoryId = value === 'all' ? null : parseInt(value);
-                    setSelectedCategoryId(newCategoryId);
-                    // Update URL
-                    if (newCategoryId) {
-                      router.push(`/reports?category=${newCategoryId}`);
-                    } else {
-                      router.push('/reports');
-                    }
-                  }}
-                >
-                  <SelectTrigger id="category-filter">
-                    <SelectValue placeholder="All Categories" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {categories.filter(c => !c.is_system).map(category => (
-                      <SelectItem key={category.id} value={category.id.toString()}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-end">
-                {selectedCategory && (
-                  <Button
-                    variant="outline"
-                    onClick={clearCategoryFilter}
-                    className="w-full"
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Clear Filter: {selectedCategory.name}
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <Separator className="my-2 md:my-3" />
-
-            {/* System Category Toggle */}
-            <div className="flex items-center space-x-2 pt-1">
-              <Checkbox
-                id="include-system"
-                checked={includeSystemCategories}
-                onCheckedChange={(checked) => setIncludeSystemCategories(checked === true)}
-              />
-              <label
-                htmlFor="include-system"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Include system categories (e.g., Transfer) in Top Merchants
-              </label>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2 md:gap-3">
+        <Select value={dateRange} onValueChange={setDateRange}>
+          <SelectTrigger id="date-range" className="w-[140px] md:w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="current-month">Current Month</SelectItem>
+            <SelectItem value="last-month">Last Month</SelectItem>
+            <SelectItem value="week">Last 7 Days</SelectItem>
+            <SelectItem value="quarter">Last Quarter</SelectItem>
+            <SelectItem value="current-year">Current Year</SelectItem>
+            <SelectItem value="year">Last Year</SelectItem>
+            <SelectItem value="all">All Time</SelectItem>
+            <SelectItem value="custom">Custom Range</SelectItem>
+          </SelectContent>
+        </Select>
+        <DatePicker
+          id="start-date"
+          date={parseLocalDate(startDate)}
+          onDateChange={(date) => {
+            const newStartDate = formatLocalDate(date);
+            setStartDate(newStartDate);
+            setDateRange('custom');
+            updateURL(newStartDate, endDate, 'custom', selectedCategoryId);
+          }}
+          placeholder="Start date"
+        />
+        <DatePicker
+          id="end-date"
+          date={parseLocalDate(endDate)}
+          onDateChange={(date) => {
+            const newEndDate = formatLocalDate(date);
+            setEndDate(newEndDate);
+            setDateRange('custom');
+            updateURL(startDate, newEndDate, 'custom', selectedCategoryId);
+          }}
+          placeholder="End date"
+        />
+        <Select
+          value={selectedCategoryId?.toString() || 'all'}
+          onValueChange={(value) => {
+            const newCategoryId = value === 'all' ? null : parseInt(value);
+            setSelectedCategoryId(newCategoryId);
+            // Update URL
+            if (newCategoryId) {
+              router.push(`/reports?category=${newCategoryId}`);
+            } else {
+              router.push('/reports');
+            }
+          }}
+        >
+          <SelectTrigger id="category-filter" className="w-[160px] md:w-[180px]">
+            <SelectValue placeholder="All Categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {categories.filter(c => !c.is_system).map(category => (
+              <SelectItem key={category.id} value={category.id.toString()}>
+                {category.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedCategory && (
+          <Button
+            variant="outline"
+            onClick={clearCategoryFilter}
+            size="sm"
+            className="h-9"
+          >
+            <X className="mr-2 h-4 w-4" />
+            Clear: {selectedCategory.name}
+          </Button>
+        )}
+        <div className="flex items-center space-x-2 ml-auto">
+          <Checkbox
+            id="include-system"
+            checked={includeSystemCategories}
+            onCheckedChange={(checked) => setIncludeSystemCategories(checked === true)}
+          />
+          <label
+            htmlFor="include-system"
+            className="text-xs md:text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+          >
+            Include system categories
+          </label>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SpendingByCategory

@@ -5,7 +5,6 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Badge } from '@/components/ui/badge';
@@ -258,61 +257,45 @@ export default function CategoryReportDetail() {
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardHeader className="pb-2 md:pb-3">
-          <CardTitle className="text-sm md:text-base font-semibold">Filters</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-3 md:pt-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3">
-            <div>
-              <Label htmlFor="date-range">Quick Select</Label>
-              <Select value={dateRange} onValueChange={setDateRange}>
-                <SelectTrigger id="date-range">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="current-month">Current Month</SelectItem>
-                  <SelectItem value="last-month">Last Month</SelectItem>
-                  <SelectItem value="week">Last 7 Days</SelectItem>
-                  <SelectItem value="quarter">Last Quarter</SelectItem>
-                  <SelectItem value="current-year">Current Year</SelectItem>
-                  <SelectItem value="year">Last Year</SelectItem>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="custom">Custom Range</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="start-date">Start Date</Label>
-              <DatePicker
-                id="start-date"
-                date={parseLocalDate(startDate)}
-                onDateChange={(date) => {
-                  const newStartDate = formatLocalDate(date);
-                  setStartDate(newStartDate);
-                  setDateRange('custom');
-                  updateURL(newStartDate, endDate, 'custom');
-                }}
-                placeholder="Select start date"
-              />
-            </div>
-            <div>
-              <Label htmlFor="end-date">End Date</Label>
-              <DatePicker
-                id="end-date"
-                date={parseLocalDate(endDate)}
-                onDateChange={(date) => {
-                  const newEndDate = formatLocalDate(date);
-                  setEndDate(newEndDate);
-                  setDateRange('custom');
-                  updateURL(startDate, newEndDate, 'custom');
-                }}
-                placeholder="Select end date"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-wrap items-center gap-2 md:gap-3">
+        <Select value={dateRange} onValueChange={setDateRange}>
+          <SelectTrigger id="date-range" className="w-[140px] md:w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="current-month">Current Month</SelectItem>
+            <SelectItem value="last-month">Last Month</SelectItem>
+            <SelectItem value="week">Last 7 Days</SelectItem>
+            <SelectItem value="quarter">Last Quarter</SelectItem>
+            <SelectItem value="current-year">Current Year</SelectItem>
+            <SelectItem value="year">Last Year</SelectItem>
+            <SelectItem value="all">All Time</SelectItem>
+            <SelectItem value="custom">Custom Range</SelectItem>
+          </SelectContent>
+        </Select>
+        <DatePicker
+          id="start-date"
+          date={parseLocalDate(startDate)}
+          onDateChange={(date) => {
+            const newStartDate = formatLocalDate(date);
+            setStartDate(newStartDate);
+            setDateRange('custom');
+            updateURL(newStartDate, endDate, 'custom');
+          }}
+          placeholder="Start date"
+        />
+        <DatePicker
+          id="end-date"
+          date={parseLocalDate(endDate)}
+          onDateChange={(date) => {
+            const newEndDate = formatLocalDate(date);
+            setEndDate(newEndDate);
+            setDateRange('custom');
+            updateURL(startDate, newEndDate, 'custom');
+          }}
+          placeholder="End date"
+        />
+      </div>
 
       {/* Category Stats */}
       <CategoryReportStats

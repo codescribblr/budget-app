@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import MonthlySpendingTrend from './trends/MonthlySpendingTrend';
 import CategorySpendingTrends from './trends/CategorySpendingTrends';
@@ -86,34 +85,21 @@ export default function TrendsPage() {
         </p>
       </div>
 
-      {/* Filters Section */}
-      <Card>
-        <CardHeader className="pb-2 md:pb-3">
-          <CardTitle className="text-sm md:text-base font-semibold">Filters</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-3 md:pt-4">
-          <div className="space-y-2 md:space-y-3">
-            {/* Time Range Filter */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3">
-              <div>
-                <Label htmlFor="time-range">Time Range</Label>
-                <Select value={timeRange} onValueChange={setTimeRange}>
-                  <SelectTrigger id="time-range">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="3">Last 3 Months</SelectItem>
-                    <SelectItem value="6">Last 6 Months</SelectItem>
-                    <SelectItem value="12">Last 12 Months</SelectItem>
-                    <SelectItem value="24">Last 24 Months</SelectItem>
-                    <SelectItem value="36">Last 36 Months</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2 md:gap-3">
+        <Select value={timeRange} onValueChange={setTimeRange}>
+          <SelectTrigger id="time-range" className="w-[160px] md:w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="3">Last 3 Months</SelectItem>
+            <SelectItem value="6">Last 6 Months</SelectItem>
+            <SelectItem value="12">Last 12 Months</SelectItem>
+            <SelectItem value="24">Last 24 Months</SelectItem>
+            <SelectItem value="36">Last 36 Months</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* Monthly Spending Trend */}
       <MonthlySpendingTrend
