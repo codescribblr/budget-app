@@ -47,56 +47,126 @@ export default function CategoryMerchantBreakdown({ transactions, category }: Ca
   const [selectedMerchants, setSelectedMerchants] = useState<string[]>(topMerchants);
 
   const chartData = useMemo(() => {
-    // Group by month and merchant
-    const monthlyData = new Map<string, Map<string, number>>();
-
-    transactions.forEach(transaction => {
-      const categorySplit = transaction.splits.find(s => s.category_id === category.id);
-      if (!categorySplit) return;
-
-      const merchantName = transaction.merchant_name || 'Unknown';
-      if (!selectedMerchants.includes(merchantName)) return;
-
-      const amount = transaction.transaction_type === 'expense'
-        ? categorySplit.amount
-        : -categorySplit.amount;
-
-      if (amount > 0) {
-        // Extract month key directly from date string (YYYY-MM-DD format)
-        const monthKey = transaction.date.substring(0, 7); // Gets "YYYY-MM"
-
-        if (!monthlyData.has(monthKey)) {
-          monthlyData.set(monthKey, new Map());
-        }
-
-        const monthMerchants = monthlyData.get(monthKey)!;
-        const current = monthMerchants.get(merchantName) || 0;
-        monthMerchants.set(merchantName, current + amount);
+    // Calculate number of months in the date range
+    let monthCount = 0;
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      monthCount = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+    } else if (transactions.length > 0) {
+      // Calculate from transaction dates if no date range provided
+      const dates = transactions
+        .map(t => t.date)
+        .sort();
+      if (dates.length > 0) {
+        const firstDate = new Date(dates[0]);
+        const lastDate = new Date(dates[dates.length - 1]);
+        monthCount = (lastDate.getFullYear() - firstDate.getFullYear()) * 12 + (lastDate.getMonth() - firstDate.getMonth()) + 1;
       }
-    });
+    }
 
-    // Convert to array format for recharts
-    const data = Array.from(monthlyData.entries())
-      .map(([month, merchantMap]) => {
-        const [year, monthNum] = month.split('-');
-        const date = new Date(parseInt(year), parseInt(monthNum) - 1);
-        const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    // If less than 2 months, show daily data instead
+    const useDailyView = monthCount < 2;
 
-        const dataPoint: any = {
-          month: monthName,
-          monthKey: month,
-        };
+    if (useDailyView) {
+      // Group by day and merchant
+      const dailyData = new Map<string, Map<string, number>>();
 
-        selectedMerchants.forEach(merchantName => {
-          dataPoint[merchantName] = merchantMap.get(merchantName) || 0;
-        });
+      transactions.forEach(transaction => {
+        const categorySplit = transaction.splits.find(s => s.category_id === category.id);
+        if (!categorySplit) return;
 
-        return dataPoint;
-      })
-      .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+        const merchantName = transaction.merchant_name || 'Unknown';
+        if (!selectedMerchants.includes(merchantName)) return;
 
-    return data;
-  }, [transactions, category.id, selectedMerchants]);
+        const amount = transaction.transaction_type === 'expense'
+          ? categorySplit.amount
+          : -categorySplit.amount;
+
+        if (amount > 0) {
+          const dayKey = transaction.date; // Use full date (YYYY-MM-DD)
+
+          if (!dailyData.has(dayKey)) {
+            dailyData.set(dayKey, new Map());
+          }
+
+          const dayMerchants = dailyData.get(dayKey)!;
+          const current = dayMerchants.get(merchantName) || 0;
+          dayMerchants.set(merchantName, current + amount);
+        }
+      });
+
+      // Convert to array format for recharts
+      const data = Array.from(dailyData.entries())
+        .map(([day, merchantMap]) => {
+          const date = new Date(day);
+          const dayName = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+          const dataPoint: any = {
+            day: dayName,
+            dayKey: day,
+          };
+
+          selectedMerchants.forEach(merchantName => {
+            dataPoint[merchantName] = merchantMap.get(merchantName) || 0;
+          });
+
+          return dataPoint;
+        })
+        .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+
+      return { data, isDaily: true };
+    } else {
+      // Group by month and merchant
+      const monthlyData = new Map<string, Map<string, number>>();
+
+      transactions.forEach(transaction => {
+        const categorySplit = transaction.splits.find(s => s.category_id === category.id);
+        if (!categorySplit) return;
+
+        const merchantName = transaction.merchant_name || 'Unknown';
+        if (!selectedMerchants.includes(merchantName)) return;
+
+        const amount = transaction.transaction_type === 'expense'
+          ? categorySplit.amount
+          : -categorySplit.amount;
+
+        if (amount > 0) {
+          const monthKey = transaction.date.substring(0, 7); // Gets "YYYY-MM"
+
+          if (!monthlyData.has(monthKey)) {
+            monthlyData.set(monthKey, new Map());
+          }
+
+          const monthMerchants = monthlyData.get(monthKey)!;
+          const current = monthMerchants.get(merchantName) || 0;
+          monthMerchants.set(merchantName, current + amount);
+        }
+      });
+
+      // Convert to array format for recharts
+      const data = Array.from(monthlyData.entries())
+        .map(([month, merchantMap]) => {
+          const [year, monthNum] = month.split('-');
+          const date = new Date(parseInt(year), parseInt(monthNum) - 1);
+          const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+          const dataPoint: any = {
+            month: monthName,
+            monthKey: month,
+          };
+
+          selectedMerchants.forEach(merchantName => {
+            dataPoint[merchantName] = merchantMap.get(merchantName) || 0;
+          });
+
+          return dataPoint;
+        })
+        .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+
+      return { data, isDaily: false };
+    }
+  }, [transactions, category.id, selectedMerchants, startDate, endDate]);
 
   const toggleMerchant = (merchantName: string) => {
     setSelectedMerchants(prev =>
@@ -139,10 +209,10 @@ export default function CategoryMerchantBreakdown({ transactions, category }: Ca
       </div>
 
       <ResponsiveContainer width="100%" height={350}>
-        <LineChart data={chartData}>
+        <LineChart data={chartData.data}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis
-            dataKey="month"
+            dataKey={chartData.isDaily ? 'day' : 'month'}
             tick={{ fontSize: 12 }}
             angle={-45}
             textAnchor="end"

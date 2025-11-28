@@ -54,6 +54,8 @@ export default function CategoryReportCharts({
             <CategoryMonthlyTrend
               transactions={categoryTransactions}
               category={category}
+              startDate={startDate}
+              endDate={endDate}
             />
           </CardContent>
         </Card>
@@ -68,6 +70,8 @@ export default function CategoryReportCharts({
             <CategoryMerchantBreakdown
               transactions={categoryTransactions}
               category={category}
+              startDate={startDate}
+              endDate={endDate}
             />
           </CardContent>
         </Card>
