@@ -45,6 +45,7 @@ import {
 import { UserMenu } from "@/components/layout/user-menu"
 import { AccountSwitcher } from "@/components/layout/account-switcher"
 import { useFeature } from "@/contexts/FeatureContext"
+import { useSubscription } from "@/contexts/SubscriptionContext"
 
 const navigationSections = [
   {
@@ -54,18 +55,18 @@ const navigationSections = [
       { label: "Transactions", path: "/transactions", icon: Receipt },
       { label: "Import", path: "/import", icon: Upload },
       { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
-      { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureFlag: "income_buffer" },
+      { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureKey: "income_buffer" },
       { label: "Income", path: "/income", icon: DollarSign },
-      { label: "Goals", path: "/goals", icon: Target },
-      { label: "AI Assistant", path: "/dashboard/ai-assistant", icon: Sparkles },
+      { label: "Goals", path: "/goals", icon: Target, featureKey: "goals" },
+      { label: "AI Assistant", path: "/dashboard/ai-assistant", icon: Sparkles, featureKey: "ai_chat" },
     ],
   },
   {
     label: "Reports",
     items: [
       { label: "Overview", path: "/reports", icon: FileText },
-      { label: "Trends", path: "/reports/trends", icon: TrendingUp },
-      { label: "Category Reports", path: "/reports/categories", icon: Mail },
+      { label: "Trends", path: "/reports/trends", icon: TrendingUp, featureKey: "advanced_reporting" },
+      { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
     ],
   },
   {
@@ -97,7 +98,11 @@ export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { state, isMobile, setOpenMobile } = useSidebar()
+  const { isPremium } = useSubscription()
   const incomeBufferEnabled = useFeature('income_buffer')
+  const goalsEnabled = useFeature('goals')
+  const aiChatEnabled = useFeature('ai_chat')
+  const advancedReportingEnabled = useFeature('advanced_reporting')
   const [openWizards, setOpenWizards] = React.useState(false)
 
   const isActive = (path: string) => {
@@ -144,7 +149,30 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {section.items
-                  .filter((item) => !('featureFlag' in item) || (item.featureFlag === 'income_buffer' && incomeBufferEnabled))
+                  .filter((item) => {
+                    // If item has a featureKey, check if feature is enabled
+                    if ('featureKey' in item && item.featureKey) {
+                      const featureKey = item.featureKey as string
+                      switch (featureKey) {
+                        case 'income_buffer':
+                          return incomeBufferEnabled
+                        case 'goals':
+                          return goalsEnabled
+                        case 'ai_chat':
+                          return aiChatEnabled
+                        case 'advanced_reporting':
+                          return advancedReportingEnabled
+                        default:
+                          return true
+                      }
+                    }
+                    // Legacy support for featureFlag
+                    if ('featureFlag' in item && item.featureFlag) {
+                      return item.featureFlag === 'income_buffer' && incomeBufferEnabled
+                    }
+                    // No feature requirement, show item
+                    return true
+                  })
                   .map((item) => {
                     const Icon = item.icon
                     const active = isActive(item.path)

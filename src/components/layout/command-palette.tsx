@@ -71,12 +71,13 @@ const navigationItems = [
   { label: "Transactions", path: "/transactions", icon: Receipt },
   { label: "Import", path: "/import", icon: Upload },
   { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
-  { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureFlag: "income_buffer" },
+  { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureKey: "income_buffer" },
   { label: "Reports", path: "/reports", icon: FileText },
-  { label: "Trends", path: "/reports/trends", icon: TrendingUp },
-  { label: "Category Reports", path: "/reports/categories", icon: Mail },
+  { label: "Trends", path: "/reports/trends", icon: TrendingUp, featureKey: "advanced_reporting" },
+  { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
   { label: "Income", path: "/income", icon: DollarSign },
-  { label: "Goals", path: "/goals", icon: Target },
+  { label: "Goals", path: "/goals", icon: Target, featureKey: "goals" },
+  { label: "AI Assistant", path: "/dashboard/ai-assistant", icon: Sparkles, featureKey: "ai_chat" },
   { label: "Merchants", path: "/merchants", icon: Store },
   { label: "Category Rules", path: "/category-rules", icon: FolderTree },
   { label: "Settings", path: "/settings", icon: Settings },
@@ -98,6 +99,9 @@ export function CommandPalette() {
   const [transactionsLoading, setTransactionsLoading] = React.useState(false)
   const router = useRouter()
   const incomeBufferEnabled = useFeature('income_buffer')
+  const goalsEnabled = useFeature('goals')
+  const aiChatEnabled = useFeature('ai_chat')
+  const advancedReportingEnabled = useFeature('advanced_reporting')
   const scrollTimeoutsRef = React.useRef<NodeJS.Timeout[]>([])
 
   React.useEffect(() => {
@@ -220,7 +224,30 @@ export function CommandPalette() {
           </CommandEmpty>
           <CommandGroup heading="Navigation">
             {navigationItems
-              .filter((item) => !item.featureFlag || (item.featureFlag === 'income_buffer' && incomeBufferEnabled))
+              .filter((item) => {
+                // If item has a featureKey, check if feature is enabled
+                if ('featureKey' in item && item.featureKey) {
+                  const featureKey = item.featureKey as string
+                  switch (featureKey) {
+                    case 'income_buffer':
+                      return incomeBufferEnabled
+                    case 'goals':
+                      return goalsEnabled
+                    case 'ai_chat':
+                      return aiChatEnabled
+                    case 'advanced_reporting':
+                      return advancedReportingEnabled
+                    default:
+                      return true
+                  }
+                }
+                // Legacy support for featureFlag
+                if ('featureFlag' in item && item.featureFlag) {
+                  return item.featureFlag === 'income_buffer' && incomeBufferEnabled
+                }
+                // No feature requirement, show item
+                return true
+              })
               .map((item) => {
                 const Icon = item.icon
                 return (

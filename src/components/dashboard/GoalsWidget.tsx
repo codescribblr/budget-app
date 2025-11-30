@@ -13,6 +13,7 @@ import { Target, Calendar, TrendingUp, ArrowRight, Crown, ChevronUp } from 'luci
 import Link from 'next/link';
 import { parseLocalDate } from '@/lib/date-utils';
 import { useFeature } from '@/contexts/FeatureContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 
 interface GoalsWidgetProps {
   disabled?: boolean;
@@ -21,6 +22,7 @@ interface GoalsWidgetProps {
 export default function GoalsWidget({ disabled = false }: GoalsWidgetProps) {
   const router = useRouter();
   const goalsEnabled = useFeature('goals');
+  const { isPremium } = useSubscription();
   const [goals, setGoals] = useState<GoalWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(true);
@@ -52,49 +54,54 @@ export default function GoalsWidget({ disabled = false }: GoalsWidgetProps) {
     return null;
   }
 
-  // Show upgrade prompt if goals feature is not enabled
+  // If feature is disabled, hide widget completely (don't show upgrade prompt for premium users who disabled it)
   if (!goalsEnabled) {
-    return (
-      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-        <Card className="relative">
-          <CardHeader>
-            <CollapsibleTrigger asChild>
-              <div className="flex items-center gap-2 cursor-pointer">
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5" />
-                  Goals
-                </CardTitle>
-                <CardDescription>Track your savings goals</CardDescription>
-              </div>
-            </CollapsibleTrigger>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent className="pb-8 text-center py-4 space-y-4">
-              <p className="text-muted-foreground">
-                Goals & Debt Tracking is a premium feature
-              </p>
-              <Button
-                onClick={() => router.push('/settings/subscription')}
-                size="sm"
-                className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
-              >
-                <Crown className="mr-2 h-4 w-4" />
-                Upgrade to Premium
-              </Button>
-            </CardContent>
-            {isOpen && (
-              <button
-                onClick={() => setIsOpen(false)}
-                className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
-                aria-label="Collapse card"
-              >
-                <ChevronUp className="h-4 w-4" />
-              </button>
-            )}
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-    );
+    // Only show upgrade prompt if user doesn't have premium
+    if (!isPremium) {
+      return (
+        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+          <Card className="relative">
+            <CardHeader>
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center gap-2 cursor-pointer">
+                  <CardTitle className="flex items-center gap-2">
+                    <Target className="h-5 w-5" />
+                    Goals
+                  </CardTitle>
+                  <CardDescription>Track your savings goals</CardDescription>
+                </div>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="pb-8 text-center py-4 space-y-4">
+                <p className="text-muted-foreground">
+                  Goals & Debt Tracking is a premium feature
+                </p>
+                <Button
+                  onClick={() => router.push('/settings/subscription')}
+                  size="sm"
+                  className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
+                >
+                  <Crown className="mr-2 h-4 w-4" />
+                  Upgrade to Premium
+                </Button>
+              </CardContent>
+              {isOpen && (
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                  aria-label="Collapse card"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </button>
+              )}
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      );
+    }
+    // Premium user disabled the feature - hide widget completely
+    return null;
   }
 
   if (goals.length === 0) {

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useFeature } from '@/contexts/FeatureContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +41,7 @@ interface LoanListProps {
 export default function LoanList({ loans, onUpdate, disabled = false }: LoanListProps) {
   const router = useRouter();
   const loansEnabled = useFeature('loans');
+  const { isPremium } = useSubscription();
   const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
   const [loanName, setLoanName] = useState('');
   const [balance, setBalance] = useState('');
@@ -265,23 +267,28 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
     }
   };
 
-  // Show upgrade prompt if loans feature is not enabled
+  // If feature is disabled, hide widget completely (don't show upgrade prompt for premium users who disabled it)
   if (!loansEnabled) {
-    return (
-      <div className="text-center py-8 space-y-4">
-        <p className="text-muted-foreground">
-          Loans Management is a premium feature
-        </p>
-        <Button
-          onClick={() => router.push('/settings/subscription')}
-          size="sm"
-          className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
-        >
-          <Crown className="mr-2 h-4 w-4" />
-          Upgrade to Premium
-        </Button>
-      </div>
-    );
+    // Only show upgrade prompt if user doesn't have premium
+    if (!isPremium) {
+      return (
+        <div className="text-center py-8 space-y-4">
+          <p className="text-muted-foreground">
+            Loans Management is a premium feature
+          </p>
+          <Button
+            onClick={() => router.push('/settings/subscription')}
+            size="sm"
+            className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
+          >
+            <Crown className="mr-2 h-4 w-4" />
+            Upgrade to Premium
+          </Button>
+        </div>
+      );
+    }
+    // Premium user disabled the feature - hide widget completely
+    return null;
   }
 
   const totalBalance = loans.reduce((sum, loan) => sum + loan.balance, 0);

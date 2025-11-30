@@ -20,6 +20,7 @@ import {
 import { ChevronDown, Menu } from 'lucide-react';
 import SignOutButton from '@/components/auth/SignOutButton';
 import { AIUsageIndicator } from '@/components/ai/AIUsageIndicator';
+import { useFeature } from '@/contexts/FeatureContext';
 import { ReactNode } from 'react';
 
 interface AppHeaderProps {
@@ -37,6 +38,7 @@ export default function AppHeader({
 }: AppHeaderProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const advancedReportingEnabled = useFeature('advanced_reporting');
 
   const isActive = (path: string) => {
     if (path === '/dashboard') {
@@ -136,32 +138,36 @@ export default function AppHeader({
                     >
                       Reports
                     </button>
-                    <button
-                      onClick={() => handleNavigation('/reports/trends')}
-                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
-                        isActive('/reports/trends')
-                          ? 'bg-gray-800 text-white hover:bg-gray-700'
-                          : 'hover:bg-accent'
-                      }`}
-                    >
-                      <span className="flex items-center">
-                        <span className="mr-2 text-muted-foreground">└</span>
-                        Trends
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => handleNavigation('/reports/categories')}
-                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
-                        isActive('/reports/categories')
-                          ? 'bg-gray-800 text-white hover:bg-gray-700'
-                          : 'hover:bg-accent'
-                      }`}
-                    >
-                      <span className="flex items-center">
-                        <span className="mr-2 text-muted-foreground">└</span>
-                        Category Reports
-                      </span>
-                    </button>
+                    {advancedReportingEnabled && (
+                      <>
+                        <button
+                          onClick={() => handleNavigation('/reports/trends')}
+                          className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                            isActive('/reports/trends')
+                              ? 'bg-gray-800 text-white hover:bg-gray-700'
+                              : 'hover:bg-accent'
+                          }`}
+                        >
+                          <span className="flex items-center">
+                            <span className="mr-2 text-muted-foreground">└</span>
+                            Trends
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => handleNavigation('/reports/categories')}
+                          className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                            isActive('/reports/categories')
+                              ? 'bg-gray-800 text-white hover:bg-gray-700'
+                              : 'hover:bg-accent'
+                          }`}
+                        >
+                          <span className="flex items-center">
+                            <span className="mr-2 text-muted-foreground">└</span>
+                            Category Reports
+                          </span>
+                        </button>
+                      </>
+                    )}
                     <button
                       onClick={() => handleNavigation('/income')}
                       className={`w-full text-left px-4 py-3 transition-colors border-b ${
@@ -296,12 +302,16 @@ export default function AppHeader({
                   <DropdownMenuItem onClick={() => window.location.href = '/reports'}>
                     Reports
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => window.location.href = '/reports/trends'}>
-                    Trends
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => window.location.href = '/reports/categories'}>
-                    Category Reports
-                  </DropdownMenuItem>
+                  {advancedReportingEnabled && (
+                    <>
+                      <DropdownMenuItem onClick={() => window.location.href = '/reports/trends'}>
+                        Trends
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => window.location.href = '/reports/categories'}>
+                        Category Reports
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button

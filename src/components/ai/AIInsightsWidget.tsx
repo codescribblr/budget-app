@@ -124,32 +124,37 @@ export function AIInsightsWidget() {
   const canGenerate = stats ? stats.dashboard_insights.used < stats.dashboard_insights.limit : false;
   const remainingInsights = stats ? stats.dashboard_insights.limit - stats.dashboard_insights.used : 0;
 
-  // Show upgrade prompt if AI Insights feature is not available
+  // If feature is disabled, hide widget completely (don't show upgrade prompt for premium users who disabled it)
   if (!canAccess) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="h-5 w-5 text-purple-500" />
-            AI Insights
-          </CardTitle>
-          <CardDescription>Get intelligent insights about your finances</CardDescription>
-        </CardHeader>
-        <CardContent className="text-center py-4 space-y-4">
-          <p className="text-muted-foreground">
-            AI Insights is a premium feature
-          </p>
-          <Button
-            onClick={() => router.push('/settings/subscription')}
-            size="sm"
-            className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
-          >
-            <Crown className="mr-2 h-4 w-4" />
-            Upgrade to Premium
-          </Button>
-        </CardContent>
-      </Card>
-    );
+    // Only show upgrade prompt if user doesn't have premium
+    if (!isPremium) {
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-purple-500" />
+              AI Insights
+            </CardTitle>
+            <CardDescription>Get intelligent insights about your finances</CardDescription>
+          </CardHeader>
+          <CardContent className="text-center py-4 space-y-4">
+            <p className="text-muted-foreground">
+              AI Insights is a premium feature
+            </p>
+            <Button
+              onClick={() => router.push('/settings/subscription')}
+              size="sm"
+              className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
+            >
+              <Crown className="mr-2 h-4 w-4" />
+              Upgrade to Premium
+            </Button>
+          </CardContent>
+        </Card>
+      );
+    }
+    // Premium user disabled the feature - hide widget completely
+    return null;
   }
 
   return (

@@ -27,6 +27,7 @@ import GoalsWidget from './GoalsWidget';
 import IncomeBufferCard from './IncomeBufferCard';
 import { AIInsightsWidget } from '@/components/ai/AIInsightsWidget';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
+import { useFeature } from '@/contexts/FeatureContext';
 
 // Helper function to calculate summary from local state
 function calculateSummary(
@@ -88,6 +89,7 @@ function calculateSummary(
 
 export default function Dashboard() {
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
+  const loansEnabled = useFeature('loans');
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
@@ -393,38 +395,40 @@ export default function Dashboard() {
             </Card>
           </Collapsible>
 
-          <Collapsible open={isLoansOpen} onOpenChange={setIsLoansOpen}>
-            <Card id="loans-section" className="relative">
-              <CardHeader>
-                <CollapsibleTrigger asChild>
-                  <div className="flex items-center gap-2 cursor-pointer">
-                    <CardTitle className="flex items-center gap-2">
-                      <Landmark className="h-5 w-5" />
-                      Loans
-                    </CardTitle>
-                  </div>
-                </CollapsibleTrigger>
-              </CardHeader>
-              <CollapsibleContent>
-                <CardContent className="pb-8">
-                  <LoanList 
-                    loans={loans} 
-                    onUpdate={(updatedLoans) => setLoans(updatedLoans)} 
-                    disabled={!isEditor || permissionsLoading}
-                  />
-                </CardContent>
-                {isLoansOpen && (
-                  <button
-                    onClick={() => setIsLoansOpen(false)}
-                    className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
-                    aria-label="Collapse card"
-                  >
-                    <ChevronUp className="h-4 w-4" />
-                  </button>
-                )}
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
+          {loansEnabled && (
+            <Collapsible open={isLoansOpen} onOpenChange={setIsLoansOpen}>
+              <Card id="loans-section" className="relative">
+                <CardHeader>
+                  <CollapsibleTrigger asChild>
+                    <div className="flex items-center gap-2 cursor-pointer">
+                      <CardTitle className="flex items-center gap-2">
+                        <Landmark className="h-5 w-5" />
+                        Loans
+                      </CardTitle>
+                    </div>
+                  </CollapsibleTrigger>
+                </CardHeader>
+                <CollapsibleContent>
+                  <CardContent className="pb-8">
+                    <LoanList 
+                      loans={loans} 
+                      onUpdate={(updatedLoans) => setLoans(updatedLoans)} 
+                      disabled={!isEditor || permissionsLoading}
+                    />
+                  </CardContent>
+                  {isLoansOpen && (
+                    <button
+                      onClick={() => setIsLoansOpen(false)}
+                      className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                      aria-label="Collapse card"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </button>
+                  )}
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+          )}
 
           {bufferStatus?.enabled && <IncomeBufferCard />}
 
