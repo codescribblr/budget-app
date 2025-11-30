@@ -96,6 +96,9 @@ export default function Dashboard() {
   const [monthlyNetIncome, setMonthlyNetIncome] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [isPendingChecksOpen, setIsPendingChecksOpen] = useState(true);
+  const [isAccountsOpen, setIsAccountsOpen] = useState(true);
+  const [isCreditCardsOpen, setIsCreditCardsOpen] = useState(true);
+  const [isLoansOpen, setIsLoansOpen] = useState(true);
   const [bufferStatus, setBufferStatus] = useState<any>(null);
   const [showBufferNotice, setShowBufferNotice] = useState(false);
 
@@ -285,39 +288,73 @@ export default function Dashboard() {
         <div className="space-y-6">
           <AIInsightsWidget />
 
-          <Card id="accounts-section">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wallet className="h-5 w-5" />
-                Accounts
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AccountList 
-                accounts={accounts} 
-                onUpdate={(updatedAccounts) => setAccounts(updatedAccounts)}
-                onUpdateSummary={updateSummary}
-                disabled={!isEditor || permissionsLoading}
-              />
-            </CardContent>
-          </Card>
+          <Collapsible open={isAccountsOpen} onOpenChange={setIsAccountsOpen}>
+            <Card id="accounts-section" className="relative">
+              <CardHeader>
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center gap-2 cursor-pointer">
+                    <CardTitle className="flex items-center gap-2">
+                      <Wallet className="h-5 w-5" />
+                      Accounts
+                    </CardTitle>
+                  </div>
+                </CollapsibleTrigger>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="pb-8">
+                  <AccountList 
+                    accounts={accounts} 
+                    onUpdate={(updatedAccounts) => setAccounts(updatedAccounts)}
+                    onUpdateSummary={updateSummary}
+                    disabled={!isEditor || permissionsLoading}
+                  />
+                </CardContent>
+                {isAccountsOpen && (
+                  <button
+                    onClick={() => setIsAccountsOpen(false)}
+                    className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                    aria-label="Collapse card"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                )}
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
-          <Card id="credit-cards-section">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCardIcon className="h-5 w-5" />
-                Credit Cards
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CreditCardList 
-                creditCards={creditCards} 
-                onUpdate={(updatedCreditCards) => setCreditCards(updatedCreditCards)}
-                onUpdateSummary={updateSummary}
-                disabled={!isEditor || permissionsLoading}
-              />
-            </CardContent>
-          </Card>
+          <Collapsible open={isCreditCardsOpen} onOpenChange={setIsCreditCardsOpen}>
+            <Card id="credit-cards-section" className="relative">
+              <CardHeader>
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center gap-2 cursor-pointer">
+                    <CardTitle className="flex items-center gap-2">
+                      <CreditCardIcon className="h-5 w-5" />
+                      Credit Cards
+                    </CardTitle>
+                  </div>
+                </CollapsibleTrigger>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="pb-8">
+                  <CreditCardList 
+                    creditCards={creditCards} 
+                    onUpdate={(updatedCreditCards) => setCreditCards(updatedCreditCards)}
+                    onUpdateSummary={updateSummary}
+                    disabled={!isEditor || permissionsLoading}
+                  />
+                </CardContent>
+                {isCreditCardsOpen && (
+                  <button
+                    onClick={() => setIsCreditCardsOpen(false)}
+                    className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                    aria-label="Collapse card"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                )}
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
           <Collapsible open={isPendingChecksOpen} onOpenChange={setIsPendingChecksOpen}>
             <Card className="relative">
@@ -356,21 +393,38 @@ export default function Dashboard() {
             </Card>
           </Collapsible>
 
-          <Card id="loans-section">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Landmark className="h-5 w-5" />
-                Loans
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LoanList 
-                loans={loans} 
-                onUpdate={(updatedLoans) => setLoans(updatedLoans)} 
-                disabled={!isEditor || permissionsLoading}
-              />
-            </CardContent>
-          </Card>
+          <Collapsible open={isLoansOpen} onOpenChange={setIsLoansOpen}>
+            <Card id="loans-section" className="relative">
+              <CardHeader>
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center gap-2 cursor-pointer">
+                    <CardTitle className="flex items-center gap-2">
+                      <Landmark className="h-5 w-5" />
+                      Loans
+                    </CardTitle>
+                  </div>
+                </CollapsibleTrigger>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="pb-8">
+                  <LoanList 
+                    loans={loans} 
+                    onUpdate={(updatedLoans) => setLoans(updatedLoans)} 
+                    disabled={!isEditor || permissionsLoading}
+                  />
+                </CardContent>
+                {isLoansOpen && (
+                  <button
+                    onClick={() => setIsLoansOpen(false)}
+                    className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                    aria-label="Collapse card"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                )}
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
           {bufferStatus?.enabled && <IncomeBufferCard />}
 

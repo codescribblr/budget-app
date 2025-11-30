@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
-import { Wallet, TrendingUp } from 'lucide-react';
+import { Wallet, TrendingUp, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
 
 interface IncomeBufferStatus {
@@ -19,6 +20,7 @@ interface IncomeBufferStatus {
 export default function IncomeBufferCard() {
   const [status, setStatus] = useState<IncomeBufferStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(true);
 
   useEffect(() => {
     fetchStatus();
@@ -40,17 +42,34 @@ export default function IncomeBufferCard() {
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wallet className="h-5 w-5" />
-            Income Buffer
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-sm text-muted-foreground">Loading...</div>
-        </CardContent>
-      </Card>
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <Card className="relative">
+          <CardHeader>
+            <CollapsibleTrigger asChild>
+              <div className="flex items-center gap-2 cursor-pointer">
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5" />
+                  Income Buffer
+                </CardTitle>
+              </div>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="pb-8">
+              <div className="text-sm text-muted-foreground">Loading...</div>
+            </CardContent>
+            {isOpen && (
+              <button
+                onClick={() => setIsOpen(false)}
+                className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                aria-label="Collapse card"
+              >
+                <ChevronUp className="h-4 w-4" />
+              </button>
+            )}
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
     );
   }
 
@@ -71,17 +90,23 @@ export default function IncomeBufferCard() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Wallet className="h-5 w-5" />
-          Income Buffer
-        </CardTitle>
-        <CardDescription>
-          Smooth irregular income into regular monthly funding
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <Card className="relative">
+        <CardHeader>
+          <CollapsibleTrigger asChild>
+            <div className="cursor-pointer">
+              <CardTitle className="flex items-center gap-2">
+                <Wallet className="h-5 w-5" />
+                Income Buffer
+              </CardTitle>
+              <CardDescription>
+                Smooth irregular income into regular monthly funding
+              </CardDescription>
+            </div>
+          </CollapsibleTrigger>
+        </CardHeader>
+        <CollapsibleContent>
+          <CardContent className="pb-8 space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
             <div className="text-sm text-muted-foreground">Buffer Balance</div>
@@ -106,8 +131,19 @@ export default function IncomeBufferCard() {
             </Button>
           </Link>
         </div>
-      </CardContent>
-    </Card>
+          </CardContent>
+          {isOpen && (
+            <button
+              onClick={() => setIsOpen(false)}
+              className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+              aria-label="Collapse card"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+          )}
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }
 
