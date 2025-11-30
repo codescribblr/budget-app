@@ -96,7 +96,7 @@ const navigationSections = [
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { state } = useSidebar()
+  const { state, isMobile, setOpenMobile } = useSidebar()
   const incomeBufferEnabled = useFeature('income_buffer')
   const [openWizards, setOpenWizards] = React.useState(false)
 
@@ -106,6 +106,14 @@ export function AppSidebar() {
     }
     // Exact match or starts with path followed by a slash
     return pathname === path || pathname.startsWith(path + "/")
+  }
+
+  const handleNavigation = (path: string) => {
+    router.push(path)
+    // Close mobile sidebar after navigation
+    if (isMobile) {
+      setOpenMobile(false)
+    }
   }
 
   // Check if any wizard sub-item is active
@@ -169,7 +177,7 @@ export function AppSidebar() {
                                     <SidebarMenuSubItem key={subItem.path}>
                                       <SidebarMenuSubButton
                                         isActive={subActive}
-                                        onClick={() => router.push(subItem.path)}
+                                        onClick={() => handleNavigation(subItem.path)}
                                       >
                                         {subItem.label}
                                       </SidebarMenuSubButton>
@@ -186,7 +194,7 @@ export function AppSidebar() {
                     return (
                       <SidebarMenuItem key={item.path}>
                         <SidebarMenuButton
-                          onClick={() => router.push(item.path)}
+                          onClick={() => handleNavigation(item.path)}
                           isActive={active}
                           tooltip={item.label}
                         >
