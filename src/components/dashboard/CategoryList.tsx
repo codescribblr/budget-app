@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -254,6 +255,187 @@ function SortableRow({
         )}
       </TableCell>
     </TableRow>
+  );
+}
+
+interface CategoryCardProps {
+  category: Category;
+  spent: number;
+  ytdSpent?: number;
+  budget: number;
+  remaining: number;
+  percentUsed: number;
+  editingBalanceId: number | null;
+  editingBalanceValue: string;
+  setEditingBalanceValue: (value: string) => void;
+  startEditingBalance: (category: Category) => void;
+  saveInlineBalance: (categoryId: number) => void;
+  cancelEditingBalance: () => void;
+  openEditDialog: (category: Category) => void;
+  handleDeleteCategory: (category: Category) => void;
+  getBudgetStatusColor: (percentUsed: number) => string;
+  getProgressBarColor: (percentUsed: number) => string;
+  disabled?: boolean;
+}
+
+function CategoryCard({
+  category,
+  spent,
+  ytdSpent,
+  budget,
+  remaining,
+  percentUsed,
+  editingBalanceId,
+  editingBalanceValue,
+  setEditingBalanceValue,
+  startEditingBalance,
+  saveInlineBalance,
+  cancelEditingBalance,
+  openEditDialog,
+  handleDeleteCategory,
+  getBudgetStatusColor,
+  getProgressBarColor,
+  disabled = false,
+}: CategoryCardProps) {
+  return (
+    <Card className="p-3">
+      <div className="space-y-2">
+        {/* Header: Category name and action button */}
+        <div className="flex items-start justify-between gap-2">
+          <a
+            href={`/reports?category=${category.id}`}
+            className="hover:underline cursor-pointer font-medium text-sm flex-1 min-w-0"
+          >
+            {category.name}
+          </a>
+          {!disabled && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => openEditDialog(category)} disabled={disabled}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDeleteCategory(category)} className="text-red-600" disabled={disabled}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+
+        {/* Budget Progress */}
+        {category.category_type === 'accumulation' || category.category_type === 'target_balance' ? (
+          <FundingProgressIndicator 
+            category={category} 
+            spent={spent}
+            ytdSpent={category.category_type === 'accumulation' ? ytdSpent : undefined}
+            showSpentForAccumulation={category.category_type === 'accumulation'}
+          />
+        ) : budget > 0 ? (
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs">
+              <span className={getBudgetStatusColor(percentUsed)}>
+                {percentUsed.toFixed(0)}% used
+              </span>
+              <span className="text-muted-foreground">
+                {formatCurrency(remaining)} left
+              </span>
+            </div>
+            <div className="relative">
+              <Progress
+                value={Math.min(percentUsed, 100)}
+                className="h-1.5"
+              />
+              <div
+                className={`absolute top-0 left-0 h-1.5 rounded-full transition-all ${getProgressBarColor(percentUsed)}`}
+                style={{ width: `${Math.min(percentUsed, 100)}%` }}
+              />
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">No budget set</span>
+        )}
+
+        {/* Monthly and Balance */}
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <div className="flex-1">
+            <div className="text-xs text-muted-foreground">Monthly</div>
+            <div className="text-sm font-medium">
+              {category.notes ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help">
+                        {formatCurrency(category.monthly_amount)}*
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-xs whitespace-pre-wrap">{category.notes}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                formatCurrency(category.monthly_amount)
+              )}
+            </div>
+          </div>
+          <div className="flex-1">
+            <div className="text-xs text-muted-foreground">Balance</div>
+            {editingBalanceId === category.id ? (
+              <div className="flex items-center gap-1">
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={editingBalanceValue}
+                  onChange={(e) => setEditingBalanceValue(e.target.value)}
+                  className="h-7 text-sm text-right"
+                  autoFocus
+                  disabled={disabled}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      saveInlineBalance(category.id);
+                    } else if (e.key === 'Escape') {
+                      cancelEditingBalance();
+                    }
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => saveInlineBalance(category.id)}
+                  disabled={disabled}
+                >
+                  <Check className="h-3 w-3 text-green-600" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={cancelEditingBalance}
+                >
+                  <X className="h-3 w-3 text-red-600" />
+                </Button>
+              </div>
+            ) : (
+              <div
+                className={`text-sm font-semibold ${disabled ? 'cursor-default' : 'cursor-pointer hover:bg-muted px-1 py-0.5 rounded'} ${category.current_balance < 0 ? 'text-red-600' : ''}`}
+                onClick={() => startEditingBalance(category)}
+                title={disabled ? undefined : "Click to edit balance"}
+              >
+                {formatCurrency(category.current_balance)}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -702,95 +884,159 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
 
         {/* Scrollable categories section */}
         <div className="flex-1 overflow-y-auto">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={(isReorderMode ? reorderedCategories : envelopeCategories).map(c => c.id)}
-              strategy={verticalListSortingStrategy}
-              disabled={!isReorderMode}
-            >
-              <Table>
-                <TableHeader className="sticky top-0 bg-background z-10">
-                  <TableRow>
-                    {isReorderMode && <TableHead className="w-[10%]"></TableHead>}
-                    <TableHead className={isReorderMode ? "w-[25%]" : "w-[30%]"}>Category</TableHead>
-                    <TableHead className={isReorderMode ? "w-[25%]" : "w-[30%]"}>Budget Progress</TableHead>
-                    <TableHead className="text-right w-[15%]">Monthly</TableHead>
-                    <TableHead className="text-right w-[15%]">Balance</TableHead>
-                    <TableHead className="text-right w-[10%]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(isReorderMode ? reorderedCategories : envelopeCategories).map((category) => {
-                    const spent = monthlySpending[category.id] || 0;
-                    const ytdSpent = ytdSpending[category.id] || 0;
-                    const budget = category.monthly_amount;
-                    const remaining = budget - spent;
-                    const percentUsed = budget > 0 ? (spent / budget) * 100 : 0;
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-2">
+            {(isReorderMode ? reorderedCategories : envelopeCategories).map((category) => {
+              const spent = monthlySpending[category.id] || 0;
+              const ytdSpent = ytdSpending[category.id] || 0;
+              const budget = category.monthly_amount;
+              const remaining = budget - spent;
+              const percentUsed = budget > 0 ? (spent / budget) * 100 : 0;
 
-                    return (
-                      <SortableRow
-                        key={category.id}
-                        category={category}
-                        spent={spent}
-                        ytdSpent={ytdSpent}
-                        budget={budget}
-                        remaining={remaining}
-                        percentUsed={percentUsed}
-                        isReorderMode={isReorderMode}
-                        editingBalanceId={editingBalanceId}
-                        editingBalanceValue={editingBalanceValue}
-                        setEditingBalanceValue={setEditingBalanceValue}
-                        startEditingBalance={startEditingBalance}
-                        saveInlineBalance={saveInlineBalance}
-                        cancelEditingBalance={cancelEditingBalance}
-                        openEditDialog={openEditDialog}
-                        handleDeleteCategory={handleDeleteCategory}
-                        getBudgetStatusColor={getBudgetStatusColor}
-                        getProgressBarColor={getProgressBarColor}
-                        disabled={disabled}
-                      />
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </SortableContext>
-          </DndContext>
+              return (
+                <CategoryCard
+                  key={category.id}
+                  category={category}
+                  spent={spent}
+                  ytdSpent={ytdSpent}
+                  budget={budget}
+                  remaining={remaining}
+                  percentUsed={percentUsed}
+                  editingBalanceId={editingBalanceId}
+                  editingBalanceValue={editingBalanceValue}
+                  setEditingBalanceValue={setEditingBalanceValue}
+                  startEditingBalance={startEditingBalance}
+                  saveInlineBalance={saveInlineBalance}
+                  cancelEditingBalance={cancelEditingBalance}
+                  openEditDialog={openEditDialog}
+                  handleDeleteCategory={handleDeleteCategory}
+                  getBudgetStatusColor={getBudgetStatusColor}
+                  getProgressBarColor={getProgressBarColor}
+                  disabled={disabled}
+                />
+              );
+            })}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={(isReorderMode ? reorderedCategories : envelopeCategories).map(c => c.id)}
+                strategy={verticalListSortingStrategy}
+                disabled={!isReorderMode}
+              >
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableRow>
+                      {isReorderMode && <TableHead className="w-[10%]"></TableHead>}
+                      <TableHead className={isReorderMode ? "w-[25%]" : "w-[30%]"}>Category</TableHead>
+                      <TableHead className={isReorderMode ? "w-[25%]" : "w-[30%]"}>Budget Progress</TableHead>
+                      <TableHead className="text-right w-[15%]">Monthly</TableHead>
+                      <TableHead className="text-right w-[15%]">Balance</TableHead>
+                      <TableHead className="text-right w-[10%]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(isReorderMode ? reorderedCategories : envelopeCategories).map((category) => {
+                      const spent = monthlySpending[category.id] || 0;
+                      const ytdSpent = ytdSpending[category.id] || 0;
+                      const budget = category.monthly_amount;
+                      const remaining = budget - spent;
+                      const percentUsed = budget > 0 ? (spent / budget) * 100 : 0;
+
+                      return (
+                        <SortableRow
+                          key={category.id}
+                          category={category}
+                          spent={spent}
+                          ytdSpent={ytdSpent}
+                          budget={budget}
+                          remaining={remaining}
+                          percentUsed={percentUsed}
+                          isReorderMode={isReorderMode}
+                          editingBalanceId={editingBalanceId}
+                          editingBalanceValue={editingBalanceValue}
+                          setEditingBalanceValue={setEditingBalanceValue}
+                          startEditingBalance={startEditingBalance}
+                          saveInlineBalance={saveInlineBalance}
+                          cancelEditingBalance={cancelEditingBalance}
+                          openEditDialog={openEditDialog}
+                          handleDeleteCategory={handleDeleteCategory}
+                          getBudgetStatusColor={getBudgetStatusColor}
+                          getProgressBarColor={getProgressBarColor}
+                          disabled={disabled}
+                        />
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </SortableContext>
+            </DndContext>
+          </div>
         </div>
 
         {/* Fixed totals row at bottom */}
         <div className="border-t bg-muted/50">
-          <Table>
-            <TableBody>
-              <TableRow className="font-bold">
-                {isReorderMode && <TableCell className="w-[10%]"></TableCell>}
-                <TableCell className={isReorderMode ? "w-[25%]" : "w-[30%]"}>Total Budget</TableCell>
-                <TableCell className={isReorderMode ? "w-[25%]" : "w-[30%]"}></TableCell>
-                <TableCell className={`text-right w-[15%] ${summary && totalMonthly > summary.monthly_net_income ? 'text-red-600' : ''}`}>
-                  {formatCurrency(totalMonthly)}
-                </TableCell>
-                <TableCell className={`text-right w-[15%] ${hasNegativeBalance ? 'text-red-600' : ''}`}>
-                  {formatCurrency(totalCurrent)}
-                </TableCell>
-                <TableCell className="text-right w-[10%]"></TableCell>
-              </TableRow>
-              {summary && (
-                <TableRow className="font-medium text-muted-foreground">
+          {/* Mobile Totals View */}
+          <div className="md:hidden p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold">Total Budget</span>
+              <span className={`text-sm font-bold ${summary && totalMonthly > summary.monthly_net_income ? 'text-red-600' : ''}`}>
+                {formatCurrency(totalMonthly)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold">Total Balance</span>
+              <span className={`text-sm font-bold ${hasNegativeBalance ? 'text-red-600' : ''}`}>
+                {formatCurrency(totalCurrent)}
+              </span>
+            </div>
+            {summary && (
+              <div className="flex items-center justify-between pt-1 border-t">
+                <span className="text-xs text-muted-foreground">Available to be budgeted</span>
+                <span className={`text-sm font-semibold ${summary.monthly_net_income - totalMonthly < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrency(summary.monthly_net_income)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop Totals View */}
+          <div className="hidden md:block">
+            <Table>
+              <TableBody>
+                <TableRow className="font-bold">
                   {isReorderMode && <TableCell className="w-[10%]"></TableCell>}
-                  <TableCell className={isReorderMode ? "w-[25%]" : "w-[30%]"}>Available to be budgeted</TableCell>
+                  <TableCell className={isReorderMode ? "w-[25%]" : "w-[30%]"}>Total Budget</TableCell>
                   <TableCell className={isReorderMode ? "w-[25%]" : "w-[30%]"}></TableCell>
-                  <TableCell className={`text-right w-[15%] ${summary.monthly_net_income - totalMonthly < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {formatCurrency(summary.monthly_net_income)}
+                  <TableCell className={`text-right w-[15%] ${summary && totalMonthly > summary.monthly_net_income ? 'text-red-600' : ''}`}>
+                    {formatCurrency(totalMonthly)}
                   </TableCell>
-                  <TableCell className="text-right w-[15%]"></TableCell>
+                  <TableCell className={`text-right w-[15%] ${hasNegativeBalance ? 'text-red-600' : ''}`}>
+                    {formatCurrency(totalCurrent)}
+                  </TableCell>
                   <TableCell className="text-right w-[10%]"></TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                {summary && (
+                  <TableRow className="font-medium text-muted-foreground">
+                    {isReorderMode && <TableCell className="w-[10%]"></TableCell>}
+                    <TableCell className={isReorderMode ? "w-[25%]" : "w-[30%]"}>Available to be budgeted</TableCell>
+                    <TableCell className={isReorderMode ? "w-[25%]" : "w-[30%]"}></TableCell>
+                    <TableCell className={`text-right w-[15%] ${summary.monthly_net_income - totalMonthly < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {formatCurrency(summary.monthly_net_income)}
+                    </TableCell>
+                    <TableCell className="text-right w-[15%]"></TableCell>
+                    <TableCell className="text-right w-[10%]"></TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </div>
 
