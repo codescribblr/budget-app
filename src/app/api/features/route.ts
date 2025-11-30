@@ -72,6 +72,14 @@ const FEATURES = {
     dataLossWarning: false,
     requiresPremium: true,
   },
+  ai_chat: {
+    name: 'AI Chat Assistant',
+    description: 'Get intelligent insights about your finances with an AI-powered chat assistant that understands your budget, goals, and spending patterns.',
+    level: 'power',
+    dependencies: [],
+    dataLossWarning: false,
+    requiresPremium: true,
+  },
 } as const;
 
 export type FeatureName = keyof typeof FEATURES;

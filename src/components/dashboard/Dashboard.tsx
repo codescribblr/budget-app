@@ -25,6 +25,7 @@ import PendingCheckList from './PendingCheckList';
 import SummaryCards from './SummaryCards';
 import GoalsWidget from './GoalsWidget';
 import IncomeBufferCard from './IncomeBufferCard';
+import { AIInsightsWidget } from '@/components/ai/AIInsightsWidget';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 // Helper function to calculate summary from local state
@@ -282,6 +283,8 @@ export default function Dashboard() {
         </Card>
 
         <div className="space-y-6">
+          <AIInsightsWidget />
+
           <Card id="accounts-section">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

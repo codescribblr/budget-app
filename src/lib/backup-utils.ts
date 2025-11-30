@@ -54,6 +54,7 @@ export interface AccountBackupData {
   csv_import_templates?: any[];
   category_monthly_funding?: any[];
   user_feature_flags?: any[]; // User-specific, not account-specific
+  ai_conversations?: any[];
 }
 
 // Legacy interface for backward compatibility
@@ -79,6 +80,7 @@ export interface UserBackupData {
   csv_import_templates?: any[];
   category_monthly_funding?: any[];
   user_feature_flags?: any[];
+  ai_conversations?: any[];
 }
 
 /**
@@ -145,6 +147,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     { data: csv_import_templates },
     { data: category_monthly_funding },
     { data: user_feature_flags },
+    { data: ai_conversations },
   ] = await Promise.all([
     supabase.from('accounts').select('*').eq('account_id', accountId),
     supabase.from('categories').select('*').eq('account_id', accountId),
@@ -171,6 +174,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     supabase.from('csv_import_templates').select('*').eq('account_id', accountId),
     supabase.from('category_monthly_funding').select('*').eq('account_id', accountId),
     supabase.from('user_feature_flags').select('*').eq('account_id', accountId),
+    supabase.from('ai_conversations').select('*').eq('account_id', accountId),
   ]);
 
   return {
@@ -218,6 +222,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     csv_import_templates: csv_import_templates || [],
     category_monthly_funding: category_monthly_funding || [],
     user_feature_flags: user_feature_flags || [],
+    ai_conversations: ai_conversations || [],
   };
 }
 
@@ -251,6 +256,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     csv_import_templates: accountData.csv_import_templates,
     category_monthly_funding: accountData.category_monthly_funding,
     user_feature_flags: accountData.user_feature_flags,
+    ai_conversations: accountData.ai_conversations,
   };
 }
 
@@ -318,6 +324,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   await supabase.from('credit_cards').delete().eq('account_id', accountId);
   await supabase.from('category_monthly_funding').delete().eq('account_id', accountId);
   await supabase.from('user_feature_flags').delete().eq('account_id', accountId);
+  await supabase.from('ai_conversations').delete().eq('account_id', accountId);
   await supabase.from('categories').delete().eq('account_id', accountId);
   await supabase.from('accounts').delete().eq('account_id', accountId);
 
@@ -737,6 +744,25 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       throw error;
     }
     console.log('[Import] Inserted', userFeatureFlagsToInsert.length, 'user feature flags');
+  }
+
+  // Insert AI conversations (batch)
+  if (backupData.ai_conversations && backupData.ai_conversations.length > 0) {
+    const aiConversationsToInsert = backupData.ai_conversations.map(({ id, account_id, user_id, ...conversation }) => ({
+      ...conversation,
+      user_id: user.id,
+      account_id: accountId,
+    }));
+
+    const { error } = await supabase
+      .from('ai_conversations')
+      .insert(aiConversationsToInsert);
+
+    if (error) {
+      console.error('[Import] Error inserting AI conversations:', error);
+      throw error;
+    }
+    console.log('[Import] Inserted', aiConversationsToInsert.length, 'AI conversations');
   }
 
   console.log('[Import] Import completed successfully');
