@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { aiRateLimiter } from '@/lib/ai/rate-limiter';
 import { geminiService } from '@/lib/ai/gemini-service';
+import { buildUserContext } from '@/lib/ai/context-builder';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -191,16 +192,12 @@ Format as JSON with sections: summary, patterns, opportunities, recommendations,
         );
     }
 
+    // Build user context for AI
+    const context = await buildUserContext(user.id, { start: startDate, end: endDate });
+
     // Generate report with AI
     const startTime = Date.now();
-    const result = await geminiService.handleChat(prompt, {
-      currentBudget: { total: 0, spent: 0, remaining: 0 },
-      recentTransactions: [],
-      categoryTotals: {},
-      monthlySpending: [],
-      goals: [],
-      accounts: [],
-    }, []);
+    const result = await geminiService.handleChat(prompt, context, []);
 
     const responseTimeMs = Date.now() - startTime;
 
