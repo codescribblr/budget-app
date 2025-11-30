@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getActiveAccountId } from '@/lib/account-context';
+import { createHash } from 'crypto';
 
 export async function GET() {
   try {
@@ -30,6 +31,9 @@ export async function GET() {
         total_amount,
         transaction_type,
         merchant_group_id,
+        is_historical,
+        account_id,
+        credit_card_id,
         created_at,
         splits:transaction_splits(
           id,
@@ -94,6 +98,9 @@ export async function GET() {
             total_amount: txn.total_amount,
             transaction_type: txn.transaction_type,
             merchant_group_id: txn.merchant_group_id,
+            is_historical: txn.is_historical,
+            account_id: txn.account_id,
+            credit_card_id: txn.credit_card_id,
             created_at: txn.created_at,
             splits: txn.splits.map((split: any) => ({
               id: split.id,
@@ -104,6 +111,31 @@ export async function GET() {
           })),
         });
       }
+    }
+
+    // Filter out reviewed groups
+    if (duplicateGroups.length > 0) {
+      // Get all reviewed groups for this account
+      const { data: reviewedGroups } = await supabase
+        .from('duplicate_group_reviews')
+        .select('transaction_ids')
+        .eq('budget_account_id', accountId);
+
+      // Create a set of reviewed transaction ID arrays (sorted for comparison)
+      const reviewedSets = new Set<string>();
+      reviewedGroups?.forEach(review => {
+        const sortedIds = [...review.transaction_ids].sort((a, b) => a - b).join(',');
+        reviewedSets.add(sortedIds);
+      });
+
+      // Filter duplicate groups
+      const filteredGroups = duplicateGroups.filter(group => {
+        const groupTransactionIds = group.transactions.map((t: any) => t.id).sort((a: number, b: number) => a - b);
+        const groupKey = groupTransactionIds.join(',');
+        return !reviewedSets.has(groupKey);
+      });
+
+      return NextResponse.json({ duplicateGroups: filteredGroups });
     }
 
     return NextResponse.json({ duplicateGroups });
