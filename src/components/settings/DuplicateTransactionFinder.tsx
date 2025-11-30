@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -30,36 +30,39 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Loader2, Search, Trash2, AlertTriangle } from 'lucide-react';
+import { Loader2, Search, Trash2, AlertTriangle, GitMerge, CheckCircle2, XCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { parseLocalDate } from '@/lib/date-utils';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
-
-interface DuplicateGroup {
-  amount: number;
-  transactions: Array<{
-    id: number;
-    date: string;
-    description: string;
-    total_amount: number;
-    transaction_type: 'income' | 'expense';
-    created_at: string;
-    splits: Array<{
-      id: number;
-      category_id: number;
-      amount: number;
-      category_name: string;
-    }>;
-  }>;
-}
+import type { DuplicateGroup, Category } from '@/lib/types';
+import MergeTransactionDialog from '@/components/transactions/MergeTransactionDialog';
 
 export default function DuplicateTransactionFinder() {
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [isSearching, setIsSearching] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isMarkingReviewed, setIsMarkingReviewed] = useState(false);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [selectedTransactions, setSelectedTransactions] = useState<Set<number>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [mergingGroup, setMergingGroup] = useState<DuplicateGroup | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    // Fetch categories when component mounts
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/categories');
+        if (response.ok) {
+          const data = await response.json();
+          setCategories(data);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   const handleSearch = async () => {
     setIsSearching(true);
@@ -165,6 +168,39 @@ export default function DuplicateTransactionFinder() {
     return selectedCount > 0 && selectedCount < group.transactions.length;
   };
 
+  const handleMerge = (group: DuplicateGroup) => {
+    setMergingGroup(group);
+  };
+
+  const handleMergeSuccess = () => {
+    setMergingGroup(null);
+    handleSearch();
+  };
+
+  const handleMarkAsReviewed = async (group: DuplicateGroup) => {
+    setIsMarkingReviewed(true);
+    try {
+      const transactionIds = group.transactions.map(t => t.id);
+      const response = await fetch('/api/transactions/mark-duplicates-reviewed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionIds }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to mark as reviewed');
+      }
+
+      toast.success('Group marked as reviewed');
+      await handleSearch();
+    } catch (error) {
+      console.error('Error marking as reviewed:', error);
+      toast.error('Failed to mark as reviewed');
+    } finally {
+      setIsMarkingReviewed(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -225,11 +261,37 @@ export default function DuplicateTransactionFinder() {
                     <div>
                       <h3 className="font-semibold">
                         Duplicate Group {groupIndex + 1}
+                        {group.isReviewed && (
+                          <Badge variant="outline" className="ml-2">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Reviewed
+                          </Badge>
+                        )}
                       </h3>
                       <p className="text-sm text-muted-foreground">
                         Amount: {formatCurrency(group.amount)} • {group.transactions.length} transactions
                       </p>
                     </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleMerge(group)}
+                      disabled={!isEditor || permissionsLoading}
+                    >
+                      <GitMerge className="h-4 w-4 mr-1" />
+                      Merge
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleMarkAsReviewed(group)}
+                      disabled={!isEditor || permissionsLoading || isMarkingReviewed}
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-1" />
+                      Mark as Not Duplicates
+                    </Button>
                   </div>
                 </div>
 
@@ -269,6 +331,9 @@ export default function DuplicateTransactionFinder() {
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {formatDate(txn.created_at)}
+                          {txn.is_historical && (
+                            <Badge variant="outline" className="ml-1 text-xs">Historical</Badge>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -314,6 +379,16 @@ export default function DuplicateTransactionFinder() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {mergingGroup && (
+        <MergeTransactionDialog
+          isOpen={!!mergingGroup}
+          onClose={() => setMergingGroup(null)}
+          duplicateGroup={mergingGroup}
+          categories={categories}
+          onSuccess={handleMergeSuccess}
+        />
+      )}
     </Card>
   );
 }

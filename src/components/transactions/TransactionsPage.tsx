@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Search, X, Upload, Filter, CalendarIcon } from 'lucide-react';
+import { Search, X, Upload, Filter, CalendarIcon, Copy } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -440,6 +440,12 @@ export default function TransactionsPage() {
               <Link href="/import">
                 <Upload className="mr-2 h-4 w-4" />
                 Import Transactions
+              </Link>
+            </Button>
+            <Button variant="outline" asChild className="w-full sm:w-auto">
+              <Link href="/transactions/duplicates">
+                <Copy className="mr-2 h-4 w-4" />
+                Find Duplicates
               </Link>
             </Button>
             <Button onClick={() => setIsAddDialogOpen(true)} className="w-full sm:w-auto">

@@ -278,6 +278,47 @@ export interface TransactionWithSplits extends Transaction {
   credit_card_name?: string | null;
 }
 
+export interface DuplicateTransaction {
+  id: number;
+  date: string;
+  description: string;
+  total_amount: number;
+  transaction_type: 'income' | 'expense';
+  merchant_group_id: number | null;
+  is_historical: boolean;
+  account_id: number | null;
+  credit_card_id: number | null;
+  created_at: string;
+  splits: Array<{
+    id: number;
+    category_id: number;
+    amount: number;
+    category_name: string;
+  }>;
+}
+
+export interface DuplicateGroup {
+  amount: number;
+  transactions: DuplicateTransaction[];
+  isReviewed?: boolean; // Optional, for UI state
+}
+
+export interface MergeTransactionRequest {
+  baseTransactionId: number;
+  transactionsToMerge: number[];
+  mergeData: {
+    date: string; // Selected date
+    description: string; // Selected description
+    merchant_group_id: number | null;
+    is_historical: boolean;
+    transaction_type: 'income' | 'expense';
+    splits: Array<{
+      category_id: number;
+      amount: number;
+    }>;
+  };
+}
+
 // Dashboard summary
 export interface DashboardSummary {
   total_monies: number;
