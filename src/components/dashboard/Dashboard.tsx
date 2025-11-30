@@ -344,7 +344,7 @@ export default function Dashboard() {
                   />
                 </CardContent>
                 {isPendingChecksOpen && (
-                  <div className="flex justify-end pr-4 pb-4">
+                  <div className="flex justify-end pr-4 -mb-2">
                     <button
                       onClick={() => setIsPendingChecksOpen(false)}
                       className="text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
