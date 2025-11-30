@@ -283,6 +283,8 @@ export default function Dashboard() {
         </Card>
 
         <div className="space-y-6">
+          <AIInsightsWidget />
+
           <Card id="accounts-section">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -362,8 +364,6 @@ export default function Dashboard() {
           </Card>
 
           {bufferStatus?.enabled && <IncomeBufferCard />}
-
-          <AIInsightsWidget />
 
           <GoalsWidget disabled={!isEditor || permissionsLoading} />
         </div>

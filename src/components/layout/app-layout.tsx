@@ -22,7 +22,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <ThemeToggle />
             </div>
           </header>
-          <main className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+          <main className="flex flex-1 flex-col gap-4 p-4 md:p-6 min-h-0 overflow-hidden">
             {children}
           </main>
         </SidebarInset>

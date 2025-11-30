@@ -144,6 +144,7 @@ export async function POST(request: Request) {
         'goals',
         'loans',
         'advanced_reporting',
+        'ai_chat',
       ];
 
       const now = new Date().toISOString();

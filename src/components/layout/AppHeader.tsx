@@ -60,7 +60,7 @@ export default function AppHeader({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         {/* Title and Subtitle */}
         {(title || subtitle) && (
-          <div>
+          <div className="pb-4">
             {title && <h1 className="text-2xl md:text-3xl font-bold">{title}</h1>}
             {subtitle && (
               <p className="text-muted-foreground mt-1">

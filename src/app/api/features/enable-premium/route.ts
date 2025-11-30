@@ -50,6 +50,7 @@ export async function POST() {
       'goals',
       'loans',
       'advanced_reporting',
+      'ai_chat',
     ];
 
     const now = new Date().toISOString();

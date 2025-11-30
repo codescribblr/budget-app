@@ -22,9 +22,10 @@ export function useAIUsage() {
       setError(err instanceof Error ? err : new Error('Unknown error'));
       // Set default stats on error
       setStats({
-        chat: { used: 0, limit: 10 },
+        chat: { used: 0, limit: 15 },
         categorization: { used: 0, limit: 5 },
-        insights: { used: 0, limit: 1 },
+        insights: { used: 0, limit: 15 },
+        dashboard_insights: { used: 0, limit: 1 },
         reports: { used: 0, limit: 3 },
       });
     } finally {

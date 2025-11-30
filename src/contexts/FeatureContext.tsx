@@ -10,7 +10,8 @@ export type FeatureName =
   | 'income_buffer'
   | 'goals'
   | 'loans'
-  | 'advanced_reporting';
+  | 'advanced_reporting'
+  | 'ai_chat';
 
 export interface Feature {
   key: FeatureName;

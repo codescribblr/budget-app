@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { aiRateLimiter } from '@/lib/ai/rate-limiter';
 import { geminiService } from '@/lib/ai/gemini-service';
+import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -19,6 +20,19 @@ export async function POST(request: NextRequest) {
         { error: 'No active account. Please select an account first.' },
         { status: 400 }
       );
+    }
+
+    // Require premium subscription for AI insights
+    try {
+      await requirePremiumSubscription(accountId);
+    } catch (error: any) {
+      if (error instanceof PremiumRequiredError) {
+        return NextResponse.json(
+          { error: 'Premium subscription required', message: 'AI Insights is a premium feature. Please upgrade to Premium to use this feature.' },
+          { status: 403 }
+        );
+      }
+      throw error;
     }
 
     const { month, regenerate } = await request.json();
@@ -48,12 +62,13 @@ export async function POST(request: NextRequest) {
           insights: cached.insights,
           cached: true,
           generatedAt: cached.generated_at,
+          metadata: cached.insights.metadata,
         });
       }
     }
 
-    // Check rate limit
-    const rateLimit = await aiRateLimiter.checkLimit(user.id, 'insights');
+    // Check rate limit - dashboard insights widget uses separate limit
+    const rateLimit = await aiRateLimiter.checkLimit(user.id, 'dashboard_insights');
     if (!rateLimit.allowed) {
       return NextResponse.json(
         {
@@ -77,18 +92,20 @@ export async function POST(request: NextRequest) {
       .gte('date', startOfMonth.toISOString().split('T')[0])
       .lte('date', endOfMonth.toISOString().split('T')[0]);
 
-    // Get budget/categories
+    // Get budget/categories with type information
     const { data: categories } = await supabase
       .from('categories')
-      .select('id, name, monthly_amount, current_balance')
+      .select('id, name, monthly_amount, current_balance, category_type, annual_target, target_balance')
       .eq('account_id', accountId)
       .eq('is_goal', false);
 
-    const categoryBreakdown: Record<string, { budget: number; spent: number }> = {};
-    categories?.forEach((cat) => {
+    const categoryBreakdown: Record<string, { budget: number; spent: number; category_type?: string; annual_target?: number }> = {};
+    categories?.forEach((cat: any) => {
       categoryBreakdown[cat.name] = {
         budget: cat.monthly_amount || 0,
         spent: Math.abs(cat.current_balance || 0),
+        category_type: cat.category_type || 'monthly_expense',
+        annual_target: cat.annual_target || undefined,
       };
     });
 
@@ -98,6 +115,11 @@ export async function POST(request: NextRequest) {
       .select('name, target_amount, current_amount, status')
       .eq('account_id', accountId)
       .in('status', ['active', 'in_progress']);
+
+    // Track metadata about accessed data
+    const transactionCount = transactions?.length || 0;
+    const categoriesSearched = categories?.length || 0;
+    const goalsAccessed = goals?.length || 0;
 
     // Get previous month data
     const prevMonth = new Date(year, monthNum - 2, 1);
@@ -148,6 +170,20 @@ export async function POST(request: NextRequest) {
       categoryBreakdown,
     });
 
+    // Add metadata to insights
+    const insightsWithMetadata = {
+      ...result.insights,
+      metadata: {
+        transactionCount,
+        dateRange: {
+          start: startOfMonth.toISOString().split('T')[0],
+          end: endOfMonth.toISOString().split('T')[0],
+        },
+        categoriesSearched,
+        goalsAccessed,
+      },
+    };
+
     // Cache insights for 30 days
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
@@ -158,15 +194,15 @@ export async function POST(request: NextRequest) {
       insight_type: 'monthly',
       period_start: startOfMonth.toISOString().split('T')[0],
       period_end: endOfMonth.toISOString().split('T')[0],
-      insights: result.insights,
+      insights: insightsWithMetadata,
       expires_at: expiresAt.toISOString(),
     });
 
-    // Record usage
+    // Record usage - dashboard insights widget uses separate limit
     await aiRateLimiter.recordUsage(
       user.id,
       accountId,
-      'insights',
+      'dashboard_insights',
       result.tokensUsed,
       0,
       0,
@@ -175,10 +211,11 @@ export async function POST(request: NextRequest) {
     );
 
     return NextResponse.json({
-      insights: result.insights,
+      insights: insightsWithMetadata,
       cached: false,
       tokensUsed: result.tokensUsed,
       responseTimeMs: result.responseTimeMs,
+      metadata: insightsWithMetadata.metadata,
     });
   } catch (error: any) {
     console.error('Error generating insights:', error);

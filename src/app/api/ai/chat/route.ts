@@ -4,6 +4,7 @@ import { getActiveAccountId } from '@/lib/account-context';
 import { aiRateLimiter } from '@/lib/ai/rate-limiter';
 import { geminiService } from '@/lib/ai/gemini-service';
 import { buildUserContext } from '@/lib/ai/context-builder';
+import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
 import type { ChatMessage } from '@/lib/ai/types';
 
 /**
@@ -20,6 +21,19 @@ export async function POST(request: NextRequest) {
         { error: 'No active account. Please select an account first.' },
         { status: 400 }
       );
+    }
+
+    // Require premium subscription for AI chat
+    try {
+      await requirePremiumSubscription(accountId);
+    } catch (error: any) {
+      if (error instanceof PremiumRequiredError) {
+        return NextResponse.json(
+          { error: 'Premium subscription required', message: 'AI Chat Assistant is a premium feature. Please upgrade to Premium to use this feature.' },
+          { status: 403 }
+        );
+      }
+      throw error;
     }
 
     const { query, history = [] } = await request.json();
@@ -44,7 +58,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build user context
+    // Build user context (will default to last 3 months for comprehensive data)
     const context = await buildUserContext(user.id);
 
     // Parse conversation history
@@ -75,6 +89,7 @@ export async function POST(request: NextRequest) {
       response: result.response,
       tokensUsed: result.tokensUsed,
       responseTimeMs: result.responseTimeMs,
+      metadata: result.metadata,
     });
   } catch (error: any) {
     console.error('Error handling chat query:', error);
