@@ -299,10 +299,10 @@ export function AIInsightsWidget() {
             )}
           </CardContent>
           {isOpen && (
-            <div className="flex justify-end pr-4 pb-2">
+            <div className="flex justify-end pr-4 pb-4">
               <button
                 onClick={() => setIsOpen(false)}
-                className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                className="text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
                 aria-label="Collapse card"
               >
                 <ChevronUp className="h-4 w-4" />
