@@ -145,9 +145,11 @@ export default function BudgetSetupWizardPage() {
                 <ul className="list-disc list-inside mt-2 space-y-1">
                   <li>Current balance of your checking account</li>
                   <li>Current balance of your savings account (if you have one)</li>
-                  <li>Your monthly income (approximate is fine)</li>
-                  <li>A list of your regular monthly expenses</li>
+                  <li>Your monthly income (approximate is fine, optional)</li>
                 </ul>
+                <p className="text-sm mt-2">
+                  We'll create default budget categories for you, so you don't need to prepare a list of expenses.
+                </p>
               </Callout>
 
               <div className="prose dark:prose-invert max-w-none">
