@@ -9,9 +9,10 @@ export async function POST(request: Request) {
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
 
-    const { transactions, isHistorical } = await request.json() as {
+    const { transactions, isHistorical, fileName } = await request.json() as {
       transactions: ParsedTransaction[];
       isHistorical?: boolean;
+      fileName?: string;
     };
 
     if (!Array.isArray(transactions) || transactions.length === 0) {
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
     }
 
     // Import transactions using Supabase
-    const importedCount = await importTransactions(transactions, isHistorical || false);
+    const importedCount = await importTransactions(transactions, isHistorical || false, fileName || 'Unknown');
 
     // Learn from the imported transactions
     // Use description instead of merchant since that's what was used to create merchant groups

@@ -88,7 +88,8 @@ export async function GET(
           description,
           amount,
           hash,
-          imported_at
+          imported_at,
+          metadata
         )
       `)
       .eq('transaction_id', transactionId);
@@ -137,6 +138,7 @@ export async function GET(
           amount: link.imported_transactions.amount,
           hash: link.imported_transactions.hash,
           imported_at: link.imported_transactions.imported_at,
+          metadata: link.imported_transactions.metadata || {},
         } : null,
       })),
     };

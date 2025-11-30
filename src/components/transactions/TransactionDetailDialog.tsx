@@ -60,6 +60,12 @@ interface TransactionDetails {
       amount: number;
       hash: string;
       imported_at: string;
+      metadata: {
+        originalRow?: any;
+        suggestedCategory?: number | null;
+        suggestedMerchant?: string | null;
+        [key: string]: any;
+      };
     } | null;
   }>;
 }
@@ -280,9 +286,21 @@ export default function TransactionDetailDialog({
                             <p className="font-medium">{meta.imported_transaction.source_type}</p>
                           </div>
                           <div>
-                            <p className="text-sm text-muted-foreground">Source Identifier</p>
+                            <p className="text-sm text-muted-foreground">Source File</p>
                             <p className="font-medium text-sm break-all">{meta.imported_transaction.source_identifier}</p>
                           </div>
+                          {meta.imported_transaction.metadata?.suggestedCategory && (
+                            <div>
+                              <p className="text-sm text-muted-foreground">Suggested Category ID</p>
+                              <p className="font-medium">{meta.imported_transaction.metadata.suggestedCategory}</p>
+                            </div>
+                          )}
+                          {meta.imported_transaction.metadata?.suggestedMerchant && (
+                            <div>
+                              <p className="text-sm text-muted-foreground">Suggested Merchant</p>
+                              <p className="font-medium">{meta.imported_transaction.metadata.suggestedMerchant}</p>
+                            </div>
+                          )}
                           <div>
                             <p className="text-sm text-muted-foreground">Original Transaction Date</p>
                             <p className="font-medium">{formatDate(meta.imported_transaction.transaction_date)}</p>
@@ -308,6 +326,18 @@ export default function TransactionDetailDialog({
                             <p className="font-medium text-sm">{formatDate(meta.link_created_at)}</p>
                           </div>
                         </div>
+                        
+                        {/* Original Row Data */}
+                        {meta.imported_transaction.metadata?.originalRow && (
+                          <div className="mt-4 pt-4 border-t">
+                            <h4 className="font-semibold mb-2">Original CSV Row Data</h4>
+                            <div className="bg-muted p-3 rounded-md overflow-x-auto">
+                              <pre className="text-xs font-mono whitespace-pre-wrap break-words">
+                                {JSON.stringify(meta.imported_transaction.metadata.originalRow, null, 2)}
+                              </pre>
+                            </div>
+                          </div>
+                        )}
                       </>
                     ) : (
                       <p className="text-sm text-muted-foreground">Import metadata not available</p>

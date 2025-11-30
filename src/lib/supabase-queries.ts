@@ -1580,7 +1580,7 @@ export async function checkDuplicateHash(hash: string): Promise<boolean> {
   return data !== null;
 }
 
-export async function importTransactions(transactions: any[], isHistorical: boolean = false): Promise<number> {
+export async function importTransactions(transactions: any[], isHistorical: boolean = false, fileName: string = 'Unknown'): Promise<number> {
   const { supabase, user } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
@@ -1595,18 +1595,44 @@ export async function importTransactions(transactions: any[], isHistorical: bool
   }
 
   // ===== STEP 1: Batch insert imported_transactions =====
-  const importedTransactionsData = validTransactions.map(txn => ({
-    user_id: user.id,
-    account_id: accountId,
-    import_date: importDate,
-    source_type: 'CSV Import',
-    source_identifier: 'Unknown',
-    transaction_date: txn.date,
-    merchant: txn.merchant || txn.description,
-    description: txn.description,
-    amount: txn.amount,
-    hash: txn.hash,
-  }));
+  // Determine source type based on filename extension
+  const isImageImport = fileName.match(/\.(jpg|jpeg|png|pdf)$/i) !== null;
+  const sourceType = isImageImport ? 'Image Import' : 'CSV Import';
+
+  const importedTransactionsData = validTransactions.map(txn => {
+    // Parse originalData if it's a JSON string, otherwise use empty object
+    let originalRowData = {};
+    try {
+      if (txn.originalData) {
+        originalRowData = typeof txn.originalData === 'string' 
+          ? JSON.parse(txn.originalData) 
+          : txn.originalData;
+      }
+    } catch (e) {
+      console.warn('Failed to parse originalData:', e);
+    }
+
+    // Build metadata object with original row data and other useful info
+    const metadata: any = {
+      originalRow: originalRowData,
+      suggestedCategory: txn.suggestedCategory || null,
+      suggestedMerchant: txn.merchant || null,
+    };
+
+    return {
+      user_id: user.id,
+      account_id: accountId,
+      import_date: importDate,
+      source_type: sourceType,
+      source_identifier: fileName,
+      transaction_date: txn.date,
+      merchant: txn.merchant || txn.description,
+      description: txn.description,
+      amount: txn.amount,
+      hash: txn.hash,
+      metadata: metadata,
+    };
+  });
 
   let { data: importedTxs, error: importError } = await supabase
     .from('imported_transactions')

@@ -100,6 +100,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         fileName.endsWith('.pdf')
       ) {
         transactions = await parseImageFile(file);
+        // Store filename for image imports too
+        sessionStorage.setItem('csvFileName', file.name);
       } else {
         setError('Unsupported file type. Please upload a CSV or image file.');
         setIsProcessing(false);
