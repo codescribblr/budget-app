@@ -849,37 +849,40 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
             Add Category
           </Button>
 
-          {!isReorderMode ? (
-            <Button
-              onClick={handleEnterReorderMode}
-              size="sm"
-              variant="outline"
-              disabled={envelopeCategories.length <= 1 || disabled}
-            >
-              <GripVertical className="mr-2 h-4 w-4" />
-              Reorder
-            </Button>
-          ) : (
-            <div className="flex gap-2">
+          {/* Reorder buttons - only show on desktop */}
+          <div className="hidden md:block">
+            {!isReorderMode ? (
               <Button
-                onClick={handleSaveReorder}
-                size="sm"
-                disabled={isSaving || disabled}
-              >
-                <Save className="mr-2 h-4 w-4" />
-                {isSaving ? 'Saving...' : 'Save'}
-              </Button>
-              <Button
-                onClick={handleCancelReorder}
+                onClick={handleEnterReorderMode}
                 size="sm"
                 variant="outline"
-                disabled={isSaving}
+                disabled={envelopeCategories.length <= 1 || disabled}
               >
-                <X className="mr-2 h-4 w-4" />
-                Cancel
+                <GripVertical className="mr-2 h-4 w-4" />
+                Reorder
               </Button>
-            </div>
-          )}
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSaveReorder}
+                  size="sm"
+                  disabled={isSaving || disabled}
+                >
+                  <Save className="mr-2 h-4 w-4" />
+                  {isSaving ? 'Saving...' : 'Save'}
+                </Button>
+                <Button
+                  onClick={handleCancelReorder}
+                  size="sm"
+                  variant="outline"
+                  disabled={isSaving}
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Scrollable categories section */}
