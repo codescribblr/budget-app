@@ -320,7 +320,7 @@ export default function Dashboard() {
           </Card>
 
           <Collapsible open={isPendingChecksOpen} onOpenChange={setIsPendingChecksOpen}>
-            <Card>
+            <Card className="relative">
               <CardHeader>
                 <CollapsibleTrigger asChild>
                   <div className="flex items-center gap-2 cursor-pointer">
@@ -344,15 +344,13 @@ export default function Dashboard() {
                   />
                 </CardContent>
                 {isPendingChecksOpen && (
-                  <div className="flex justify-end pr-4 -mb-2">
-                    <button
-                      onClick={() => setIsPendingChecksOpen(false)}
-                      className="text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
-                      aria-label="Collapse card"
-                    >
-                      <ChevronUp className="h-4 w-4" />
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setIsPendingChecksOpen(false)}
+                    className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                    aria-label="Collapse card"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
                 )}
               </CollapsibleContent>
             </Card>
