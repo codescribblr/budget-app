@@ -154,8 +154,8 @@ export default function FeaturesSettings() {
           {/* Show button to enable premium features if user has premium but features aren't enabled */}
           {hasPremium && isOwner && !loading && premiumFeaturesNotEnabled && (
             <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex-1">
                   <p className="font-semibold text-yellow-800 dark:text-yellow-200">
                     Premium features not enabled
                   </p>
@@ -179,7 +179,7 @@ export default function FeaturesSettings() {
                       toast.error(error.message || 'Failed to enable premium features');
                     }
                   }}
-                  className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:from-yellow-500 hover:to-orange-600"
+                  className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:from-yellow-500 hover:to-orange-600 w-full sm:w-auto shrink-0"
                 >
                   Enable All Premium Features
                 </Button>
@@ -207,15 +207,15 @@ export default function FeaturesSettings() {
                     return (
                       <div
                         key={feature.key}
-                        className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-card"
+                        className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 p-4 rounded-lg border bg-card"
                       >
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
+                        <div className="flex-1 space-y-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
                             <h4 className="font-semibold">{feature.name}</h4>
                             {feature.requiresPremium && (
                               <Badge
                                 variant="default"
-                                className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-0 text-xs"
+                                className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-0 text-xs shrink-0"
                               >
                                 <Crown className="h-3 w-3 mr-1" />
                                 Premium
@@ -225,7 +225,7 @@ export default function FeaturesSettings() {
                               <HelpTooltip content={helpContent.tooltip} />
                             )}
                             {feature.dependencies.length > 0 && (
-                              <Badge variant="outline" className="text-xs">
+                              <Badge variant="outline" className="text-xs shrink-0">
                                 <Info className="h-3 w-3 mr-1" />
                                 Requires {feature.dependencies.length} feature{feature.dependencies.length > 1 ? 's' : ''}
                               </Badge>
@@ -255,7 +255,7 @@ export default function FeaturesSettings() {
                           )}
                         </div>
 
-                        <div className="flex flex-col items-end gap-2">
+                        <div className="flex flex-row sm:flex-col items-center sm:items-end justify-end sm:justify-start gap-2 shrink-0">
                           <Switch
                             checked={feature.enabled}
                             onCheckedChange={(checked) => handleToggle(feature, checked)}
@@ -265,14 +265,14 @@ export default function FeaturesSettings() {
                             <Button
                               variant="link"
                               size="sm"
-                              className="h-auto p-0 text-xs"
+                              className="h-auto p-0 text-xs whitespace-nowrap"
                               onClick={() => router.push('/settings/subscription')}
                             >
-                              Upgrade to enable →
+                              Upgrade →
                             </Button>
                           )}
                           {!isOwner && !permissionsLoading && (
-                            <p className="text-xs text-muted-foreground">Only account owners can manage features</p>
+                            <p className="text-xs text-muted-foreground text-right sm:text-right hidden sm:block">Only account owners can manage features</p>
                           )}
                         </div>
                       </div>
