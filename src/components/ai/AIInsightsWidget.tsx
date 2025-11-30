@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Brain, RefreshCw, Loader2, Sparkles, Crown } from 'lucide-react';
+import { Brain, RefreshCw, Loader2, Sparkles, Crown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAIUsage } from '@/hooks/use-ai-usage';
 import { useRotatingLoadingMessage } from '@/hooks/use-rotating-loading-message';
@@ -195,7 +195,10 @@ export function AIInsightsWidget() {
           </div>
         </CardHeader>
         <CollapsibleContent>
-          <CardContent>
+          <CardContent className="relative">
+            {isOpen && (
+              <ChevronUp className="absolute bottom-2 right-2 h-4 w-4 text-muted-foreground/50" />
+            )}
             {loading ? (
               <div className="space-y-4">
                 <Skeleton className="h-20 w-full" />

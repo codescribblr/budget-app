@@ -15,7 +15,7 @@ import type {
   DashboardSummary,
 } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
-import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, Mail } from 'lucide-react';
+import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, Mail, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
 import CategoryList from './CategoryList';
 import AccountList from './AccountList';
@@ -335,7 +335,10 @@ export default function Dashboard() {
                 </CollapsibleTrigger>
               </CardHeader>
               <CollapsibleContent>
-                <CardContent>
+                <CardContent className="relative">
+                  {isPendingChecksOpen && (
+                    <ChevronUp className="absolute bottom-2 right-2 h-4 w-4 text-muted-foreground/50" />
+                  )}
                   <PendingCheckList 
                     pendingChecks={pendingChecks} 
                     onUpdate={(updatedPendingChecks) => setPendingChecks(updatedPendingChecks)}
