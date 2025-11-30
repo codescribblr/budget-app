@@ -39,6 +39,7 @@ export function AccountSwitcher() {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [newAccountName, setNewAccountName] = useState("")
   const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -91,6 +92,7 @@ export function AccountSwitcher() {
     if (!newAccountName.trim()) return
 
     setCreating(true)
+    setCreateError(null)
     try {
       const response = await fetch('/api/budget-accounts', {
         method: 'POST',
@@ -102,14 +104,20 @@ export function AccountSwitcher() {
         const data = await response.json()
         setShowCreateDialog(false)
         setNewAccountName("")
+        setCreateError(null)
         await loadAccounts()
         // Switch to new account
         if (data.account?.id) {
           await handleSwitchAccount(data.account.id)
         }
+      } else {
+        // Handle error response
+        const errorData = await response.json().catch(() => ({ error: 'Failed to create account' }))
+        setCreateError(errorData.error || 'Failed to create account. Please try again.')
       }
     } catch (error) {
       console.error('Error creating account:', error)
+      setCreateError('An unexpected error occurred. Please try again.')
     } finally {
       setCreating(false)
     }
@@ -149,9 +157,9 @@ export function AccountSwitcher() {
             </div>
             {state === "expanded" && (
               <>
-                <div className="flex flex-col items-start flex-1 min-w-0">
+                <div className="flex flex-col items-start flex-1 min-w-0 gap-1">
                   <span className="text-sm font-semibold leading-none">Budget App</span>
-                  <span className="text-xs text-muted-foreground leading-none truncate w-full">
+                  <span className="text-xs text-muted-foreground leading-none truncate w-full text-left">
                     {activeAccount?.accountName || 'Select Account'}
                   </span>
                 </div>
@@ -199,13 +207,21 @@ export function AccountSwitcher() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {createError && (
+              <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
+                {createError}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="account-name">Account Name</Label>
               <Input
                 id="account-name"
                 placeholder="My Budget"
                 value={newAccountName}
-                onChange={(e) => setNewAccountName(e.target.value)}
+                onChange={(e) => {
+                  setNewAccountName(e.target.value)
+                  setCreateError(null) // Clear error when user types
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     handleCreateAccount()
@@ -220,6 +236,7 @@ export function AccountSwitcher() {
               onClick={() => {
                 setShowCreateDialog(false)
                 setNewAccountName("")
+                setCreateError(null)
               }}
             >
               Cancel

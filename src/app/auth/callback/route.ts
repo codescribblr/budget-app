@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
             .limit(1);
 
           // If user has pending invites, redirect to accept the first one
+          // DO NOT create an account for users with pending invitations
           if (invitations && invitations.length > 0) {
             const newRedirectUrl = isLocalEnv
               ? `${origin}/invite/${invitations[0].token}`
@@ -65,9 +66,44 @@ export async function GET(request: NextRequest) {
             
             return NextResponse.redirect(newRedirectUrl);
           }
+
+          // No pending invitations - check if user already has a budget account
+          // If not, create one automatically (this is a new user signing up normally)
+          const { data: existingAccounts } = await adminSupabase
+            .from('budget_accounts')
+            .select('id')
+            .eq('owner_id', user.id)
+            .is('deleted_at', null)
+            .limit(1);
+
+          if (!existingAccounts || existingAccounts.length === 0) {
+            // User doesn't have an account - create one automatically
+            const accountName = user.email?.split('@')[0] || 'My Budget';
+            const { data: newAccount, error: accountError } = await adminSupabase
+              .from('budget_accounts')
+              .insert({
+                owner_id: user.id,
+                name: accountName,
+              })
+              .select('id')
+              .single();
+
+            if (!accountError && newAccount) {
+              // Add user as owner in account_users
+              await adminSupabase
+                .from('account_users')
+                .insert({
+                  account_id: newAccount.id,
+                  user_id: user.id,
+                  role: 'owner',
+                  status: 'active',
+                  accepted_at: new Date().toISOString(),
+                });
+            }
+          }
         } catch (err) {
           // If check fails, continue with normal redirect
-          console.error('Error checking invitations in callback:', err);
+          console.error('Error checking invitations or creating account in callback:', err);
         }
       }
 

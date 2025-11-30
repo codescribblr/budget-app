@@ -59,10 +59,53 @@ export async function GET(
       .single();
 
     if (existingMember) {
-      return NextResponse.json(
-        { error: 'You are already a member of this account' },
-        { status: 400 }
-      );
+      // User is already a member - mark invitation as accepted (cleanup) and return success
+      const adminSupabase = createServiceRoleClient();
+      await adminSupabase
+        .from('account_invitations')
+        .update({ accepted_at: new Date().toISOString() })
+        .eq('account_id', invitation.account_id)
+        .eq('email', invitation.email.toLowerCase())
+        .is('accepted_at', null);
+
+      // Fetch account details
+      const { data: account } = await adminSupabase
+        .from('budget_accounts')
+        .select('id, name, owner_id')
+        .eq('id', invitation.account_id)
+        .single();
+
+      let accountName = account?.name || 'Unknown Account';
+      let ownerEmail = null;
+      if (account?.owner_id) {
+        try {
+          const { data: owner } = await adminSupabase.auth.admin.getUserById(account.owner_id);
+          if (owner?.user?.email) {
+            ownerEmail = owner.user.email;
+            // Use owner email as fallback for account name if account name is not set
+            if (!account?.name) {
+              accountName = ownerEmail;
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching owner email:', err);
+        }
+      }
+
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const hasOwnAccount = authUser ? await checkUserHasOwnAccount(supabase, authUser.id) : false;
+
+      // Return success with alreadyMember flag
+      return NextResponse.json({
+        account: {
+          id: invitation.account_id,
+          name: accountName,
+          ownerEmail: ownerEmail,
+        },
+        role: invitation.role,
+        userHasOwnAccount: hasOwnAccount,
+        alreadyMember: true,
+      });
     }
 
     // Fetch account details using service role to bypass RLS
@@ -74,12 +117,19 @@ export async function GET(
       .eq('id', invitation.account_id)
       .single();
 
-    // Get owner email as fallback for account name
+    // Get owner email as fallback for account name and to display owner info
     let accountName = account?.name || 'Unknown Account';
-    if (!account?.name && account?.owner_id) {
+    let ownerEmail = null;
+    if (account?.owner_id) {
       try {
         const { data: owner } = await adminSupabase.auth.admin.getUserById(account.owner_id);
-        accountName = owner?.user?.email || accountName;
+        if (owner?.user?.email) {
+          ownerEmail = owner.user.email;
+          // Use owner email as fallback for account name if account name is not set
+          if (!account?.name) {
+            accountName = ownerEmail;
+          }
+        }
       } catch (err) {
         console.error('Error fetching owner email:', err);
       }
@@ -92,6 +142,7 @@ export async function GET(
       account: {
         id: invitation.account_id,
         name: accountName,
+        ownerEmail: ownerEmail,
       },
       role: invitation.role,
       userHasOwnAccount: hasOwnAccount,

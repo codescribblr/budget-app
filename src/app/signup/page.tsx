@@ -46,6 +46,57 @@ function SignupForm() {
 
     try {
       const supabase = createClient();
+      
+      // If signing up from invite link, use special endpoint that bypasses email verification
+      if (isInviteSignup && redirectTo) {
+        // Extract invite token from redirectTo
+        const inviteTokenMatch = redirectTo.match(/\/invite\/([^/?]+)/);
+        const inviteToken = inviteTokenMatch ? inviteTokenMatch[1] : null;
+        
+        if (!inviteToken) {
+          setError('Invalid invitation link');
+          setLoading(false);
+          return;
+        }
+
+        // Use invite-based signup endpoint (bypasses email verification)
+        const signupResponse = await fetch('/api/auth/signup-with-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            password,
+            inviteToken,
+          }),
+        });
+
+        const signupData = await signupResponse.json();
+
+        if (!signupResponse.ok) {
+          setError(signupData.error || 'Failed to create account');
+          setLoading(false);
+          return;
+        }
+
+        // Sign in the newly created user
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) {
+          setError(signInError.message || 'Account created but failed to sign in. Please try signing in.');
+          setLoading(false);
+          return;
+        }
+
+        // Successfully signed in - redirect to accept invitation
+        router.push(redirectTo);
+        router.refresh();
+        return;
+      }
+
+      // Regular signup flow (requires email verification)
       // Preserve redirectTo through email confirmation
       const callbackUrl = redirectTo 
         ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`

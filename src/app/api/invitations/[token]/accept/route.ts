@@ -77,12 +77,19 @@ export async function POST(
       throw accountError;
     }
 
-    // Get owner email as fallback for account name
+    // Get owner email as fallback for account name and to display owner info
     let accountName = account?.name || 'Unknown Account';
-    if (!account?.name && account?.owner_id) {
+    let ownerEmail = null;
+    if (account?.owner_id) {
       try {
         const { data: owner } = await adminSupabase.auth.admin.getUserById(account.owner_id);
-        accountName = owner?.user?.email || accountName;
+        if (owner?.user?.email) {
+          ownerEmail = owner.user.email;
+          // Use owner email as fallback for account name if account name is not set
+          if (!account?.name) {
+            accountName = ownerEmail;
+          }
+        }
       } catch (err) {
         console.error('Error fetching owner email:', err);
       }
@@ -121,6 +128,7 @@ export async function POST(
       account: {
         id: invitation.account_id,
         name: accountName,
+        ownerEmail: ownerEmail,
       },
       role: invitation.role,
       userHasOwnAccount: hasOwnAccount,

@@ -17,9 +17,10 @@ export default function AcceptInvitationPage() {
   const [accepting, setAccepting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [invitation, setInvitation] = useState<{
-    account: { id: number; name: string }
+    account: { id: number; name: string; ownerEmail?: string | null }
     role: string
     userHasOwnAccount: boolean
+    alreadyMember?: boolean
   } | null>(null)
   const [success, setSuccess] = useState(false)
 
@@ -86,6 +87,26 @@ export default function AcceptInvitationPage() {
 
       // If we get here, we can show the accept button
       const data = await response.json()
+      
+      // If user is already a member, redirect to dashboard immediately
+      if (data.alreadyMember) {
+        // Switch to this account and redirect
+        try {
+          await fetch('/api/budget-accounts/switch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId: data.account.id }),
+          })
+        } catch (err) {
+          console.error('Error switching account:', err)
+        }
+        
+        setLoading(false)
+        router.push('/dashboard')
+        router.refresh()
+        return
+      }
+      
       setInvitation(data)
       setLoading(false)
     } catch (err) {
@@ -190,6 +211,11 @@ export default function AcceptInvitationPage() {
             <p className="text-muted-foreground mb-4">
               You've been added to <strong>{invitation?.account?.name || 'Unknown Account'}</strong> as a {invitation?.role}.
             </p>
+            {invitation?.account?.ownerEmail && (
+              <p className="text-sm text-muted-foreground mb-4">
+                Account owner: {invitation.account.ownerEmail}
+              </p>
+            )}
             {!invitation?.userHasOwnAccount && (
               <p className="text-sm text-muted-foreground mb-4">
                 You can create your own account anytime from the account switcher in the header.
@@ -217,6 +243,9 @@ export default function AcceptInvitationPage() {
               <div className="space-y-2">
                 <p className="text-sm font-medium">Account:</p>
                 <p className="text-lg font-semibold">{invitation.account?.name || 'Unknown Account'}</p>
+                {invitation.account?.ownerEmail && (
+                  <p className="text-sm text-muted-foreground">Owner: {invitation.account.ownerEmail}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-medium">Role:</p>

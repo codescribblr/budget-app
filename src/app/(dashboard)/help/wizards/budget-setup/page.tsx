@@ -40,7 +40,7 @@ export default function BudgetSetupWizardPage() {
   const handleComplete = async () => {
     setIsCreating(true);
     try {
-      // Create accounts
+      // Prepare accounts to create
       const accountsToCreate = [];
 
       if (wizardData.checkingBalance && parseFloat(wizardData.checkingBalance) > 0) {
@@ -61,45 +61,38 @@ export default function BudgetSetupWizardPage() {
         });
       }
 
-      // Create accounts
-      for (const account of accountsToCreate) {
-        const response = await fetch('/api/accounts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(account),
-        });
+      // Prepare categories to create
+      const categoriesToCreate = DEFAULT_CATEGORIES.map((category, index) => ({
+        ...category,
+        sort_order: index,
+      }));
 
-        if (!response.ok) {
-          throw new Error('Failed to create account');
-        }
+      // Create everything in a single batch request
+      const response = await fetch('/api/wizard/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accounts: accountsToCreate,
+          categories: categoriesToCreate,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to create budget' }));
+        throw new Error(errorData.error || 'Failed to create budget');
       }
 
-      // Create categories
-      for (let i = 0; i < DEFAULT_CATEGORIES.length; i++) {
-        const category = DEFAULT_CATEGORIES[i];
-        const response = await fetch('/api/categories', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...category,
-            sort_order: i,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to create category');
-        }
-      }
+      const result = await response.json();
 
       toast.success(
-        `Budget created! Added ${accountsToCreate.length} account(s) and ${DEFAULT_CATEGORIES.length} categories.`
+        `Budget created! Added ${result.accountsCount || accountsToCreate.length} account(s) and ${result.categoriesCount || DEFAULT_CATEGORIES.length} categories.`
       );
 
       // Redirect to money movement page
       router.push('/money-movement');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating budget:', error);
-      toast.error('Failed to create budget. Please try again.');
+      toast.error(error.message || 'Failed to create budget. Please try again.');
       setIsCreating(false);
     }
   };
