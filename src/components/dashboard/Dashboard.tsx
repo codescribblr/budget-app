@@ -335,10 +335,7 @@ export default function Dashboard() {
                 </CollapsibleTrigger>
               </CardHeader>
               <CollapsibleContent>
-                <CardContent className="relative">
-                  {isPendingChecksOpen && (
-                    <ChevronUp className="absolute bottom-2 right-2 h-4 w-4 text-muted-foreground/50" />
-                  )}
+                <CardContent className="pb-8">
                   <PendingCheckList 
                     pendingChecks={pendingChecks} 
                     onUpdate={(updatedPendingChecks) => setPendingChecks(updatedPendingChecks)}
@@ -346,6 +343,17 @@ export default function Dashboard() {
                     disabled={!isEditor || permissionsLoading}
                   />
                 </CardContent>
+                {isPendingChecksOpen && (
+                  <div className="flex justify-end pr-4 pb-2">
+                    <button
+                      onClick={() => setIsPendingChecksOpen(false)}
+                      className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                      aria-label="Collapse card"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </CollapsibleContent>
             </Card>
           </Collapsible>

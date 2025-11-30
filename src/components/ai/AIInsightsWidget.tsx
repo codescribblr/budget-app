@@ -195,10 +195,7 @@ export function AIInsightsWidget() {
           </div>
         </CardHeader>
         <CollapsibleContent>
-          <CardContent className="relative">
-            {isOpen && (
-              <ChevronUp className="absolute bottom-2 right-2 h-4 w-4 text-muted-foreground/50" />
-            )}
+          <CardContent className="pb-8">
             {loading ? (
               <div className="space-y-4">
                 <Skeleton className="h-20 w-full" />
@@ -301,6 +298,17 @@ export function AIInsightsWidget() {
               </div>
             )}
           </CardContent>
+          {isOpen && (
+            <div className="flex justify-end pr-4 pb-2">
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                aria-label="Collapse card"
+              >
+                <ChevronUp className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </CollapsibleContent>
       </Card>
     </Collapsible>
