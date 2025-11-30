@@ -129,7 +129,7 @@ export default function BudgetSetupWizardPage() {
 
       <div className="bg-card border rounded-lg p-6">
         <Wizard
-          steps={['Welcome', 'Accounts', 'Income', 'Categories', 'Review']}
+          steps={['Welcome', 'Accounts', 'Income Info', 'Categories', 'Review']}
           onComplete={handleComplete}
           onCancel={handleCancel}
           isProcessing={isCreating}
@@ -153,14 +153,12 @@ export default function BudgetSetupWizardPage() {
               <div className="prose dark:prose-invert max-w-none">
                 <h3>What this wizard will do:</h3>
                 <ol>
-                  <li>Set up your bank accounts</li>
-                  <li>Configure your income</li>
+                  <li>Set up your bank accounts with current balances</li>
                   <li>Create your first budget categories</li>
-                  <li>Allocate your current money to categories</li>
                 </ol>
 
                 <p className="text-sm text-muted-foreground mt-4">
-                  Don't worry - you can change everything later! This is just to get you started.
+                  After setup, you'll be able to allocate your money to categories and configure your income settings. Don't worry - you can change everything later! This is just to get you started.
                 </p>
               </div>
             </div>
@@ -210,7 +208,7 @@ export default function BudgetSetupWizardPage() {
           {/* Step 3: Income */}
           <WizardStep
             title="Set Up Your Income"
-            description="Tell us about your monthly income so we can help you budget effectively."
+            description="Tell us about your monthly income. This helps us understand your budget, but you can configure detailed income settings later."
           >
             <div className="space-y-6">
               <div className="space-y-2">
@@ -223,13 +221,12 @@ export default function BudgetSetupWizardPage() {
                   onChange={(e) => updateData('monthlyIncome', e.target.value)}
                 />
                 <p className="text-sm text-muted-foreground">
-                  Enter your typical monthly take-home pay (after taxes and deductions)
+                  Enter your typical monthly take-home pay (after taxes and deductions). This is just for reference - you'll set up detailed income settings later.
                 </p>
               </div>
 
-              <Callout type="info" title="Irregular income?">
-                If your income varies month to month, enter a conservative estimate (lower than
-                average). You can always adjust later!
+              <Callout type="info" title="Note">
+                This wizard creates your accounts and categories. After completion, you can configure detailed income settings (pay frequency, tax rate, deductions) on the Income page.
               </Callout>
             </div>
           </WizardStep>
@@ -334,8 +331,8 @@ export default function BudgetSetupWizardPage() {
 
               <Callout type="tip" title="What happens next?">
                 After completing this wizard, you'll be taken to the Money Movement page where
-                you can allocate your current money to categories. Then you're ready to start
-                budgeting!
+                you can allocate your current money to categories. You can also configure detailed
+                income settings on the Income page. Then you're ready to start budgeting!
               </Callout>
             </div>
           </WizardStep>

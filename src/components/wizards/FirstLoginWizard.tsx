@@ -163,7 +163,7 @@ export function FirstLoginWizard() {
 
         <div className="mt-4">
           <Wizard
-            steps={['Welcome', 'Accounts', 'Income', 'Categories', 'Review']}
+            steps={['Welcome', 'Accounts', 'Income Info', 'Categories', 'Review']}
             onComplete={handleComplete}
             onCancel={handleCancel}
             isProcessing={isCreating}
@@ -187,14 +187,12 @@ export function FirstLoginWizard() {
                 <div className="prose dark:prose-invert max-w-none">
                   <h3>What this wizard will do:</h3>
                   <ol>
-                    <li>Set up your bank accounts</li>
-                    <li>Configure your income</li>
+                    <li>Set up your bank accounts with current balances</li>
                     <li>Create your first budget categories</li>
-                    <li>Allocate your current money to categories</li>
                   </ol>
 
                   <p className="text-sm text-muted-foreground mt-4">
-                    Don't worry - you can change everything later! This is just to get you started.
+                    After setup, you'll be able to allocate your money to categories and configure your income settings. Don't worry - you can change everything later! This is just to get you started.
                   </p>
                 </div>
               </div>
@@ -245,7 +243,7 @@ export function FirstLoginWizard() {
             {/* Step 3: Income */}
             <WizardStep
               title="Set Your Monthly Income"
-              description="How much do you earn per month?"
+              description="Tell us about your monthly income. This helps us understand your budget, but you can configure detailed income settings later."
             >
               <div className="space-y-4">
                 <div>
@@ -261,9 +259,12 @@ export function FirstLoginWizard() {
                     }
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Enter your approximate monthly income. You can adjust this later in Settings.
+                    Enter your approximate monthly income. This is just for reference - you'll set up detailed income settings (pay frequency, tax rate, deductions) later on the Income page.
                   </p>
                 </div>
+                <Callout type="info" title="Note">
+                  This wizard creates your accounts and categories. After completion, you can configure detailed income settings on the Income page.
+                </Callout>
               </div>
             </WizardStep>
 
@@ -323,7 +324,8 @@ export function FirstLoginWizard() {
                 <Callout type="info" title="Next Steps">
                   After setup, you can:
                   <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
-                    <li>Allocate your money to categories</li>
+                    <li>Allocate your money to categories on the Money Movement page</li>
+                    <li>Configure detailed income settings on the Income page</li>
                     <li>Add transactions</li>
                     <li>Import transactions from your bank</li>
                     <li>Customize your categories</li>
