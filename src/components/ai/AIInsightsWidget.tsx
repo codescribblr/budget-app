@@ -65,10 +65,17 @@ export function AIInsightsWidget() {
           setInsights(data.insights);
           // Metadata might be in data.metadata or data.insights.metadata
           setMetadata(data.metadata || data.insights?.metadata || null);
+        } else {
+          // No cached insights - ensure state is cleared
+          setInsights(null);
+          setMetadata(null);
         }
       }
     } catch (error) {
       console.error('Error loading cached insights:', error);
+      // On error, ensure state is cleared
+      setInsights(null);
+      setMetadata(null);
     } finally {
       setLoading(false);
     }
@@ -157,26 +164,6 @@ export function AIInsightsWidget() {
               </div>
             </CollapsibleTrigger>
             <div className="flex flex-col items-end gap-1">
-              {!insights && canGenerate && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={generateInsights}
-                  disabled={generating}
-                >
-                  {generating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      <span className="max-w-[200px] truncate">{loadingMessage}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Generate Insights
-                    </>
-                  )}
-                </Button>
-              )}
               {insights && (
                 <>
                   <Button

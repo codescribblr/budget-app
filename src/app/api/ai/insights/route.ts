@@ -65,6 +65,12 @@ export async function POST(request: NextRequest) {
           metadata: cached.insights.metadata,
         });
       }
+      
+      // No cached insights found and regenerate is false - return empty response
+      return NextResponse.json({
+        insights: null,
+        cached: false,
+      });
     }
 
     // Check rate limit - dashboard insights widget uses separate limit
