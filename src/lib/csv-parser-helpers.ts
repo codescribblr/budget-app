@@ -336,7 +336,7 @@ export async function processTransactions(
       credit_card_id: transaction.credit_card_id !== undefined ? transaction.credit_card_id : (defaultCreditCardId || null),
       isDuplicate,
       duplicateType,
-      status: isDuplicate || !hasSplits ? 'excluded' : 'pending',
+      status: (isDuplicate || !hasSplits ? 'excluded' : 'pending') as 'pending' | 'confirmed' | 'excluded',
       suggestedCategory,
       splits: suggestedCategory
         ? [{
@@ -365,12 +365,12 @@ export async function processTransactions(
         const { suggestions: aiSuggestions } = await aiCategorizationResponse.json();
         
         // Create a map of transaction ID to AI suggestion
-        const aiSuggestionMap = new Map(
+        const aiSuggestionMap = new Map<string, { transactionId: string; categoryId: number | null; categoryName: string; confidence: number; reason: string }>(
           aiSuggestions.map((s: any) => [s.transactionId, s])
         );
 
         // Update transactions with AI suggestions
-        return processedTransactions.map((transaction) => {
+        return processedTransactions.map((transaction): ParsedTransaction => {
           const aiSuggestion = aiSuggestionMap.get(transaction.id);
           
           if (aiSuggestion && aiSuggestion.categoryId && !transaction.isDuplicate) {
@@ -378,7 +378,7 @@ export async function processTransactions(
             return {
               ...transaction,
               suggestedCategory: aiSuggestion.categoryId,
-              status: 'pending',
+              status: 'pending' as const,
               splits: [{
                 categoryId: aiSuggestion.categoryId,
                 categoryName: category?.name || aiSuggestion.categoryName,
@@ -388,7 +388,10 @@ export async function processTransactions(
             };
           }
           
-          return transaction;
+          return {
+            ...transaction,
+            status: transaction.status as 'pending' | 'confirmed' | 'excluded',
+          };
         });
       } else {
         // If AI categorization fails, log but don't fail the entire import

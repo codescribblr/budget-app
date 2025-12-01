@@ -19,6 +19,9 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [showAIFallback, setShowAIFallback] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [fallbackError, setFallbackError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
@@ -96,12 +99,47 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         fileType.startsWith('image/') ||
         fileName.endsWith('.jpg') ||
         fileName.endsWith('.jpeg') ||
-        fileName.endsWith('.png') ||
-        fileName.endsWith('.pdf')
+        fileName.endsWith('.png')
       ) {
-        transactions = await parseImageFile(file);
-        // Store filename for image imports too
+        // Images use AI parsing
+        const parseResult = await parseImageFile(file, true);
+        
+        if (parseResult.error || parseResult.transactions.length === 0) {
+          throw new Error(parseResult.error || 'No transactions found in the file');
+        }
+        
+        transactions = parseResult.transactions;
         sessionStorage.setItem('csvFileName', file.name);
+      } else if (fileName.endsWith('.pdf') || fileType === 'application/pdf') {
+        // Parse PDF using local parser first
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/import/process-pdf', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.transactions && result.transactions.length > 0) {
+            transactions = result.transactions;
+            sessionStorage.setItem('csvFileName', file.name);
+          } else {
+            throw new Error('No transactions found in PDF');
+          }
+        } else {
+          // PDF parsing failed, offer AI fallback
+          const errorData = await response.json();
+          if (errorData.canFallbackToAI) {
+            setPendingFile(file);
+            setFallbackError(errorData.error || 'PDF parsing failed. AI fallback available.');
+            setShowAIFallback(true);
+            setIsProcessing(false);
+            return;
+          }
+          throw new Error(errorData.error || 'Failed to parse PDF');
+        }
       } else {
         setError('Unsupported file type. Please upload a CSV or image file.');
         setIsProcessing(false);
@@ -239,6 +277,68 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       {error && (
         <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
           <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+        </div>
+      )}
+
+      {showAIFallback && pendingFile && (
+        <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md space-y-3">
+          <div>
+            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+              PDF parsing failed
+            </p>
+            <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+              {fallbackError}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={async () => {
+                setShowAIFallback(false);
+                setIsProcessing(true);
+                setError(null);
+                try {
+                  const aiResult = await parseImageFile(pendingFile, true);
+                  if (aiResult.error) {
+                    throw new Error(aiResult.error);
+                  }
+                  if (aiResult.transactions.length === 0) {
+                    throw new Error('No transactions found in the file');
+                  }
+                  
+                  const { processTransactions } = await import('@/lib/csv-parser-helpers');
+                  const processedTransactions = await processTransactions(aiResult.transactions);
+                  onFileUploaded(processedTransactions, pendingFile.name);
+                  sessionStorage.setItem('csvFileName', pendingFile.name);
+                  setPendingFile(null);
+                } catch (err) {
+                  console.error('Error processing file with AI:', err);
+                  setError(err instanceof Error ? err.message : 'Failed to process file with AI');
+                } finally {
+                  setIsProcessing(false);
+                }
+              }}
+              disabled={isProcessing}
+            >
+              Try AI Parsing
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setShowAIFallback(false);
+                setPendingFile(null);
+                setFallbackError(null);
+                setError('PDF parsing cancelled');
+              }}
+              disabled={isProcessing}
+            >
+              Cancel
+            </Button>
+          </div>
+          <p className="text-xs text-yellow-700 dark:text-yellow-300">
+            💡 AI parsing requires OpenAI API key configured in your environment
+          </p>
         </div>
       )}
 

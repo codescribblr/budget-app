@@ -646,7 +646,9 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                             <>
                               <span>{transaction.splits[0].categoryName}</span>
                               {transaction.splits[0].isAICategorized && (
-                                <Sparkles className="h-3.5 w-3.5 text-purple-500" title="AI categorized" />
+                                <span className="inline-flex items-center" title="AI categorized">
+                                  <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+                                </span>
                               )}
                             </>
                           ) : (
