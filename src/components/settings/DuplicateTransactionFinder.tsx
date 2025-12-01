@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Card,
   CardContent,
@@ -18,52 +17,47 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { Loader2, Search, Trash2, AlertTriangle } from 'lucide-react';
+import { Loader2, Search, AlertTriangle, GitMerge, CheckCircle2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { parseLocalDate } from '@/lib/date-utils';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
-
-interface DuplicateGroup {
-  amount: number;
-  transactions: Array<{
-    id: number;
-    date: string;
-    description: string;
-    total_amount: number;
-    transaction_type: 'income' | 'expense';
-    created_at: string;
-    splits: Array<{
-      id: number;
-      category_id: number;
-      amount: number;
-      category_name: string;
-    }>;
-  }>;
-}
+import type { DuplicateGroup, Category } from '@/lib/types';
+import MergeTransactionDialog from '@/components/transactions/MergeTransactionDialog';
+import TransactionDetailDialog from '@/components/transactions/TransactionDetailDialog';
 
 export default function DuplicateTransactionFinder() {
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [isSearching, setIsSearching] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isMarkingReviewed, setIsMarkingReviewed] = useState(false);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
-  const [selectedTransactions, setSelectedTransactions] = useState<Set<number>>(new Set());
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [mergingGroup, setMergingGroup] = useState<DuplicateGroup | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  // Track selected transactions per group: Map<groupIndex, Set<transactionId>>
+  const [selectedTransactions, setSelectedTransactions] = useState<Map<number, Set<number>>>(new Map());
+  const [viewingTransactionId, setViewingTransactionId] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Fetch categories when component mounts
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/categories');
+        if (response.ok) {
+          const data = await response.json();
+          setCategories(data);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   const handleSearch = async () => {
     setIsSearching(true);
-    setSelectedTransactions(new Set());
+    setSelectedTransactions(new Map()); // Clear selections
     
     try {
       const response = await fetch('/api/transactions/find-duplicates');
@@ -88,63 +82,51 @@ export default function DuplicateTransactionFinder() {
     }
   };
 
-  const handleToggleTransaction = (transactionId: number) => {
-    const newSelected = new Set(selectedTransactions);
-    if (newSelected.has(transactionId)) {
-      newSelected.delete(transactionId);
+  const handleToggleTransaction = (groupIndex: number, transactionId: number) => {
+    const newSelected = new Map(selectedTransactions);
+    const groupSelected = new Set(newSelected.get(groupIndex) || []);
+    
+    if (groupSelected.has(transactionId)) {
+      groupSelected.delete(transactionId);
     } else {
-      newSelected.add(transactionId);
+      groupSelected.add(transactionId);
     }
+    
+    if (groupSelected.size === 0) {
+      newSelected.delete(groupIndex);
+    } else {
+      newSelected.set(groupIndex, groupSelected);
+    }
+    
     setSelectedTransactions(newSelected);
   };
 
-  const handleToggleGroup = (group: DuplicateGroup, checked: boolean) => {
-    const newSelected = new Set(selectedTransactions);
-    group.transactions.forEach(txn => {
-      if (checked) {
-        newSelected.add(txn.id);
-      } else {
-        newSelected.delete(txn.id);
-      }
-    });
+  const handleToggleGroup = (groupIndex: number, group: DuplicateGroup, checked: boolean) => {
+    const newSelected = new Map(selectedTransactions);
+    
+    if (checked) {
+      const allIds = new Set(group.transactions.map(t => t.id));
+      newSelected.set(groupIndex, allIds);
+    } else {
+      newSelected.delete(groupIndex);
+    }
+    
     setSelectedTransactions(newSelected);
   };
 
-  const handleDeleteSelected = async () => {
-    if (selectedTransactions.size === 0) {
-      toast.error('No transactions selected');
-      return;
-    }
+  const getSelectedCount = (groupIndex: number): number => {
+    return selectedTransactions.get(groupIndex)?.size || 0;
+  };
 
-    setIsDeleting(true);
+  const isGroupFullySelected = (groupIndex: number, group: DuplicateGroup): boolean => {
+    const selected = selectedTransactions.get(groupIndex);
+    if (!selected) return false;
+    return group.transactions.every(txn => selected.has(txn.id));
+  };
 
-    try {
-      const response = await fetch('/api/transactions/delete-duplicates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transactionIds: Array.from(selectedTransactions),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete transactions');
-      }
-
-      const data = await response.json();
-      
-      toast.success(`Deleted ${data.deleted} transaction(s)`);
-      
-      // Refresh the duplicate search
-      setShowDeleteDialog(false);
-      setSelectedTransactions(new Set());
-      await handleSearch();
-    } catch (error) {
-      console.error('Error deleting transactions:', error);
-      toast.error('Failed to delete transactions');
-    } finally {
-      setIsDeleting(false);
-    }
+  const isGroupPartiallySelected = (groupIndex: number, group: DuplicateGroup): boolean => {
+    const selectedCount = getSelectedCount(groupIndex);
+    return selectedCount > 0 && selectedCount < group.transactions.length;
   };
 
   const formatDate = (dateStr: string) => {
@@ -156,13 +138,55 @@ export default function DuplicateTransactionFinder() {
     }) || dateStr;
   };
 
-  const isGroupFullySelected = (group: DuplicateGroup) => {
-    return group.transactions.every(txn => selectedTransactions.has(txn.id));
+  const handleMerge = (groupIndex: number, group: DuplicateGroup) => {
+    const selected = selectedTransactions.get(groupIndex);
+    if (!selected || selected.size < 2) {
+      toast.error('Please select at least 2 transactions to merge');
+      return;
+    }
+    
+    // Create a filtered group with only selected transactions
+    const filteredGroup: DuplicateGroup = {
+      ...group,
+      transactions: group.transactions.filter(t => selected.has(t.id)),
+    };
+    
+    setMergingGroup(filteredGroup);
   };
 
-  const isGroupPartiallySelected = (group: DuplicateGroup) => {
-    const selectedCount = group.transactions.filter(txn => selectedTransactions.has(txn.id)).length;
-    return selectedCount > 0 && selectedCount < group.transactions.length;
+  const handleMergeSuccess = () => {
+    setMergingGroup(null);
+    handleSearch();
+  };
+
+  const handleMarkAsReviewed = async (groupIndex: number, group: DuplicateGroup) => {
+    const selected = selectedTransactions.get(groupIndex);
+    if (!selected || selected.size === 0) {
+      toast.error('Please select at least one transaction to mark as reviewed');
+      return;
+    }
+    
+    setIsMarkingReviewed(true);
+    try {
+      const transactionIds = Array.from(selected);
+      const response = await fetch('/api/transactions/mark-duplicates-reviewed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionIds }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to mark as reviewed');
+      }
+
+      toast.success('Selected transactions marked as reviewed');
+      await handleSearch();
+    } catch (error) {
+      console.error('Error marking as reviewed:', error);
+      toast.error('Failed to mark as reviewed');
+    } finally {
+      setIsMarkingReviewed(false);
+    }
   };
 
   return (
@@ -174,7 +198,7 @@ export default function DuplicateTransactionFinder() {
         </CardTitle>
         <CardDescription>
           Search for transactions with the same amount and date (±1 day). 
-          Useful for finding duplicates that were imported multiple times.
+          Merge duplicate transactions to combine their data, or mark groups as reviewed if they're not duplicates.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -188,19 +212,9 @@ export default function DuplicateTransactionFinder() {
             Search for Duplicates
           </Button>
 
-          {duplicateGroups.length > 0 && selectedTransactions.size > 0 && (
-            <Button
-              variant="destructive"
-              onClick={() => setShowDeleteDialog(true)}
-              disabled={isDeleting || !isEditor || permissionsLoading}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete Selected ({selectedTransactions.size})
-            </Button>
-          )}
         </div>
         {!isEditor && !permissionsLoading && (
-          <p className="text-sm text-muted-foreground">Only editors and owners can search for and delete duplicate transactions</p>
+          <p className="text-sm text-muted-foreground">Only editors and owners can search for and merge duplicate transactions</p>
         )}
 
         {duplicateGroups.length > 0 && (
@@ -209,29 +223,67 @@ export default function DuplicateTransactionFinder() {
               <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
               <p className="text-sm text-yellow-900 dark:text-yellow-100">
                 Found {duplicateGroups.length} group(s) of potential duplicates. 
-                Review carefully and select which transactions to delete.
+                Review carefully and merge them to combine their data, or mark as reviewed if they're not duplicates.
               </p>
             </div>
 
-            {duplicateGroups.map((group, groupIndex) => (
-              <div key={groupIndex} className="border rounded-lg p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Checkbox
-                      checked={isGroupFullySelected(group)}
-                      onCheckedChange={(checked) => handleToggleGroup(group, checked as boolean)}
-                      className={isGroupPartiallySelected(group) ? 'data-[state=checked]:bg-gray-500' : ''}
-                    />
-                    <div>
-                      <h3 className="font-semibold">
-                        Duplicate Group {groupIndex + 1}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Amount: {formatCurrency(group.amount)} • {group.transactions.length} transactions
-                      </p>
+            {duplicateGroups.map((group, groupIndex) => {
+              const selectedCount = getSelectedCount(groupIndex);
+              const isFullySelected = isGroupFullySelected(groupIndex, group);
+              const isPartiallySelected = isGroupPartiallySelected(groupIndex, group);
+              
+              return (
+                <div key={groupIndex} className="border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        checked={isFullySelected}
+                        onCheckedChange={(checked) => handleToggleGroup(groupIndex, group, checked as boolean)}
+                        className={isPartiallySelected ? 'data-[state=checked]:bg-gray-500' : ''}
+                      />
+                      <div>
+                        <h3 className="font-semibold">
+                          Duplicate Group {groupIndex + 1}
+                          {group.isReviewed && (
+                            <Badge variant="outline" className="ml-2">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              Reviewed
+                            </Badge>
+                          )}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Amount: {formatCurrency(group.amount)} • {group.transactions.length} transactions
+                          {selectedCount > 0 && (
+                            <span className="ml-2">• {selectedCount} selected</span>
+                          )}
+                        </p>
+                      </div>
                     </div>
+                    {selectedCount > 0 && (
+                      <div className="flex items-center gap-2">
+                        {selectedCount >= 2 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleMerge(groupIndex, group)}
+                            disabled={!isEditor || permissionsLoading}
+                          >
+                            <GitMerge className="h-4 w-4 mr-1" />
+                            Merge Selected ({selectedCount})
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleMarkAsReviewed(groupIndex, group)}
+                          disabled={!isEditor || permissionsLoading || isMarkingReviewed}
+                        >
+                          <CheckCircle2 className="h-4 w-4 mr-1" />
+                          Mark as Not Duplicates ({selectedCount})
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                </div>
 
                 <Table>
                   <TableHeader>
@@ -245,37 +297,54 @@ export default function DuplicateTransactionFinder() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {group.transactions.map((txn) => (
-                      <TableRow key={txn.id}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedTransactions.has(txn.id)}
-                            onCheckedChange={() => handleToggleTransaction(txn.id)}
-                          />
-                        </TableCell>
-                        <TableCell>{formatDate(txn.date)}</TableCell>
-                        <TableCell className="max-w-xs truncate">{txn.description}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {txn.splits.map((split, idx) => (
-                              <Badge key={idx} variant="secondary" className="text-xs">
-                                {split.category_name}: {formatCurrency(split.amount)}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(txn.total_amount)}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {formatDate(txn.created_at)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {group.transactions.map((txn) => {
+                      const isSelected = selectedTransactions.get(groupIndex)?.has(txn.id) || false;
+                      return (
+                        <TableRow 
+                          key={txn.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={(e) => {
+                            // Don't open dialog if clicking checkbox
+                            if ((e.target as HTMLElement).closest('button, [role="checkbox"]')) {
+                              return;
+                            }
+                            setViewingTransactionId(txn.id);
+                          }}
+                        >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => handleToggleTransaction(groupIndex, txn.id)}
+                            />
+                          </TableCell>
+                          <TableCell>{formatDate(txn.date)}</TableCell>
+                          <TableCell className="max-w-xs truncate">{txn.description}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {txn.splits.map((split, idx) => (
+                                <Badge key={idx} variant="secondary" className="text-xs">
+                                  {split.category_name}: {formatCurrency(split.amount)}
+                                </Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {formatCurrency(txn.total_amount)}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {formatDate(txn.created_at)}
+                            {txn.is_historical && (
+                              <Badge variant="outline" className="ml-1 text-xs">Historical</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -287,33 +356,23 @@ export default function DuplicateTransactionFinder() {
         )}
       </CardContent>
 
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Selected Transactions?</AlertDialogTitle>
-            <AlertDialogDescription>
-              You are about to delete {selectedTransactions.size} transaction(s). 
-              This will reverse the category balance changes and remove the transactions from your records.
-              <br /><br />
-              <strong>Note:</strong> The import records will be preserved to prevent these transactions 
-              from being re-imported in the future.
-              <br /><br />
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteSelected}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Delete {selectedTransactions.size} Transaction(s)
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {mergingGroup && (
+        <MergeTransactionDialog
+          isOpen={!!mergingGroup}
+          onClose={() => setMergingGroup(null)}
+          duplicateGroup={mergingGroup}
+          categories={categories}
+          onSuccess={handleMergeSuccess}
+        />
+      )}
+
+      {viewingTransactionId && (
+        <TransactionDetailDialog
+          isOpen={!!viewingTransactionId}
+          onClose={() => setViewingTransactionId(null)}
+          transactionId={viewingTransactionId}
+        />
+      )}
     </Card>
   );
 }

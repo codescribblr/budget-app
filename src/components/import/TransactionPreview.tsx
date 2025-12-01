@@ -284,6 +284,9 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
       return;
     }
 
+    // Get filename from sessionStorage
+    const fileName = sessionStorage.getItem('csvFileName') || sessionStorage.getItem('parsedFileName') || 'Unknown';
+
     // Show progress dialog
     setIsImporting(true);
     setShowProgress(true);
@@ -297,6 +300,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         body: JSON.stringify({
           transactions: toImport,
           isHistorical: isHistorical,
+          fileName: fileName,
         }),
       });
 
