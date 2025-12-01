@@ -268,7 +268,8 @@ function parseAmount(amountStr: string): number {
 export async function processTransactions(
   transactions: ParsedTransaction[],
   defaultAccountId?: number | null,
-  defaultCreditCardId?: number | null
+  defaultCreditCardId?: number | null,
+  skipAICategorization: boolean = false
 ): Promise<ParsedTransaction[]> {
   // Step 1: Check for duplicates within the file itself
   const seenHashes = new Map<string, number>();
@@ -314,8 +315,8 @@ export async function processTransactions(
   });
   const { suggestions } = await categorizationResponse.json();
 
-  // Step 5: Process each transaction
-  return transactions.map((transaction, index) => {
+  // Step 5: Process each transaction with initial categorization
+  const processedTransactions = transactions.map((transaction, index) => {
     const isDatabaseDuplicate = databaseDuplicateSet.has(transaction.hash);
     const isWithinFileDuplicate = withinFileDuplicates.has(index);
     const isDuplicate = isDatabaseDuplicate || isWithinFileDuplicate;
@@ -336,7 +337,7 @@ export async function processTransactions(
       credit_card_id: transaction.credit_card_id !== undefined ? transaction.credit_card_id : (defaultCreditCardId || null),
       isDuplicate,
       duplicateType,
-      status: isDuplicate || !hasSplits ? 'excluded' : 'pending',
+      status: (isDuplicate || !hasSplits ? 'excluded' : 'pending') as 'pending' | 'confirmed' | 'excluded',
       suggestedCategory,
       splits: suggestedCategory
         ? [{
@@ -347,4 +348,119 @@ export async function processTransactions(
         : [],
     };
   });
+
+  // Step 6: AI categorization for remaining uncategorized transactions (if enabled)
+  if (skipAICategorization) {
+    return processedTransactions;
+  }
+
+  const uncategorizedTransactions = processedTransactions.filter(
+    (txn) => !txn.isDuplicate && (!txn.splits || txn.splits.length === 0)
+  );
+
+  if (uncategorizedTransactions.length > 0) {
+    try {
+      const aiCategorizationResponse = await fetch('/api/import/ai-categorize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactions: uncategorizedTransactions }),
+      });
+
+      if (aiCategorizationResponse.ok || aiCategorizationResponse.status === 503) {
+        const responseData = await aiCategorizationResponse.json();
+        const { suggestions: aiSuggestions = [], serviceUnavailable, message } = responseData;
+        
+        // Handle service unavailable (503) - treat as success but with empty suggestions
+        if (aiCategorizationResponse.status === 503 || serviceUnavailable) {
+          if (typeof window !== 'undefined') {
+            const { toast } = await import('sonner');
+            toast.info('AI service temporarily unavailable', {
+              description: message || 'The AI service is overloaded. Continuing with rule-based categorization only.',
+              duration: 5000,
+            });
+          }
+          // Continue without AI categorization
+          return processedTransactions;
+        }
+        
+        // Create a map of transaction ID to AI suggestion
+        const aiSuggestionMap = new Map<string, { transactionId: string; categoryId: number | null; categoryName: string; confidence: number; reason: string }>(
+          aiSuggestions.map((s: any) => [s.transactionId, s])
+        );
+
+        const categorizedCount = aiSuggestions.filter((s: any) => s.categoryId).length;
+        
+        // Show success message if any transactions were categorized
+        if (categorizedCount > 0 && typeof window !== 'undefined') {
+          const { toast } = await import('sonner');
+          toast.success(`AI categorized ${categorizedCount} transaction${categorizedCount !== 1 ? 's' : ''}`, {
+            description: `${uncategorizedTransactions.length - categorizedCount} transaction${uncategorizedTransactions.length - categorizedCount !== 1 ? 's' : ''} remain uncategorized`,
+          });
+        }
+
+        // Update transactions with AI suggestions
+        return processedTransactions.map((transaction): ParsedTransaction => {
+          const aiSuggestion = aiSuggestionMap.get(transaction.id);
+          
+          if (aiSuggestion && aiSuggestion.categoryId && !transaction.isDuplicate) {
+            const category = categories.find((c: any) => c.id === aiSuggestion.categoryId);
+            return {
+              ...transaction,
+              suggestedCategory: aiSuggestion.categoryId,
+              status: 'pending' as const,
+              splits: [{
+                categoryId: aiSuggestion.categoryId,
+                categoryName: category?.name || aiSuggestion.categoryName,
+                amount: transaction.amount,
+                isAICategorized: true, // Mark as AI-categorized
+              }],
+            };
+          }
+          
+          return {
+            ...transaction,
+            status: transaction.status as 'pending' | 'confirmed' | 'excluded',
+          };
+        });
+      } else {
+        // Handle rate limit and other errors
+        const errorData = await aiCategorizationResponse.json().catch(() => ({ error: 'AI categorization failed' }));
+        
+        if (aiCategorizationResponse.status === 429) {
+          // Rate limit exceeded
+          if (typeof window !== 'undefined') {
+            const { toast } = await import('sonner');
+            const resetAt = errorData.resetAt ? new Date(errorData.resetAt) : null;
+            const resetTime = resetAt ? resetAt.toLocaleTimeString() : 'tomorrow';
+            toast.warning('AI categorization limit reached', {
+              description: errorData.message || `Daily limit reached. ${errorData.remaining || 0} attempts remaining. Resets at ${resetTime}.`,
+              duration: 6000,
+            });
+          }
+        } else {
+          // Other errors - log but don't fail the entire import
+          console.warn('AI categorization failed:', errorData.error || 'Unknown error');
+          if (typeof window !== 'undefined') {
+            const { toast } = await import('sonner');
+            toast.info('AI categorization unavailable', {
+              description: errorData.message || 'Continuing with rule-based categorization only.',
+              duration: 4000,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      // If AI categorization fails, log but don't fail the entire import
+      console.warn('Error calling AI categorization:', error);
+      if (typeof window !== 'undefined') {
+        const { toast } = await import('sonner');
+        toast.info('AI categorization unavailable', {
+          description: 'Continuing with rule-based categorization only.',
+          duration: 4000,
+        });
+      }
+    }
+  }
+
+  return processedTransactions;
 }

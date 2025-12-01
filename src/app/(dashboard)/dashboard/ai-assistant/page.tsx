@@ -170,8 +170,8 @@ export default function AIAssistantPage() {
           <div className="flex-1 min-w-0 min-h-0 p-4 md:p-6">
             <div className="h-full max-w-4xl mx-auto">
               <PremiumFeatureGate
-                featureName="AI Chat Assistant"
-                featureDescription="Get intelligent insights about your finances with an AI-powered chat assistant that understands your budget, goals, and spending patterns"
+                featureName="AI Features"
+                featureDescription="Enable AI-powered features throughout the app, including intelligent transaction categorization, financial insights, and chat assistant that understands your budget, goals, and spending patterns"
               >
                 {isInitialized ? (
                   <AIChatInterface

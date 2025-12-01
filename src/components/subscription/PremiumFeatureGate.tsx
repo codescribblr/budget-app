@@ -29,7 +29,8 @@ export function PremiumFeatureGate({
     'Goals & Debt Tracking': 'goals',
     'Loans Management': 'loans',
     'Advanced Reporting': 'advanced_reporting',
-    'AI Chat Assistant': 'ai_chat',
+    'AI Features': 'ai_chat',
+    'AI Chat Assistant': 'ai_chat', // Backward compatibility
     'Income Buffer': 'income_buffer',
   };
 

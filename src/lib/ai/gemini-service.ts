@@ -124,6 +124,172 @@ Only return the JSON array, no other text.`;
   }
 
   /**
+   * Categorize import transactions (for transaction import flow)
+   * Uses string transaction IDs and includes description field
+   */
+  async categorizeImportTransactions(
+    transactions: Array<{
+      id: string; // String ID for import transactions
+      merchant: string;
+      description: string;
+      amount: number;
+      date: string;
+      transaction_type: 'income' | 'expense';
+    }>,
+    availableCategories: Array<{ id: number; name: string }>
+  ): Promise<{
+    suggestions: Array<{
+      transactionId: string;
+      categoryId: number | null;
+      categoryName: string;
+      confidence: number;
+      reason: string;
+    }>;
+    tokensUsed: number;
+    responseTimeMs: number;
+  }> {
+    if (!API_KEY) {
+      throw new Error('Google Gemini API key not configured');
+    }
+
+    if (transactions.length === 0) {
+      return {
+        suggestions: [],
+        tokensUsed: 0,
+        responseTimeMs: 0,
+      };
+    }
+
+    const startTime = Date.now();
+
+    // Build category list - only include category names
+    const categoryList = availableCategories.map(c => c.name).join(', ');
+    
+    // Build transaction list with index mapping
+    const transactionList = transactions
+      .map(
+        (t, idx) =>
+          `${idx + 1}. Merchant: ${t.merchant || 'Unknown'}, Description: ${t.description}, Amount: $${t.amount.toFixed(2)}, Date: ${t.date}, Type: ${t.transaction_type}`
+      )
+      .join('\n');
+
+    const prompt = `You are a financial transaction categorization expert. Analyze these transactions and assign the most appropriate category from the available categories list.
+
+CRITICAL RULES:
+1. You MUST only use categories from this exact list: ${categoryList}
+2. If no category fits well, you may return null for categoryId, but try your best to match to the closest category
+3. Return a JSON array with the exact format specified below
+4. Use the transaction index (1-based) as the transaction_id in your response
+
+Available categories: ${categoryList}
+
+Transactions to categorize:
+${transactionList}
+
+Return a JSON array with this EXACT format (use transaction index as transaction_id):
+[{"transaction_id": 1, "category": "category_name_from_list", "confidence": 0.95, "reason": "brief explanation"}]
+
+Consider:
+- Merchant names and patterns
+- Transaction descriptions
+- Transaction amounts
+- Transaction type (income vs expense)
+- Common spending patterns
+- Context clues from merchant names and descriptions
+
+IMPORTANT: 
+- transaction_id should be the index number (1, 2, 3, etc.) from the list above
+- category MUST be an exact match from the available categories list
+- confidence should be between 0 and 1
+- Only return the JSON array, no other text or markdown formatting`;
+
+    try {
+      const result = await this.flashModel.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      // Parse JSON from response (handle markdown code blocks if present)
+      let jsonText = text.trim();
+      if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      }
+
+      const aiSuggestions = JSON.parse(jsonText) as Array<{
+        transaction_id: number; // This is the 1-based index
+        category: string;
+        confidence: number;
+        reason: string;
+      }>;
+
+      // Map to our format using the transaction IDs
+      const mappedSuggestions = aiSuggestions.map((s) => {
+        // transaction_id is 1-based index, convert to 0-based to get the transaction
+        const transactionIndex = s.transaction_id - 1;
+        const transaction = transactions[transactionIndex];
+        
+        if (!transaction) {
+          console.warn(`Transaction index ${transactionIndex} not found`);
+          return null;
+        }
+
+        // Find category by name (case-insensitive, trimmed)
+        const category = availableCategories.find(
+          (c) => c.name.trim().toLowerCase() === s.category.trim().toLowerCase()
+        );
+
+        return {
+          transactionId: transaction.id,
+          categoryId: category?.id || null,
+          categoryName: category?.name || s.category,
+          confidence: Math.max(0, Math.min(1, s.confidence || 0.5)),
+          reason: s.reason || '',
+        };
+      }).filter((s): s is NonNullable<typeof s> => s !== null);
+
+      const responseTimeMs = Date.now() - startTime;
+      const tokensUsed = response.usageMetadata?.totalTokenCount || 0;
+
+      return {
+        suggestions: mappedSuggestions,
+        tokensUsed,
+        responseTimeMs,
+      };
+    } catch (error: any) {
+      console.error('Error categorizing import transactions:', error);
+      
+      // Check for service unavailable/overloaded errors (503)
+      if (
+        error.message?.includes('503') ||
+        error.message?.includes('Service Unavailable') ||
+        error.message?.includes('overloaded') ||
+        error.message?.includes('overload') ||
+        error.status === 503
+      ) {
+        // Create a custom error that we can detect in the API route
+        const serviceUnavailableError = new Error('AI service temporarily unavailable. Please try again later.');
+        (serviceUnavailableError as any).isServiceUnavailable = true;
+        throw serviceUnavailableError;
+      }
+      
+      // Check for quota/rate limit errors (429)
+      if (
+        error.message?.includes('429') ||
+        error.message?.includes('quota') ||
+        error.message?.includes('Quota exceeded') ||
+        error.status === 429
+      ) {
+        const retryAfter = error.message?.match(/retry in ([\d.]+)s/i)?.[1];
+        throw new Error(
+          `AI service quota exceeded. ${retryAfter ? `Please retry in ${Math.ceil(parseFloat(retryAfter))} seconds.` : 'Please try again later.'} ` +
+          `If this persists, check your Google Gemini API key configuration in Google AI Studio.`
+        );
+      }
+      
+      throw new Error(`Failed to categorize transactions: ${error.message}`);
+    }
+  }
+
+  /**
    * Generate monthly insights
    */
   async generateInsights(

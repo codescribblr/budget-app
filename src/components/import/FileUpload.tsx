@@ -3,9 +3,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Sparkles, AlertCircle, Crown } from 'lucide-react';
 import { parseCSVFile } from '@/lib/csv-parser';
 import { parseImageFile } from '@/lib/image-parser';
 import { analyzeCSV } from '@/lib/column-analyzer';
+import { useAIUsage } from '@/hooks/use-ai-usage';
+import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useFeature } from '@/contexts/FeatureContext';
 import type { ParsedTransaction } from '@/lib/import-types';
 import Papa from 'papaparse';
 
@@ -19,6 +26,13 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [showAIFallback, setShowAIFallback] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [fallbackError, setFallbackError] = useState<string | null>(null);
+  const [enableAICategorization, setEnableAICategorization] = useState(false); // Disabled by default
+  const { stats, loading: statsLoading } = useAIUsage();
+  const { isPremium } = useSubscription();
+  const aiChatEnabled = useFeature('ai_chat');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
@@ -96,12 +110,47 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         fileType.startsWith('image/') ||
         fileName.endsWith('.jpg') ||
         fileName.endsWith('.jpeg') ||
-        fileName.endsWith('.png') ||
-        fileName.endsWith('.pdf')
+        fileName.endsWith('.png')
       ) {
-        transactions = await parseImageFile(file);
-        // Store filename for image imports too
+        // Images use AI parsing
+        const parseResult = await parseImageFile(file, true);
+        
+        if (parseResult.error || parseResult.transactions.length === 0) {
+          throw new Error(parseResult.error || 'No transactions found in the file');
+        }
+        
+        transactions = parseResult.transactions;
         sessionStorage.setItem('csvFileName', file.name);
+      } else if (fileName.endsWith('.pdf') || fileType === 'application/pdf') {
+        // Parse PDF using local parser first
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/import/process-pdf', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.transactions && result.transactions.length > 0) {
+            transactions = result.transactions;
+            sessionStorage.setItem('csvFileName', file.name);
+          } else {
+            throw new Error('No transactions found in PDF');
+          }
+        } else {
+          // PDF parsing failed, offer AI fallback
+          const errorData = await response.json();
+          if (errorData.canFallbackToAI) {
+            setPendingFile(file);
+            setFallbackError(errorData.error || 'PDF parsing failed. AI fallback available.');
+            setShowAIFallback(true);
+            setIsProcessing(false);
+            return;
+          }
+          throw new Error(errorData.error || 'Failed to parse PDF');
+        }
       } else {
         setError('Unsupported file type. Please upload a CSV or image file.');
         setIsProcessing(false);
@@ -116,7 +165,15 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
 
       // Check for duplicates and auto-categorize
       const { processTransactions } = await import('@/lib/csv-parser-helpers');
-      const processedTransactions = await processTransactions(transactions);
+      // Skip AI categorization if disabled OR if limit is reached
+      const shouldSkipAI = !enableAICategorization || 
+        (stats ? stats.categorization.used >= stats.categorization.limit : false);
+      const processedTransactions = await processTransactions(
+        transactions,
+        undefined,
+        undefined,
+        shouldSkipAI
+      );
 
       onFileUploaded(processedTransactions, file.name);
     } catch (err) {
@@ -236,9 +293,164 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         </div>
       </div>
 
+      {/* AI Categorization Settings */}
+      {!disabled && (
+        // Hide card if user is premium but feature is disabled
+        !(isPremium && !aiChatEnabled) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-purple-500" />
+                AI Categorization
+                {!isPremium && (
+                  <Badge
+                    variant="default"
+                    className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-0 text-xs shrink-0"
+                  >
+                    <Crown className="h-3 w-3 mr-1" />
+                    Premium
+                  </Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                Automatically categorize uncategorized transactions using AI
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5">
+                  <Checkbox
+                    id="enable-ai-categorization"
+                    checked={enableAICategorization}
+                    onCheckedChange={(checked) => {
+                      if (checked === true) {
+                        setEnableAICategorization(true);
+                      } else {
+                        setEnableAICategorization(false);
+                      }
+                    }}
+                    disabled={statsLoading || isProcessing || !isPremium || !aiChatEnabled}
+                  />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label
+                    htmlFor="enable-ai-categorization"
+                    className={`text-sm font-medium leading-normal block ${
+                      !isPremium || !aiChatEnabled
+                        ? 'cursor-not-allowed opacity-70'
+                        : 'cursor-pointer'
+                    }`}
+                  >
+                    Enable AI categorization
+                  </label>
+                  {!isPremium && (
+                    <div className="text-sm text-muted-foreground">
+                      <span>Upgrade to Premium to enable AI categorization</span>
+                    </div>
+                  )}
+                  {isPremium && !aiChatEnabled && (
+                    <div className="text-sm text-muted-foreground">
+                      <span>Enable AI features in Settings to use this feature</span>
+                    </div>
+                  )}
+                  {isPremium && aiChatEnabled && !statsLoading && stats && (
+                    <div className="text-sm text-muted-foreground">
+                      {enableAICategorization ? (
+                        stats.categorization.used >= stats.categorization.limit ? (
+                          <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            <span>Daily limit reached ({stats.categorization.used}/{stats.categorization.limit}). AI categorization will be skipped.</span>
+                          </div>
+                        ) : (
+                          <span>
+                            {stats.categorization.limit - stats.categorization.used} attempt{stats.categorization.limit - stats.categorization.used !== 1 ? 's' : ''} remaining today
+                          </span>
+                        )
+                      ) : (
+                        <span>AI categorization will be skipped. Only rule-based categorization will be used.</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      )}
+
       {error && (
         <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
           <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+        </div>
+      )}
+
+      {showAIFallback && pendingFile && (
+        <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md space-y-3">
+          <div>
+            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+              PDF parsing failed
+            </p>
+            <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+              {fallbackError}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={async () => {
+                setShowAIFallback(false);
+                setIsProcessing(true);
+                setError(null);
+                try {
+                  const aiResult = await parseImageFile(pendingFile, true);
+                  if (aiResult.error) {
+                    throw new Error(aiResult.error);
+                  }
+                  if (aiResult.transactions.length === 0) {
+                    throw new Error('No transactions found in the file');
+                  }
+                  
+                  const { processTransactions } = await import('@/lib/csv-parser-helpers');
+                  // Skip AI categorization if disabled OR if limit is reached
+                  const shouldSkipAI = !enableAICategorization || 
+                    (stats ? stats.categorization.used >= stats.categorization.limit : false);
+                  const processedTransactions = await processTransactions(
+                    aiResult.transactions,
+                    undefined,
+                    undefined,
+                    shouldSkipAI
+                  );
+                  onFileUploaded(processedTransactions, pendingFile.name);
+                  sessionStorage.setItem('csvFileName', pendingFile.name);
+                  setPendingFile(null);
+                } catch (err) {
+                  console.error('Error processing file with AI:', err);
+                  setError(err instanceof Error ? err.message : 'Failed to process file with AI');
+                } finally {
+                  setIsProcessing(false);
+                }
+              }}
+              disabled={isProcessing}
+            >
+              Try AI Parsing
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setShowAIFallback(false);
+                setPendingFile(null);
+                setFallbackError(null);
+                setError('PDF parsing cancelled');
+              }}
+              disabled={isProcessing}
+            >
+              Cancel
+            </Button>
+          </div>
+          <p className="text-xs text-yellow-700 dark:text-yellow-300">
+            💡 AI parsing requires OpenAI API key configured in your environment
+          </p>
         </div>
       )}
 

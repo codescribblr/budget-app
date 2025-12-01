@@ -22,6 +22,7 @@ export interface TransactionSplit {
   categoryId: number;
   categoryName: string;
   amount: number;
+  isAICategorized?: boolean; // Flag to track if this categorization was done by AI
 }
 
 export interface CSVFormat {

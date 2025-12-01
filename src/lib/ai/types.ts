@@ -1,13 +1,11 @@
 // AI Integration Types
 
-export type AIFeatureType = 'chat' | 'categorization' | 'insights' | 'dashboard_insights' | 'reports' | 'prediction';
+export type AIFeatureType = 'chat' | 'categorization' | 'dashboard_insights' | 'prediction';
 
 export interface UsageStats {
   chat: { used: number; limit: number };
   categorization: { used: number; limit: number };
-  insights: { used: number; limit: number };
   dashboard_insights: { used: number; limit: number };
-  reports: { used: number; limit: number };
 }
 
 export interface RateLimitResult {
