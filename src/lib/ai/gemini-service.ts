@@ -257,8 +257,27 @@ IMPORTANT:
     } catch (error: any) {
       console.error('Error categorizing import transactions:', error);
       
-      // Check for quota/rate limit errors
-      if (error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('Quota exceeded')) {
+      // Check for service unavailable/overloaded errors (503)
+      if (
+        error.message?.includes('503') ||
+        error.message?.includes('Service Unavailable') ||
+        error.message?.includes('overloaded') ||
+        error.message?.includes('overload') ||
+        error.status === 503
+      ) {
+        // Create a custom error that we can detect in the API route
+        const serviceUnavailableError = new Error('AI service temporarily unavailable. Please try again later.');
+        (serviceUnavailableError as any).isServiceUnavailable = true;
+        throw serviceUnavailableError;
+      }
+      
+      // Check for quota/rate limit errors (429)
+      if (
+        error.message?.includes('429') ||
+        error.message?.includes('quota') ||
+        error.message?.includes('Quota exceeded') ||
+        error.status === 429
+      ) {
         const retryAfter = error.message?.match(/retry in ([\d.]+)s/i)?.[1];
         throw new Error(
           `AI service quota exceeded. ${retryAfter ? `Please retry in ${Math.ceil(parseFloat(retryAfter))} seconds.` : 'Please try again later.'} ` +

@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
-import { getAllCategories } from '@/lib/supabase-queries';
+import { getAllCategories, isFeatureEnabled } from '@/lib/supabase-queries';
+import { getActiveAccountId } from '@/lib/account-context';
+import { aiRateLimiter } from '@/lib/ai/rate-limiter';
 import { geminiService } from '@/lib/ai/gemini-service';
+import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
 import type { ParsedTransaction } from '@/lib/import-types';
 
 export async function POST(request: Request) {
@@ -9,6 +12,38 @@ export async function POST(request: Request) {
     const { checkWriteAccess } = await import('@/lib/api-helpers');
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
+
+    const { user } = await getAuthenticatedUser();
+    const accountId = await getActiveAccountId();
+
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'No active account. Please select an account first.' },
+        { status: 400 }
+      );
+    }
+
+    // Require premium subscription for AI categorization
+    try {
+      await requirePremiumSubscription(accountId);
+    } catch (error: any) {
+      if (error instanceof PremiumRequiredError) {
+        return NextResponse.json(
+          { error: 'Premium subscription required', message: 'AI categorization is a premium feature. Please upgrade to Premium to use this feature.' },
+          { status: 403 }
+        );
+      }
+      throw error;
+    }
+
+    // Check if AI feature is enabled
+    const aiFeatureEnabled = await isFeatureEnabled('ai_chat');
+    if (!aiFeatureEnabled) {
+      return NextResponse.json(
+        { error: 'Feature disabled', message: 'AI features are disabled for this account. Enable AI features in Settings to use this feature.' },
+        { status: 403 }
+      );
+    }
 
     const { transactions } = await request.json() as {
       transactions: ParsedTransaction[];
@@ -33,6 +68,20 @@ export async function POST(request: Request) {
       });
     }
 
+    // Check rate limit BEFORE making AI call
+    const rateLimit = await aiRateLimiter.checkLimit(user.id, 'categorization');
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Rate limit exceeded',
+          message: `Daily AI categorization limit reached (${rateLimit.remaining} remaining). Try again tomorrow.`,
+          resetAt: rateLimit.resetAt.toISOString(),
+          remaining: rateLimit.remaining,
+        },
+        { status: 429 }
+      );
+    }
+
     // Fetch all categories (exclude goal categories)
     const categories = await getAllCategories(true);
 
@@ -47,9 +96,42 @@ export async function POST(request: Request) {
     }));
 
     // Call AI categorization
-    const result = await geminiService.categorizeImportTransactions(
-      transactionsForAI,
-      categories.map((c) => ({ id: c.id, name: c.name }))
+    let result;
+    try {
+      result = await geminiService.categorizeImportTransactions(
+        transactionsForAI,
+        categories.map((c) => ({ id: c.id, name: c.name }))
+      );
+    } catch (aiError: any) {
+      // Handle service unavailable errors gracefully (don't consume rate limit)
+      if (aiError.isServiceUnavailable || aiError.message?.includes('temporarily unavailable')) {
+        return NextResponse.json(
+          {
+            suggestions: [],
+            error: 'AI service temporarily unavailable',
+            message: 'The AI categorization service is currently overloaded. Continuing with rule-based categorization only.',
+            serviceUnavailable: true,
+          },
+          { status: 503 }
+        );
+      }
+      // Re-throw other errors to be handled below
+      throw aiError;
+    }
+
+    // Record usage AFTER successful AI call (only if we got a result)
+    await aiRateLimiter.recordUsage(
+      user.id,
+      accountId,
+      'categorization',
+      result.tokensUsed,
+      0, // tokensInput - not available from this method
+      0, // tokensOutput - not available from this method
+      result.responseTimeMs,
+      {
+        transactionCount: uncategorizedTransactions.length,
+        categorizedCount: result.suggestions.filter(s => s.categoryId).length,
+      }
     );
 
     // Map suggestions back to transaction format expected by the frontend
@@ -79,13 +161,32 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error('Error in AI categorization:', error);
+    
+    // Don't log service unavailable errors as critical errors
+    if (error.isServiceUnavailable || error.message?.includes('temporarily unavailable')) {
+      return NextResponse.json(
+        {
+          suggestions: [],
+          error: 'AI service temporarily unavailable',
+          message: 'The AI categorization service is currently overloaded. Continuing with rule-based categorization only.',
+          serviceUnavailable: true,
+        },
+        { status: 503 }
+      );
+    }
+    
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    return NextResponse.json(
-      { error: error.message || 'Failed to categorize transactions with AI' },
-      { status: 500 }
-    );
+    
+    // For other errors, return 200 with empty suggestions so import can continue
+    // This prevents the import from failing due to AI issues
+    console.warn('AI categorization failed, continuing without AI:', error.message);
+    return NextResponse.json({
+      suggestions: [],
+      error: error.message || 'Failed to categorize transactions with AI',
+      message: 'Continuing with rule-based categorization only.',
+    });
   }
 }
 

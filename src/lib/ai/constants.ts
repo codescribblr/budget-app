@@ -4,14 +4,8 @@ export const USER_LIMITS = {
   daily: {
     chat: 15,
     categorization: 5,
-    insights: 15, // For AI assistant insights
     dashboard_insights: 1, // For dashboard widget insights
-    reports: 3,
-    total: 35,
-  },
-  monthly: {
-    insights: 2,
-    reports: 30,
+    total: 21, // Updated total: 15 + 5 + 1 = 21
   },
 } as const;
 

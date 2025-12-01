@@ -24,9 +24,7 @@ export function useAIUsage() {
       setStats({
         chat: { used: 0, limit: 15 },
         categorization: { used: 0, limit: 5 },
-        insights: { used: 0, limit: 15 },
         dashboard_insights: { used: 0, limit: 1 },
-        reports: { used: 0, limit: 3 },
       });
     } finally {
       setLoading(false);

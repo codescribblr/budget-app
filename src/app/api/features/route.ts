@@ -73,8 +73,8 @@ const FEATURES = {
     requiresPremium: true,
   },
   ai_chat: {
-    name: 'AI Chat Assistant',
-    description: 'Get intelligent insights about your finances with an AI-powered chat assistant that understands your budget, goals, and spending patterns.',
+    name: 'AI Features',
+    description: 'Enable AI-powered features throughout the app, including intelligent transaction categorization, financial insights, and chat assistant that understands your budget, goals, and spending patterns.',
     level: 'power',
     dependencies: [],
     dataLossWarning: false,

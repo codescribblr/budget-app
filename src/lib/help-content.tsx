@@ -209,5 +209,120 @@ export const HELP_CONTENT = {
       },
     ],
   },
+
+  ai_chat: {
+    title: 'AI Features',
+    tooltip: 'Enable AI-powered features including transaction categorization, financial insights, and chat assistant.',
+    description: 'AI Features use advanced machine learning to help automate categorization, generate insights, and answer questions about your finances.',
+    sections: [
+      {
+        title: 'What\'s Included',
+        content: (
+          <div className="space-y-3">
+            <div>
+              <strong>Transaction Categorization</strong>
+              <p className="text-muted-foreground">
+                Automatically categorize uncategorized transactions during import. The AI analyzes merchant names, 
+                descriptions, and amounts to suggest appropriate categories based on your existing categorization patterns.
+              </p>
+            </div>
+            <div>
+              <strong>Financial Insights</strong>
+              <p className="text-muted-foreground">
+                Get monthly AI-generated insights about your spending patterns, budget performance, and savings 
+                opportunities. Insights appear in the dashboard widget and are updated daily.
+              </p>
+            </div>
+            <div>
+              <strong>AI Chat Assistant</strong>
+              <p className="text-muted-foreground">
+                Ask questions about your budget, spending, goals, and financial patterns. The assistant understands 
+                your complete financial picture and can provide personalized recommendations.
+              </p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: 'How It Works',
+        content: (
+          <ol className="list-decimal list-inside space-y-2">
+            <li>
+              <strong>Transaction Categorization:</strong> When importing transactions, uncategorized items are 
+              automatically analyzed and assigned to categories based on patterns from your past transactions.
+            </li>
+            <li>
+              <strong>Financial Insights:</strong> The AI analyzes your spending, budget, and goals to generate 
+              monthly insights with actionable recommendations.
+            </li>
+            <li>
+              <strong>Chat Assistant:</strong> Ask questions in natural language about your finances. The AI 
+              has access to your transactions, categories, goals, and budget to provide contextual answers.
+            </li>
+            <li>
+              <strong>Learning:</strong> The AI learns from your manual corrections and category choices to 
+              improve suggestions over time.
+            </li>
+          </ol>
+        ),
+      },
+      {
+        title: 'Daily Limits',
+        content: (
+          <div className="space-y-2">
+            <p>
+              To ensure fair usage and maintain service quality, AI features have daily limits:
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Chat:</strong> 15 queries per day</li>
+              <li><strong>Categorization:</strong> 5 import sessions per day</li>
+              <li><strong>Dashboard Insights:</strong> 1 generation per day</li>
+            </ul>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Limits reset daily at midnight UTC. You can always review and manually adjust AI suggestions.
+            </p>
+          </div>
+        ),
+      },
+      {
+        title: 'Accuracy & Review',
+        content: (
+          <div className="space-y-2">
+            <p>
+              AI suggestions are designed to be helpful, but they're not always perfect. Always review AI 
+              categorizations before importing transactions.
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>AI categorizations are marked with a sparkles icon (✨) for easy identification</li>
+              <li>You can accept, modify, or reject any AI suggestion</li>
+              <li>Manual corrections help the AI learn your preferences</li>
+              <li>Rule-based categorization still runs as a backup</li>
+            </ul>
+          </div>
+        ),
+      },
+      {
+        title: 'Privacy & Data',
+        content: (
+          <div className="space-y-2">
+            <p>
+              Your financial data privacy is important:
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Transaction data is sent to Google's Gemini AI service for processing</li>
+              <li>Data is used only for categorization and insights generation</li>
+              <li>We do not store your data with third-party AI services beyond what's necessary for processing</li>
+              <li>You can disable AI features at any time in Settings</li>
+              <li>When disabled, no data is sent to AI services</li>
+            </ul>
+            <p className="mt-2 text-sm text-muted-foreground">
+              AI features require an active Premium subscription. Disabling this feature turns off all AI 
+              functionality across the app.
+            </p>
+          </div>
+        ),
+      },
+    ],
+  },
 };
 

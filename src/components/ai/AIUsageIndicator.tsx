@@ -58,8 +58,7 @@ export function AIUsageIndicator() {
           <div className="space-y-1 text-xs">
             <div>Chat: {stats.chat.used}/{stats.chat.limit}</div>
             <div>Categorization: {stats.categorization.used}/{stats.categorization.limit}</div>
-            <div>Insights: {stats.insights.used}/{stats.insights.limit}</div>
-            <div>Reports: {stats.reports.used}/{stats.reports.limit}</div>
+            <div>Dashboard Insights: {stats.dashboard_insights.used}/{stats.dashboard_insights.limit}</div>
           </div>
         </TooltipContent>
       </Tooltip>

@@ -136,17 +136,9 @@ class AIRateLimiter {
         used: counts.categorization || 0,
         limit: USER_LIMITS.daily.categorization,
       },
-      insights: {
-        used: counts.insights || 0,
-        limit: USER_LIMITS.daily.insights,
-      },
       dashboard_insights: {
         used: counts.dashboard_insights || 0,
         limit: USER_LIMITS.daily.dashboard_insights,
-      },
-      reports: {
-        used: counts.reports || 0,
-        limit: USER_LIMITS.daily.reports,
       },
     };
   }
@@ -167,9 +159,7 @@ class AIRateLimiter {
     return {
       chat: { used: 0, limit: USER_LIMITS.daily.chat },
       categorization: { used: 0, limit: USER_LIMITS.daily.categorization },
-      insights: { used: 0, limit: USER_LIMITS.daily.insights },
       dashboard_insights: { used: 0, limit: USER_LIMITS.daily.dashboard_insights },
-      reports: { used: 0, limit: USER_LIMITS.daily.reports },
     };
   }
 }

@@ -3,9 +3,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Sparkles, AlertCircle, Crown } from 'lucide-react';
 import { parseCSVFile } from '@/lib/csv-parser';
 import { parseImageFile } from '@/lib/image-parser';
 import { analyzeCSV } from '@/lib/column-analyzer';
+import { useAIUsage } from '@/hooks/use-ai-usage';
+import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useFeature } from '@/contexts/FeatureContext';
 import type { ParsedTransaction } from '@/lib/import-types';
 import Papa from 'papaparse';
 
@@ -22,6 +29,10 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
   const [showAIFallback, setShowAIFallback] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [fallbackError, setFallbackError] = useState<string | null>(null);
+  const [enableAICategorization, setEnableAICategorization] = useState(false); // Disabled by default
+  const { stats, loading: statsLoading } = useAIUsage();
+  const { isPremium } = useSubscription();
+  const aiChatEnabled = useFeature('ai_chat');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
@@ -154,7 +165,15 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
 
       // Check for duplicates and auto-categorize
       const { processTransactions } = await import('@/lib/csv-parser-helpers');
-      const processedTransactions = await processTransactions(transactions);
+      // Skip AI categorization if disabled OR if limit is reached
+      const shouldSkipAI = !enableAICategorization || 
+        (stats ? stats.categorization.used >= stats.categorization.limit : false);
+      const processedTransactions = await processTransactions(
+        transactions,
+        undefined,
+        undefined,
+        shouldSkipAI
+      );
 
       onFileUploaded(processedTransactions, file.name);
     } catch (err) {
@@ -274,6 +293,91 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         </div>
       </div>
 
+      {/* AI Categorization Settings */}
+      {!disabled && (
+        // Hide card if user is premium but feature is disabled
+        !(isPremium && !aiChatEnabled) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-purple-500" />
+                AI Categorization
+                {!isPremium && (
+                  <Badge
+                    variant="default"
+                    className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-0 text-xs shrink-0"
+                  >
+                    <Crown className="h-3 w-3 mr-1" />
+                    Premium
+                  </Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                Automatically categorize uncategorized transactions using AI
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5">
+                  <Checkbox
+                    id="enable-ai-categorization"
+                    checked={enableAICategorization}
+                    onCheckedChange={(checked) => {
+                      if (checked === true) {
+                        setEnableAICategorization(true);
+                      } else {
+                        setEnableAICategorization(false);
+                      }
+                    }}
+                    disabled={statsLoading || isProcessing || !isPremium || !aiChatEnabled}
+                  />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label
+                    htmlFor="enable-ai-categorization"
+                    className={`text-sm font-medium leading-normal block ${
+                      !isPremium || !aiChatEnabled
+                        ? 'cursor-not-allowed opacity-70'
+                        : 'cursor-pointer'
+                    }`}
+                  >
+                    Enable AI categorization
+                  </label>
+                  {!isPremium && (
+                    <div className="text-sm text-muted-foreground">
+                      <span>Upgrade to Premium to enable AI categorization</span>
+                    </div>
+                  )}
+                  {isPremium && !aiChatEnabled && (
+                    <div className="text-sm text-muted-foreground">
+                      <span>Enable AI features in Settings to use this feature</span>
+                    </div>
+                  )}
+                  {isPremium && aiChatEnabled && !statsLoading && stats && (
+                    <div className="text-sm text-muted-foreground">
+                      {enableAICategorization ? (
+                        stats.categorization.used >= stats.categorization.limit ? (
+                          <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            <span>Daily limit reached ({stats.categorization.used}/{stats.categorization.limit}). AI categorization will be skipped.</span>
+                          </div>
+                        ) : (
+                          <span>
+                            {stats.categorization.limit - stats.categorization.used} attempt{stats.categorization.limit - stats.categorization.used !== 1 ? 's' : ''} remaining today
+                          </span>
+                        )
+                      ) : (
+                        <span>AI categorization will be skipped. Only rule-based categorization will be used.</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      )}
+
       {error && (
         <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
           <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
@@ -307,7 +411,15 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                   }
                   
                   const { processTransactions } = await import('@/lib/csv-parser-helpers');
-                  const processedTransactions = await processTransactions(aiResult.transactions);
+                  // Skip AI categorization if disabled OR if limit is reached
+                  const shouldSkipAI = !enableAICategorization || 
+                    (stats ? stats.categorization.used >= stats.categorization.limit : false);
+                  const processedTransactions = await processTransactions(
+                    aiResult.transactions,
+                    undefined,
+                    undefined,
+                    shouldSkipAI
+                  );
                   onFileUploaded(processedTransactions, pendingFile.name);
                   sessionStorage.setItem('csvFileName', pendingFile.name);
                   setPendingFile(null);
