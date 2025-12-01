@@ -55,6 +55,7 @@ export interface AccountBackupData {
   category_monthly_funding?: any[];
   user_feature_flags?: any[]; // User-specific, not account-specific
   ai_conversations?: any[];
+  duplicate_group_reviews?: any[];
 }
 
 // Legacy interface for backward compatibility
@@ -81,6 +82,7 @@ export interface UserBackupData {
   category_monthly_funding?: any[];
   user_feature_flags?: any[];
   ai_conversations?: any[];
+  duplicate_group_reviews?: any[];
 }
 
 /**
@@ -148,6 +150,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     { data: category_monthly_funding },
     { data: user_feature_flags },
     { data: ai_conversations },
+    { data: duplicate_group_reviews },
   ] = await Promise.all([
     supabase.from('accounts').select('*').eq('account_id', accountId),
     supabase.from('categories').select('*').eq('account_id', accountId),
@@ -175,6 +178,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     supabase.from('category_monthly_funding').select('*').eq('account_id', accountId),
     supabase.from('user_feature_flags').select('*').eq('account_id', accountId),
     supabase.from('ai_conversations').select('*').eq('account_id', accountId),
+    supabase.from('duplicate_group_reviews').select('*').eq('budget_account_id', accountId),
   ]);
 
   return {
@@ -223,6 +227,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     category_monthly_funding: category_monthly_funding || [],
     user_feature_flags: user_feature_flags || [],
     ai_conversations: ai_conversations || [],
+    duplicate_group_reviews: duplicate_group_reviews || [],
   };
 }
 
@@ -257,6 +262,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     category_monthly_funding: accountData.category_monthly_funding,
     user_feature_flags: accountData.user_feature_flags,
     ai_conversations: accountData.ai_conversations,
+    duplicate_group_reviews: accountData.duplicate_group_reviews,
   };
 }
 
@@ -325,6 +331,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   await supabase.from('category_monthly_funding').delete().eq('account_id', accountId);
   await supabase.from('user_feature_flags').delete().eq('account_id', accountId);
   await supabase.from('ai_conversations').delete().eq('account_id', accountId);
+  await supabase.from('duplicate_group_reviews').delete().eq('budget_account_id', accountId);
   await supabase.from('categories').delete().eq('account_id', accountId);
   await supabase.from('accounts').delete().eq('account_id', accountId);
 
@@ -763,6 +770,37 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       throw error;
     }
     console.log('[Import] Inserted', aiConversationsToInsert.length, 'AI conversations');
+  }
+
+  // Insert duplicate group reviews (batch with remapped transaction_ids)
+  if (backupData.duplicate_group_reviews && backupData.duplicate_group_reviews.length > 0) {
+    const duplicateGroupReviewsToInsert = backupData.duplicate_group_reviews.map(({ id, budget_account_id, transaction_ids, reviewed_by, ...review }) => {
+      // Remap transaction_ids array to new transaction IDs
+      const remappedTransactionIds = transaction_ids
+        ? transaction_ids
+            .map((oldId: number) => transactionIdMap.get(oldId))
+            .filter((newId: number | undefined) => newId !== undefined) as number[]
+        : [];
+
+      return {
+        ...review,
+        budget_account_id: accountId,
+        transaction_ids: remappedTransactionIds,
+        reviewed_by: reviewed_by || null, // Keep reviewed_by if it exists, otherwise null
+      };
+    }).filter(review => review.transaction_ids.length > 0); // Only include reviews with valid remapped transaction IDs
+
+    if (duplicateGroupReviewsToInsert.length > 0) {
+      const { error } = await supabase
+        .from('duplicate_group_reviews')
+        .insert(duplicateGroupReviewsToInsert);
+
+      if (error) {
+        console.error('[Import] Error inserting duplicate group reviews:', error);
+        throw error;
+      }
+      console.log('[Import] Inserted', duplicateGroupReviewsToInsert.length, 'duplicate group reviews');
+    }
   }
 
   console.log('[Import] Import completed successfully');
