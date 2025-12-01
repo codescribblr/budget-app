@@ -22,7 +22,7 @@ import ImportConfirmationDialog from './ImportConfirmationDialog';
 import ImportProgressDialog from './ImportProgressDialog';
 import { generateTransactionHash } from '@/lib/csv-parser';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
-import { MoreVertical, Edit, X, Check, RefreshCw, Trash2 } from 'lucide-react';
+import { MoreVertical, Edit, X, Check, RefreshCw, Trash2, Sparkles } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
 import { deleteTemplate } from '@/lib/mapping-templates';
 import { parseCSVFile } from '@/lib/csv-parser';
@@ -229,6 +229,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
           updatedItem.splits = [{
             ...updatedItem.splits[0],
             amount,
+            // Preserve isAICategorized flag when only amount changes
           }];
         }
         return updatedItem;
@@ -254,6 +255,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
             categoryId: category.id,
             categoryName: category.name,
             amount: item.amount,
+            isAICategorized: false, // User manually changed, clear AI flag
           }],
         };
       }
@@ -638,10 +640,15 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                         </SelectContent>
                       </Select>
                     ) : (
-                      <div className="text-sm">
+                      <div className="text-sm flex items-center gap-1.5">
                         {transaction.splits.length > 0 ? (
                           transaction.splits.length === 1 ? (
-                            transaction.splits[0].categoryName
+                            <>
+                              <span>{transaction.splits[0].categoryName}</span>
+                              {transaction.splits[0].isAICategorized && (
+                                <Sparkles className="h-3.5 w-3.5 text-purple-500" title="AI categorized" />
+                              )}
+                            </>
                           ) : (
                             <span className="text-muted-foreground">
                               {transaction.splits.length} categories

@@ -314,8 +314,8 @@ export async function processTransactions(
   });
   const { suggestions } = await categorizationResponse.json();
 
-  // Step 5: Process each transaction
-  return transactions.map((transaction, index) => {
+  // Step 5: Process each transaction with initial categorization
+  const processedTransactions = transactions.map((transaction, index) => {
     const isDatabaseDuplicate = databaseDuplicateSet.has(transaction.hash);
     const isWithinFileDuplicate = withinFileDuplicates.has(index);
     const isDuplicate = isDatabaseDuplicate || isWithinFileDuplicate;
@@ -347,4 +347,58 @@ export async function processTransactions(
         : [],
     };
   });
+
+  // Step 6: AI categorization for remaining uncategorized transactions
+  const uncategorizedTransactions = processedTransactions.filter(
+    (txn) => !txn.isDuplicate && (!txn.splits || txn.splits.length === 0)
+  );
+
+  if (uncategorizedTransactions.length > 0) {
+    try {
+      const aiCategorizationResponse = await fetch('/api/import/ai-categorize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactions: uncategorizedTransactions }),
+      });
+
+      if (aiCategorizationResponse.ok) {
+        const { suggestions: aiSuggestions } = await aiCategorizationResponse.json();
+        
+        // Create a map of transaction ID to AI suggestion
+        const aiSuggestionMap = new Map(
+          aiSuggestions.map((s: any) => [s.transactionId, s])
+        );
+
+        // Update transactions with AI suggestions
+        return processedTransactions.map((transaction) => {
+          const aiSuggestion = aiSuggestionMap.get(transaction.id);
+          
+          if (aiSuggestion && aiSuggestion.categoryId && !transaction.isDuplicate) {
+            const category = categories.find((c: any) => c.id === aiSuggestion.categoryId);
+            return {
+              ...transaction,
+              suggestedCategory: aiSuggestion.categoryId,
+              status: 'pending',
+              splits: [{
+                categoryId: aiSuggestion.categoryId,
+                categoryName: category?.name || aiSuggestion.categoryName,
+                amount: transaction.amount,
+                isAICategorized: true, // Mark as AI-categorized
+              }],
+            };
+          }
+          
+          return transaction;
+        });
+      } else {
+        // If AI categorization fails, log but don't fail the entire import
+        console.warn('AI categorization failed, continuing with existing categorizations');
+      }
+    } catch (error) {
+      // If AI categorization fails, log but don't fail the entire import
+      console.warn('Error calling AI categorization:', error);
+    }
+  }
+
+  return processedTransactions;
 }

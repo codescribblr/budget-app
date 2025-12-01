@@ -76,7 +76,7 @@ export default function TransactionEditDialog({
   };
 
   const handleAddSplit = () => {
-    setSplits([...splits, { categoryId: 0, categoryName: '', amount: 0 }]);
+    setSplits([...splits, { categoryId: 0, categoryName: '', amount: 0, isAICategorized: false }]);
   };
 
   const handleRemoveSplit = (index: number) => {
@@ -94,11 +94,13 @@ export default function TransactionEditDialog({
         ...newSplits[index],
         categoryId,
         categoryName: category?.name || '',
+        isAICategorized: false, // User manually changed category, clear AI flag
       };
     } else {
       newSplits[index] = {
         ...newSplits[index],
         [field]: parseFloat(value) || 0,
+        // Preserve isAICategorized flag when only amount changes
       };
     }
     setSplits(newSplits);
