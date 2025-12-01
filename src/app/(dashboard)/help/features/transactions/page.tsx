@@ -15,7 +15,10 @@ import {
   History,
   Upload,
   Zap,
-  Lightbulb
+  Lightbulb,
+  GitMerge,
+  Copy,
+  Eye
 } from 'lucide-react';
 
 export default function TransactionsFeaturePage() {
@@ -329,6 +332,208 @@ export default function TransactionsFeaturePage() {
         </CardContent>
       </Card>
 
+      {/* Viewing Transaction Details */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Eye className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Viewing Transaction Details</CardTitle>
+              <CardDescription className="text-base">
+                See complete information about any transaction including import metadata
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <StepList
+            steps={[
+              { title: 'Find the transaction', content: 'Locate the transaction in the list' },
+              { title: 'Click on the row', content: 'Click anywhere on the transaction row to open the detail dialog' },
+              { title: 'Review details', content: 'View all transaction information, category splits, and import metadata' },
+            ]}
+          />
+          <p className="text-sm text-muted-foreground">
+            The transaction detail dialog shows:
+          </p>
+          <ul className="space-y-2 text-sm text-muted-foreground ml-4">
+            <li className="flex items-start gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+              <span>Complete transaction information (date, description, amount, type, merchant, account)</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+              <span>All category splits with amounts</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+              <span>Import metadata (if imported): original CSV row data, source filename, suggested categories</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+              <span>Creation and update timestamps</span>
+            </li>
+          </ul>
+          <Callout type="tip" title="Import Metadata">
+            For imported transactions, you can see the original CSV row data, which includes all columns
+            from your bank export. This is helpful when reviewing duplicates or understanding where
+            transaction data came from.
+          </Callout>
+        </CardContent>
+      </Card>
+
+      {/* Finding and Managing Duplicates */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Copy className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Finding and Managing Duplicate Transactions</CardTitle>
+              <CardDescription className="text-base">
+                Identify and merge duplicate transactions to keep your budget clean
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <StepList
+            steps={[
+              {
+                title: 'Go to Transactions page',
+                content: <span>Navigate to the <Link href="/transactions" className="text-primary hover:underline">Transactions page</Link></span>
+              },
+              {
+                title: 'Click "Find Duplicates"',
+                content: 'Click the "Find Duplicates" button in the page header'
+              },
+              {
+                title: 'Review duplicate groups',
+                content: 'The app will show groups of transactions that appear to be duplicates based on amount, date, and description'
+              },
+              {
+                title: 'Select transactions',
+                content: 'Select individual transactions or use the group checkbox to select all transactions in a group'
+              },
+              {
+                title: 'Take action',
+                content: 'Merge selected transactions or mark them as "Not Duplicates" if they\'re not actually duplicates'
+              },
+            ]}
+          />
+          <div className="bg-muted/50 rounded-lg p-4 border">
+            <p className="text-sm font-medium mb-3">Duplicate Detection</p>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>Transactions are grouped as duplicates if they have the same amount and date (within ±1 day)</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>The app checks both exact matches and similar descriptions</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>Groups marked as "Not Duplicates" won't appear again unless new matching transactions are added</span>
+              </li>
+            </ul>
+          </div>
+          <Callout type="info" title="Click to View Details">
+            Click on any transaction row to see full details including import metadata. This helps
+            you determine if transactions are truly duplicates or just similar.
+          </Callout>
+        </CardContent>
+      </Card>
+
+      {/* Merging Duplicate Transactions */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <GitMerge className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Merging Duplicate Transactions</CardTitle>
+              <CardDescription className="text-base">
+                Combine duplicate transactions while choosing which data to keep
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            When you find duplicate transactions, you can merge them instead of deleting them. This
+            allows you to combine the best information from each transaction.
+          </p>
+          <StepList
+            steps={[
+              {
+                title: 'Select transactions to merge',
+                content: 'Select at least 2 transactions in a duplicate group (use checkboxes)'
+              },
+              {
+                title: 'Click "Merge Selected"',
+                content: 'The merge dialog will open showing all selected transactions'
+              },
+              {
+                title: 'Review quick merge preview',
+                content: 'The app suggests the best values for each field based on smart defaults'
+              },
+              {
+                title: 'Customize if needed',
+                content: 'Click "Customize Merge" to choose specific values for date, description, merchant, category, and historical status'
+              },
+              {
+                title: 'Combine category splits',
+                content: 'If transactions have different categories, you can combine them into a single merged transaction'
+              },
+              {
+                title: 'Confirm merge',
+                content: 'Review the preview and click "Merge Transactions" to complete the merge'
+              },
+            ]}
+          />
+          <div className="bg-muted/50 rounded-lg p-4 border">
+            <p className="text-sm font-medium mb-3">What Gets Merged</p>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Date:</strong> Choose which transaction's date to keep</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Description:</strong> Select the most descriptive description</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Merchant:</strong> Choose which merchant group to use</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Categories:</strong> Combine splits from all transactions</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Historical Status:</strong> Choose whether the merged transaction affects category balances</span>
+              </li>
+            </ul>
+          </div>
+          <Callout type="warning" title="Category Balance Updates">
+            When merging transactions, the app automatically reverses the balance changes from the
+            original transactions and applies the correct changes for the merged transaction. If
+            you mark the merged transaction as historical, it won't affect category balances.
+          </Callout>
+          <Callout type="info" title="Import Metadata Preserved">
+            All import metadata (original CSV row data, source filename) from merged transactions
+            is preserved and linked to the merged transaction. This ensures duplicate detection
+            continues to work correctly.
+          </Callout>
+        </CardContent>
+      </Card>
+
       {/* Importing Transactions */}
       <Card>
         <CardHeader>
@@ -359,9 +564,14 @@ export default function TransactionsFeaturePage() {
             ]}
           />
           <p className="text-sm text-muted-foreground">
-            See the <Link href="/help/features/csv-import" className="text-primary hover:underline">CSV Import guide</Link> for
+            See the <Link href="/help/tutorials/importing" className="text-primary hover:underline">Importing Transactions tutorial</Link> for
             detailed instructions.
           </p>
+          <Callout type="info" title="Duplicate Detection During Import">
+            The app automatically detects duplicates during import by comparing transaction hashes.
+            If a transaction has been imported before (or manually entered), it will be marked as
+            a duplicate. You can review and merge duplicates later using the "Find Duplicates" feature.
+          </Callout>
         </CardContent>
       </Card>
 

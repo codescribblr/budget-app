@@ -8,14 +8,14 @@ The user backup system (accessed from Settings page) allows users to create, man
 
 ## What's Included in User Backups
 
-### ✅ **Complete Data Backup (13 Tables)**
+### ✅ **Complete Data Backup (14 Tables)**
 
 1. **`accounts`** - All bank accounts (checking, savings, cash)
 2. **`categories`** - All budget envelopes with balances
 3. **`credit_cards`** - All credit cards with limits and balances
 4. **`transactions`** - All transactions (income, expenses, transfers)
 5. **`transaction_splits`** - How transactions are split across categories
-6. **`imported_transactions`** - Import history (prevents duplicate imports)
+6. **`imported_transactions`** - Import history (prevents duplicate imports) with metadata (original CSV row data, filename)
 7. **`imported_transaction_links`** - Links between imports and transactions
 8. **`merchant_groups`** - Merchant grouping/normalization data
 9. **`merchant_mappings`** - Merchant pattern to group mappings
@@ -24,6 +24,7 @@ The user backup system (accessed from Settings page) allows users to create, man
 12. **`income_settings`** - Income configuration (salary, pay frequency)
 13. **`pre_tax_deductions`** - Pre-tax deduction items
 14. **`settings`** - User settings (pay frequency, annual income, etc.)
+15. **`duplicate_group_reviews`** - Reviewed duplicate transaction groups (prevents re-showing reviewed groups)
 
 ### ❌ **Not Included (Intentionally)**
 

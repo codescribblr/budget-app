@@ -1,5 +1,7 @@
 # Duplicate Transaction Merge Feature - Implementation Plan
 
+> **Status:** ✅ **COMPLETED** - All features have been implemented and merged to main branch.
+
 ## Overview
 
 This document outlines the plan for significantly improving the duplicate transaction finder feature. The improvements include:

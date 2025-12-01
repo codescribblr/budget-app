@@ -133,13 +133,20 @@ export default function ImportingTutorialPage() {
                   <ol className="list-decimal list-inside mt-2 space-y-1">
                     <li>You'll see a preview of all transactions</li>
                     <li>Check that dates, descriptions, and amounts look correct</li>
-                    <li>The app will flag potential duplicates</li>
+                    <li>The app will flag potential duplicates based on transaction hash (date, description, amount)</li>
                     <li>Uncheck any transactions you don't want to import</li>
                     <li>Review the auto-categorization (if enabled)</li>
+                    <li>Click on any transaction row to see full details including original CSV row data</li>
                   </ol>
                   <Callout type="warning" title="Watch for duplicates">
-                    If you've already manually entered some transactions, the app will try to
-                    detect duplicates. Review these carefully!
+                    If you've already manually entered some transactions or imported them before, the app will
+                    detect duplicates by comparing transaction hashes. Review these carefully! You can merge
+                    duplicates later using the "Find Duplicates" feature on the Transactions page.
+                  </Callout>
+                  <Callout type="info" title="Import Metadata">
+                    All original CSV row data is stored with imported transactions. This includes all columns
+                    from your bank export, not just the ones used for the transaction. You can view this data
+                    by clicking on any imported transaction to see its full details.
                   </Callout>
                 </>
               ),
@@ -271,8 +278,10 @@ export default function ImportingTutorialPage() {
             <h3 className="font-semibold mb-2">🔄 Too Many Duplicates</h3>
             <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
               <li>The app compares date, description, and amount to detect duplicates</li>
-              <li>If you're getting false positives, you may need to manually review</li>
+              <li>If you're getting false positives, you can mark groups as "Not Duplicates" to prevent them from reappearing</li>
               <li>Consider importing less frequently to reduce overlap</li>
+              <li>Use the "Find Duplicates" feature on the Transactions page to review and merge duplicates after import</li>
+              <li>You can merge duplicates instead of deleting them, choosing which data to keep from each transaction</li>
             </ul>
           </div>
         </div>
@@ -294,6 +303,35 @@ export default function ImportingTutorialPage() {
           file. The app will remember your templates!
         </Callout>
 
+        <h2>Managing Duplicates After Import</h2>
+        <p>
+          After importing, you may find duplicate transactions (especially if you've imported overlapping
+          date ranges or manually entered some transactions). Here's how to handle them:
+        </p>
+        <ol className="list-decimal list-inside mt-2 space-y-2">
+          <li>
+            Go to the{' '}
+            <Link href="/transactions" className="text-primary hover:underline">
+              Transactions page
+            </Link>{' '}
+            and click "Find Duplicates"
+          </li>
+          <li>Review the duplicate groups - click on any transaction to see full details including import metadata</li>
+          <li>
+            <strong>If they're duplicates:</strong> Select the transactions and click "Merge Selected" to combine them,
+            choosing which data to keep from each transaction
+          </li>
+          <li>
+            <strong>If they're not duplicates:</strong> Select the transactions and click "Mark as Not Duplicates" to
+            prevent them from appearing again
+          </li>
+        </ol>
+        <Callout type="tip" title="Merge vs Delete">
+          Merging duplicates is better than deleting because you can combine the best information from each
+          transaction. For example, one might have a better description while another has the correct merchant.
+          The merge feature lets you choose which data to keep.
+        </Callout>
+
         <h2>Next Steps</h2>
         <p>Now that you know how to import transactions:</p>
         <ul>
@@ -312,6 +350,13 @@ export default function ImportingTutorialPage() {
             for complex categorization
           </li>
           <li>Import regularly to keep your budget current</li>
+          <li>
+            Use the{' '}
+            <Link href="/help/features/transactions" className="text-primary hover:underline">
+              Find Duplicates
+            </Link>{' '}
+            feature to clean up any duplicate transactions
+          </li>
         </ul>
       </div>
 
