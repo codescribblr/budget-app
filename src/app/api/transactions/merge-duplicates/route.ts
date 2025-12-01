@@ -187,9 +187,29 @@ export async function POST(request: Request) {
       }
     }
 
-    // Step 5: Delete other transactions (preserve import links)
+    // Step 5: Collect all imported_transaction_ids from all transactions being merged
+    // This includes both the base transaction and the ones being merged
+    const allTransactionIdsForLinks = [baseTransactionId, ...transactionsToMerge];
+    const { data: existingLinks, error: linksFetchError } = await supabase
+      .from('imported_transaction_links')
+      .select('imported_transaction_id')
+      .in('transaction_id', allTransactionIdsForLinks);
+
+    if (linksFetchError) {
+      console.error('Error fetching import links:', linksFetchError);
+    }
+
+    // Extract unique imported_transaction_ids
+    const importedTransactionIds = new Set<number>();
+    if (existingLinks) {
+      existingLinks.forEach(link => {
+        importedTransactionIds.add(link.imported_transaction_id);
+      });
+    }
+
+    // Step 6: Delete other transactions (but preserve imported_transaction records)
     for (const transactionId of transactionsToMerge) {
-      // Delete imported_transaction_links (but keep the imported_transaction record)
+      // Delete imported_transaction_links (we'll recreate them for the merged transaction)
       await supabase
         .from('imported_transaction_links')
         .delete()
@@ -207,6 +227,31 @@ export async function POST(request: Request) {
         .delete()
         .eq('id', transactionId)
         .eq('budget_account_id', accountId);
+    }
+
+    // Step 7: Re-link all imported_transaction records to the merged transaction
+    // This ensures duplicate detection continues to work for all original hashes
+    if (importedTransactionIds.size > 0) {
+      // First, delete any existing links for the base transaction (we'll recreate them all)
+      await supabase
+        .from('imported_transaction_links')
+        .delete()
+        .eq('transaction_id', baseTransactionId);
+
+      // Create new links from all imported_transaction_ids to the merged transaction
+      const newLinks = Array.from(importedTransactionIds).map(importedTxnId => ({
+        imported_transaction_id: importedTxnId,
+        transaction_id: baseTransactionId,
+      }));
+
+      const { error: createLinksError } = await supabase
+        .from('imported_transaction_links')
+        .insert(newLinks);
+
+      if (createLinksError) {
+        console.error('Error creating import links:', createLinksError);
+        // Non-critical error, but log it
+      }
     }
 
     // Step 6: Get and return merged transaction
