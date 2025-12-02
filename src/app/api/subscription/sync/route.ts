@@ -5,7 +5,13 @@ import { getActiveAccountId } from '@/lib/account-context';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { setupPremiumFeatures } from '@/lib/premium-feature-setup';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+function getStripe(): Stripe {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+  }
+  return new Stripe(secretKey);
+}
 
 /**
  * POST /api/subscription/sync
@@ -40,6 +46,7 @@ export async function POST(request: Request) {
     const wasPremium = existingSub?.tier === 'premium' && ['active', 'trialing'].includes(existingSub?.status || '');
 
     // If no customer ID found, try to find it by searching Stripe customers by email
+    const stripe = getStripe();
     if (!customerId) {
       const customers = await stripe.customers.list({
         email: user.email!,

@@ -4,7 +4,13 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getOrCreateStripeCustomer } from '@/lib/subscription-utils';
 import { getActiveAccountId } from '@/lib/account-context';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+function getStripe(): Stripe {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+  }
+  return new Stripe(secretKey);
+}
 
 export async function POST(request: Request) {
   try {
@@ -21,6 +27,7 @@ export async function POST(request: Request) {
     }
 
     // Get or create Stripe customer
+    const stripe = getStripe();
     const customerId = await getOrCreateStripeCustomer(user.id, user.email!, stripe);
 
     // Create checkout session
