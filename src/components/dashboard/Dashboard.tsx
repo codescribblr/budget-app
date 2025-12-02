@@ -282,7 +282,7 @@ export default function Dashboard() {
                 </div>
               </CollapsibleTrigger>
             </CardHeader>
-            <CollapsibleContent>
+            <CollapsibleContent className="flex-1 flex flex-col min-h-0">
               <CardContent className="flex-1 overflow-hidden pb-8">
                 <CategoryList 
                   categories={categories} 
