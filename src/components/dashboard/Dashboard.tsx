@@ -101,6 +101,7 @@ export default function Dashboard() {
   const [isAccountsOpen, setIsAccountsOpen] = useState(true);
   const [isCreditCardsOpen, setIsCreditCardsOpen] = useState(true);
   const [isLoansOpen, setIsLoansOpen] = useState(true);
+  const [isCategoriesOpen, setIsCategoriesOpen] = useState(true);
   const [bufferStatus, setBufferStatus] = useState<any>(null);
   const [showBufferNotice, setShowBufferNotice] = useState(false);
 
@@ -269,23 +270,40 @@ export default function Dashboard() {
       {summary && <SummaryCards summary={summary} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[calc(100vh-400px)]">
-        <Card className="flex flex-col lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Mail className="h-5 w-5" />
-              Budget Categories (Envelopes)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-hidden">
-            <CategoryList 
-              categories={categories} 
-              summary={summary} 
-              onUpdate={(updatedCategories) => setCategories(updatedCategories)}
-              onUpdateSummary={updateSummary}
-              disabled={!isEditor || permissionsLoading}
-            />
-          </CardContent>
-        </Card>
+        <Collapsible open={isCategoriesOpen} onOpenChange={setIsCategoriesOpen}>
+          <Card className="flex flex-col lg:col-span-2 relative">
+            <CardHeader>
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center gap-2 cursor-pointer">
+                  <CardTitle className="flex items-center gap-2">
+                    <Mail className="h-5 w-5" />
+                    Budget Categories (Envelopes)
+                  </CardTitle>
+                </div>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent className="flex-1 flex flex-col min-h-0">
+              <CardContent className="flex-1 overflow-hidden pb-8">
+                <CategoryList 
+                  categories={categories} 
+                  summary={summary} 
+                  onUpdate={(updatedCategories) => setCategories(updatedCategories)}
+                  onUpdateSummary={updateSummary}
+                  disabled={!isEditor || permissionsLoading}
+                />
+              </CardContent>
+              {isCategoriesOpen && (
+                <button
+                  onClick={() => setIsCategoriesOpen(false)}
+                  className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                  aria-label="Collapse card"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </button>
+              )}
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         <div className="space-y-6">
           <AIInsightsWidget />
