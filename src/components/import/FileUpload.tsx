@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { Sparkles, AlertCircle, Crown } from 'lucide-react';
 import { parseCSVFile } from '@/lib/csv-parser';
 import { parseImageFile } from '@/lib/image-parser';
@@ -30,11 +31,19 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [fallbackError, setFallbackError] = useState<string | null>(null);
   const [enableAICategorization, setEnableAICategorization] = useState(false); // Disabled by default
+  const [progress, setProgress] = useState(0);
+  const [progressStage, setProgressStage] = useState<string>('');
   const { stats, loading: statsLoading } = useAIUsage();
   const { isPremium } = useSubscription();
   const aiChatEnabled = useFeature('ai_chat');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
+
+  // Progress callback function
+  const updateProgress = (value: number, stage: string) => {
+    setProgress(value);
+    setProgressStage(stage);
+  };
 
   // Process a file (used by both file input and drag-drop)
   const processFile = async (file: File) => {
@@ -45,6 +54,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
 
     setIsProcessing(true);
     setError(null);
+    setProgress(0);
+    setProgressStage('');
 
     try {
       let transactions: ParsedTransaction[];
@@ -54,9 +65,11 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       const fileName = file.name.toLowerCase();
 
       if (fileName.endsWith('.csv') || fileType === 'text/csv') {
+        updateProgress(5, 'Reading CSV file...');
         // Parse CSV first to get raw data
         const rawData = await parseCSVToArray(file);
         
+        updateProgress(15, 'Analyzing CSV structure...');
         // Analyze CSV structure
         const analysis = analyzeCSV(rawData);
         
@@ -81,6 +94,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           });
 
         if (highConfidence) {
+          updateProgress(25, 'Parsing CSV transactions...');
           // Auto-import with detected mapping
           const result = await parseCSVFile(file);
           transactions = result.transactions;
@@ -112,6 +126,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         fileName.endsWith('.jpeg') ||
         fileName.endsWith('.png')
       ) {
+        updateProgress(10, 'Processing image with AI...');
         // Images use AI parsing
         const parseResult = await parseImageFile(file, true);
         
@@ -122,10 +137,12 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         transactions = parseResult.transactions;
         sessionStorage.setItem('csvFileName', file.name);
       } else if (fileName.endsWith('.pdf') || fileType === 'application/pdf') {
+        updateProgress(10, 'Converting PDF to text...');
         // Parse PDF using local parser first
         const formData = new FormData();
         formData.append('file', file);
 
+        updateProgress(20, 'Extracting transactions from PDF...');
         const response = await fetch('/api/import/process-pdf', {
           method: 'POST',
           body: formData,
@@ -154,31 +171,42 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       } else {
         setError('Unsupported file type. Please upload a CSV or image file.');
         setIsProcessing(false);
+        setProgress(0);
+        setProgressStage('');
         return;
       }
 
       if (transactions.length === 0) {
         setError('No transactions found in the file');
         setIsProcessing(false);
+        setProgress(0);
+        setProgressStage('');
         return;
       }
+
+      updateProgress(40, `Found ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''}. Checking for duplicates...`);
 
       // Check for duplicates and auto-categorize
       const { processTransactions } = await import('@/lib/csv-parser-helpers');
       // Skip AI categorization if disabled OR if limit is reached
       const shouldSkipAI = !enableAICategorization || 
         (stats ? stats.categorization.used >= stats.categorization.limit : false);
+      
       const processedTransactions = await processTransactions(
         transactions,
         undefined,
         undefined,
-        shouldSkipAI
+        shouldSkipAI,
+        updateProgress
       );
 
+      updateProgress(100, 'Processing complete!');
       onFileUploaded(processedTransactions, file.name);
     } catch (err) {
       console.error('Error processing file:', err);
       setError(err instanceof Error ? err.message : 'Failed to process file');
+      setProgress(0);
+      setProgressStage('');
     } finally {
       setIsProcessing(false);
       // Reset file input
@@ -290,6 +318,15 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           <Button onClick={handleButtonClick} disabled={isProcessing || disabled}>
             {isProcessing ? 'Processing...' : 'Choose File'}
           </Button>
+          {isProcessing && (
+            <div className="w-full space-y-2 mt-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">{progressStage || 'Processing...'}</span>
+                <span className="text-muted-foreground">{Math.round(progress)}%</span>
+              </div>
+              <Progress value={progress} className="h-2" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -401,8 +438,11 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                 setShowAIFallback(false);
                 setIsProcessing(true);
                 setError(null);
+                setProgress(0);
+                setProgressStage('');
                 try {
-                  const aiResult = await parseImageFile(pendingFile, true);
+                  updateProgress(10, 'Processing PDF with AI...');
+                  const aiResult = await parseImageFile(pendingFile!, true);
                   if (aiResult.error) {
                     throw new Error(aiResult.error);
                   }
@@ -410,6 +450,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                     throw new Error('No transactions found in the file');
                   }
                   
+                  updateProgress(40, `Found ${aiResult.transactions.length} transaction${aiResult.transactions.length !== 1 ? 's' : ''}. Checking for duplicates...`);
                   const { processTransactions } = await import('@/lib/csv-parser-helpers');
                   // Skip AI categorization if disabled OR if limit is reached
                   const shouldSkipAI = !enableAICategorization || 
@@ -418,10 +459,12 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                     aiResult.transactions,
                     undefined,
                     undefined,
-                    shouldSkipAI
+                    shouldSkipAI,
+                    updateProgress
                   );
-                  onFileUploaded(processedTransactions, pendingFile.name);
-                  sessionStorage.setItem('csvFileName', pendingFile.name);
+                  updateProgress(100, 'Processing complete!');
+                  onFileUploaded(processedTransactions, pendingFile!.name);
+                  sessionStorage.setItem('csvFileName', pendingFile!.name);
                   setPendingFile(null);
                 } catch (err) {
                   console.error('Error processing file with AI:', err);

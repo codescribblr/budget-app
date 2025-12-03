@@ -269,9 +269,11 @@ export async function processTransactions(
   transactions: ParsedTransaction[],
   defaultAccountId?: number | null,
   defaultCreditCardId?: number | null,
-  skipAICategorization: boolean = false
+  skipAICategorization: boolean = false,
+  progressCallback?: (progress: number, stage: string) => void
 ): Promise<ParsedTransaction[]> {
   // Step 1: Check for duplicates within the file itself
+  if (progressCallback) progressCallback(45, 'Checking for duplicate transactions...');
   const seenHashes = new Map<string, number>();
   const withinFileDuplicates = new Set<number>();
 
@@ -285,6 +287,7 @@ export async function processTransactions(
 
   // Step 2: Fetch existing transaction hashes for deduplication against database
   // Also send transaction data for fallback duplicate detection (by date + description + amount)
+  if (progressCallback) progressCallback(50, 'Checking against existing transactions...');
   const response = await fetch('/api/import/check-duplicates', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -303,10 +306,12 @@ export async function processTransactions(
   const databaseDuplicateSet = new Set(duplicates);
 
   // Step 3: Fetch categories for auto-categorization
+  if (progressCallback) progressCallback(55, 'Loading categories...');
   const categoriesResponse = await fetch('/api/categories');
   const categories = await categoriesResponse.json();
 
   // Step 4: Get smart category suggestions for all merchants
+  if (progressCallback) progressCallback(60, 'Applying categorization rules...');
   const merchants = transactions.map(t => t.merchant);
   const categorizationResponse = await fetch('/api/categorize', {
     method: 'POST',
@@ -316,6 +321,7 @@ export async function processTransactions(
   const { suggestions } = await categorizationResponse.json();
 
   // Step 5: Process each transaction with initial categorization
+  if (progressCallback) progressCallback(65, 'Categorizing transactions...');
   const processedTransactions = transactions.map((transaction, index) => {
     const isDatabaseDuplicate = databaseDuplicateSet.has(transaction.hash);
     const isWithinFileDuplicate = withinFileDuplicates.has(index);
@@ -351,6 +357,7 @@ export async function processTransactions(
 
   // Step 6: AI categorization for remaining uncategorized transactions (if enabled)
   if (skipAICategorization) {
+    if (progressCallback) progressCallback(100, 'Processing complete!');
     return processedTransactions;
   }
 
@@ -360,6 +367,7 @@ export async function processTransactions(
 
   if (uncategorizedTransactions.length > 0) {
     try {
+      if (progressCallback) progressCallback(70, `Using AI to categorize ${uncategorizedTransactions.length} transaction${uncategorizedTransactions.length !== 1 ? 's' : ''}...`);
       const aiCategorizationResponse = await fetch('/api/import/ai-categorize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -398,6 +406,7 @@ export async function processTransactions(
           });
         }
 
+        if (progressCallback) progressCallback(90, 'Applying AI category suggestions...');
         // Update transactions with AI suggestions
         return processedTransactions.map((transaction): ParsedTransaction => {
           const aiSuggestion = aiSuggestionMap.get(transaction.id);
@@ -462,5 +471,6 @@ export async function processTransactions(
     }
   }
 
+  if (progressCallback) progressCallback(100, 'Processing complete!');
   return processedTransactions;
 }
