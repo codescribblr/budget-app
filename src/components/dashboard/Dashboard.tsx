@@ -270,8 +270,8 @@ export default function Dashboard() {
       {summary && <SummaryCards summary={summary} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[calc(100vh-400px)]">
-        <Collapsible open={isCategoriesOpen} onOpenChange={setIsCategoriesOpen}>
-          <Card className="flex flex-col lg:col-span-2 relative">
+        <Collapsible open={isCategoriesOpen} onOpenChange={setIsCategoriesOpen} className="lg:col-span-2">
+          <Card className="flex flex-col relative">
             <CardHeader>
               <CollapsibleTrigger asChild>
                 <div className="flex items-center gap-2 cursor-pointer">
