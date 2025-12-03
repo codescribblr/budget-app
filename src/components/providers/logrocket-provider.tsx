@@ -27,11 +27,6 @@ export function LogRocketProvider({ children }: { children: React.ReactNode }) {
           // Don't record text inputs by default (can be configured per input)
           textSanitizer: true,
         },
-        // Capture console logs
-        captureConsole: {
-          isEnabled: true,
-          levels: ["error", "warn"],
-        },
         // Network request capture
         network: {
           isEnabled: true,
@@ -70,10 +65,9 @@ export function LogRocketProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user && logRocketInitialized) {
         identifyUser(session.user)
-      } else if (!session && logRocketInitialized) {
-        // Clear user identification on logout
-        LogRocket.identify(null)
       }
+      // Note: LogRocket doesn't have a clear/identify(null) method
+      // User identification will persist until a new user is identified
     })
 
     return () => {
@@ -88,12 +82,17 @@ function identifyUser(user: User) {
   if (!logRocketInitialized) return
 
   try {
-    LogRocket.identify(user.id, {
-      email: user.email,
+    const traits: Record<string, string | number | boolean> = {
       name: user.user_metadata?.name || user.email?.split("@")[0] || "User",
-      // Add any other user metadata you want to track
       created_at: user.created_at,
-    })
+    }
+    
+    // Only include email if it exists
+    if (user.email) {
+      traits.email = user.email
+    }
+    
+    LogRocket.identify(user.id, traits)
   } catch (error) {
     console.error("Failed to identify user in LogRocket:", error)
   }
