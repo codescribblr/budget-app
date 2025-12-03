@@ -53,26 +53,6 @@ export default function FeaturesSettings() {
   const premiumFeaturesNotEnabled = hasPremium && features.some(
     f => f.requiresPremium && !f.enabled
   );
-  
-  // Debug logging (remove in production)
-  React.useEffect(() => {
-    if (!loading) {
-      console.log('[Features Settings] State:', {
-        hasPremium,
-        isOwner,
-        permissionsLoading,
-        loading,
-        premiumFeaturesNotEnabled,
-        featuresCount: features.length,
-        premiumFeatures: features.filter(f => f.requiresPremium).map(f => ({
-          name: f.name,
-          enabled: f.enabled,
-          requiresPremium: f.requiresPremium,
-        })),
-        shouldShowButton: hasPremium && isOwner && !loading && premiumFeaturesNotEnabled,
-      });
-    }
-  }, [hasPremium, isOwner, loading, permissionsLoading, premiumFeaturesNotEnabled, features]);
 
   const handleToggle = async (feature: Feature, enabled: boolean) => {
     // Check if premium required and user doesn't have premium

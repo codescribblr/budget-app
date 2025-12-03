@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getActiveAccountId } from '@/lib/account-context';
 
 /**
- * Get count of transactions without merchant_group_id
+ * Get count of transactions that can be linked (have merchant mappings but no merchant_group_id)
  */
 export async function GET() {
   try {
@@ -13,23 +14,58 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Count transactions without merchant_group_id
-    const { count, error } = await supabase
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json({ count: 0 });
+    }
+
+    // Get all transactions without merchant_group_id
+    const { data: transactions, error: transactionsError } = await supabase
       .from('transactions')
-      .select('*', { count: 'exact', head: true })
+      .select('id, description')
       .eq('user_id', user.id)
       .is('merchant_group_id', null);
 
-    if (error) {
-      console.error('Error counting unlinked transactions:', error);
+    if (transactionsError) {
+      console.error('Error fetching transactions:', transactionsError);
       return NextResponse.json(
         { error: 'Failed to count unlinked transactions' },
         { status: 500 }
       );
     }
 
+    if (!transactions || transactions.length === 0) {
+      return NextResponse.json({ count: 0 });
+    }
+
+    // Check which transactions have merchant mappings
+    // We need to check if any of these transaction descriptions have mappings
+    const descriptions = transactions.map(t => t.description);
+    
+    // Get all merchant mappings for this account
+    const { data: mappings, error: mappingsError } = await supabase
+      .from('merchant_mappings')
+      .select('pattern')
+      .eq('user_id', user.id)
+      .eq('account_id', accountId)
+      .not('merchant_group_id', 'is', null);
+
+    if (mappingsError) {
+      console.error('Error fetching merchant mappings:', mappingsError);
+      return NextResponse.json(
+        { error: 'Failed to count unlinked transactions' },
+        { status: 500 }
+      );
+    }
+
+    // Create a set of mapped patterns for quick lookup
+    const mappedPatterns = new Set(mappings?.map(m => m.pattern) || []);
+
+    // Count transactions that have mappings
+    const linkableCount = transactions.filter(t => mappedPatterns.has(t.description)).length;
+
     return NextResponse.json({
-      count: count || 0,
+      count: linkableCount,
     });
   } catch (error) {
     console.error('Error in unlinked-count:', error);
