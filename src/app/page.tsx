@@ -15,7 +15,12 @@ import {
   Crown,
   Check,
   ArrowRight,
-  Sparkles
+  Sparkles,
+  Users,
+  FileText,
+  Rocket,
+  Brain,
+  MessageSquare
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -63,8 +68,8 @@ export default function HomePage() {
             Take Control of Your Money
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Simple, powerful envelope budgeting that helps you save more and stress less. 
-            Track every dollar with confidence.
+            Simple, powerful envelope budgeting with AI-powered insights. 
+            Track every dollar with confidence and get personalized financial advice.
           </p>
           <div className="flex gap-4 justify-center flex-wrap">
             <Link href="/signup?plan=premium">
@@ -110,7 +115,7 @@ export default function HomePage() {
                 </div>
                 <CardTitle>Smart Insights</CardTitle>
                 <CardDescription>
-                  Track spending trends and get actionable insights to improve your financial health.
+                  Track spending trends and get actionable insights. Premium users get AI-powered analysis and personalized recommendations.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -162,12 +167,48 @@ export default function HomePage() {
                 </CardDescription>
               </CardHeader>
             </Card>
+
+            <Card className="border-2">
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-teal-100 dark:bg-teal-900 flex items-center justify-center mb-4">
+                  <Users className="h-6 w-6 text-teal-600 dark:text-teal-400" />
+                </div>
+                <CardTitle>Multi-User Collaboration</CardTitle>
+                <CardDescription>
+                  Share budgets with family members or partners. Invite collaborators with custom permissions.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            <Card className="border-2">
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-amber-100 dark:bg-amber-900 flex items-center justify-center mb-4">
+                  <FileText className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                </div>
+                <CardTitle>PDF Statement Import</CardTitle>
+                <CardDescription>
+                  Import transactions directly from PDF bank statements. No manual data entry needed.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            <Card className="border-2">
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-pink-100 dark:bg-pink-900 flex items-center justify-center mb-4">
+                  <Rocket className="h-6 w-6 text-pink-600 dark:text-pink-400" />
+                </div>
+                <CardTitle>Budget Setup Wizard</CardTitle>
+                <CardDescription>
+                  Get started in minutes with our guided setup wizard. Create accounts and categories effortlessly.
+                </CardDescription>
+              </CardHeader>
+            </Card>
           </div>
         </div>
       </section>
 
       {/* Pricing Section */}
-      <section className="py-20 px-4 bg-muted/50">
+      <section id="pricing" className="py-20 px-4 bg-muted/50">
         <div className="container mx-auto max-w-6xl">
           <h2 className="text-4xl font-bold text-center mb-4">Choose Your Plan</h2>
           <p className="text-center text-muted-foreground mb-12 text-lg">
@@ -203,7 +244,15 @@ export default function HomePage() {
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span>CSV Import</span>
+                    <span>CSV & PDF Import</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span>Budget Setup Wizard</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span>Multi-User Collaboration</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
@@ -245,6 +294,22 @@ export default function HomePage() {
               <CardContent className="space-y-4">
                 <p className="text-sm font-semibold">Everything in Free, plus:</p>
                 <ul className="space-y-3">
+                  <li className="flex items-start gap-2">
+                    <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span className="flex items-center gap-1">
+                      <Brain className="h-4 w-4 text-purple-500" />
+                      AI Features
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2 ml-6">
+                    <span className="text-xs text-muted-foreground">• AI Chat Assistant</span>
+                  </li>
+                  <li className="flex items-start gap-2 ml-6">
+                    <span className="text-xs text-muted-foreground">• AI Transaction Categorization</span>
+                  </li>
+                  <li className="flex items-start gap-2 ml-6">
+                    <span className="text-xs text-muted-foreground">• AI Budget Insights & Reports</span>
+                  </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                     <span>Monthly Funding Tracking</span>
