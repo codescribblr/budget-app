@@ -55,7 +55,8 @@ export function FeatureProvider({ children }: { children: React.ReactNode }) {
       }
 
       const data = await response.json();
-      setFeatures(data.features);
+      // Ensure features is always an array, even if API returns malformed data
+      setFeatures(Array.isArray(data.features) ? data.features : []);
       setHasPremium(data.hasPremium || false);
     } catch (err: any) {
       console.error('Error fetching features:', err);

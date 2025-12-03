@@ -71,6 +71,14 @@ export default function MapColumnsPage() {
       const analysisData = JSON.parse(csvAnalysisStr);
       const csvData = JSON.parse(csvDataStr);
       
+      // Validate data structure
+      if (!analysisData || typeof analysisData !== 'object') {
+        throw new Error('Invalid analysis data');
+      }
+      if (!Array.isArray(csvData)) {
+        throw new Error('Invalid CSV data');
+      }
+      
       setAnalysis(analysisData);
       setSampleData(csvData.slice(0, 5));
       setFileName(fileNameStr);
@@ -78,11 +86,14 @@ export default function MapColumnsPage() {
       // Initialize mappings from analysis
       const initialMappings: Record<number, FieldType> = {};
       
-      analysisData.columns.forEach((col: ColumnAnalysis) => {
-        if (col.fieldType !== 'unknown' && col.confidence > 0.5) {
-          initialMappings[col.columnIndex] = col.fieldType as FieldType;
-        }
-      });
+      // Safely check if columns exists and is an array
+      if (Array.isArray(analysisData.columns)) {
+        analysisData.columns.forEach((col: ColumnAnalysis) => {
+          if (col && col.fieldType !== 'unknown' && col.confidence > 0.5) {
+            initialMappings[col.columnIndex] = col.fieldType as FieldType;
+          }
+        });
+      }
 
       // Set required fields if detected
       if (analysisData.dateColumn !== null) {

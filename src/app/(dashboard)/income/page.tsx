@@ -156,7 +156,8 @@ export default function IncomePage() {
 
       // Fetch categories to calculate monthly budget
       const categoriesRes = await fetch('/api/categories');
-      const categories = await categoriesRes.json();
+      const categoriesData = await categoriesRes.json();
+      const categories = Array.isArray(categoriesData) ? categoriesData : [];
 
       const totalBudget = categories
         .filter((cat: any) => !cat.is_system)
