@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '@/lib/supabase-queries';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { processEmailAttachments } from '@/lib/automatic-imports/email-processor';
 import type { EmailAttachment } from '@/lib/automatic-imports/email-processor';
 
@@ -7,8 +7,11 @@ import type { EmailAttachment } from '@/lib/automatic-imports/email-processor';
  * POST /api/webhooks/email-import
  * Handle incoming emails for automatic import
  * 
- * This endpoint should be configured with your email service provider
- * (SendGrid Inbound Parse, AWS SES, Postmark, etc.)
+ * Supports multiple email providers:
+ * - Resend (JSON webhook with API calls for attachments)
+ * - SendGrid Inbound Parse (form-data)
+ * - Postmark (form-data)
+ * - AWS SES (form-data)
  * 
  * Expected payload format varies by provider, but should include:
  * - To/Recipient: unique email address identifying the import setup
@@ -20,40 +23,123 @@ export async function POST(request: Request) {
     // Verify webhook signature if configured
     // TODO: Add webhook signature verification based on email provider
     
-    const formData = await request.formData();
+    const contentType = request.headers.get('content-type') || '';
+    let to: string;
+    let attachments: EmailAttachment[] = [];
     
-    // Extract email metadata
-    const to = formData.get('to') as string;
-    const from = formData.get('from') as string;
-    const subject = formData.get('subject') as string;
-    
-    // Extract attachments
-    const attachments: EmailAttachment[] = [];
-    
-    // Handle different email providers' attachment formats
-    // SendGrid format
-    const attachmentCount = parseInt(formData.get('attachments') as string) || 0;
-    for (let i = 1; i <= attachmentCount; i++) {
-      const file = formData.get(`attachment${i}`) as File;
-      if (file) {
-        const buffer = Buffer.from(await file.arrayBuffer());
-        attachments.push({
-          filename: file.name,
-          contentType: file.type,
-          content: buffer,
-        });
+    // Detect provider by content type
+    if (contentType.includes('application/json')) {
+      // Resend webhook format (JSON)
+      const resendWebhook = await request.json();
+      
+      // Resend webhook payload structure:
+      // { type: 'email.received', data: { email_id, from, to, subject, ... } }
+      if (resendWebhook.type !== 'email.received') {
+        return NextResponse.json(
+          { error: 'Invalid webhook event type' },
+          { status: 400 }
+        );
       }
-    }
-    
-    // Alternative: Check for files directly in formData
-    for (const [key, value] of formData.entries()) {
-      if (value instanceof File && value.name) {
-        const buffer = Buffer.from(await value.arrayBuffer());
-        attachments.push({
-          filename: value.name,
-          contentType: value.type,
-          content: buffer,
-        });
+      
+      const emailData = resendWebhook.data;
+      to = emailData.to;
+      const emailId = emailData.email_id;
+      
+      if (!emailId) {
+        return NextResponse.json(
+          { error: 'Missing email_id in Resend webhook' },
+          { status: 400 }
+        );
+      }
+      
+      // Fetch attachments from Resend API
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) {
+        return NextResponse.json(
+          { error: 'RESEND_API_KEY not configured' },
+          { status: 500 }
+        );
+      }
+      
+      // Get attachments list
+      const attachmentsResponse = await fetch(
+        `https://api.resend.com/emails/${emailId}/attachments`,
+        {
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+          },
+        }
+      );
+      
+      if (!attachmentsResponse.ok) {
+        console.error('Error fetching attachments from Resend:', await attachmentsResponse.text());
+        return NextResponse.json(
+          { error: 'Failed to fetch attachments from Resend' },
+          { status: 500 }
+        );
+      }
+      
+      const attachmentsData = await attachmentsResponse.json();
+      
+      // Resend API returns: { data: [{ id, filename, content_type, size, download_url }] }
+      const attachmentList = attachmentsData.data || attachmentsData || [];
+      
+      // Download each attachment
+      for (const attachment of attachmentList) {
+        if (!attachment.download_url) {
+          console.warn(`Attachment ${attachment.filename || attachment.id} missing download_url`);
+          continue;
+        }
+        
+        try {
+          const downloadResponse = await fetch(attachment.download_url);
+          if (!downloadResponse.ok) {
+            console.error(`Failed to download attachment: ${downloadResponse.statusText}`);
+            continue;
+          }
+          
+          const buffer = Buffer.from(await downloadResponse.arrayBuffer());
+          attachments.push({
+            filename: attachment.filename || `attachment-${attachment.id}`,
+            contentType: attachment.content_type || attachment.contentType || 'application/octet-stream',
+            content: buffer,
+          });
+        } catch (error) {
+          console.error(`Error downloading attachment ${attachment.filename || attachment.id}:`, error);
+        }
+      }
+    } else {
+      // Form-data format (SendGrid, Postmark, etc.)
+      const formData = await request.formData();
+      
+      // Extract email metadata
+      to = formData.get('to') as string;
+      
+      // Extract attachments
+      // SendGrid format
+      const attachmentCount = parseInt(formData.get('attachments') as string) || 0;
+      for (let i = 1; i <= attachmentCount; i++) {
+        const file = formData.get(`attachment${i}`) as File;
+        if (file) {
+          const buffer = Buffer.from(await file.arrayBuffer());
+          attachments.push({
+            filename: file.name,
+            contentType: file.type,
+            content: buffer,
+          });
+        }
+      }
+      
+      // Alternative: Check for files directly in formData
+      for (const [key, value] of formData.entries()) {
+        if (value instanceof File && value.name) {
+          const buffer = Buffer.from(await value.arrayBuffer());
+          attachments.push({
+            filename: value.name,
+            contentType: value.type,
+            content: buffer,
+          });
+        }
       }
     }
 
@@ -84,7 +170,8 @@ export async function POST(request: Request) {
     }
 
     // Verify import setup exists and is active
-    const { supabase } = await getAuthenticatedUser();
+    // Use service role client since webhooks come from external services
+    const supabase = createServiceRoleClient();
     const { data: setup, error: setupError } = await supabase
       .from('automatic_import_setups')
       .select('*')
@@ -109,6 +196,8 @@ export async function POST(request: Request) {
       attachments,
       sourceBatchId,
       isHistorical: setup.is_historical,
+      accountId: setup.account_id,
+      supabase,
     });
 
     // Update setup with last fetch info

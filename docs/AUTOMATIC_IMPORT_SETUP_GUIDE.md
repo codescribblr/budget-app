@@ -19,7 +19,48 @@ Follow these steps to get automatic transaction imports working:
 
 Choose one email service provider:
 
-#### Option A: SendGrid (Easiest)
+#### Option A: Resend (Recommended - You're Already Using It!)
+
+Since you're already using Resend for SMTP, this is the easiest option:
+
+1. **Get Your Resend API Key:**
+   - Go to https://resend.com/api-keys
+   - Copy your API key (or create a new one)
+   - Add to `.env.local`:
+     ```
+     RESEND_API_KEY=re_your-api-key-here
+     ```
+
+2. **Set Up Inbound Email Domain:**
+   - Go to https://resend.com/emails/receiving
+   - Click "Add Domain" or use the default `.resend.app` domain
+   - For custom domain: Add the DNS records shown in Resend dashboard
+   - For `.resend.app` domain: You'll get an address like `your-app@resend.app`
+
+3. **Configure Webhook:**
+   - Go to https://resend.com/webhooks
+   - Click "Add Webhook"
+   - Set **Endpoint URL:** `https://yourdomain.com/api/webhooks/email-import`
+   - Select event: **`email.received`**
+   - Click "Add Webhook"
+
+4. **Get Your Inbound Email Address:**
+   - Go to https://resend.com/emails/receiving
+   - Find your inbound address (e.g., `your-app@resend.app`)
+   - Or use a custom domain address (e.g., `imports@yourdomain.com`)
+
+5. **Test:**
+   - Send a test email with PDF/CSV attachment to your inbound address
+   - Check Resend dashboard → Receiving Emails to see the email
+   - Check your application logs for webhook processing
+
+**Note:** 
+- Resend webhooks send JSON payloads with `type: 'email.received'`
+- The webhook handler automatically detects Resend format and fetches attachments via Resend's API
+- Attachments are downloaded using temporary URLs (valid for 1 hour)
+- Make sure `RESEND_API_KEY` is set in your `.env.local`
+
+#### Option B: SendGrid (Alternative)
 
 1. Sign up: https://sendgrid.com (free tier available)
 2. Go to: Settings → Inbound Parse
@@ -31,7 +72,7 @@ Choose one email service provider:
 5. Add MX records to your DNS (shown in SendGrid dashboard)
 6. Test by sending an email to `test@imports.yourdomain.com`
 
-#### Option B: Postmark (Simple)
+#### Option C: Postmark (Alternative)
 
 1. Sign up: https://postmarkapp.com
 2. Go to: Inbound → Add Server
@@ -39,7 +80,7 @@ Choose one email service provider:
 4. Configure DNS records as shown
 5. Test by sending an email
 
-#### Option C: AWS SES (Advanced)
+#### Option D: AWS SES (Advanced)
 
 1. Set up AWS SES in your AWS account
 2. Create S3 bucket for email storage
@@ -61,10 +102,15 @@ Choose one email service provider:
    - Select "Email Import"
    - Choose target account
    - Click "Create Setup"
-   - Copy the generated email address
+   - **Important:** Use your Resend inbound email address format:
+     - For `.resend.app` domain: `setup-123@your-app.resend.app`
+     - For custom domain: `setup-123@imports.yourdomain.com`
+   - The setup will store this email address
 
 4. **Test Email Forwarding:**
-   - Forward a test bank statement email (with PDF/CSV attachment) to the generated address
+   - Forward a test bank statement email (with PDF/CSV attachment) to your Resend inbound address
+   - Make sure the "To" address matches the format: `setup-{id}@your-domain`
+   - Check Resend dashboard → Receiving Emails to verify email was received
    - Check `/imports/queue` to see queued transactions
    - Review and approve transactions
 
@@ -106,6 +152,7 @@ Add links to your navigation menu:
    - Test with: `curl -X POST https://yourdomain.com/api/webhooks/email-import`
 
 2. **Check email service logs:**
+   - Resend: Check Dashboard → Receiving Emails → View email details
    - SendGrid: Check Activity → Inbound Parse
    - Postmark: Check Inbound → Activity
    - AWS SES: Check CloudWatch logs

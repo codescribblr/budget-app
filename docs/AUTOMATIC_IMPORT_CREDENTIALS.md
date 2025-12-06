@@ -4,16 +4,60 @@ This guide explains how to obtain API credentials for each automatic import inte
 
 ## Email Import (Free - Recommended for MVP)
 
-**No API keys required!** Email import uses your existing SMTP configuration.
+**Resend API key required** if using Resend (which you already are!). Email import uses Resend's inbound email feature.
 
 ### Setup Steps:
-1. Configure SMTP settings in `.env.local` (already configured)
-2. Set up email webhook endpoint: `https://yourdomain.com/api/webhooks/email-import`
-3. Configure your email service provider to forward emails to this endpoint
+1. Get your Resend API key (see below)
+2. Add `RESEND_API_KEY` to `.env.local`
+3. Set up email webhook endpoint: `https://yourdomain.com/api/webhooks/email-import`
+4. Configure Resend inbound email and webhook
 
 ### Email Service Provider Options:
 
-#### Option 1: SendGrid Inbound Parse (Recommended)
+#### Option 1: Resend Inbound Email (Recommended - You're Already Using Resend!)
+
+Since you're already using Resend for SMTP, this is the easiest option:
+
+1. **Get Your Resend API Key:**
+   - Go to https://resend.com/api-keys
+   - Copy your existing API key (or create a new one)
+   - Add to `.env.local`:
+     ```
+     RESEND_API_KEY=re_your-api-key-here
+     ```
+
+2. **Set Up Inbound Email Domain:**
+   - Go to https://resend.com/emails/receiving
+   - Click "Add Domain" or use the default `.resend.app` domain
+   - **For custom domain:** Add the DNS records shown in Resend dashboard
+   - **For `.resend.app` domain:** You'll get an address like `your-app@resend.app`
+
+3. **Configure Webhook:**
+   - Go to https://resend.com/webhooks
+   - Click "Add Webhook"
+   - Set **Endpoint URL:** `https://yourdomain.com/api/webhooks/email-import`
+   - Select event: **`email.received`**
+   - Click "Add Webhook"
+
+4. **Get Your Inbound Email Address:**
+   - Go to https://resend.com/emails/receiving
+   - Find your inbound address (e.g., `your-app@resend.app`)
+   - Or use a custom domain address (e.g., `imports@yourdomain.com`)
+
+5. **Cost:** Free tier includes generous limits, then pay-as-you-go
+
+**How It Works:**
+- Resend sends a JSON webhook when an email is received
+- The webhook handler automatically detects Resend format
+- Attachments are fetched via Resend's Attachments API
+- Download URLs are valid for 1 hour
+
+**Documentation:**
+- Inbound Email: https://resend.com/docs/dashboard/receiving/introduction
+- Attachments API: https://resend.com/docs/dashboard/receiving/attachments
+- Webhooks: https://resend.com/docs/dashboard/webhooks
+
+#### Option 2: SendGrid Inbound Parse (Alternative)
 1. Sign up at https://sendgrid.com
 2. Go to Settings → Inbound Parse
 3. Add new hostname: `imports.yourdomain.com`
@@ -21,14 +65,14 @@ This guide explains how to obtain API credentials for each automatic import inte
 5. Configure MX records as instructed
 6. **Cost:** Free tier includes 100 emails/day
 
-#### Option 2: AWS SES
+#### Option 3: AWS SES
 1. Set up AWS SES in your AWS account
 2. Create an S3 bucket for email storage
 3. Configure SES to receive emails and store in S3
 4. Set up Lambda function to process emails and call webhook
 5. **Cost:** ~$0.10 per 1,000 emails
 
-#### Option 3: Postmark Inbound
+#### Option 4: Postmark Inbound
 1. Sign up at https://postmarkapp.com
 2. Go to Inbound → Add Server
 3. Set webhook URL: `https://yourdomain.com/api/webhooks/email-import`

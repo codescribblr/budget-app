@@ -7,12 +7,15 @@ import { getAuthenticatedUser } from '../supabase-queries';
 import { getActiveAccountId } from '../account-context';
 import type { ParsedTransaction } from '../import-types';
 import { generateTransactionHash } from '../csv-parser';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface QueueTransactionOptions {
   importSetupId: number;
   transactions: ParsedTransaction[];
   sourceBatchId: string;
   isHistorical?: boolean;
+  accountId?: number; // Optional: provide accountId for webhook contexts
+  supabase?: SupabaseClient; // Optional: provide supabase client for webhook contexts
 }
 
 /**
@@ -20,8 +23,10 @@ export interface QueueTransactionOptions {
  * Handles deduplication against both imported_transactions and queued_imports
  */
 export async function queueTransactions(options: QueueTransactionOptions): Promise<number> {
-  const { supabase } = await getAuthenticatedUser();
-  const accountId = await getActiveAccountId();
+  // Use provided supabase client or get authenticated user's client
+  const supabase = options.supabase || (await getAuthenticatedUser()).supabase;
+  // Use provided accountId or get from context
+  const accountId = options.accountId || await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
   const { importSetupId, transactions, sourceBatchId, isHistorical = false } = options;

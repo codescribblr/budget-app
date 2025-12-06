@@ -14,11 +14,15 @@ export interface EmailAttachment {
   content: Buffer | string;
 }
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 export interface ProcessEmailOptions {
   importSetupId: number;
   attachments: EmailAttachment[];
   sourceBatchId: string;
   isHistorical?: boolean;
+  accountId?: number; // Optional: provide accountId for webhook contexts
+  supabase?: SupabaseClient; // Optional: provide supabase client for webhook contexts
 }
 
 /**
@@ -62,6 +66,8 @@ export async function processEmailAttachments(options: ProcessEmailOptions): Pro
         transactions,
         sourceBatchId,
         isHistorical,
+        accountId: options.accountId,
+        supabase: options.supabase,
       });
 
       totalQueued += queued;
