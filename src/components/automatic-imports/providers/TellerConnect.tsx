@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTellerConnect } from 'teller-connect-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, CreditCard } from 'lucide-react';
 
 interface TellerConnectProps {
+  onOpen?: () => void;
+  onExit?: () => void;
   onSuccess: (enrollment: {
     accessToken: string;
     enrollmentId: string;
@@ -17,13 +19,17 @@ interface TellerConnectProps {
   onError?: (error: Error) => void;
   targetAccountId?: number;
   isHistorical?: boolean;
+  autoOpen?: boolean;
 }
 
 export default function TellerConnect({
+  onOpen,
+  onExit,
   onSuccess,
   onError,
   targetAccountId,
   isHistorical,
+  autoOpen = false,
 }: TellerConnectProps) {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,8 +81,28 @@ export default function TellerConnect({
     },
     onExit: () => {
       setConnecting(false);
+      if (onExit) {
+        onExit();
+      }
     },
   });
+
+  // Auto-open Teller modal when autoOpen is true and ready
+  useEffect(() => {
+    if (autoOpen && ready && !connecting) {
+      // Call onOpen callback if provided (for tracking/logging purposes)
+      if (onOpen) {
+        onOpen();
+      }
+      // Open the Teller modal
+      open();
+    }
+  }, [autoOpen, ready, connecting, open, onOpen]);
+
+  // When autoOpen is true, hide the Card UI since Teller modal will be shown
+  if (autoOpen) {
+    return null;
+  }
 
   return (
     <Card>
@@ -97,7 +123,12 @@ export default function TellerConnect({
         )}
 
         <Button
-          onClick={() => open()}
+          onClick={() => {
+            if (onOpen) {
+              onOpen();
+            }
+            open();
+          }}
           disabled={!ready || connecting}
           className="w-full"
         >
