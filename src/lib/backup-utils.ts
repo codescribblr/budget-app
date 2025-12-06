@@ -56,6 +56,8 @@ export interface AccountBackupData {
   user_feature_flags?: any[]; // User-specific, not account-specific
   ai_conversations?: any[];
   duplicate_group_reviews?: any[];
+  automatic_import_setups?: any[];
+  queued_imports?: any[];
 }
 
 // Legacy interface for backward compatibility
@@ -83,6 +85,8 @@ export interface UserBackupData {
   user_feature_flags?: any[];
   ai_conversations?: any[];
   duplicate_group_reviews?: any[];
+  automatic_import_setups?: any[];
+  queued_imports?: any[];
 }
 
 /**
@@ -151,6 +155,8 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     { data: user_feature_flags },
     { data: ai_conversations },
     { data: duplicate_group_reviews },
+    { data: automatic_import_setups },
+    { data: queued_imports },
   ] = await Promise.all([
     supabase.from('accounts').select('*').eq('account_id', accountId),
     supabase.from('categories').select('*').eq('account_id', accountId),
@@ -179,10 +185,12 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     supabase.from('user_feature_flags').select('*').eq('account_id', accountId),
     supabase.from('ai_conversations').select('*').eq('account_id', accountId),
     supabase.from('duplicate_group_reviews').select('*').eq('budget_account_id', accountId),
+    supabase.from('automatic_import_setups').select('*').eq('account_id', accountId),
+    supabase.from('queued_imports').select('*').eq('account_id', accountId),
   ]);
 
   return {
-    version: '2.0',
+    version: '2.1',
     created_at: new Date().toISOString(),
     created_by: user.id,
     account: {
@@ -228,6 +236,8 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     user_feature_flags: user_feature_flags || [],
     ai_conversations: ai_conversations || [],
     duplicate_group_reviews: duplicate_group_reviews || [],
+    automatic_import_setups: automatic_import_setups || [],
+    queued_imports: queued_imports || [],
   };
 }
 
@@ -263,6 +273,8 @@ export async function exportUserData(): Promise<UserBackupData> {
     user_feature_flags: accountData.user_feature_flags,
     ai_conversations: accountData.ai_conversations,
     duplicate_group_reviews: accountData.duplicate_group_reviews,
+    automatic_import_setups: accountData.automatic_import_setups,
+    queued_imports: accountData.queued_imports,
   };
 }
 
@@ -332,6 +344,8 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   await supabase.from('user_feature_flags').delete().eq('account_id', accountId);
   await supabase.from('ai_conversations').delete().eq('account_id', accountId);
   await supabase.from('duplicate_group_reviews').delete().eq('budget_account_id', accountId);
+  await supabase.from('queued_imports').delete().eq('account_id', accountId);
+  await supabase.from('automatic_import_setups').delete().eq('account_id', accountId);
   await supabase.from('categories').delete().eq('account_id', accountId);
   await supabase.from('accounts').delete().eq('account_id', accountId);
 
@@ -801,6 +815,77 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       }
       console.log('[Import] Inserted', duplicateGroupReviewsToInsert.length, 'duplicate group reviews');
     }
+  }
+
+  // Insert automatic_import_setups (after accounts, credit_cards are inserted)
+  const importSetupIdMap = new Map<number, number>();
+  if (backupData.automatic_import_setups && backupData.automatic_import_setups.length > 0) {
+    const setupsToInsert = backupData.automatic_import_setups.map(({ 
+      id, 
+      account_id, 
+      user_id, 
+      target_account_id, 
+      target_credit_card_id,
+      created_by,
+      ...setup 
+    }) => ({
+      ...setup,
+      user_id: user.id,
+      account_id: accountId,
+      target_account_id: target_account_id ? (accountIdMap.get(target_account_id) || null) : null,
+      target_credit_card_id: target_credit_card_id ? (creditCardIdMap.get(target_credit_card_id) || null) : null,
+      created_by: created_by || user.id,
+    }));
+
+    const { data, error } = await supabase
+      .from('automatic_import_setups')
+      .insert(setupsToInsert)
+      .select('id');
+
+    if (error) {
+      console.error('[Import] Error inserting automatic_import_setups:', error);
+      throw error;
+    }
+
+    // Create ID mapping for queued_imports foreign key
+    backupData.automatic_import_setups.forEach((oldSetup, index) => {
+      importSetupIdMap.set(oldSetup.id, data[index].id);
+    });
+    console.log('[Import] Inserted', data.length, 'automatic import setups');
+  }
+
+  // Insert queued_imports (after automatic_import_setups, categories, accounts, credit_cards, transactions are inserted)
+  if (backupData.queued_imports && backupData.queued_imports.length > 0) {
+    const queuedImportsToInsert = backupData.queued_imports.map(({ 
+      id, 
+      account_id, 
+      import_setup_id,
+      suggested_category_id,
+      target_account_id,
+      target_credit_card_id,
+      imported_transaction_id,
+      reviewed_by,
+      ...queuedImport 
+    }) => ({
+      ...queuedImport,
+      account_id: accountId,
+      import_setup_id: import_setup_id ? (importSetupIdMap.get(import_setup_id) || null) : null,
+      suggested_category_id: suggested_category_id ? (categoryIdMap.get(suggested_category_id) || null) : null,
+      target_account_id: target_account_id ? (accountIdMap.get(target_account_id) || null) : null,
+      target_credit_card_id: target_credit_card_id ? (creditCardIdMap.get(target_credit_card_id) || null) : null,
+      imported_transaction_id: imported_transaction_id ? (transactionIdMap.get(imported_transaction_id) || null) : null,
+      reviewed_by: reviewed_by || null, // Keep reviewed_by if restoring to same user, otherwise null
+    }));
+
+    const { error } = await supabase
+      .from('queued_imports')
+      .insert(queuedImportsToInsert);
+
+    if (error) {
+      console.error('[Import] Error inserting queued_imports:', error);
+      throw error;
+    }
+    console.log('[Import] Inserted', queuedImportsToInsert.length, 'queued imports');
   }
 
   console.log('[Import] Import completed successfully');
