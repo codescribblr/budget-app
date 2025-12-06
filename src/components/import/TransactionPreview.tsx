@@ -681,12 +681,36 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                   <TableCell className="text-center min-w-[100px]">
                     <Checkbox
                       checked={transaction.is_historical ?? false}
-                      onCheckedChange={(checked) => {
+                      onCheckedChange={async (checked) => {
+                        const newValue = checked === true;
+                        // Update local state
                         setItems(items.map(item => 
                           item.id === transaction.id 
-                            ? { ...item, is_historical: checked === true }
+                            ? { ...item, is_historical: newValue }
                             : item
                         ));
+                        
+                        // If this is a queued import, save to database
+                        if (transaction.id.startsWith('queued-')) {
+                          const queuedImportId = parseInt(transaction.id.replace('queued-', ''));
+                          if (!isNaN(queuedImportId)) {
+                            try {
+                              await fetch(`/api/automatic-imports/queue/${queuedImportId}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ is_historical: newValue }),
+                              });
+                            } catch (error) {
+                              console.error('Error updating queued import is_historical:', error);
+                              // Revert on error
+                              setItems(items.map(item => 
+                                item.id === transaction.id 
+                                  ? { ...item, is_historical: !newValue }
+                                  : item
+                              ));
+                            }
+                          }
+                        }
                       }}
                       title="Mark as historical (won't affect current budget)"
                     />
