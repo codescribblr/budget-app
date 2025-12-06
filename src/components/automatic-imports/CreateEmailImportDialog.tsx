@@ -141,7 +141,7 @@ export default function CreateEmailImportDialog({
               </SelectTrigger>
               <SelectContent>
                 {accounts.length === 0 ? (
-                  <SelectItem value="" disabled>No accounts available</SelectItem>
+                  <SelectItem value="no-accounts" disabled>No accounts available</SelectItem>
                 ) : (
                   accounts.map((account) => (
                     <SelectItem key={account.id} value={account.id.toString()}>

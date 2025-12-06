@@ -63,7 +63,7 @@ export default function CreateTellerImportDialog({
           accessToken: enrollment.accessToken,
           enrollmentId: enrollment.enrollmentId,
           institutionName: enrollment.institutionName,
-          target_account_id: targetAccountId ? parseInt(targetAccountId) : null,
+          target_account_id: targetAccountId && targetAccountId !== 'none' ? parseInt(targetAccountId) : null,
           is_historical: isHistorical,
         }),
       });
@@ -106,12 +106,12 @@ export default function CreateTellerImportDialog({
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>Target Account (Optional)</Label>
-            <Select value={targetAccountId} onValueChange={setTargetAccountId}>
+            <Select value={targetAccountId || undefined} onValueChange={setTargetAccountId}>
               <SelectTrigger>
                 <SelectValue placeholder="Select account (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None (use default)</SelectItem>
+                <SelectItem value="none">None (use default)</SelectItem>
                 {accounts.map((account) => (
                   <SelectItem key={account.id} value={account.id.toString()}>
                     {account.name}
@@ -145,7 +145,7 @@ export default function CreateTellerImportDialog({
             <TellerConnect
               onSuccess={handleTellerSuccess}
               onError={handleTellerError}
-              targetAccountId={targetAccountId ? parseInt(targetAccountId) : undefined}
+              targetAccountId={targetAccountId && targetAccountId !== 'none' ? parseInt(targetAccountId) : undefined}
               isHistorical={isHistorical}
             />
           )}
