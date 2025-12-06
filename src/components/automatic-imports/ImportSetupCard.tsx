@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Trash2, Edit, Mail, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Trash2, Edit, Mail, AlertCircle, CheckCircle2, RefreshCw, CreditCard } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
