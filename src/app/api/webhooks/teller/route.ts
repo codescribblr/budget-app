@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { fetchAndQueueTellerTransactions } from '@/lib/automatic-imports/providers/teller-service';
+import { getDecryptedAccessToken } from '@/lib/automatic-imports/helpers';
 import crypto from 'crypto';
 
 /**
@@ -108,9 +109,9 @@ export async function POST(request: Request) {
         const accountIds = [...new Set(transactions.map((t: any) => t.account_id))];
 
         for (const setup of setups) {
-          const accessToken = setup.source_config?.access_token;
+          const accessToken = getDecryptedAccessToken(setup);
           if (!accessToken) {
-            console.warn(`No access token found for setup ${setup.id}`);
+            console.warn(`No access token found or failed to decrypt for setup ${setup.id}`);
             continue;
           }
 
@@ -177,9 +178,9 @@ export async function POST(request: Request) {
 
         // Fetch and queue transactions for each setup
         for (const setup of setups) {
-          const accessToken = setup.source_config?.access_token;
+          const accessToken = getDecryptedAccessToken(setup);
           if (!accessToken) {
-            console.warn(`No access token found for setup ${setup.id}`);
+            console.warn(`No access token found or failed to decrypt for setup ${setup.id}`);
             continue;
           }
 

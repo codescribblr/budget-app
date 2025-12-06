@@ -2,6 +2,32 @@
 
 This guide explains how to obtain API credentials for each automatic import integration option.
 
+## 🔐 Encryption Key (Required)
+
+**Important:** All API access tokens (like Teller access tokens) are encrypted before storage. You must set up an encryption key before using any integrations that store access tokens.
+
+### Steps to Generate Encryption Key:
+
+1. **Generate a random encryption key:**
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+   This will output a 64-character hex string.
+
+2. **Add to .env.local:**
+   ```
+   ENCRYPTION_KEY=your-generated-64-character-hex-string-here
+   ```
+
+3. **Security Notes:**
+   - Keep this key secret and never commit it to version control
+   - Use a different key for each environment (development, staging, production)
+   - If you lose the key, you'll need to re-connect all integrations
+   - The key must be exactly 64 characters (32 bytes in hex)
+   - In production, this key is **required** - the app will error if not set
+
+---
+
 ## Email Import (Free - Recommended for MVP)
 
 **Resend API key required** if using Resend (which you already are!). Email import uses Resend's inbound email feature.

@@ -4,6 +4,7 @@ import { getActiveAccountId } from '@/lib/account-context';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { fetchAndQueueTellerTransactions, fetchTellerAccounts } from '@/lib/automatic-imports/providers/teller-service';
+import { getDecryptedAccessToken } from '@/lib/automatic-imports/helpers';
 
 /**
  * POST /api/automatic-imports/setups/[id]/fetch
@@ -51,10 +52,10 @@ export async function POST(
 
     // Handle different source types
     if (setup.source_type === 'teller') {
-      const accessToken = setup.source_config?.access_token;
+      const accessToken = getDecryptedAccessToken(setup);
       if (!accessToken) {
         return NextResponse.json(
-          { error: 'No access token found for Teller setup' },
+          { error: 'No access token found or failed to decrypt for Teller setup' },
           { status: 400 }
         );
       }

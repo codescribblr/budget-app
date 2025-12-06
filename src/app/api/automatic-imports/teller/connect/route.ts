@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import { fetchTellerAccounts } from '@/lib/automatic-imports/providers/teller-service';
+import { encrypt } from '@/lib/encryption';
 
 /**
  * POST /api/automatic-imports/teller/connect
@@ -62,6 +63,8 @@ export async function POST(request: Request) {
 
     // Create import setup
     // Store accessToken encrypted in source_config
+    const encryptedAccessToken = encrypt(accessToken);
+    
     const { data: setup, error: setupError } = await supabase
       .from('automatic_import_setups')
       .insert({
@@ -74,7 +77,7 @@ export async function POST(request: Request) {
         is_historical: isHistorical || false,
         is_active: true,
         source_config: {
-          access_token: accessToken, // TODO: Encrypt this token
+          access_token: encryptedAccessToken, // Encrypted access token
           enrollment_id: enrollmentId,
           institution_name: institutionName,
           account_ids: tellerAccounts.map(acc => acc.id),

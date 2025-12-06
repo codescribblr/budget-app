@@ -91,9 +91,11 @@ TELLER_ENV=sandbox
 ### Security Considerations
 
 1. **Access Token Storage:**
-   - Currently stored in `source_config` JSONB field
-   - **TODO:** Should be encrypted before storage
-   - Consider using Supabase Vault or encryption library
+   - ✅ **Encrypted** before storage in `source_config` JSONB field
+   - Uses AES-256-GCM encryption with a key derived from `ENCRYPTION_KEY`
+   - Each encryption uses a unique salt and IV for security
+   - Tokens are automatically decrypted when retrieved
+   - Legacy plain-text tokens are supported (with warning) for migration
 
 2. **Webhook Signature Verification:**
    - ✅ Implemented HMAC-SHA-256 verification
