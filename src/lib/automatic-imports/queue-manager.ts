@@ -303,12 +303,24 @@ export async function approveAndImportQueuedTransactions(queuedImportIds: number
   // If transactions with splits are provided, use them
   // Otherwise, fetch queued imports and convert (but they need splits!)
   let transactions: any[];
+  let queuedImports: any[] | null = null;
+  let batchId = 'unknown';
   
   if (transactionsWithSplits && transactionsWithSplits.length > 0) {
     transactions = transactionsWithSplits;
+    
+    // Still need to fetch batch_id for the import filename
+    const { data: batchData } = await supabase
+      .from('queued_imports')
+      .select('source_batch_id')
+      .in('id', queuedImportIds)
+      .limit(1)
+      .single();
+    
+    batchId = batchData?.source_batch_id || 'unknown';
   } else {
     // Fetch queued imports
-    const { data: queuedImports, error: fetchError } = await supabase
+    const { data: fetchedQueuedImports, error: fetchError } = await supabase
       .from('queued_imports')
       .select('*')
       .in('id', queuedImportIds)
@@ -320,14 +332,19 @@ export async function approveAndImportQueuedTransactions(queuedImportIds: number
       throw fetchError;
     }
 
-    if (!queuedImports || queuedImports.length === 0) {
+    if (!fetchedQueuedImports || fetchedQueuedImports.length === 0) {
       return { imported: 0 };
     }
+
+    queuedImports = fetchedQueuedImports;
+    
+    // Get batch_id from first queued import
+    batchId = fetchedQueuedImports[0]?.source_batch_id || 'unknown';
 
     // Convert to ParsedTransaction format
     // Note: This requires splits to be set - they should come from the review UI
     transactions = await Promise.all(
-      queuedImports.map(qi => convertQueuedImportToParsedTransaction(qi))
+      fetchedQueuedImports.map(qi => convertQueuedImportToParsedTransaction(qi))
     );
   }
 
@@ -341,16 +358,6 @@ export async function approveAndImportQueuedTransactions(queuedImportIds: number
   // Import using existing import function
   const { importTransactions } = await import('../supabase-queries');
   
-  // Get batch_id from queued imports (use first one for batch name)
-  const { data: queuedImportsForBatch } = await supabase
-    .from('queued_imports')
-    .select('source_batch_id')
-    .in('id', queuedImportIds)
-    .limit(1)
-    .single();
-  
-  const batchId = queuedImportsForBatch?.source_batch_id || 'unknown';
-  
   // Use per-transaction is_historical if provided, otherwise fall back to false
   // The transactions array should already have is_historical set from convertQueuedImportToParsedTransaction
   // or from the UI when transactionsWithSplits is provided
@@ -360,16 +367,45 @@ export async function approveAndImportQueuedTransactions(queuedImportIds: number
     `Automatic Import - Batch ${batchId}`
   );
 
-  // Update queued imports to mark as imported
-  const importedIds = queuedImportIds.slice(0, importedCount);
+  // Map validTransactions back to queued import IDs
+  // If transactionsWithSplits was provided, extract IDs from transaction.id (queued-{id})
+  // Otherwise, use the queuedImports array we fetched earlier
+  let importedQueuedIds: number[];
   
-  await supabase
-    .from('queued_imports')
-    .update({
-      status: 'imported',
-      imported_at: new Date().toISOString(),
-    })
-    .in('id', importedIds);
+  if (transactionsWithSplits && transactionsWithSplits.length > 0) {
+    // Extract queued import IDs from transaction IDs (format: queued-{id})
+    importedQueuedIds = validTransactions
+      .map(txn => {
+        if (txn.id.startsWith('queued-')) {
+          const id = parseInt(txn.id.replace('queued-', ''), 10);
+          return isNaN(id) ? null : id;
+        }
+        return null;
+      })
+      .filter((id): id is number => id !== null)
+      .slice(0, importedCount);
+  } else if (queuedImports) {
+    // Map validTransactions to queued import IDs by matching hashes
+    const validHashes = new Set(validTransactions.map(t => t.hash));
+    importedQueuedIds = queuedImports
+      .filter(qi => validHashes.has(qi.hash))
+      .map(qi => qi.id)
+      .slice(0, importedCount);
+  } else {
+    // Fallback: use queuedImportIds in order (less accurate but better than nothing)
+    importedQueuedIds = queuedImportIds.slice(0, importedCount);
+  }
+  
+  // Update queued imports to mark as imported
+  if (importedQueuedIds.length > 0) {
+    await supabase
+      .from('queued_imports')
+      .update({
+        status: 'imported',
+        imported_at: new Date().toISOString(),
+      })
+      .in('id', importedQueuedIds);
+  }
 
   return { imported: importedCount };
 }

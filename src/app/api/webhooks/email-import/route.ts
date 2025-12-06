@@ -42,7 +42,9 @@ export async function POST(request: Request) {
       }
       
       const emailData = resendWebhook.data;
-      to = emailData.to;
+      // Handle to field - could be string or array
+      const toField = emailData.to;
+      to = Array.isArray(toField) ? toField[0] : toField;
       const emailId = emailData.email_id;
       
       if (!emailId) {

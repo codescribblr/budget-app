@@ -226,13 +226,16 @@ export async function fetchAndQueueTellerTransactions(options: {
       targetCreditCardId = setup.target_credit_card_id;
     } else {
       // If supabase and accountId provided, still fetch setup for account mappings
-      const { data: setup } = await supabase
+      const { data: setup, error: setupError } = await supabase
         .from('automatic_import_setups')
         .select('target_account_id, target_credit_card_id')
         .eq('id', importSetupId)
         .single();
       
-      if (setup) {
+      if (setupError) {
+        console.warn(`Error fetching setup ${importSetupId} for account mappings:`, setupError);
+        // Continue with null values - account mappings are optional
+      } else if (setup) {
         targetAccountId = setup.target_account_id;
         targetCreditCardId = setup.target_credit_card_id;
       }
