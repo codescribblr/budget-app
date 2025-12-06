@@ -78,6 +78,12 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     if (storedIsHistorical === 'true') {
       setIsHistorical(true);
     }
+
+    // Initialize per-transaction is_historical from global flag if not already set
+    setItems(prevItems => prevItems.map(item => ({
+      ...item,
+      is_historical: item.is_historical !== undefined ? item.is_historical : (storedIsHistorical === 'true'),
+    })));
   }, []);
 
 
@@ -276,8 +282,12 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          transactions: toImport,
-          isHistorical: isHistorical,
+          transactions: toImport.map(txn => ({
+            ...txn,
+            // Use per-transaction is_historical if set, otherwise fall back to global flag
+            is_historical: txn.is_historical !== undefined ? txn.is_historical : isHistorical,
+          })),
+          isHistorical: isHistorical, // Keep for backward compatibility
           fileName: fileName,
         }),
       });
@@ -434,7 +444,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
           <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-200">
             <span className="font-medium">📜 Historical Import:</span>
-            <span>These transactions will not affect your current envelope balances</span>
+            <span>Default for all transactions (can be changed per transaction below)</span>
           </div>
         </div>
       )}
@@ -478,6 +488,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
               <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
               <TableHead className="whitespace-nowrap">Category</TableHead>
               <TableHead className="whitespace-nowrap">Account</TableHead>
+              <TableHead className="whitespace-nowrap text-center">Historical</TableHead>
               <TableHead className="whitespace-nowrap">Status</TableHead>
               <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
             </TableRow>
@@ -664,6 +675,21 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                         {getAccountDisplayName(transaction)}
                       </div>
                     )}
+                  </TableCell>
+
+                  {/* Historical Cell */}
+                  <TableCell className="text-center min-w-[100px]">
+                    <Checkbox
+                      checked={transaction.is_historical ?? false}
+                      onCheckedChange={(checked) => {
+                        setItems(items.map(item => 
+                          item.id === transaction.id 
+                            ? { ...item, is_historical: checked === true }
+                            : item
+                        ));
+                      }}
+                      title="Mark as historical (won't affect current budget)"
+                    />
                   </TableCell>
 
                   {/* Status Cell */}

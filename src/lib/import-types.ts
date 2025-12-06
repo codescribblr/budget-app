@@ -16,6 +16,7 @@ export interface ParsedTransaction {
   status: 'pending' | 'confirmed' | 'excluded';
   splits: TransactionSplit[];
   forceImport?: boolean; // User explicitly clicked "Include" on a duplicate
+  is_historical?: boolean; // Per-transaction historical flag
 }
 
 export interface TransactionSplit {

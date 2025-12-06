@@ -287,6 +287,7 @@ export async function convertQueuedImportToParsedTransaction(queuedImport: any):
     isDuplicate: false,
     status: queuedImport.status === 'approved' ? 'confirmed' as const : 'pending' as const,
     splits,
+    is_historical: queuedImport.is_historical || false,
   };
 }
 
@@ -340,20 +341,22 @@ export async function approveAndImportQueuedTransactions(queuedImportIds: number
   // Import using existing import function
   const { importTransactions } = await import('../supabase-queries');
   
-  // Get is_historical from queued imports (not from transactions array)
-  const { data: queuedImports } = await supabase
+  // Get batch_id from queued imports (use first one for batch name)
+  const { data: queuedImportsForBatch } = await supabase
     .from('queued_imports')
-    .select('is_historical, source_batch_id')
+    .select('source_batch_id')
     .in('id', queuedImportIds)
     .limit(1)
     .single();
   
-  const isHistorical = queuedImports?.is_historical || false;
-  const batchId = queuedImports?.source_batch_id || 'unknown';
+  const batchId = queuedImportsForBatch?.source_batch_id || 'unknown';
   
+  // Use per-transaction is_historical if provided, otherwise fall back to false
+  // The transactions array should already have is_historical set from convertQueuedImportToParsedTransaction
+  // or from the UI when transactionsWithSplits is provided
   const importedCount = await importTransactions(
     validTransactions,
-    isHistorical,
+    false, // Global flag - per-transaction is_historical is used instead
     `Automatic Import - Batch ${batchId}`
   );
 

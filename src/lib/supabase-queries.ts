@@ -1723,6 +1723,9 @@ export async function importTransactions(transactions: any[], isHistorical: bool
     // based on the user's selected mapping convention
     const transactionType = txn.transaction_type || 'expense';
     
+    // Use per-transaction is_historical if provided, otherwise fall back to global flag
+    const transactionIsHistorical = txn.is_historical !== undefined ? txn.is_historical : isHistorical;
+    
     return {
       user_id: user.id,
       budget_account_id: accountId,
@@ -1733,7 +1736,7 @@ export async function importTransactions(transactions: any[], isHistorical: bool
       merchant_group_id: merchantGroupIds[index],
       account_id: txn.account_id || null, // This is the bank account, not budget account
       credit_card_id: txn.credit_card_id || null,
-      is_historical: isHistorical,
+      is_historical: transactionIsHistorical,
     };
   });
 
@@ -1754,6 +1757,8 @@ export async function importTransactions(transactions: any[], isHistorical: bool
   validTransactions.forEach((txn, txnIndex) => {
     const transactionId = createdTransactions[txnIndex].id;
     const transactionType = transactionsData[txnIndex].transaction_type;
+    // Use per-transaction is_historical if provided, otherwise fall back to global flag
+    const transactionIsHistorical = txn.is_historical !== undefined ? txn.is_historical : isHistorical;
 
     txn.splits.forEach((split: any) => {
       // CSV parser already normalizes amounts to positive, but add safeguard for edge cases
@@ -1765,8 +1770,8 @@ export async function importTransactions(transactions: any[], isHistorical: bool
         amount: absSplitAmount,
       });
 
-      // Accumulate balance updates (only for non-historical)
-      if (!isHistorical) {
+      // Accumulate balance updates (only for non-historical transactions)
+      if (!transactionIsHistorical) {
         const balanceChange = transactionType === 'income'
           ? absSplitAmount
           : -absSplitAmount;
