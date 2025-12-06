@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Mail, CreditCard, AlertCircle } from 'lucide-react';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import ImportSetupCard from '@/components/automatic-imports/ImportSetupCard';
-import CreateEmailImportDialog from '@/components/automatic-imports/CreateEmailImportDialog';
+import IntegrationSelector from '@/components/automatic-imports/IntegrationSelector';
 
 interface AutomaticImportSetup {
   id: number;
@@ -114,7 +114,7 @@ export default function AutomaticImportsPage() {
         </div>
       )}
 
-      <CreateEmailImportDialog
+      <IntegrationSelector
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
         onCreated={handleSetupCreated}

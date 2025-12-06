@@ -204,21 +204,53 @@ Since you're already using Resend for SMTP, this is the easiest option:
    - Create a developer account
 
 2. **Create Application**
-   - Go to Dashboard → API Keys
-   - Generate an access token
+   - Go to Dashboard → Applications
+   - Create a new application
+   - Copy your **Application ID**
 
-3. **Environment**
+3. **Get Webhook Secret**
+   - Go to Dashboard → Webhooks
+   - Add webhook URL: `https://yourdomain.com/api/webhooks/teller`
+   - Copy the webhook signing secret
+
+4. **Environment**
    - Use `sandbox` for testing
    - Use `production` for live users
 
-4. **Add to .env.local:**
+5. **Add to .env.local:**
    ```
-   TELLER_ACCESS_TOKEN=your-access-token
+   NEXT_PUBLIC_TELLER_APPLICATION_ID=your-application-id
+   TELLER_WEBHOOK_SECRET=your-webhook-secret
    TELLER_ENV=sandbox
    ```
 
+### How It Works:
+
+1. **User Connects Account:**
+   - User clicks "Connect with Teller" button
+   - Teller Connect OAuth flow opens
+   - User authenticates with their bank
+   - `onSuccess` callback receives `accessToken` and enrollment data
+
+2. **Store Connection:**
+   - Access token stored in `source_config` (should be encrypted)
+   - Enrollment ID stored as `source_identifier`
+   - Bank name and account numbers stored for display
+
+3. **Fetch Transactions:**
+   - Transactions fetched via Teller API using access token
+   - Converted to `ParsedTransaction` format
+   - Queued for review (same as email imports)
+
+4. **Webhook Updates:**
+   - Teller sends webhooks for new/updated transactions
+   - Webhook handler verifies signature
+   - Fetches and queues new transactions automatically
+
 ### Documentation:
 - API Docs: https://teller.io/docs
+- Teller Connect Guide: https://teller.io/docs/guides/connect
+- React Library: https://github.com/tellerhq/teller-connect-react
 - Dashboard: https://teller.io/dashboard
 
 ---

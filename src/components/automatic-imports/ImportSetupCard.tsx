@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Trash2, Edit, Mail, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Trash2, Edit, Mail, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +40,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isActive, setIsActive] = useState(setup.is_active);
   const [updating, setUpdating] = useState(false);
+  const [fetching, setFetching] = useState(false);
 
   const handleToggleActive = async (checked: boolean) => {
     setUpdating(true);
@@ -76,10 +77,40 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
     }
   };
 
+  const handleManualFetch = async () => {
+    if (setup.source_type !== 'teller') {
+      alert('Manual fetch is only available for Teller integrations');
+      return;
+    }
+
+    setFetching(true);
+    try {
+      const response = await fetch(`/api/automatic-imports/setups/${setup.id}/fetch`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch transactions');
+      }
+
+      const data = await response.json();
+      alert(`Fetched ${data.fetched} transactions, queued ${data.queued} for review`);
+      onUpdated();
+    } catch (error: any) {
+      console.error('Error fetching transactions:', error);
+      alert(error.message || 'Failed to fetch transactions');
+    } finally {
+      setFetching(false);
+    }
+  };
+
   const getSourceIcon = () => {
     switch (setup.source_type) {
       case 'email':
         return <Mail className="h-5 w-5" />;
+      case 'teller':
+        return <CreditCard className="h-5 w-5" />;
       default:
         return <CreditCard className="h-5 w-5" />;
     }
@@ -87,13 +118,13 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
 
   const getSourceBadge = () => {
     const colors: Record<string, string> = {
-      email: 'bg-blue-100 text-blue-800',
-      plaid: 'bg-purple-100 text-purple-800',
-      finicity: 'bg-green-100 text-green-800',
-      mx: 'bg-orange-100 text-orange-800',
-      teller: 'bg-gray-100 text-gray-800',
+      email: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      plaid: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+      finicity: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+      mx: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+      teller: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
     };
-    return colors[setup.source_type] || 'bg-gray-100 text-gray-800';
+    return colors[setup.source_type] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
   };
 
   const formatDate = (dateString: string | null) => {
@@ -130,6 +161,17 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
                   disabled={updating}
                 />
               </div>
+              {setup.source_type === 'teller' && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleManualFetch}
+                  disabled={fetching || !isActive}
+                  title="Fetch transactions now"
+                >
+                  <RefreshCw className={`h-4 w-4 ${fetching ? 'animate-spin' : ''}`} />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
