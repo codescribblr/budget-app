@@ -90,10 +90,12 @@ export async function processEmailAttachments(options: ProcessEmailOptions): Pro
  */
 async function processCSVAttachment(attachment: EmailAttachment): Promise<ParsedTransaction[]> {
   // Convert content to File object for CSV parser
-  const blob = typeof attachment.content === 'string'
-    ? new Blob([attachment.content], { type: 'text/csv' })
-    : new Blob([attachment.content], { type: 'text/csv' });
+  // File API is available in Next.js API routes
+  const buffer = typeof attachment.content === 'string'
+    ? Buffer.from(attachment.content, 'utf-8')
+    : attachment.content;
   
+  const blob = new Blob([buffer], { type: 'text/csv' });
   const file = new File([blob], attachment.filename, { type: 'text/csv' });
 
   const result = await parseCSVFile(file, { skipTemplate: false });
@@ -105,10 +107,12 @@ async function processCSVAttachment(attachment: EmailAttachment): Promise<Parsed
  */
 async function processPDFAttachment(attachment: EmailAttachment): Promise<ParsedTransaction[]> {
   // Convert content to File object for PDF parser
-  const blob = typeof attachment.content === 'string'
-    ? new Blob([attachment.content], { type: 'application/pdf' })
-    : new Blob([attachment.content], { type: 'application/pdf' });
+  // File API is available in Next.js API routes
+  const buffer = typeof attachment.content === 'string'
+    ? Buffer.from(attachment.content, 'base64') // PDFs are typically base64 encoded
+    : attachment.content;
   
+  const blob = new Blob([buffer], { type: 'application/pdf' });
   const file = new File([blob], attachment.filename, { type: 'application/pdf' });
 
   const result = await parsePDFFile(file);

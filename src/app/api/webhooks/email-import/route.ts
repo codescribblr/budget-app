@@ -151,17 +151,17 @@ export async function POST(request: Request) {
     }
 
     // Extract import setup ID from email address
-    // Format: user123+setup456@imports.budgetapp.com
-    // Or: setup-456@imports.budgetapp.com
-    const emailMatch = to.match(/setup[_-]?(\d+)|(\d+)\+setup(\d+)/i);
-    if (!emailMatch) {
+    // Format: setup-{id}@{domain}
+    // Example: setup-123@imports.budgetapp.com
+    const emailMatch = to.match(/setup[_-](\d+)@/i);
+    if (!emailMatch || !emailMatch[1]) {
       return NextResponse.json(
-        { error: 'Could not identify import setup from email address' },
+        { error: `Could not identify import setup from email address: ${to}` },
         { status: 400 }
       );
     }
 
-    const importSetupId = parseInt(emailMatch[1] || emailMatch[3]);
+    const importSetupId = parseInt(emailMatch[1], 10);
     if (isNaN(importSetupId)) {
       return NextResponse.json(
         { error: 'Invalid import setup ID in email address' },

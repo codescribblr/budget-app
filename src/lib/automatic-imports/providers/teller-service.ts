@@ -136,8 +136,12 @@ export function convertTellerTransactionToParsed(
   accountId?: number,
   creditCardId?: number
 ): ParsedTransaction {
-  const amount = Math.abs(parseFloat(tellerTransaction.amount));
-  const isIncome = parseFloat(tellerTransaction.amount) > 0;
+  const parsedAmount = parseFloat(tellerTransaction.amount);
+  if (isNaN(parsedAmount)) {
+    throw new Error(`Invalid transaction amount: ${tellerTransaction.amount}`);
+  }
+  const amount = Math.abs(parsedAmount);
+  const isIncome = parsedAmount > 0;
   
   // Extract merchant from description or counterparty
   const merchant = tellerTransaction.details?.counterparty?.name 

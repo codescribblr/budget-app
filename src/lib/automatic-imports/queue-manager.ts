@@ -339,8 +339,17 @@ export async function approveAndImportQueuedTransactions(queuedImportIds: number
 
   // Import using existing import function
   const { importTransactions } = await import('../supabase-queries');
-  const isHistorical = transactions[0].is_historical || false;
-  const batchId = transactions[0].source_batch_id || 'unknown';
+  
+  // Get is_historical from queued imports (not from transactions array)
+  const { data: queuedImports } = await supabase
+    .from('queued_imports')
+    .select('is_historical, source_batch_id')
+    .in('id', queuedImportIds)
+    .limit(1)
+    .single();
+  
+  const isHistorical = queuedImports?.is_historical || false;
+  const batchId = queuedImports?.source_batch_id || 'unknown';
   
   const importedCount = await importTransactions(
     validTransactions,
