@@ -44,10 +44,11 @@ Since you're already using Resend for SMTP, this is the easiest option:
    - Select event: **`email.received`**
    - Click "Add Webhook"
 
-4. **Get Your Inbound Email Address:**
-   - Go to https://resend.com/emails/receiving
-   - Find your inbound address (e.g., `your-app@resend.app`)
-   - Or use a custom domain address (e.g., `imports@yourdomain.com`)
+4. **Configure Receiving Domain:**
+   - Add `RESEND_RECEIVING_DOMAIN` to your `.env.local` with your receiving domain
+   - This is used to generate unique email addresses for each import setup
+   - Format: `setup-{id}@{RESEND_RECEIVING_DOMAIN}`
+   - Example: If domain is `imports.yourdomain.com`, emails will be `setup-123@imports.yourdomain.com`
 
 5. **Test:**
    - Send a test email with PDF/CSV attachment to your inbound address
@@ -102,10 +103,10 @@ Since you're already using Resend for SMTP, this is the easiest option:
    - Select "Email Import"
    - Choose target account
    - Click "Create Setup"
-   - **Important:** Use your Resend inbound email address format:
-     - For `.resend.app` domain: `setup-123@your-app.resend.app`
-     - For custom domain: `setup-123@imports.yourdomain.com`
-   - The setup will store this email address
+   - **The system will automatically generate a unique email address** using `RESEND_RECEIVING_DOMAIN`
+   - Format: `setup-{id}@{RESEND_RECEIVING_DOMAIN}`
+   - Example: `setup-123@imports.yourdomain.com`
+   - Copy the generated email address shown in the dialog
 
 4. **Test Email Forwarding:**
    - Forward a test bank statement email (with PDF/CSV attachment) to your Resend inbound address

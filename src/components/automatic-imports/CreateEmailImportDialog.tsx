@@ -33,8 +33,24 @@ export default function CreateEmailImportDialog({
   const [isHistorical, setIsHistorical] = useState(false);
   const [emailAddress, setEmailAddress] = useState<string>('');
   const [emailCopied, setEmailCopied] = useState(false);
+  const [receivingDomain, setReceivingDomain] = useState<string>('');
 
-  // Email will be generated after setup creation with actual ID
+  // Fetch receiving domain on mount
+  useEffect(() => {
+    fetchReceivingDomain();
+  }, []);
+
+  const fetchReceivingDomain = async () => {
+    try {
+      const response = await fetch('/api/automatic-imports/email-domain');
+      if (response.ok) {
+        const data = await response.json();
+        setReceivingDomain(data.domain);
+      }
+    } catch (error) {
+      console.error('Error fetching receiving domain:', error);
+    }
+  };
 
   const handleCreate = async () => {
     if (!targetAccountId) {
@@ -53,13 +69,9 @@ export default function CreateEmailImportDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           source_type: 'email',
-          source_identifier: emailAddress || `setup-${Date.now()}`,
+          // source_identifier will be generated server-side using RESEND_RECEIVING_DOMAIN
           target_account_id: parseInt(targetAccountId),
           is_historical: isHistorical,
-          source_config: {
-            email_address: emailAddress,
-            forwarding_enabled: true,
-          },
           integration_name: 'Email Import',
         }),
       });
@@ -71,22 +83,11 @@ export default function CreateEmailImportDialog({
 
       const data = await response.json();
       
-      // Update email address with actual setup ID
-      const actualEmail = `setup-${data.setup.id}@imports.budgetapp.com`;
-      setEmailAddress(actualEmail);
-
-      // Update the setup with the correct email
-      await fetch(`/api/automatic-imports/setups/${data.setup.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source_identifier: actualEmail,
-          source_config: {
-            email_address: actualEmail,
-            forwarding_enabled: true,
-          },
-        }),
-      });
+      // Email address is now generated server-side, extract from response
+      const actualEmail = data.setup.source_identifier || data.setup.source_config?.email_address;
+      if (actualEmail) {
+        setEmailAddress(actualEmail);
+      }
 
       toast({
         title: 'Success',
@@ -175,7 +176,7 @@ export default function CreateEmailImportDialog({
             </Label>
           </div>
 
-          {emailAddress && (
+          {emailAddress ? (
             <div className="space-y-2 p-4 bg-muted rounded-lg">
               <Label>Forward emails to:</Label>
               <div className="flex items-center gap-2">
@@ -195,6 +196,10 @@ export default function CreateEmailImportDialog({
               <p className="text-sm text-muted-foreground">
                 Forward bank statement emails to this address. Attached PDF or CSV files will be automatically processed.
               </p>
+            </div>
+          ) : receivingDomain && (
+            <div className="text-sm text-muted-foreground">
+              Email address will be generated after setup creation: <code className="text-xs">setup-{'{id}'}@{receivingDomain}</code>
             </div>
           )}
 

@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const {
+    let {
       source_type,
       source_identifier,
       target_account_id,
@@ -69,11 +69,17 @@ export async function POST(request: Request) {
     } = body;
 
     // Validate required fields
-    if (!source_type || !source_identifier) {
+    if (!source_type) {
       return NextResponse.json(
-        { error: 'source_type and source_identifier are required' },
+        { error: 'source_type is required' },
         { status: 400 }
       );
+    }
+
+    // For email imports, generate email address if not provided
+    if (source_type === 'email' && !source_identifier) {
+      // Generate temporary identifier - will be updated with actual ID after creation
+      source_identifier = `setup-temp-${Date.now()}`;
     }
 
     // Validate source_type
@@ -109,6 +115,34 @@ export async function POST(request: Request) {
     if (error) {
       console.error('Error creating import setup:', error);
       return NextResponse.json({ error: 'Failed to create import setup' }, { status: 500 });
+    }
+
+    // For email imports, update with actual email address using receiving domain
+    if (source_type === 'email' && data) {
+      const receivingDomain = process.env.RESEND_RECEIVING_DOMAIN || 'imports.budgetapp.com';
+      const actualEmail = `setup-${data.id}@${receivingDomain}`;
+      
+      const { data: updatedSetup, error: updateError } = await supabase
+        .from('automatic_import_setups')
+        .update({
+          source_identifier: actualEmail,
+          source_config: {
+            ...(source_config || {}),
+            email_address: actualEmail,
+            forwarding_enabled: true,
+          },
+        })
+        .eq('id', data.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Error updating email address:', updateError);
+        // Return original setup even if update fails
+        return NextResponse.json({ setup: data });
+      }
+
+      return NextResponse.json({ setup: updatedSetup });
     }
 
     return NextResponse.json({ setup: data });

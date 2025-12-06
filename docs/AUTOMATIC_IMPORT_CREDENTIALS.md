@@ -31,6 +31,16 @@ Since you're already using Resend for SMTP, this is the easiest option:
    - Click "Add Domain" or use the default `.resend.app` domain
    - **For custom domain:** Add the DNS records shown in Resend dashboard
    - **For `.resend.app` domain:** You'll get an address like `your-app@resend.app`
+   - **Copy your receiving domain** (the domain part of your inbound address)
+   - Add to `.env.local`:
+     ```
+     RESEND_RECEIVING_DOMAIN=your-app.resend.app
+     ```
+     Or for custom domain:
+     ```
+     RESEND_RECEIVING_DOMAIN=imports.yourdomain.com
+     ```
+   - **Important:** This domain is used to generate unique email addresses for each import setup
 
 3. **Configure Webhook:**
    - Go to https://resend.com/webhooks
