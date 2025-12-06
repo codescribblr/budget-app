@@ -25,9 +25,9 @@ export async function POST(request: Request) {
       accessToken,
       enrollmentId,
       institutionName,
-      targetAccountId,
-      targetCreditCardId,
-      isHistorical,
+      target_account_id,
+      target_credit_card_id,
+      is_historical,
     } = body;
 
     if (!accessToken || !enrollmentId) {
@@ -36,6 +36,15 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Parse and validate target_account_id and target_credit_card_id
+    const targetAccountId = target_account_id 
+      ? (typeof target_account_id === 'string' ? parseInt(target_account_id, 10) : target_account_id)
+      : null;
+    const targetCreditCardId = target_credit_card_id
+      ? (typeof target_credit_card_id === 'string' ? parseInt(target_credit_card_id, 10) : target_credit_card_id)
+      : null;
+    const isHistorical = is_historical || false;
 
     // Fetch accounts from Teller to get account details
     let tellerAccounts: any[] = [];

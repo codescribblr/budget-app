@@ -193,8 +193,10 @@ export async function fetchAndQueueTellerTransactions(options: {
     let supabase = providedSupabase;
     let setupAccountId = budgetAccountId;
     let actualIsHistorical = isHistorical;
+    let targetAccountId: number | null = null;
+    let targetCreditCardId: number | null = null;
 
-    // If not provided, fetch setup to get account_id and is_historical
+    // Fetch setup to get account_id, is_historical, and account mappings
     if (!supabase || !setupAccountId) {
       if (!supabase) {
         const { getAuthenticatedUser } = await import('../../supabase-queries');
@@ -204,7 +206,7 @@ export async function fetchAndQueueTellerTransactions(options: {
 
       const { data: setup, error: setupError } = await supabase
         .from('automatic_import_setups')
-        .select('account_id, is_historical')
+        .select('account_id, is_historical, target_account_id, target_credit_card_id')
         .eq('id', importSetupId)
         .single();
       
@@ -215,6 +217,20 @@ export async function fetchAndQueueTellerTransactions(options: {
       setupAccountId = setup.account_id;
       if (actualIsHistorical === undefined) {
         actualIsHistorical = setup.is_historical;
+      }
+      targetAccountId = setup.target_account_id;
+      targetCreditCardId = setup.target_credit_card_id;
+    } else {
+      // If supabase and accountId provided, still fetch setup for account mappings
+      const { data: setup } = await supabase
+        .from('automatic_import_setups')
+        .select('target_account_id, target_credit_card_id')
+        .eq('id', importSetupId)
+        .single();
+      
+      if (setup) {
+        targetAccountId = setup.target_account_id;
+        targetCreditCardId = setup.target_credit_card_id;
       }
     }
 
@@ -232,9 +248,9 @@ export async function fetchAndQueueTellerTransactions(options: {
       return { fetched: 0, queued: 0, errors: [] };
     }
 
-    // Convert to ParsedTransaction format
+    // Convert to ParsedTransaction format with account mapping
     const parsedTransactions = transactions.map(txn => 
-      convertTellerTransactionToParsed(txn)
+      convertTellerTransactionToParsed(txn, targetAccountId || undefined, targetCreditCardId || undefined)
     );
 
     // Generate batch ID

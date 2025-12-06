@@ -52,20 +52,26 @@ export default function CreateEmailImportDialog({
   };
 
   const handleCreate = async () => {
-    if (!targetAccountId) {
+    if (!targetAccountId || targetAccountId === 'none') {
       toast.error('Please select a target account');
       return;
     }
 
     setLoading(true);
     try {
+      const accountIdNum = parseInt(targetAccountId, 10);
+      if (isNaN(accountIdNum)) {
+        toast.error('Invalid account selected');
+        return;
+      }
+
       const response = await fetch('/api/automatic-imports/setups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           source_type: 'email',
           // source_identifier will be generated server-side using RESEND_RECEIVING_DOMAIN
-          target_account_id: parseInt(targetAccountId),
+          target_account_id: accountIdNum,
           is_historical: isHistorical,
           integration_name: 'Email Import',
         }),
