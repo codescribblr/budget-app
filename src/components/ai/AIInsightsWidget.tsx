@@ -32,7 +32,7 @@ export function AIInsightsWidget() {
   const [isOpen, setIsOpen] = useState(true);
   const [showAllInsights, setShowAllInsights] = useState(false);
   const { stats, refreshStats } = useAIUsage();
-  const loadingMessage = useRotatingLoadingMessage(3000, generating);
+  const loadingMessage = useRotatingLoadingMessage(5000, generating);
 
   // Only show insights if user has premium AND feature is enabled
   const canAccess = isPremium && aiChatEnabled;

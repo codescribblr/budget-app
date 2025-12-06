@@ -20,7 +20,7 @@ export function AICategorizeButton({
 }: AICategorizeButtonProps) {
   const [loading, setLoading] = useState(false);
   const { stats, refreshStats } = useAIUsage();
-  const loadingMessage = useRotatingLoadingMessage(3000, loading);
+  const loadingMessage = useRotatingLoadingMessage(5000, loading);
 
   const handleCategorize = async () => {
     if (transactionIds.length === 0) {

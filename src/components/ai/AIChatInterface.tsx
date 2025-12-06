@@ -39,7 +39,7 @@ export function AIChatInterface({
     onConversationCreated: onConversationCreated,
   });
   const { stats, refreshStats } = useAIUsage();
-  const loadingMessage = useRotatingLoadingMessage(3000, loading);
+  const loadingMessage = useRotatingLoadingMessage(5000, loading);
 
   // Load conversation when conversationId prop changes
   useEffect(() => {
