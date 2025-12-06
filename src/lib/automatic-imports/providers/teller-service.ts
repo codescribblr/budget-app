@@ -149,11 +149,11 @@ export function convertTellerTransactionToParsed(
     || tellerTransaction.description;
 
   // Generate hash for deduplication
-  const hash = generateTransactionHash({
-    date: tellerTransaction.date,
-    description: tellerTransaction.description,
-    amount: amount.toString(),
-  });
+  const hash = generateTransactionHash(
+    tellerTransaction.date,
+    tellerTransaction.description,
+    amount
+  );
 
   return {
     id: `teller-${tellerTransaction.id}`,

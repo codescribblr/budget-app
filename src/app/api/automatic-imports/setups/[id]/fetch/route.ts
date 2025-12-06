@@ -71,7 +71,7 @@ export async function POST(
 
       // Fetch transactions for each account
       const results = await Promise.all(
-        accountIds.map(tellerAccountId =>
+        accountIds.map((tellerAccountId: string) =>
           fetchAndQueueTellerTransactions({
             importSetupId: setup.id,
             accessToken,

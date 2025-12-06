@@ -89,14 +89,28 @@ export async function POST(request: NextRequest) {
     // Gather user data
     const supabase = await createClient();
 
-    // Get transactions for the month
+    const monthStart = startOfMonth.toISOString().split('T')[0];
+    const monthEnd = endOfMonth.toISOString().split('T')[0];
+    const startOfYear = new Date(year, 0, 1);
+    const yearStart = startOfYear.toISOString().split('T')[0];
+
+    // Get transactions for the month (use budget_account_id to match budgeting views)
     const { data: transactions } = await supabase
       .from('transactions')
       .select('merchant, total_amount, date, categories(name)')
-      .eq('account_id', accountId)
+      .eq('budget_account_id', accountId)
       .eq('transaction_type', 'expense')
-      .gte('date', startOfMonth.toISOString().split('T')[0])
-      .lte('date', endOfMonth.toISOString().split('T')[0]);
+      .gte('date', monthStart)
+      .lte('date', monthEnd);
+
+    // Get year-to-date transactions for annual/accumulation comparisons
+    const { data: ytdTransactions } = await supabase
+      .from('transactions')
+      .select('total_amount, categories(name)')
+      .eq('budget_account_id', accountId)
+      .eq('transaction_type', 'expense')
+      .gte('date', yearStart)
+      .lte('date', monthEnd);
 
     // Get budget/categories with type information
     const { data: categories } = await supabase
@@ -105,13 +119,40 @@ export async function POST(request: NextRequest) {
       .eq('account_id', accountId)
       .eq('is_goal', false);
 
-    const categoryBreakdown: Record<string, { budget: number; spent: number; category_type?: string; annual_target?: number }> = {};
+    // Spend maps for current month and year-to-date
+    const monthCategorySpend: Record<string, number> = {};
+    (transactions || []).forEach((t) => {
+      const catName = (t.categories as any)?.name || 'Uncategorized';
+      monthCategorySpend[catName] = (monthCategorySpend[catName] || 0) + Math.abs(t.total_amount || 0);
+    });
+
+    const ytdCategorySpend: Record<string, number> = {};
+    (ytdTransactions || []).forEach((t) => {
+      const catName = (t.categories as any)?.name || 'Uncategorized';
+      ytdCategorySpend[catName] = (ytdCategorySpend[catName] || 0) + Math.abs(t.total_amount || 0);
+    });
+
+    const categoryBreakdown: Record<
+      string,
+      {
+        monthly_budget: number;
+        monthly_spent: number;
+        ytd_spent: number;
+        category_type: 'monthly_expense' | 'accumulation' | 'target_balance';
+        annual_target?: number;
+        current_balance: number;
+      }
+    > = {};
+
     categories?.forEach((cat: any) => {
+      const categoryType = (cat.category_type as 'monthly_expense' | 'accumulation' | 'target_balance') || 'monthly_expense';
       categoryBreakdown[cat.name] = {
-        budget: cat.monthly_amount || 0,
-        spent: Math.abs(cat.current_balance || 0),
-        category_type: cat.category_type || 'monthly_expense',
+        monthly_budget: cat.monthly_amount || 0,
+        monthly_spent: monthCategorySpend[cat.name] || 0,
+        ytd_spent: ytdCategorySpend[cat.name] || 0,
+        category_type: categoryType,
         annual_target: cat.annual_target || undefined,
+        current_balance: cat.current_balance || 0,
       };
     });
 
@@ -134,7 +175,7 @@ export async function POST(request: NextRequest) {
     const { data: prevTransactions } = await supabase
       .from('transactions')
       .select('total_amount, categories(name)')
-      .eq('account_id', accountId)
+      .eq('budget_account_id', accountId)
       .eq('transaction_type', 'expense')
       .gte('date', prevMonth.toISOString().split('T')[0])
       .lte('date', prevMonthEnd.toISOString().split('T')[0]);
@@ -148,7 +189,8 @@ export async function POST(request: NextRequest) {
     const prevTotal = prevTransactions?.reduce((sum, t) => sum + (t.total_amount || 0), 0) || 0;
 
     const totalBudget = categories?.reduce((sum, cat) => sum + (cat.monthly_amount || 0), 0) || 0;
-    const totalSpent = transactions?.reduce((sum, t) => sum + (t.total_amount || 0), 0) || 0;
+    const totalSpent = Object.values(monthCategorySpend).reduce((sum, amt) => sum + amt, 0);
+    const totalYtdSpent = Object.values(ytdCategorySpend).reduce((sum, amt) => sum + amt, 0);
 
     // Generate insights
     const result = await geminiService.generateInsights({
@@ -162,6 +204,12 @@ export async function POST(request: NextRequest) {
         total: totalBudget,
         spent: totalSpent,
         remaining: totalBudget - totalSpent,
+        ytdSpent: totalYtdSpent,
+        period: {
+          monthStart,
+          monthEnd,
+          yearStart,
+        },
       },
       goals: (goals || []).map((g) => ({
         name: g.name,

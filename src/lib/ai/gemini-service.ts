@@ -304,6 +304,12 @@ IMPORTANT:
         total: number;
         spent: number;
         remaining: number;
+        ytdSpent: number;
+        period: {
+          monthStart: string;
+          monthEnd: string;
+          yearStart: string;
+        };
       };
       goals: Array<{
         name: string;
@@ -315,7 +321,17 @@ IMPORTANT:
         total: number;
         categoryBreakdown: Record<string, number>;
       };
-      categoryBreakdown: Record<string, { budget: number; spent: number }>;
+      categoryBreakdown: Record<
+        string,
+        {
+          monthly_budget: number;
+          monthly_spent: number;
+          ytd_spent: number;
+          category_type: 'monthly_expense' | 'accumulation' | 'target_balance';
+          annual_target?: number;
+          current_balance: number;
+        }
+      >;
     }
   ): Promise<{
     insights: MonthlyInsights;
@@ -328,14 +344,18 @@ IMPORTANT:
 
     const startTime = Date.now();
 
-    const categoryBreakdown = Object.entries(userData.categoryBreakdown)
-      .map(([cat, data]: [string, any]) => {
-        const typeInfo = data.category_type === 'accumulation' && data.annual_target
-          ? ` [ACCUMULATION - Annual Target: $${data.annual_target.toFixed(2)}]`
-          : data.category_type === 'target_balance'
-          ? ` [TARGET BALANCE]`
-          : ` [MONTHLY EXPENSE]`;
-        return `- ${cat}: $${data.spent.toFixed(2)} (monthly budget: $${data.budget.toFixed(2)})${typeInfo}`;
+    const categoryBreakdownText = Object.entries(userData.categoryBreakdown)
+      .map(([cat, data]) => {
+        if (data.category_type === 'accumulation') {
+          const target = data.annual_target ?? data.monthly_budget * 12;
+          return `- ${cat} [ACCUMULATION]: YTD spent $${data.ytd_spent.toFixed(2)} / annual target $${target.toFixed(2)} | This month spent $${data.monthly_spent.toFixed(2)} | Monthly funding $${data.monthly_budget.toFixed(2)} | Current balance $${data.current_balance.toFixed(2)}`;
+        }
+
+        if (data.category_type === 'target_balance') {
+          return `- ${cat} [TARGET BALANCE]: Current balance $${data.current_balance.toFixed(2)} | Monthly funding $${data.monthly_budget.toFixed(2)} | This month spent $${data.monthly_spent.toFixed(2)}`;
+        }
+
+        return `- ${cat} [MONTHLY EXPENSE]: This month spent $${data.monthly_spent.toFixed(2)} vs monthly budget $${data.monthly_budget.toFixed(2)} | YTD spent $${data.ytd_spent.toFixed(2)}`;
       })
       .join('\n');
 
@@ -372,24 +392,28 @@ CATEGORY TYPES - CRITICAL TO UNDERSTAND:
    - Funding stops when target_balance is reached
 
 UNDERSTANDING SPENDING VS BUDGET:
-- For MONTHLY EXPENSE categories: Spending > monthly_amount = potential concern
-- For ACCUMULATION categories: Spending > monthly_amount = EXPECTED and NORMAL
-  - Only warn if spending exceeds accumulated savings
-- Always check category_type before making budget warnings
-- Accumulation categories are designed for irregular spending patterns
+- MONTHLY EXPENSE: Evaluate this month's spending vs monthly_amount.
+- ACCUMULATION: Spending can exceed monthly_amount; evaluate YTD vs annual_target and whether current_balance would go negative.
+- Always check category_type before making budget warnings.
+- Accumulation categories are designed for irregular spending patterns.
 `;
 
     const prompt = `You are a personal financial advisor. Analyze this user's spending data and provide actionable insights.
 
 ${helpDocumentation}
 
-Current Month Summary:
-- Total spent: $${userData.budget.spent.toFixed(2)}
-- Budget: $${userData.budget.total.toFixed(2)}
-- Over/Under: $${(userData.budget.spent - userData.budget.total).toFixed(2)}
+TIMEFRAMES:
+- Current month range: ${userData.budget.period.monthStart} to ${userData.budget.period.monthEnd}
+- Year-to-date range: ${userData.budget.period.yearStart} to ${userData.budget.period.monthEnd}
 
-Top Categories:
-${categoryBreakdown}
+Monthly Budget Summary (use ONLY this month's spending for monthly checks):
+- Total spent this month: $${userData.budget.spent.toFixed(2)}
+- Monthly budget: $${userData.budget.total.toFixed(2)}
+- Over/Under this month: $${(userData.budget.spent - userData.budget.total).toFixed(2)}
+- Year-to-date spending (for annual/accumulation context): $${userData.budget.ytdSpent.toFixed(2)}
+
+Category Spending Detail:
+${categoryBreakdownText}
 
 Previous Month Comparison:
 - Total: $${userData.previousMonth.total.toFixed(2)}
@@ -399,12 +423,15 @@ Financial Goals:
 ${userData.goals.map((g) => `- ${g.name}: $${g.current_amount.toFixed(2)} / $${g.target_amount.toFixed(2)} (${g.status})`).join('\n')}
 
 CRITICAL: When analyzing category spending:
-- For ACCUMULATION categories: Spending more than monthly budget is EXPECTED and NORMAL
-  - These categories are designed for irregular spending patterns
-  - Only flag if spending exceeds accumulated savings (would cause negative balance)
-  - Focus on whether they're on track for annual target, not monthly spending
-- For MONTHLY EXPENSE categories: Spending more than monthly budget may indicate overspending
-- Always check the category type before flagging "over budget" spending
+- Use the provided ranges:
+  - MONTHLY EXPENSE categories -> compare THIS MONTH'S spending to monthly_budget (do NOT combine multiple months).
+  - ACCUMULATION categories -> compare YTD spending to annual_target and check current_balance. Monthly spikes are normal.
+- For ACCUMULATION:
+  - Spending over monthly_budget is expected; only warn if YTD spending risks exceeding annual_target OR current_balance would go negative.
+  - Mention if monthly funding is off-track versus annual_target (monthly_budget * 12).
+- For MONTHLY EXPENSE:
+  - Spending this month above monthly_budget may indicate overspending.
+- Always reference the category_type before making any budget warning.
 
 Provide 5-7 insights covering:
 1. Overall spending health (vs budget) - considering category types

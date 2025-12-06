@@ -91,11 +91,25 @@ export async function processEmailAttachments(options: ProcessEmailOptions): Pro
 async function processCSVAttachment(attachment: EmailAttachment): Promise<ParsedTransaction[]> {
   // Convert content to File object for CSV parser
   // File API is available in Next.js API routes
-  const buffer = typeof attachment.content === 'string'
-    ? Buffer.from(attachment.content, 'utf-8')
-    : attachment.content;
+  let buffer: Buffer | Uint8Array;
+  if (typeof attachment.content === 'string') {
+    buffer = Buffer.from(attachment.content, 'utf-8');
+  } else {
+    buffer = attachment.content;
+  }
   
-  const blob = new Blob([buffer], { type: 'text/csv' });
+  // Convert Buffer to Uint8Array for Blob constructor
+  // Create a new Uint8Array from buffer values to ensure proper type
+  let uint8Array: Uint8Array;
+  if (buffer instanceof Buffer) {
+    // Create a new ArrayBuffer and copy buffer data
+    const arrayBuffer = new ArrayBuffer(buffer.length);
+    uint8Array = new Uint8Array(arrayBuffer);
+    uint8Array.set(buffer);
+  } else {
+    uint8Array = buffer;
+  }
+  const blob = new Blob([uint8Array as BlobPart], { type: 'text/csv' });
   const file = new File([blob], attachment.filename, { type: 'text/csv' });
 
   const result = await parseCSVFile(file, { skipTemplate: false });
@@ -108,11 +122,25 @@ async function processCSVAttachment(attachment: EmailAttachment): Promise<Parsed
 async function processPDFAttachment(attachment: EmailAttachment): Promise<ParsedTransaction[]> {
   // Convert content to File object for PDF parser
   // File API is available in Next.js API routes
-  const buffer = typeof attachment.content === 'string'
-    ? Buffer.from(attachment.content, 'base64') // PDFs are typically base64 encoded
-    : attachment.content;
+  let buffer: Buffer | Uint8Array;
+  if (typeof attachment.content === 'string') {
+    buffer = Buffer.from(attachment.content, 'base64'); // PDFs are typically base64 encoded
+  } else {
+    buffer = attachment.content;
+  }
   
-  const blob = new Blob([buffer], { type: 'application/pdf' });
+  // Convert Buffer to Uint8Array for Blob constructor
+  // Create a new Uint8Array from buffer values to ensure proper type
+  let uint8Array: Uint8Array;
+  if (buffer instanceof Buffer) {
+    // Create a new ArrayBuffer and copy buffer data
+    const arrayBuffer = new ArrayBuffer(buffer.length);
+    uint8Array = new Uint8Array(arrayBuffer);
+    uint8Array.set(buffer);
+  } else {
+    uint8Array = buffer;
+  }
+  const blob = new Blob([uint8Array as BlobPart], { type: 'application/pdf' });
   const file = new File([blob], attachment.filename, { type: 'application/pdf' });
 
   const result = await parsePDFFile(file);

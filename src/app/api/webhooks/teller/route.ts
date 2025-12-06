@@ -106,7 +106,7 @@ export async function POST(request: Request) {
         // Process transactions for each setup
         // Group transactions by account_id to fetch efficiently
         const transactions = payload.transactions || [];
-        const accountIds = [...new Set(transactions.map((t: any) => t.account_id))];
+        const accountIds = [...new Set(transactions.map((t: any) => t.account_id as string))] as string[];
 
         for (const setup of setups) {
           const accessToken = getDecryptedAccessToken(setup);
