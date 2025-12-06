@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -15,6 +17,7 @@ import { useAIUsage } from '@/hooks/use-ai-usage';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useFeature } from '@/contexts/FeatureContext';
 import type { ParsedTransaction } from '@/lib/import-types';
+import type { Account, CreditCard } from '@/lib/types';
 import Papa from 'papaparse';
 
 interface FileUploadProps {
@@ -33,11 +36,56 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
   const [enableAICategorization, setEnableAICategorization] = useState(false); // Disabled by default
   const [progress, setProgress] = useState(0);
   const [progressStage, setProgressStage] = useState<string>('');
+  const [defaultAccountId, setDefaultAccountId] = useState<number | null>(null);
+  const [defaultCreditCardId, setDefaultCreditCardId] = useState<number | null>(null);
+  const [isHistorical, setIsHistorical] = useState(false);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
+  const [processedTransactions, setProcessedTransactions] = useState<ParsedTransaction[] | null>(null);
+  const [processedFileName, setProcessedFileName] = useState<string>('');
+  const [processingComplete, setProcessingComplete] = useState(false);
   const { stats, loading: statsLoading } = useAIUsage();
   const { isPremium } = useSubscription();
   const aiChatEnabled = useFeature('ai_chat');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
+
+  // Fetch accounts and credit cards on mount
+  useEffect(() => {
+    fetchAccounts();
+    fetchCreditCards();
+  }, []);
+
+  const fetchAccounts = async () => {
+    const response = await fetch('/api/accounts');
+    const data = await response.json();
+    setAccounts(data);
+  };
+
+  const fetchCreditCards = async () => {
+    const response = await fetch('/api/credit-cards');
+    const data = await response.json();
+    setCreditCards(data);
+  };
+
+  const handleDefaultAccountChange = (value: string) => {
+    if (value === 'none') {
+      setDefaultAccountId(null);
+      setDefaultCreditCardId(null);
+    } else if (value.startsWith('account-')) {
+      setDefaultAccountId(parseInt(value.replace('account-', '')));
+      setDefaultCreditCardId(null);
+    } else if (value.startsWith('card-')) {
+      setDefaultCreditCardId(parseInt(value.replace('card-', '')));
+      setDefaultAccountId(null);
+    }
+  };
+
+  const getDefaultAccountValue = (): string => {
+    if (defaultAccountId) return `account-${defaultAccountId}`;
+    if (defaultCreditCardId) return `card-${defaultCreditCardId}`;
+    return 'none';
+  };
 
   // Progress callback function
   const updateProgress = (value: number, stage: string) => {
@@ -118,6 +166,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           sessionStorage.setItem('csvFileName', file.name);
           router.push('/import/map-columns');
           setIsProcessing(false);
+          setProcessingComplete(false);
           return;
         }
       } else if (
@@ -164,6 +213,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
             setFallbackError(errorData.error || 'PDF parsing failed. AI fallback available.');
             setShowAIFallback(true);
             setIsProcessing(false);
+            setProcessingComplete(false);
             return;
           }
           throw new Error(errorData.error || 'Failed to parse PDF');
@@ -171,6 +221,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       } else {
         setError('Unsupported file type. Please upload a CSV or image file.');
         setIsProcessing(false);
+        setProcessingComplete(false);
         setProgress(0);
         setProgressStage('');
         return;
@@ -179,6 +230,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       if (transactions.length === 0) {
         setError('No transactions found in the file');
         setIsProcessing(false);
+        setProcessingComplete(false);
         setProgress(0);
         setProgressStage('');
         return;
@@ -200,15 +252,20 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         updateProgress
       );
 
-      updateProgress(100, 'Processing complete!');
-      onFileUploaded(processedTransactions, file.name);
+      // Store processed transactions and pause for user to set options
+      setProcessedTransactions(processedTransactions);
+      setProcessedFileName(file.name);
+      setProcessingComplete(true);
+      updateProgress(100, 'Processing complete! Review your import options below.');
     } catch (err) {
       console.error('Error processing file:', err);
       setError(err instanceof Error ? err.message : 'Failed to process file');
       setProgress(0);
       setProgressStage('');
-    } finally {
       setIsProcessing(false);
+      setProcessingComplete(false);
+      setProcessedTransactions(null);
+      setProcessedFileName('');
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -283,6 +340,32 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
     fileInputRef.current?.click();
   };
 
+  const handleContinueToPreview = () => {
+    if (!processedTransactions) return;
+
+    // Apply default account/card to transactions that don't have one set
+    const transactionsWithDefaults = processedTransactions.map(txn => ({
+      ...txn,
+      // Only set default if transaction doesn't already have an account/card set
+      account_id: (txn.account_id !== undefined && txn.account_id !== null) ? txn.account_id : (defaultAccountId || null),
+      credit_card_id: (txn.credit_card_id !== undefined && txn.credit_card_id !== null) ? txn.credit_card_id : (defaultCreditCardId || null),
+    }));
+
+    // Store isHistorical in sessionStorage for TransactionPreview
+    sessionStorage.setItem('importIsHistorical', isHistorical.toString());
+
+    // Reset processing state
+    setIsProcessing(false);
+    setProcessingComplete(false);
+    setProgress(0);
+    setProgressStage('');
+    setProcessedTransactions(null);
+    setProcessedFileName('');
+
+    // Move to preview
+    onFileUploaded(transactionsWithDefaults, processedFileName);
+  };
+
   return (
     <div className="space-y-4">
       <input
@@ -318,13 +401,87 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           <Button onClick={handleButtonClick} disabled={isProcessing || disabled}>
             {isProcessing ? 'Processing...' : 'Choose File'}
           </Button>
-          {isProcessing && (
-            <div className="w-full space-y-2 mt-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{progressStage || 'Processing...'}</span>
-                <span className="text-muted-foreground">{Math.round(progress)}%</span>
+          {(isProcessing || processingComplete) && (
+            <div className="w-full space-y-4 mt-4">
+              {isProcessing && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{progressStage || 'Processing...'}</span>
+                    <span className="text-muted-foreground">{Math.round(progress)}%</span>
+                  </div>
+                  <Progress value={progress} className="h-2" />
+                </div>
+              )}
+              
+              {/* Import Options - shown during and after processing */}
+              <div className="mt-6 pt-4 border-t space-y-4">
+                <div className="text-sm font-medium text-foreground">Import Options</div>
+                
+                {/* Historical Import Option */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="historical-processing"
+                    checked={isHistorical}
+                    onCheckedChange={(checked) => setIsHistorical(checked as boolean)}
+                  />
+                  <Label
+                    htmlFor="historical-processing"
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    Import as historical (won&apos;t affect current envelope balances)
+                  </Label>
+                </div>
+
+                {/* Default Account/Card Option */}
+                <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
+                  <Label htmlFor="default-account-processing" className="text-sm font-medium sm:min-w-[140px]">
+                    Default Account/Card:
+                  </Label>
+                  <Select 
+                    value={getDefaultAccountValue()} 
+                    onValueChange={handleDefaultAccountChange}
+                  >
+                    <SelectTrigger id="default-account-processing" className="w-full sm:w-[250px]">
+                      <SelectValue placeholder="None" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {accounts.length > 0 && (
+                        <>
+                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Accounts</div>
+                          {accounts.map((account) => (
+                            <SelectItem key={account.id} value={`account-${account.id}`}>
+                              {account.name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {creditCards.length > 0 && (
+                        <>
+                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Credit Cards</div>
+                          {creditCards.map((card) => (
+                            <SelectItem key={card.id} value={`card-${card.id}`}>
+                              {card.name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Continue Button - shown only when processing is complete */}
+                {processingComplete && (
+                  <div className="pt-2">
+                    <Button 
+                      onClick={handleContinueToPreview} 
+                      className="w-full"
+                    >
+                      Continue to Preview
+                    </Button>
+                  </div>
+                )}
               </div>
-              <Progress value={progress} className="h-2" />
             </div>
           )}
         </div>
@@ -462,8 +619,12 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                     shouldSkipAI,
                     updateProgress
                   );
-                  updateProgress(100, 'Processing complete!');
-                  onFileUploaded(processedTransactions, pendingFile!.name);
+
+                  // Store processed transactions and pause for user to set options
+                  setProcessedTransactions(processedTransactions);
+                  setProcessedFileName(pendingFile!.name);
+                  setProcessingComplete(true);
+                  updateProgress(100, 'Processing complete! Review your import options below.');
                   sessionStorage.setItem('csvFileName', pendingFile!.name);
                   setPendingFile(null);
                 } catch (err) {

@@ -43,8 +43,6 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
-  const [defaultAccountId, setDefaultAccountId] = useState<number | null>(null);
-  const [defaultCreditCardId, setDefaultCreditCardId] = useState<number | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<ParsedTransaction | null>(null);
   const [editingField, setEditingField] = useState<EditingField | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -74,17 +72,14 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     if (storedDateFormat) {
       setDateFormat(storedDateFormat);
     }
+
+    // Load isHistorical from sessionStorage (set during processing)
+    const storedIsHistorical = sessionStorage.getItem('importIsHistorical');
+    if (storedIsHistorical === 'true') {
+      setIsHistorical(true);
+    }
   }, []);
 
-  // Update transactions when default account/card changes
-  useEffect(() => {
-    setItems(prevItems => prevItems.map(item => ({
-      ...item,
-      // Only set default if transaction doesn't already have an account/card set
-      account_id: item.account_id !== undefined ? item.account_id : (defaultAccountId || null),
-      credit_card_id: item.credit_card_id !== undefined ? item.credit_card_id : (defaultCreditCardId || null),
-    })));
-  }, [defaultAccountId, defaultCreditCardId]);
 
   const fetchCategories = async () => {
     const response = await fetch('/api/categories?excludeGoals=true');
@@ -104,25 +99,6 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     setCreditCards(data);
   };
 
-  const handleDefaultAccountChange = (value: string) => {
-    if (value === 'none') {
-      setDefaultAccountId(null);
-      setDefaultCreditCardId(null);
-    } else if (value.startsWith('account-')) {
-      setDefaultAccountId(parseInt(value.replace('account-', '')));
-      setDefaultCreditCardId(null);
-    } else if (value.startsWith('card-')) {
-      setDefaultCreditCardId(parseInt(value.replace('card-', '')));
-      setDefaultAccountId(null);
-    }
-  };
-
-  const getDefaultAccountValue = (): string => {
-    if (defaultAccountId) return `account-${defaultAccountId}`;
-    if (defaultCreditCardId) return `card-${defaultCreditCardId}`;
-    return 'none';
-  };
-
   const handleInlineAccountChange = (transactionId: string, value: string) => {
     setItems(items.map(item => {
       if (item.id === transactionId) {
@@ -140,13 +116,13 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   };
 
   const getAccountDisplayName = (transaction: ParsedTransaction): string => {
-    if (transaction.account_id) {
+    if (transaction.account_id !== undefined && transaction.account_id !== null) {
       const account = accounts.find(a => a.id === transaction.account_id);
-      return account ? account.name : '—';
+      return account ? account.name : `Account ${transaction.account_id}`;
     }
-    if (transaction.credit_card_id) {
+    if (transaction.credit_card_id !== undefined && transaction.credit_card_id !== null) {
       const card = creditCards.find(c => c.id === transaction.credit_card_id);
-      return card ? card.name : '—';
+      return card ? card.name : `Card ${transaction.credit_card_id}`;
     }
     return '—';
   };
@@ -452,6 +428,16 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
           </div>
         </div>
       )}
+
+      {/* Historical Import Indicator */}
+      {isHistorical && (
+        <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
+          <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-200">
+            <span className="font-medium">📜 Historical Import:</span>
+            <span>These transactions will not affect your current envelope balances</span>
+          </div>
+        </div>
+      )}
       
       <div className="p-4 bg-muted rounded-md space-y-4">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -480,60 +466,12 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
             {isImporting ? 'Importing...' : `Import ${categorizedCount} Transaction${categorizedCount !== 1 ? 's' : ''}`}
           </Button>
         </div>
-
-        <div className="flex items-center space-x-2 pt-2 border-t">
-          <Checkbox
-            id="historical"
-            checked={isHistorical}
-            onCheckedChange={(checked) => setIsHistorical(checked as boolean)}
-          />
-          <Label
-            htmlFor="historical"
-            className="text-sm font-normal cursor-pointer"
-          >
-            Import as historical (won&apos;t affect current envelope balances)
-          </Label>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 pt-2 border-t">
-          <Label htmlFor="default-account" className="text-sm font-medium sm:min-w-[120px]">
-            Default Account/Card:
-          </Label>
-          <Select value={getDefaultAccountValue()} onValueChange={handleDefaultAccountChange}>
-            <SelectTrigger id="default-account" className="w-full sm:w-[250px]">
-              <SelectValue placeholder="None" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None</SelectItem>
-              {accounts.length > 0 && (
-                <>
-                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Accounts</div>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={`account-${account.id}`}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </>
-              )}
-              {creditCards.length > 0 && (
-                <>
-                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Credit Cards</div>
-                  {creditCards.map((card) => (
-                    <SelectItem key={card.id} value={`card-${card.id}`}>
-                      {card.name}
-                    </SelectItem>
-                  ))}
-                </>
-              )}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       <div className="border rounded-md overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="border-border">
               <TableHead className="whitespace-nowrap">Date</TableHead>
               <TableHead className="whitespace-nowrap">Merchant</TableHead>
               <TableHead className="whitespace-nowrap">Description</TableHead>
@@ -551,18 +489,31 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
               const isEditingCategory = editingField?.transactionId === transaction.id && editingField?.field === 'category';
               const isEditingAccount = editingField?.transactionId === transaction.id && editingField?.field === 'account';
 
+              // Determine row background color based on transaction status
+              const isUncategorized = transaction.splits.length === 0;
+              const isDuplicate = transaction.duplicateType === 'database' || transaction.duplicateType === 'within-file';
+              const isManuallyExcluded = transaction.status === 'excluded' && transaction.splits.length > 0;
+              const isReadyToImport = !isUncategorized && 
+                                      transaction.status !== 'excluded' && 
+                                      transaction.splits.length > 0 && 
+                                      !transaction.isDuplicate && 
+                                      !transaction.duplicateType;
+
+              // Uncategorized transactions always have no background (default table color)
+              // Red background for duplicates or manually excluded (but not uncategorized)
+              // Green background for ready to import
+              const rowClassName = isUncategorized
+                ? 'border-border'
+                : isReadyToImport
+                ? 'bg-green-50 dark:bg-green-900/30 border-border'
+                : isDuplicate || isManuallyExcluded
+                ? 'bg-red-50 dark:bg-red-950/20 border-border'
+                : 'border-border';
+
               return (
                 <TableRow
                   key={transaction.id}
-                  className={
-                    transaction.duplicateType === 'database'
-                      ? 'bg-yellow-50 dark:bg-yellow-950/20'
-                      : transaction.duplicateType === 'within-file'
-                      ? 'bg-orange-50 dark:bg-orange-950/20'
-                      : transaction.status === 'excluded'
-                      ? 'bg-gray-50 dark:bg-gray-900 opacity-50'
-                      : ''
-                  }
+                  className={rowClassName}
                 >
                   {/* Date Cell - Inline Editable */}
                   <TableCell
@@ -671,9 +622,9 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                     {isEditingAccount ? (
                       <Select
                         value={
-                          transaction.account_id
+                          (transaction.account_id !== undefined && transaction.account_id !== null)
                             ? `account-${transaction.account_id}`
-                            : transaction.credit_card_id
+                            : (transaction.credit_card_id !== undefined && transaction.credit_card_id !== null)
                             ? `card-${transaction.credit_card_id}`
                             : 'none'
                         }

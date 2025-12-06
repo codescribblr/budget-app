@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import FileUpload from './FileUpload';
@@ -9,6 +10,7 @@ import type { ParsedTransaction } from '@/lib/import-types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 export default function ImportTransactionsPage() {
+  const router = useRouter();
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [fileName, setFileName] = useState<string>('');
@@ -46,6 +48,7 @@ export default function ImportTransactionsPage() {
     sessionStorage.removeItem('parsedFileName');
     sessionStorage.removeItem('csvDateFormat');
     sessionStorage.removeItem('csvTemplateId');
+    sessionStorage.removeItem('importIsHistorical');
   };
 
   const handleImportComplete = () => {
@@ -57,6 +60,9 @@ export default function ImportTransactionsPage() {
     sessionStorage.removeItem('csvData');
     sessionStorage.removeItem('csvFileName');
     sessionStorage.removeItem('csvFingerprint');
+    sessionStorage.removeItem('importIsHistorical');
+    // Navigate to transactions page
+    router.push('/transactions');
   };
 
   if (parsedTransactions.length > 0) {
