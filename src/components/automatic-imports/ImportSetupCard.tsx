@@ -24,6 +24,7 @@ interface ImportSetup {
   integration_name: string | null;
   bank_name: string | null;
   is_active: boolean;
+  is_historical: boolean;
   last_successful_fetch_at: string | null;
   last_error: string | null;
   error_count: number;
@@ -39,7 +40,9 @@ interface ImportSetupCardProps {
 export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportSetupCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isActive, setIsActive] = useState(setup.is_active);
+  const [isHistorical, setIsHistorical] = useState(setup.is_historical);
   const [updating, setUpdating] = useState(false);
+  const [updatingHistorical, setUpdatingHistorical] = useState(false);
   const [fetching, setFetching] = useState(false);
 
   const handleToggleActive = async (checked: boolean) => {
@@ -59,6 +62,26 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
       alert('Failed to update setup');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleToggleHistorical = async (checked: boolean) => {
+    setUpdatingHistorical(true);
+    try {
+      const response = await fetch(`/api/automatic-imports/setups/${setup.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_historical: checked }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update historical flag');
+      setIsHistorical(checked);
+      onUpdated();
+    } catch (error) {
+      console.error('Error updating historical flag:', error);
+      alert('Failed to update historical flag');
+    } finally {
+      setUpdatingHistorical(false);
     }
   };
 
@@ -161,6 +184,17 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
                   disabled={updating}
                 />
               </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor={`historical-${setup.id}`} className="text-sm">
+                  Historical
+                </Label>
+                <Switch
+                  id={`historical-${setup.id}`}
+                  checked={isHistorical}
+                  onCheckedChange={handleToggleHistorical}
+                  disabled={updatingHistorical}
+                />
+              </div>
               {setup.source_type === 'teller' && (
                 <Button
                   variant="ghost"
@@ -184,6 +218,12 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
+            {isHistorical && (
+              <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                <span className="font-medium">Historical transactions</span>
+                <span className="text-muted-foreground">(won't affect current budget)</span>
+              </div>
+            )}
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Last successful fetch:</span>
               <span>{formatDate(setup.last_successful_fetch_at)}</span>

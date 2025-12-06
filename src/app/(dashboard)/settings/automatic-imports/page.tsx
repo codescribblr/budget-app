@@ -14,6 +14,7 @@ interface AutomaticImportSetup {
   integration_name: string | null;
   bank_name: string | null;
   is_active: boolean;
+  is_historical: boolean;
   last_successful_fetch_at: string | null;
   last_error: string | null;
   error_count: number;
