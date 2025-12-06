@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import TellerConnect from './providers/TellerConnect';
 
 interface CreateTellerImportDialogProps {
@@ -26,7 +26,6 @@ export default function CreateTellerImportDialog({
   onOpenChange,
   onCreated,
 }: CreateTellerImportDialogProps) {
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [targetAccountId, setTargetAccountId] = useState<string>('');
   const [isHistorical, setIsHistorical] = useState(false);
@@ -74,10 +73,7 @@ export default function CreateTellerImportDialog({
         throw new Error(error.error || 'Failed to create Teller import setup');
       }
 
-      toast({
-        title: 'Success',
-        description: `Connected ${enrollment.institutionName} via Teller successfully`,
-      });
+      toast.success(`Connected ${enrollment.institutionName} via Teller successfully`);
 
       setTellerConnected(true);
       setTimeout(() => {
@@ -87,22 +83,14 @@ export default function CreateTellerImportDialog({
       }, 1500);
     } catch (error: any) {
       console.error('Error creating Teller import:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to create import setup',
-        variant: 'destructive',
-      });
+      toast.error(error.message || 'Failed to create import setup');
     } finally {
       setLoading(false);
     }
   };
 
   const handleTellerError = (error: Error) => {
-    toast({
-      title: 'Connection Error',
-      description: error.message || 'Failed to connect with Teller',
-      variant: 'destructive',
-    });
+    toast.error(error.message || 'Failed to connect with Teller');
   };
 
   return (

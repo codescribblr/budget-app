@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Mail, Copy, Check } from 'lucide-react';
 
 interface CreateEmailImportDialogProps {
@@ -27,7 +27,6 @@ export default function CreateEmailImportDialog({
   onOpenChange,
   onCreated,
 }: CreateEmailImportDialogProps) {
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [targetAccountId, setTargetAccountId] = useState<string>('');
   const [isHistorical, setIsHistorical] = useState(false);
@@ -54,11 +53,7 @@ export default function CreateEmailImportDialog({
 
   const handleCreate = async () => {
     if (!targetAccountId) {
-      toast({
-        title: 'Error',
-        description: 'Please select a target account',
-        variant: 'destructive',
-      });
+      toast.error('Please select a target account');
       return;
     }
 
@@ -89,20 +84,13 @@ export default function CreateEmailImportDialog({
         setEmailAddress(actualEmail);
       }
 
-      toast({
-        title: 'Success',
-        description: 'Email import setup created successfully',
-      });
+      toast.success('Email import setup created successfully');
 
       onCreated();
       onOpenChange(false);
     } catch (error: any) {
       console.error('Error creating email import:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to create import setup',
-        variant: 'destructive',
-      });
+      toast.error(error.message || 'Failed to create import setup');
     } finally {
       setLoading(false);
     }
