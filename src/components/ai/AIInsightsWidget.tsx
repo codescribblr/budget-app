@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Brain, RefreshCw, Loader2, Sparkles, Crown, ChevronUp } from 'lucide-react';
+import { Brain, RefreshCw, Loader2, Sparkles, Crown, ChevronUp, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAIUsage } from '@/hooks/use-ai-usage';
 import { useRotatingLoadingMessage } from '@/hooks/use-rotating-loading-message';
@@ -21,11 +21,23 @@ export function AIInsightsWidget() {
   const aiChatEnabled = useFeature('ai_chat');
   const { isPremium, loading: subscriptionLoading } = useSubscription();
   const [insights, setInsights] = useState<MonthlyInsights | null>(null);
+  const [insightId, setInsightId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<'positive' | 'negative' | null>(null);
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [metadata, setMetadata] = useState<{
     transactionCount?: number;
+    transactionTotal?: number;
+    ytdTransactionCount?: number;
+    ytdTransactionTotal?: number;
     dateRange?: { start: string; end: string };
+    ytdDateRange?: { start: string; end: string };
     categoriesSearched?: number;
     goalsAccessed?: number;
+    accountsAccessed?: number;
+    creditCardsAccessed?: number;
+    loansAccessed?: number;
+    incomeBufferAccessed?: boolean;
+    incomeSettingsAccessed?: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -65,10 +77,14 @@ export function AIInsightsWidget() {
           setInsights(data.insights);
           // Metadata might be in data.metadata or data.insights.metadata
           setMetadata(data.metadata || data.insights?.metadata || null);
+          setInsightId(data.insightId || null);
+          setFeedback(data.feedback || null);
         } else {
           // No cached insights - ensure state is cleared
           setInsights(null);
           setMetadata(null);
+          setInsightId(null);
+          setFeedback(null);
         }
       }
     } catch (error) {
@@ -110,6 +126,8 @@ export function AIInsightsWidget() {
         setInsights(data.insights);
         // Metadata might be in data.metadata or data.insights.metadata
         setMetadata(data.metadata || data.insights?.metadata || null);
+        setInsightId(data.insightId || null);
+        setFeedback(data.feedback || null);
       }
       refreshStats();
       toast.success('Insights generated successfully');
@@ -123,6 +141,39 @@ export function AIInsightsWidget() {
 
   const canGenerate = stats ? stats.dashboard_insights.used < stats.dashboard_insights.limit : false;
   const remainingInsights = stats ? stats.dashboard_insights.limit - stats.dashboard_insights.used : 0;
+
+  const handleFeedback = async (feedbackType: 'positive' | 'negative') => {
+    if (!insightId) return;
+
+    setSubmittingFeedback(true);
+    try {
+      const response = await fetch('/api/ai/insights/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          insightId,
+          feedback: feedbackType,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to save feedback');
+        return;
+      }
+
+      const data = await response.json();
+      setFeedback(data.feedback);
+      toast.success('Thank you for your feedback!');
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      toast.error('Failed to save feedback');
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
 
   // If feature is disabled, hide widget completely (don't show upgrade prompt for premium users who disabled it)
   if (!canAccess) {
@@ -270,11 +321,51 @@ export function AIInsightsWidget() {
                 {metadata && (
                   <DataSummary
                     transactionCount={metadata.transactionCount || 0}
+                    transactionTotal={metadata.transactionTotal}
+                    ytdTransactionCount={metadata.ytdTransactionCount}
+                    ytdTransactionTotal={metadata.ytdTransactionTotal}
                     dateRange={metadata.dateRange || { start: '', end: '' }}
+                    ytdDateRange={metadata.ytdDateRange}
                     categoriesSearched={metadata.categoriesSearched || 0}
                     merchantsSearched={0}
                     goalsAccessed={metadata.goalsAccessed}
+                    accountsAccessed={metadata.accountsAccessed}
+                    creditCardsAccessed={metadata.creditCardsAccessed}
+                    loansAccessed={metadata.loansAccessed}
+                    incomeBufferAccessed={metadata.incomeBufferAccessed}
+                    incomeSettingsAccessed={metadata.incomeSettingsAccessed}
                   />
+                )}
+
+                {/* Feedback buttons - only show if no feedback has been provided */}
+                {insightId && !feedback && (
+                  <div className="mt-4 pt-4 border-t border-muted">
+                    <p className="text-xs text-muted-foreground mb-2 text-center">
+                      Was this insight helpful?
+                    </p>
+                    <div className="flex gap-2 justify-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleFeedback('positive')}
+                        disabled={submittingFeedback}
+                        className="flex items-center gap-2"
+                      >
+                        <ThumbsUp className="h-4 w-4" />
+                        Yes
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleFeedback('negative')}
+                        disabled={submittingFeedback}
+                        className="flex items-center gap-2"
+                      >
+                        <ThumbsDown className="h-4 w-4" />
+                        No
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (

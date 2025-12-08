@@ -3,28 +3,38 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 interface DataSummaryProps {
   transactionCount: number;
+  transactionTotal?: number;
+  ytdTransactionCount?: number;
+  ytdTransactionTotal?: number;
   dateRange: { start: string; end: string };
+  ytdDateRange?: { start: string; end: string };
   categoriesSearched: number;
   merchantsSearched: number;
   goalsAccessed?: number;
   loansAccessed?: number;
   accountsAccessed?: number;
+  creditCardsAccessed?: number;
   incomeBufferAccessed?: boolean;
   incomeSettingsAccessed?: boolean;
 }
 
 export function DataSummary({
   transactionCount,
+  transactionTotal,
+  ytdTransactionCount,
+  ytdTransactionTotal,
   dateRange,
+  ytdDateRange,
   categoriesSearched,
   merchantsSearched,
   goalsAccessed,
   loansAccessed,
   accountsAccessed,
+  creditCardsAccessed,
   incomeBufferAccessed,
   incomeSettingsAccessed,
 }: DataSummaryProps) {
@@ -36,6 +46,7 @@ export function DataSummary({
     (goalsAccessed !== undefined && goalsAccessed > 0) ||
     (loansAccessed !== undefined && loansAccessed > 0) ||
     (accountsAccessed !== undefined && accountsAccessed > 0) ||
+    (creditCardsAccessed !== undefined && creditCardsAccessed > 0) ||
     incomeBufferAccessed ||
     incomeSettingsAccessed;
 
@@ -57,12 +68,21 @@ export function DataSummary({
       </Button>
       {expanded && (
         <div className="mt-2 text-xs text-muted-foreground space-y-1 pl-4">
-          {transactionCount > 0 && (
+          <div>• Date range: {dateRange.start} to {dateRange.end}</div>
+          {transactionCount > 0 && transactionTotal !== undefined ? (
             <>
-              <div>• {transactionCount} transactions analyzed</div>
-              <div>• Date range: {dateRange.start} to {dateRange.end}</div>
+              <div>• {transactionCount} transaction{transactionCount !== 1 ? 's' : ''} analyzed this month (Total: {formatCurrency(transactionTotal)})</div>
             </>
+          ) : (
+            <div>• No transactions found this month</div>
           )}
+          {ytdTransactionCount !== undefined && ytdTransactionCount > 0 && ytdTransactionTotal !== undefined ? (
+            <>
+              <div>• {ytdTransactionCount} transaction{ytdTransactionCount !== 1 ? 's' : ''} analyzed year-to-date {ytdDateRange ? `(${ytdDateRange.start} to ${ytdDateRange.end})` : ''} (Total: {formatCurrency(ytdTransactionTotal)})</div>
+            </>
+          ) : ytdTransactionCount !== undefined && ytdTransactionCount === 0 ? (
+            <div>• No transactions found year-to-date</div>
+          ) : null}
           {categoriesSearched > 0 && (
             <div>• {categoriesSearched} categories searched</div>
           )}
@@ -77,6 +97,9 @@ export function DataSummary({
           )}
           {accountsAccessed !== undefined && accountsAccessed > 0 && (
             <div>• {accountsAccessed} account{accountsAccessed !== 1 ? 's' : ''} accessed</div>
+          )}
+          {creditCardsAccessed !== undefined && creditCardsAccessed > 0 && (
+            <div>• {creditCardsAccessed} credit card{creditCardsAccessed !== 1 ? 's' : ''} accessed</div>
           )}
           {incomeBufferAccessed && (
             <div>• Income buffer accessed</div>

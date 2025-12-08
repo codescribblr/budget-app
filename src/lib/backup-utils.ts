@@ -855,37 +855,64 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   }
 
   // Insert queued_imports (after automatic_import_setups, categories, accounts, credit_cards, transactions are inserted)
+  // Note: queued_imports requires import_setup_id (NOT NULL), so we can only restore if automatic_import_setups exist
   if (backupData.queued_imports && backupData.queued_imports.length > 0) {
-    const queuedImportsToInsert = backupData.queued_imports.map(({ 
-      id, 
-      account_id, 
-      import_setup_id,
-      suggested_category_id,
-      target_account_id,
-      target_credit_card_id,
-      imported_transaction_id,
-      reviewed_by,
-      ...queuedImport 
-    }) => ({
-      ...queuedImport,
-      account_id: accountId,
-      import_setup_id: import_setup_id ? (importSetupIdMap.get(import_setup_id) || null) : null,
-      suggested_category_id: suggested_category_id ? (categoryIdMap.get(suggested_category_id) || null) : null,
-      target_account_id: target_account_id ? (accountIdMap.get(target_account_id) || null) : null,
-      target_credit_card_id: target_credit_card_id ? (creditCardIdMap.get(target_credit_card_id) || null) : null,
-      imported_transaction_id: imported_transaction_id ? (transactionIdMap.get(imported_transaction_id) || null) : null,
-      reviewed_by: reviewed_by || null, // Keep reviewed_by if restoring to same user, otherwise null
-    }));
+    // Filter out queued_imports that don't have a valid import_setup_id mapping
+    // This handles cases where:
+    // 1. Older backups don't have automatic_import_setups
+    // 2. The import_setup_id in the backup doesn't exist in automatic_import_setups
+    const queuedImportsToInsert = backupData.queued_imports
+      .map(({ 
+        id, 
+        account_id, 
+        import_setup_id,
+        suggested_category_id,
+        target_account_id,
+        target_credit_card_id,
+        imported_transaction_id,
+        reviewed_by,
+        ...queuedImport 
+      }) => {
+        // Map import_setup_id - if it doesn't exist in the map, return null to filter out
+        const mappedImportSetupId = import_setup_id ? (importSetupIdMap.get(import_setup_id) || null) : null;
+        
+        // Skip if import_setup_id cannot be mapped (required NOT NULL constraint)
+        if (!mappedImportSetupId) {
+          return null;
+        }
 
-    const { error } = await supabase
-      .from('queued_imports')
-      .insert(queuedImportsToInsert);
+        return {
+          ...queuedImport,
+          account_id: accountId,
+          import_setup_id: mappedImportSetupId,
+          suggested_category_id: suggested_category_id ? (categoryIdMap.get(suggested_category_id) || null) : null,
+          target_account_id: target_account_id ? (accountIdMap.get(target_account_id) || null) : null,
+          target_credit_card_id: target_credit_card_id ? (creditCardIdMap.get(target_credit_card_id) || null) : null,
+          imported_transaction_id: imported_transaction_id ? (transactionIdMap.get(imported_transaction_id) || null) : null,
+          reviewed_by: reviewed_by || null, // Keep reviewed_by if restoring to same user, otherwise null
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
-    if (error) {
-      console.error('[Import] Error inserting queued_imports:', error);
-      throw error;
+    if (queuedImportsToInsert.length > 0) {
+      const { error } = await supabase
+        .from('queued_imports')
+        .insert(queuedImportsToInsert);
+
+      if (error) {
+        console.error('[Import] Error inserting queued_imports:', error);
+        throw error;
+      }
+      console.log('[Import] Inserted', queuedImportsToInsert.length, 'queued imports');
+      
+      // Log if any were skipped
+      const skipped = backupData.queued_imports.length - queuedImportsToInsert.length;
+      if (skipped > 0) {
+        console.warn(`[Import] Skipped ${skipped} queued imports due to missing import_setup_id mapping (likely from older backup)`);
+      }
+    } else if (backupData.queued_imports.length > 0) {
+      console.warn('[Import] All queued imports were skipped - no valid import_setup_id mappings found (likely from older backup without automatic_import_setups)');
     }
-    console.log('[Import] Inserted', queuedImportsToInsert.length, 'queued imports');
   }
 
   console.log('[Import] Import completed successfully');

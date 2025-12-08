@@ -8,7 +8,7 @@ The user backup system (accessed from Settings page) allows users to create, man
 
 ## What's Included in User Backups
 
-### ✅ **Complete Data Backup (14 Tables)**
+### ✅ **Complete Data Backup (17 Tables)**
 
 1. **`accounts`** - All bank accounts (checking, savings, cash)
 2. **`categories`** - All budget envelopes with balances
@@ -25,6 +25,8 @@ The user backup system (accessed from Settings page) allows users to create, man
 13. **`pre_tax_deductions`** - Pre-tax deduction items
 14. **`settings`** - User settings (pay frequency, annual income, etc.)
 15. **`duplicate_group_reviews`** - Reviewed duplicate transaction groups (prevents re-showing reviewed groups)
+16. **`automatic_import_setups`** - Automatic import configurations (Teller, Email, etc.)
+17. **`queued_imports`** - Transactions queued for review before import
 
 ### ❌ **Not Included (Intentionally)**
 
@@ -89,6 +91,15 @@ Everything! Including:
 - All settings (pay frequency, annual income, pre-tax deductions)
 - All account balances and credit card limits
 - All budget envelope balances
+- All automatic import setups (Teller, Email integrations)
+- All queued imports (transactions pending review)
+
+### ⚠️ **Backward Compatibility**
+
+When restoring older backups that don't include newer features:
+- **`automatic_import_setups`** and **`queued_imports`**: If missing from backup, they will be empty (no automatic imports configured)
+- **`queued_imports`** without matching `automatic_import_setups`: Will be skipped during restore (requires valid import_setup_id)
+- All other fields are optional and will default to empty arrays if missing
 
 ---
 
@@ -159,14 +170,17 @@ Backups are stored as JSON with this structure:
 1. **Delete Phase** (in reverse dependency order):
    - Delete transaction_splits (depends on transactions)
    - Delete imported_transaction_links (depends on imported_transactions)
+   - Delete queued_imports (depends on automatic_import_setups, categories, accounts, credit_cards, transactions)
    - Delete transactions
    - Delete imported_transactions
    - Delete merchant_mappings
    - Delete merchant_groups
+   - Delete merchant_category_rules
    - Delete pending_checks
    - Delete pre_tax_deductions
    - Delete income_settings
    - Delete settings
+   - Delete automatic_import_setups (depends on accounts, credit_cards)
    - Delete credit_cards
    - Delete categories
    - Delete accounts
@@ -185,6 +199,8 @@ Backups are stored as JSON with this structure:
    - Insert imported_transactions
    - Insert imported_transaction_links
    - Insert settings
+   - Insert automatic_import_setups (after accounts, credit_cards)
+   - Insert queued_imports (after automatic_import_setups, categories, accounts, credit_cards, transactions)
 
 ---
 

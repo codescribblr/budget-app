@@ -295,10 +295,20 @@ IMPORTANT:
   async generateInsights(
     userData: {
       transactions: Array<{
+        date: string;
         merchant: string;
         amount: number;
-        date: string;
+        type: 'income' | 'expense';
         category: string;
+        account: string;
+      }>;
+      ytdTransactions: Array<{
+        date: string;
+        merchant: string;
+        amount: number;
+        type: 'income' | 'expense';
+        category: string;
+        account: string;
       }>;
       budget: {
         total: number;
@@ -332,6 +342,35 @@ IMPORTANT:
           current_balance: number;
         }
       >;
+      accounts?: Array<{
+        name: string;
+        balance: number;
+        account_type: string;
+      }>;
+      creditCards?: Array<{
+        name: string;
+        current_balance: number;
+        credit_limit: number;
+        available_credit: number;
+      }>;
+      loans?: Array<{
+        name: string;
+        balance: number;
+        interest_rate: number | null;
+        minimum_payment: number | null;
+        payment_due_date: number | null;
+      }>;
+      incomeBuffer?: {
+        name: string;
+        current_balance: number;
+        monthly_amount: number;
+      } | null;
+      incomeSettings?: {
+        annual_income: number | null;
+        tax_rate: number | null;
+        pay_frequency: string | null;
+        include_extra_paychecks: boolean | null;
+      } | null;
     }
   ): Promise<{
     insights: MonthlyInsights;
@@ -398,6 +437,38 @@ UNDERSTANDING SPENDING VS BUDGET:
 - Accumulation categories are designed for irregular spending patterns.
 `;
 
+    // Format transactions for prompt
+    const formatTransactions = (txns: typeof userData.transactions, label: string) => {
+      if (!txns || txns.length === 0) {
+        return `${label}: No transactions found in this period. The system searched for transactions but found none matching the criteria (expense transactions for the specified date range).`;
+      }
+      
+      // Group by category for better readability
+      const byCategory: Record<string, Array<typeof txns[0]>> = {};
+      txns.forEach(t => {
+        if (!byCategory[t.category]) {
+          byCategory[t.category] = [];
+        }
+        byCategory[t.category].push(t);
+      });
+      
+      const categorySections = Object.entries(byCategory)
+        .map(([category, categoryTxns]) => {
+          const total = categoryTxns.reduce((sum, t) => sum + t.amount, 0);
+          const transactionList = categoryTxns
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .map(t => `  - ${t.date}: ${t.merchant} - $${t.amount.toFixed(2)} (${t.account})`)
+            .join('\n');
+          return `  ${category} (Total: $${total.toFixed(2)}, ${categoryTxns.length} transaction${categoryTxns.length !== 1 ? 's' : ''}):\n${transactionList}`;
+        })
+        .join('\n\n');
+      
+      return `${label} (${txns.length} transaction${txns.length !== 1 ? 's' : ''}, Total: $${txns.reduce((sum, t) => sum + t.amount, 0).toFixed(2)}):\n${categorySections}`;
+    };
+
+    const currentMonthTransactionsText = formatTransactions(userData.transactions, `Current Month Transactions (${userData.budget.period.monthStart} to ${userData.budget.period.monthEnd})`);
+    const ytdTransactionsText = formatTransactions(userData.ytdTransactions, `Year-to-Date Transactions (${userData.budget.period.yearStart} to ${userData.budget.period.monthEnd})`);
+
     const prompt = `You are a personal financial advisor. Analyze this user's spending data and provide actionable insights.
 
 ${helpDocumentation}
@@ -415,32 +486,62 @@ Monthly Budget Summary (use ONLY this month's spending for monthly checks):
 Category Spending Detail:
 ${categoryBreakdownText}
 
+${currentMonthTransactionsText}
+
+${ytdTransactionsText}
+
 Previous Month Comparison:
 - Total: $${userData.previousMonth.total.toFixed(2)}
 - Category breakdown: ${JSON.stringify(userData.previousMonth.categoryBreakdown)}
 
 Financial Goals:
-${userData.goals.map((g) => `- ${g.name}: $${g.current_amount.toFixed(2)} / $${g.target_amount.toFixed(2)} (${g.status})`).join('\n')}
+${userData.goals.length > 0 ? userData.goals.map((g) => `- ${g.name}: $${g.current_amount.toFixed(2)} / $${g.target_amount.toFixed(2)} (${g.status})`).join('\n') : 'No active goals'}
+
+${userData.accounts && userData.accounts.length > 0 ? `Bank Accounts:
+${userData.accounts.map((a) => `- ${a.name} (${a.account_type}): $${a.balance.toFixed(2)}`).join('\n')}` : ''}
+
+${userData.creditCards && userData.creditCards.length > 0 ? `Credit Cards:
+${userData.creditCards.map((cc) => `- ${cc.name}: Balance $${cc.current_balance.toFixed(2)} / Limit $${cc.credit_limit.toFixed(2)} (Available: $${cc.available_credit.toFixed(2)})`).join('\n')}` : ''}
+
+${userData.loans && userData.loans.length > 0 ? `Loans:
+${userData.loans.map((l) => `- ${l.name}: Balance $${l.balance.toFixed(2)}${l.interest_rate ? `, Interest Rate: ${l.interest_rate.toFixed(2)}%` : ''}${l.minimum_payment ? `, Minimum Payment: $${l.minimum_payment.toFixed(2)}` : ''}`).join('\n')}` : ''}
+
+${userData.incomeBuffer ? `Income Buffer:
+- ${userData.incomeBuffer.name}: Current balance $${userData.incomeBuffer.current_balance.toFixed(2)}, Monthly allocation $${userData.incomeBuffer.monthly_amount.toFixed(2)}` : ''}
+
+${userData.incomeSettings && userData.incomeSettings.annual_income ? `Income Settings:
+- Annual Income: $${userData.incomeSettings.annual_income.toFixed(2)}${userData.incomeSettings.tax_rate ? `, Tax Rate: ${(userData.incomeSettings.tax_rate * 100).toFixed(1)}%` : ''}${userData.incomeSettings.pay_frequency ? `, Pay Frequency: ${userData.incomeSettings.pay_frequency}` : ''}` : ''}
 
 CRITICAL: When analyzing category spending:
+- IMPORTANT: If the transaction data shows "No transactions found", this means the system searched for transactions but found none in the specified period. This could mean:
+  - The period is in the future (e.g., requesting insights for a future month)
+  - No expense transactions exist for this account in this period
+  - Transactions may need to be imported or categorized
+- Use the transaction data provided above to understand spending patterns, identify specific merchants, and analyze trends.
 - Use the provided ranges:
-  - MONTHLY EXPENSE categories -> compare THIS MONTH'S spending to monthly_budget (do NOT combine multiple months).
-  - ACCUMULATION categories -> compare YTD spending to annual_target and check current_balance. Monthly spikes are normal.
+  - MONTHLY EXPENSE categories -> compare THIS MONTH'S spending to monthly_budget (do NOT combine multiple months). Use current month transactions to identify specific spending patterns.
+  - ACCUMULATION categories -> compare YTD spending to annual_target and check current_balance. Use year-to-date transactions to see spending patterns throughout the year. Monthly spikes are normal.
 - For ACCUMULATION:
   - Spending over monthly_budget is expected; only warn if YTD spending risks exceeding annual_target OR current_balance would go negative.
   - Mention if monthly funding is off-track versus annual_target (monthly_budget * 12).
+  - Use year-to-date transactions to identify when large expenses occurred and whether they align with expected patterns.
 - For MONTHLY EXPENSE:
   - Spending this month above monthly_budget may indicate overspending.
+  - Use current month transactions to identify which merchants or spending patterns contributed to overspending.
 - Always reference the category_type before making any budget warning.
+- Reference specific transactions, merchants, or spending patterns when providing insights to make them more actionable.
 
 Provide 5-7 insights covering:
 1. Overall spending health (vs budget) - considering category types
 2. Category-specific observations - distinguishing accumulation vs monthly expense patterns
 3. Notable spending changes
 4. Goal progress assessment
-5. Actionable recommendations
-6. Potential savings opportunities
-7. Upcoming budget considerations
+5. Account and credit card balances (if provided) - liquidity and debt management
+6. Loan status and payment considerations (if provided)
+7. Income buffer and cash flow health (if provided)
+8. Actionable recommendations
+9. Potential savings opportunities
+10. Upcoming budget considerations
 
 Format as JSON:
 {
