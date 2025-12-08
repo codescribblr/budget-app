@@ -9,6 +9,117 @@ import type { ParsedTransaction } from '../import-types';
 import { generateTransactionHash } from '../csv-parser';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/**
+ * Get or create a single shared manual import setup for the current account
+ * This is used for manual file uploads - we use one shared setup per account
+ * to avoid creating thousands of setup records
+ */
+export async function getOrCreateManualImportSetup(
+  accountId?: number,
+  targetAccountId?: number | null,
+  targetCreditCardId?: number | null
+): Promise<number> {
+  const { supabase, user } = await getAuthenticatedUser();
+  const activeAccountId = accountId || await getActiveAccountId();
+  if (!activeAccountId) throw new Error('No active account');
+
+  // Use a single shared manual import setup per account (ignore target_account_id/credit_card_id)
+  // This prevents creating thousands of setup records for manual uploads
+  const { data: existingSetup } = await supabase
+    .from('automatic_import_setups')
+    .select('id')
+    .eq('account_id', activeAccountId)
+    .eq('source_type', 'manual')
+    .single();
+
+  if (existingSetup) {
+    return existingSetup.id;
+  }
+
+  // Create new shared manual import setup
+  const { data: newSetup, error } = await supabase
+    .from('automatic_import_setups')
+    .insert({
+      account_id: activeAccountId,
+      user_id: user.id,
+      source_type: 'manual',
+      source_identifier: `manual-${activeAccountId}`,
+      target_account_id: null, // Not used for shared setup
+      target_credit_card_id: null, // Not used for shared setup
+      integration_name: 'Manual Upload',
+      is_active: true,
+      is_historical: false,
+      source_config: {},
+      created_by: user.id,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('Error creating manual import setup:', error);
+    throw error;
+  }
+
+  return newSetup.id;
+}
+
+/**
+ * Clean up manual import setups that have no active queued imports
+ * This should be called after batches are imported or deleted
+ */
+export async function cleanupManualImportSetups(accountId?: number): Promise<void> {
+  const { supabase } = await getAuthenticatedUser();
+  const activeAccountId = accountId || await getActiveAccountId();
+  if (!activeAccountId) return;
+
+  // Find all manual import setups for this account
+  const { data: manualSetups } = await supabase
+    .from('automatic_import_setups')
+    .select('id')
+    .eq('account_id', activeAccountId)
+    .eq('source_type', 'manual');
+
+  if (!manualSetups || manualSetups.length === 0) return;
+
+  const setupIds = manualSetups.map(s => s.id);
+
+  // Check which setups have active queued imports (pending or reviewing)
+  const { data: activeQueuedImports } = await supabase
+    .from('queued_imports')
+    .select('import_setup_id')
+    .eq('account_id', activeAccountId)
+    .in('import_setup_id', setupIds)
+    .in('status', ['pending', 'reviewing']);
+
+  // Find setups with no active queued imports
+  const activeSetupIds = new Set(activeQueuedImports?.map(qi => qi.import_setup_id) || []);
+  const orphanedSetupIds = setupIds.filter(id => !activeSetupIds.has(id));
+
+  // Delete orphaned manual setups
+  if (orphanedSetupIds.length > 0) {
+    // Keep one setup if we're deleting all (to avoid recreating on next upload)
+    // Delete all but the oldest one
+    if (orphanedSetupIds.length > 1) {
+      const { data: setupsToKeep } = await supabase
+        .from('automatic_import_setups')
+        .select('id')
+        .in('id', orphanedSetupIds)
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      const keepId = setupsToKeep?.[0]?.id;
+      const deleteIds = orphanedSetupIds.filter(id => id !== keepId);
+
+      if (deleteIds.length > 0) {
+        await supabase
+          .from('automatic_import_setups')
+          .delete()
+          .in('id', deleteIds);
+      }
+    }
+  }
+}
+
 export interface QueueTransactionOptions {
   importSetupId: number;
   transactions: ParsedTransaction[];
@@ -34,33 +145,47 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
   // Get existing hashes to check for duplicates
   const hashes = transactions.map(t => t.hash);
   
+  // First, deduplicate within the current batch (same hash appearing multiple times in transactions array)
+  const seenInBatch = new Set<string>();
+  const deduplicatedTransactions = transactions.filter(t => {
+    if (seenInBatch.has(t.hash)) {
+      return false; // Duplicate within this batch
+    }
+    seenInBatch.add(t.hash);
+    return true;
+  });
+
   // Check against imported_transactions
   const { data: existingImported } = await supabase
     .from('imported_transactions')
     .select('hash')
     .eq('account_id', accountId)
-    .in('hash', hashes);
+    .in('hash', Array.from(seenInBatch));
 
-  // Check against queued_imports (same batch and other batches)
+  // Check against queued_imports (including same batch - in case of retry)
+  // Also check for rejected/deleted transactions to prevent re-importing them
   const { data: existingQueued } = await supabase
     .from('queued_imports')
-    .select('hash')
+    .select('hash, source_batch_id, status')
     .eq('account_id', accountId)
-    .in('hash', hashes);
+    .in('hash', Array.from(seenInBatch));
 
+  // Build set of existing hashes (from imported or queued, including same batch)
+  // Also include rejected transactions to prevent re-importing deleted items
   const existingHashes = new Set([
     ...(existingImported?.map(t => t.hash) || []),
-    ...(existingQueued?.map(t => t.hash) || []),
+    ...(existingQueued?.map(t => t.hash) || []), // Includes all statuses (pending, reviewing, approved, rejected, imported)
   ]);
 
-  // Filter out duplicates
-  const newTransactions = transactions.filter(t => !existingHashes.has(t.hash));
+  // Filter out duplicates (both within batch and across batches)
+  const newTransactions = deduplicatedTransactions.filter(t => !existingHashes.has(t.hash));
 
   if (newTransactions.length === 0) {
     return 0; // All duplicates
   }
 
   // Prepare queued imports
+  // Use per-transaction is_historical if provided, otherwise fall back to batch-level isHistorical
   const queuedImports = newTransactions.map(txn => ({
     account_id: accountId,
     import_setup_id: importSetupId,
@@ -76,7 +201,7 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     target_account_id: txn.account_id || null,
     target_credit_card_id: txn.credit_card_id || null,
     status: 'pending' as const,
-    is_historical: isHistorical,
+    is_historical: txn.is_historical !== undefined ? txn.is_historical : isHistorical,
     source_batch_id: sourceBatchId,
     source_fetched_at: new Date().toISOString(),
   }));
@@ -161,7 +286,9 @@ export async function getQueuedImportBatches() {
         id,
         integration_name,
         source_type
-      )
+      ),
+      target_account:accounts!queued_imports_target_account_id_fkey(name),
+      target_credit_card:credit_cards!queued_imports_target_credit_card_id_fkey(name)
     `)
     .eq('account_id', accountId)
     .in('status', ['pending', 'reviewing'])
@@ -187,6 +314,57 @@ export async function getQueuedImportBatches() {
   const batchList = Array.from(batches.entries()).map(([batchId, items]) => {
     const firstItem = items[0];
     const dates = items.map(i => i.transaction_date).sort();
+
+    // Determine account name (from target_account_id or target_credit_card_id)
+    const accountName = firstItem.target_account?.name || firstItem.target_credit_card?.name || null;
+    const accountId = firstItem.target_account_id || firstItem.target_credit_card_id || null;
+    const isCreditCard = !!firstItem.target_credit_card_id;
+
+    // Extract filename from original_data for manual uploads
+    let fileName: string | null = null;
+    if (firstItem.automatic_import_setups?.source_type === 'manual') {
+      // First, try to get filename from original_data (new format)
+      if (firstItem.original_data) {
+        try {
+          const originalData = typeof firstItem.original_data === 'string' 
+            ? JSON.parse(firstItem.original_data) 
+            : firstItem.original_data;
+          fileName = originalData._uploadFileName || null;
+        } catch (e) {
+          // Ignore parsing errors
+        }
+      }
+      
+      // Fallback: extract filename from batch ID for older uploads
+      // Batch ID format: manual-{timestamp}-{sanitized-filename}
+      // The filename is sanitized: non-alphanumeric chars become dashes
+      // e.g., "statement.csv" becomes "statement-csv"
+      if (!fileName && batchId.startsWith('manual-')) {
+        const parts = batchId.split('-');
+        if (parts.length >= 3) {
+          // Everything after the timestamp (index 1) is the sanitized filename
+          const sanitizedParts = parts.slice(2);
+          if (sanitizedParts.length > 0) {
+            // Try to restore common file extensions by detecting patterns like "csv", "pdf", etc.
+            const commonExtensions = ['csv', 'pdf', 'xlsx', 'xls', 'txt', 'json'];
+            const lastPart = sanitizedParts[sanitizedParts.length - 1].toLowerCase();
+            
+            if (commonExtensions.includes(lastPart)) {
+              // Restore the dot before the extension
+              fileName = sanitizedParts.slice(0, -1).join('-') + '.' + lastPart;
+            } else {
+              // No recognizable extension, just join with dashes
+              fileName = sanitizedParts.join('-');
+            }
+          }
+        }
+      }
+    }
+
+    // Check if all transactions in batch are historical
+    const allHistorical = items.every(i => i.is_historical === true);
+    const someHistorical = items.some(i => i.is_historical === true);
+    const isHistorical = allHistorical ? true : someHistorical ? 'mixed' : false;
     
     return {
       batch_id: batchId,
@@ -203,6 +381,11 @@ export async function getQueuedImportBatches() {
         : items.some(i => i.status === 'approved') ? 'partially_approved' as const
         : items.some(i => i.status === 'reviewing') ? 'reviewing' as const
         : 'pending' as const,
+      target_account_name: accountName,
+      target_account_id: accountId,
+      is_credit_card: isCreditCard,
+      is_historical: isHistorical,
+      file_name: fileName, // Filename for manual uploads
     };
   });
 

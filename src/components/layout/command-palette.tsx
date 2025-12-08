@@ -21,6 +21,7 @@ import {
   Mail,
   HelpCircle,
   Sparkles,
+  Inbox,
 } from "lucide-react"
 import { useFeature } from "@/contexts/FeatureContext"
 
@@ -70,6 +71,7 @@ const navigationItems = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Transactions", path: "/transactions", icon: Receipt },
   { label: "Import", path: "/import", icon: Upload },
+  { label: "Import Queue", path: "/imports/queue", icon: Inbox },
   { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
   { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureKey: "income_buffer" },
   { label: "Reports", path: "/reports", icon: FileText },

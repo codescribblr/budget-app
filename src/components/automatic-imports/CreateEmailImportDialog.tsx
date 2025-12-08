@@ -44,10 +44,15 @@ export default function CreateEmailImportDialog({
       const response = await fetch('/api/automatic-imports/email-domain');
       if (response.ok) {
         const data = await response.json();
-        setReceivingDomain(data.domain);
+        if (data.domain) {
+          setReceivingDomain(data.domain);
+        } else if (!data.configured) {
+          console.warn('RESEND_RECEIVING_DOMAIN not configured. Email import setup will still work, but email address will be generated server-side.');
+        }
       }
     } catch (error) {
       console.error('Error fetching receiving domain:', error);
+      // Don't block UI if domain fetch fails
     }
   };
 
@@ -191,9 +196,13 @@ export default function CreateEmailImportDialog({
                 Forward bank statement emails to this address. Attached PDF or CSV files will be automatically processed.
               </p>
             </div>
-          ) : receivingDomain && (
+          ) : receivingDomain ? (
             <div className="text-sm text-muted-foreground">
               Email address will be generated after setup creation: <code className="text-xs">setup-{'{id}'}@{receivingDomain}</code>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              Email address will be generated after setup creation.
             </div>
           )}
 

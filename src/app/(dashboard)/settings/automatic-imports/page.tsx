@@ -7,6 +7,7 @@ import { Plus, Mail, CreditCard, AlertCircle } from 'lucide-react';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import ImportSetupCard from '@/components/automatic-imports/ImportSetupCard';
 import IntegrationSelector from '@/components/automatic-imports/IntegrationSelector';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 interface AutomaticImportSetup {
   id: number;
@@ -56,7 +57,7 @@ export default function AutomaticImportsPage() {
   };
 
   if (permissionsLoading || loading) {
-    return <div>Loading...</div>;
+    return <LoadingSpinner />;
   }
 
   if (!isEditor) {

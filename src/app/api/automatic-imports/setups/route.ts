@@ -23,6 +23,7 @@ export async function GET() {
       .from('automatic_import_setups')
       .select('*')
       .eq('account_id', accountId)
+      .neq('source_type', 'manual') // Exclude manual uploads - they're not automatic imports
       .order('created_at', { ascending: false });
 
     if (error) {

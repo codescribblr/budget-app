@@ -30,10 +30,14 @@ export default function IntegrationSelector({
 
   const handleEmailSelected = () => {
     setShowEmailDialog(true);
+    // Close the integration selector dialog when Email is selected
+    onOpenChange(false);
   };
 
   const handleTellerSelected = () => {
     setShowTellerDialog(true);
+    // Close the integration selector dialog when Teller is selected
+    onOpenChange(false);
   };
 
   const handleIntegrationCreated = () => {

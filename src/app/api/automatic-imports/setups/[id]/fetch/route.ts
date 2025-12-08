@@ -60,25 +60,73 @@ export async function POST(
         );
       }
 
-      // Get account IDs from source_config or fetch all accounts
-      const accountIds = setup.source_config?.account_ids || [];
+      // Get account mappings from source_config
+      const accountMappings = setup.source_config?.account_mappings || [];
       
-      if (accountIds.length === 0) {
-        // Fetch accounts from Teller
-        const tellerAccounts = await fetchTellerAccounts(accessToken);
-        accountIds.push(...tellerAccounts.map(acc => acc.id));
+      // Filter to only enabled accounts
+      const enabledMappings = accountMappings.filter((m: any) => m.enabled);
+      
+      if (enabledMappings.length === 0) {
+        // Fallback: if no mappings, try legacy account_ids
+        const accountIds = setup.source_config?.account_ids || [];
+        if (accountIds.length === 0) {
+          // Fetch accounts from Teller
+          const tellerAccounts = await fetchTellerAccounts(accessToken);
+          accountIds.push(...tellerAccounts.map(acc => acc.id));
+        }
+        
+        // Use legacy account_ids without mappings
+        const results = await Promise.all(
+          accountIds.map((tellerAccountId: string) =>
+            fetchAndQueueTellerTransactions({
+              importSetupId: setup.id,
+              accessToken,
+              accountId: tellerAccountId,
+              isHistorical: setup.is_historical,
+              supabase: serviceSupabase,
+              budgetAccountId: setup.account_id,
+            }).catch(err => ({
+              fetched: 0,
+              queued: 0,
+              errors: [err.message],
+            }))
+          )
+        );
+        
+        const totalFetched = results.reduce((sum, r) => sum + r.fetched, 0);
+        const totalQueued = results.reduce((sum, r) => sum + r.queued, 0);
+        const allErrors = results.flatMap(r => r.errors);
+
+        await serviceSupabase
+          .from('automatic_import_setups')
+          .update({
+            last_fetch_at: new Date().toISOString(),
+            last_successful_fetch_at: allErrors.length === 0 ? new Date().toISOString() : undefined,
+            last_error: allErrors.length > 0 ? allErrors.join('; ') : null,
+            error_count: allErrors.length > 0 ? (setup.error_count || 0) + allErrors.length : 0,
+          })
+          .eq('id', setup.id);
+
+        return NextResponse.json({
+          success: true,
+          fetched: totalFetched,
+          queued: totalQueued,
+          errors: allErrors,
+        });
       }
 
-      // Fetch transactions for each account
+      // Fetch transactions for each enabled account mapping
       const results = await Promise.all(
-        accountIds.map((tellerAccountId: string) =>
+        enabledMappings.map((mapping: any) =>
           fetchAndQueueTellerTransactions({
             importSetupId: setup.id,
             accessToken,
-            accountId: tellerAccountId,
-            isHistorical: setup.is_historical,
+            accountId: mapping.teller_account_id,
+            isHistorical: mapping.is_historical !== undefined ? mapping.is_historical : setup.is_historical, // Use per-account is_historical if available
             supabase: serviceSupabase,
             budgetAccountId: setup.account_id,
+            targetAccountId: mapping.target_account_id,
+            targetCreditCardId: mapping.target_credit_card_id,
           }).catch(err => ({
             fetched: 0,
             queued: 0,

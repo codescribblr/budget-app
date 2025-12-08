@@ -13,7 +13,8 @@ import {
   Download,
   Trash2,
   Crown,
-  UserPlus
+  UserPlus,
+  RefreshCw
 } from 'lucide-react';
 
 const settingsNavItems = [
@@ -34,6 +35,12 @@ const settingsNavItems = [
     href: '/settings/password',
     icon: Key,
     description: 'Change your password',
+  },
+  {
+    title: 'Automatic Imports',
+    href: '/settings/automatic-imports',
+    icon: RefreshCw,
+    description: 'Manage automatic transaction imports',
   },
   {
     title: 'Duplicates',

@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import TellerConnect from './providers/TellerConnect';
+import TellerAccountMappingDialog from './TellerAccountMappingDialog';
 import { CreditCard, Loader2 } from 'lucide-react';
 
 interface CreateTellerImportDialogProps {
@@ -29,27 +30,14 @@ export default function CreateTellerImportDialog({
   onCreated,
 }: CreateTellerImportDialogProps) {
   const [loading, setLoading] = useState(false);
-  const [targetAccountId, setTargetAccountId] = useState<string>('');
-  const [isHistorical, setIsHistorical] = useState(false);
-  const [accounts, setAccounts] = useState<Array<{ id: number; name: string }>>([]);
-  const [tellerConnected, setTellerConnected] = useState(false);
   const [tellerConnecting, setTellerConnecting] = useState(false);
-
-  useEffect(() => {
-    fetchAccounts();
-  }, []);
-
-  const fetchAccounts = async () => {
-    try {
-      const response = await fetch('/api/accounts');
-      if (response.ok) {
-        const data = await response.json();
-        setAccounts(data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching accounts:', error);
-    }
-  };
+  const [showMappingDialog, setShowMappingDialog] = useState(false);
+  const [mappingData, setMappingData] = useState<{
+    enrollmentId: string;
+    institutionName: string;
+    accessToken: string;
+    accounts: any[];
+  } | null>(null);
 
   const [mounted, setMounted] = useState(false);
   
@@ -71,6 +59,7 @@ export default function CreateTellerImportDialog({
   }) => {
     setLoading(true);
     try {
+      // Fetch accounts from Teller
       const response = await fetch('/api/automatic-imports/teller/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -78,34 +67,42 @@ export default function CreateTellerImportDialog({
           accessToken: enrollment.accessToken,
           enrollmentId: enrollment.enrollmentId,
           institutionName: enrollment.institutionName,
-          target_account_id: targetAccountId && targetAccountId !== 'none' ? parseInt(targetAccountId) : null,
-          is_historical: isHistorical,
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to create Teller import setup');
+        throw new Error(error.error || 'Failed to fetch Teller accounts');
       }
 
-      toast.success(`Connected ${enrollment.institutionName} via Teller successfully`);
-
-      setTellerConnected(true);
+      const data = await response.json();
+      
+      // Close the connect dialog and show mapping dialog
       setTellerConnecting(false);
-      setTimeout(() => {
-        onCreated();
-        onOpenChange(false);
-        setTellerConnected(false);
-      }, 1500);
+      onOpenChange(false); // Close the "Connect Bank Account" dialog
+      setMappingData({
+        enrollmentId: data.enrollmentId,
+        institutionName: data.institutionName,
+        accessToken: data.accessToken,
+        accounts: data.accounts,
+      });
+      setShowMappingDialog(true);
     } catch (error: any) {
-      console.error('Error creating Teller import:', error);
-      toast.error(error.message || 'Failed to create import setup');
+      console.error('Error fetching Teller accounts:', error);
+      toast.error(error.message || 'Failed to fetch accounts from Teller');
       setTellerConnecting(false);
       // Reopen the dialog on error so user can try again
       onOpenChange(true);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleMappingSuccess = () => {
+    setShowMappingDialog(false);
+    setMappingData(null);
+    onCreated();
+    onOpenChange(false);
   };
 
   const handleTellerError = (error: Error) => {
@@ -132,8 +129,6 @@ export default function CreateTellerImportDialog({
               onExit={handleTellerExit}
               onSuccess={handleTellerSuccess}
               onError={handleTellerError}
-              targetAccountId={targetAccountId && targetAccountId !== 'none' ? parseInt(targetAccountId) : undefined}
-              isHistorical={isHistorical}
               autoOpen={true}
             />
           </div>
@@ -151,53 +146,18 @@ export default function CreateTellerImportDialog({
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Target Account (Optional)</Label>
-              <Select value={targetAccountId || undefined} onValueChange={setTargetAccountId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select account (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None (use default)</SelectItem>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id.toString()}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Optionally map imported transactions to a specific account
-              </p>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              After connecting, you'll be able to map each account individually, choose which accounts to sync, and set whether transactions are historical on a per-account basis.
+            </p>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="historical-teller"
-                checked={isHistorical}
-                onCheckedChange={(checked) => setIsHistorical(checked === true)}
-              />
-              <Label htmlFor="historical-teller" className="text-sm font-normal cursor-pointer">
-                Mark transactions as historical (won't affect current budget)
-              </Label>
-            </div>
-
-            {tellerConnected ? (
-              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg text-center">
-                <p className="text-sm text-green-800 dark:text-green-200">
-                  ✓ Successfully connected! Setting up import...
-                </p>
-              </div>
-            ) : (
-              <Button
-                onClick={handleStartTellerConnection}
-                disabled={loading}
-                className="w-full"
-              >
-                <CreditCard className="mr-2 h-4 w-4" />
-                Connect Bank Account
-              </Button>
-            )}
+            <Button
+              onClick={handleStartTellerConnection}
+              disabled={loading}
+              className="w-full"
+            >
+              <CreditCard className="mr-2 h-4 w-4" />
+              Connect Bank Account
+            </Button>
 
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
@@ -207,6 +167,19 @@ export default function CreateTellerImportDialog({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Account Mapping Dialog */}
+      {mappingData && (
+        <TellerAccountMappingDialog
+          open={showMappingDialog}
+          onOpenChange={setShowMappingDialog}
+          enrollmentId={mappingData.enrollmentId}
+          institutionName={mappingData.institutionName}
+          accessToken={mappingData.accessToken}
+          accounts={mappingData.accounts}
+          onSuccess={handleMappingSuccess}
+        />
+      )}
     </>
   );
 }

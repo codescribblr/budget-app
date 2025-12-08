@@ -7,17 +7,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Sparkles, AlertCircle, Crown } from 'lucide-react';
 import { parseCSVFile } from '@/lib/csv-parser';
 import { parseImageFile } from '@/lib/image-parser';
 import { analyzeCSV } from '@/lib/column-analyzer';
-import { useAIUsage } from '@/hooks/use-ai-usage';
-import { useSubscription } from '@/contexts/SubscriptionContext';
-import { useFeature } from '@/contexts/FeatureContext';
 import type { ParsedTransaction } from '@/lib/import-types';
 import type { Account, CreditCard } from '@/lib/types';
+import { toast } from 'sonner';
 import Papa from 'papaparse';
 
 interface FileUploadProps {
@@ -33,7 +29,6 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
   const [showAIFallback, setShowAIFallback] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [fallbackError, setFallbackError] = useState<string | null>(null);
-  const [enableAICategorization, setEnableAICategorization] = useState(false); // Disabled by default
   const [progress, setProgress] = useState(0);
   const [progressStage, setProgressStage] = useState<string>('');
   const [defaultAccountId, setDefaultAccountId] = useState<number | null>(null);
@@ -44,9 +39,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
   const [processedTransactions, setProcessedTransactions] = useState<ParsedTransaction[] | null>(null);
   const [processedFileName, setProcessedFileName] = useState<string>('');
   const [processingComplete, setProcessingComplete] = useState(false);
-  const { stats, loading: statsLoading } = useAIUsage();
-  const { isPremium } = useSubscription();
-  const aiChatEnabled = useFeature('ai_chat');
+  const [queuedBatchId, setQueuedBatchId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
@@ -239,22 +232,54 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       updateProgress(40, `Found ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''}. Checking for duplicates...`);
 
       // Check for duplicates and auto-categorize
+      // AI categorization is now done on-demand in TransactionPreview
       const { processTransactions } = await import('@/lib/csv-parser-helpers');
-      // Skip AI categorization if disabled OR if limit is reached
-      const shouldSkipAI = !enableAICategorization || 
-        (stats ? stats.categorization.used >= stats.categorization.limit : false);
-      
       const processedTransactions = await processTransactions(
         transactions,
         undefined,
         undefined,
-        shouldSkipAI,
+        true, // Always skip AI categorization - user can trigger it manually in preview
         updateProgress
       );
 
-      // Store processed transactions and pause for user to set options
+      // Apply default account/card and historical flag to transactions before saving
+      // Note: At this point, defaultAccountId/defaultCreditCardId/isHistorical may not be set yet
+      // So we'll save with whatever is currently selected, and user can change before clicking continue
+      const transactionsWithDefaults = processedTransactions.map(txn => ({
+        ...txn,
+        // Only set default if transaction doesn't already have an account/card set
+        account_id: (txn.account_id !== undefined && txn.account_id !== null) ? txn.account_id : (defaultAccountId || null),
+        credit_card_id: (txn.credit_card_id !== undefined && txn.credit_card_id !== null) ? txn.credit_card_id : (defaultCreditCardId || null),
+        // Apply historical flag from user selection
+        is_historical: isHistorical,
+      }));
+
+      // Save to import queue automatically after processing
+      updateProgress(90, 'Saving to import queue...');
+      const saveResponse = await fetch('/api/import/queue-manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactions: transactionsWithDefaults,
+          fileName: file.name,
+          targetAccountId: defaultAccountId,
+          targetCreditCardId: defaultCreditCardId,
+          isHistorical: isHistorical,
+        }),
+      });
+
+      if (!saveResponse.ok) {
+        const errorData = await saveResponse.json().catch(() => ({ error: 'Failed to save import' }));
+        throw new Error(errorData.error || 'Failed to save import');
+      }
+
+      const saveResult = await saveResponse.json();
+      setQueuedBatchId(saveResult.batchId);
+
+      // Store processed transactions and pause for user to review options
       setProcessedTransactions(processedTransactions);
       setProcessedFileName(file.name);
+      setIsProcessing(false); // Reset processing state so button is enabled
       setProcessingComplete(true);
       updateProgress(100, 'Processing complete! Review your import options below.');
     } catch (err) {
@@ -340,30 +365,36 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
     fileInputRef.current?.click();
   };
 
-  const handleContinueToPreview = () => {
-    if (!processedTransactions) return;
+  const handleContinueToPreview = async () => {
+    if (!queuedBatchId) {
+      setError('Batch ID not found. Please try uploading again.');
+      return;
+    }
 
-    // Apply default account/card to transactions that don't have one set
-    const transactionsWithDefaults = processedTransactions.map(txn => ({
-      ...txn,
-      // Only set default if transaction doesn't already have an account/card set
-      account_id: (txn.account_id !== undefined && txn.account_id !== null) ? txn.account_id : (defaultAccountId || null),
-      credit_card_id: (txn.credit_card_id !== undefined && txn.credit_card_id !== null) ? txn.credit_card_id : (defaultCreditCardId || null),
-    }));
+    // If user changed account/historical settings, update the queued imports
+    try {
+      const updateResponse = await fetch('/api/automatic-imports/queue/update-batch', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batchId: queuedBatchId,
+          targetAccountId: defaultAccountId,
+          targetCreditCardId: defaultCreditCardId,
+          isHistorical: isHistorical,
+        }),
+      });
 
-    // Store isHistorical in sessionStorage for TransactionPreview
-    sessionStorage.setItem('importIsHistorical', isHistorical.toString());
+      if (!updateResponse.ok) {
+        console.warn('Failed to update batch settings, continuing anyway');
+        // Continue anyway - user can edit individual transactions in preview
+      }
+    } catch (err) {
+      console.error('Error updating queued imports:', err);
+      // Continue anyway - user can edit in preview
+    }
 
-    // Reset processing state
-    setIsProcessing(false);
-    setProcessingComplete(false);
-    setProgress(0);
-    setProgressStage('');
-    setProcessedTransactions(null);
-    setProcessedFileName('');
-
-    // Move to preview
-    onFileUploaded(transactionsWithDefaults, processedFileName);
+    // Navigate to the queue preview page
+    router.push(`/imports/queue/${queuedBatchId}`);
   };
 
   return (
@@ -476,6 +507,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                     <Button 
                       onClick={handleContinueToPreview} 
                       className="w-full"
+                      disabled={isProcessing || !queuedBatchId}
                     >
                       Continue to Preview
                     </Button>
@@ -487,90 +519,6 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         </div>
       </div>
 
-      {/* AI Categorization Settings */}
-      {!disabled && (
-        // Hide card if user is premium but feature is disabled
-        !(isPremium && !aiChatEnabled) && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-purple-500" />
-                AI Categorization
-                {!isPremium && (
-                  <Badge
-                    variant="default"
-                    className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-0 text-xs shrink-0"
-                  >
-                    <Crown className="h-3 w-3 mr-1" />
-                    Premium
-                  </Badge>
-                )}
-              </CardTitle>
-              <CardDescription>
-                Automatically categorize uncategorized transactions using AI
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5">
-                  <Checkbox
-                    id="enable-ai-categorization"
-                    checked={enableAICategorization}
-                    onCheckedChange={(checked) => {
-                      if (checked === true) {
-                        setEnableAICategorization(true);
-                      } else {
-                        setEnableAICategorization(false);
-                      }
-                    }}
-                    disabled={statsLoading || isProcessing || !isPremium || !aiChatEnabled}
-                  />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <label
-                    htmlFor="enable-ai-categorization"
-                    className={`text-sm font-medium leading-normal block ${
-                      !isPremium || !aiChatEnabled
-                        ? 'cursor-not-allowed opacity-70'
-                        : 'cursor-pointer'
-                    }`}
-                  >
-                    Enable AI categorization
-                  </label>
-                  {!isPremium && (
-                    <div className="text-sm text-muted-foreground">
-                      <span>Upgrade to Premium to enable AI categorization</span>
-                    </div>
-                  )}
-                  {isPremium && !aiChatEnabled && (
-                    <div className="text-sm text-muted-foreground">
-                      <span>Enable AI features in Settings to use this feature</span>
-                    </div>
-                  )}
-                  {isPremium && aiChatEnabled && !statsLoading && stats && (
-                    <div className="text-sm text-muted-foreground">
-                      {enableAICategorization ? (
-                        stats.categorization.used >= stats.categorization.limit ? (
-                          <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            <span>Daily limit reached ({stats.categorization.used}/{stats.categorization.limit}). AI categorization will be skipped.</span>
-                          </div>
-                        ) : (
-                          <span>
-                            {stats.categorization.limit - stats.categorization.used} attempt{stats.categorization.limit - stats.categorization.used !== 1 ? 's' : ''} remaining today
-                          </span>
-                        )
-                      ) : (
-                        <span>AI categorization will be skipped. Only rule-based categorization will be used.</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )
-      )}
 
       {error && (
         <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
@@ -609,20 +557,49 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                   
                   updateProgress(40, `Found ${aiResult.transactions.length} transaction${aiResult.transactions.length !== 1 ? 's' : ''}. Checking for duplicates...`);
                   const { processTransactions } = await import('@/lib/csv-parser-helpers');
-                  // Skip AI categorization if disabled OR if limit is reached
-                  const shouldSkipAI = !enableAICategorization || 
-                    (stats ? stats.categorization.used >= stats.categorization.limit : false);
+                  // AI categorization is now done on-demand in TransactionPreview
                   const processedTransactions = await processTransactions(
                     aiResult.transactions,
                     undefined,
                     undefined,
-                    shouldSkipAI,
+                    true, // Always skip AI categorization - user can trigger it manually in preview
                     updateProgress
                   );
 
-                  // Store processed transactions and pause for user to set options
+                  // Apply default account/card and historical flag to transactions before saving
+                  const transactionsWithDefaults = processedTransactions.map(txn => ({
+                    ...txn,
+                    account_id: (txn.account_id !== undefined && txn.account_id !== null) ? txn.account_id : (defaultAccountId || null),
+                    credit_card_id: (txn.credit_card_id !== undefined && txn.credit_card_id !== null) ? txn.credit_card_id : (defaultCreditCardId || null),
+                    is_historical: isHistorical,
+                  }));
+
+                  // Save to import queue automatically after processing
+                  updateProgress(90, 'Saving to import queue...');
+                  const saveResponse = await fetch('/api/import/queue-manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      transactions: transactionsWithDefaults,
+                      fileName: pendingFile!.name,
+                      targetAccountId: defaultAccountId,
+                      targetCreditCardId: defaultCreditCardId,
+                      isHistorical: isHistorical,
+                    }),
+                  });
+
+                  if (!saveResponse.ok) {
+                    const errorData = await saveResponse.json().catch(() => ({ error: 'Failed to save import' }));
+                    throw new Error(errorData.error || 'Failed to save import');
+                  }
+
+                  const saveResult = await saveResponse.json();
+                  setQueuedBatchId(saveResult.batchId);
+
+                  // Store processed transactions and pause for user to review options
                   setProcessedTransactions(processedTransactions);
                   setProcessedFileName(pendingFile!.name);
+                  setIsProcessing(false); // Reset processing state so button is enabled
                   setProcessingComplete(true);
                   updateProgress(100, 'Processing complete! Review your import options below.');
                   sessionStorage.setItem('csvFileName', pendingFile!.name);

@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Trash2, Edit, Mail, AlertCircle, CheckCircle2, RefreshCw, CreditCard } from 'lucide-react';
+import { Trash2, Edit, Mail, AlertCircle, CheckCircle2, RefreshCw, CreditCard, Settings, Loader2 } from 'lucide-react';
+import TellerAccountMappingDialog from './TellerAccountMappingDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,17 +19,30 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+interface AccountMapping {
+  teller_account_id: string;
+  enabled: boolean;
+  is_historical?: boolean;
+  target_account_id?: number | null;
+  target_credit_card_id?: number | null;
+  account_name?: string;
+}
+
 interface ImportSetup {
   id: number;
   source_type: string;
   integration_name: string | null;
   bank_name: string | null;
   is_active: boolean;
-  is_historical: boolean;
+  is_historical: boolean; // Deprecated, kept for backwards compatibility
   last_successful_fetch_at: string | null;
   last_error: string | null;
   error_count: number;
   estimated_monthly_cost: number | null;
+  source_config?: {
+    account_mappings?: AccountMapping[];
+    [key: string]: any;
+  };
 }
 
 interface ImportSetupCardProps {
@@ -40,10 +54,65 @@ interface ImportSetupCardProps {
 export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportSetupCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isActive, setIsActive] = useState(setup.is_active);
-  const [isHistorical, setIsHistorical] = useState(setup.is_historical);
   const [updating, setUpdating] = useState(false);
-  const [updatingHistorical, setUpdatingHistorical] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [loadingMappings, setLoadingMappings] = useState(false);
+  const [showEditAccounts, setShowEditAccounts] = useState(false);
+  const [mappingData, setMappingData] = useState<{
+    enrollmentId: string;
+    institutionName: string;
+    accessToken: string;
+    accounts: any[];
+    currentMappings: any[];
+  } | null>(null);
+  const [accountNames, setAccountNames] = useState<Record<number, string>>({});
+  const [creditCardNames, setCreditCardNames] = useState<Record<number, string>>({});
+
+  // Get account mappings for Teller integrations
+  const accountMappings = setup.source_config?.account_mappings || [];
+  const hasAccountMappings = accountMappings.length > 0;
+
+  // Fetch account and credit card names for display
+  useEffect(() => {
+    if (hasAccountMappings) {
+      const accountIds = accountMappings
+        .map(m => m.target_account_id)
+        .filter((id): id is number => id !== null && id !== undefined);
+      const creditCardIds = accountMappings
+        .map(m => m.target_credit_card_id)
+        .filter((id): id is number => id !== null && id !== undefined);
+
+      if (accountIds.length > 0) {
+        fetch('/api/accounts')
+          .then(res => res.json())
+          .then(accounts => {
+            const names: Record<number, string> = {};
+            accounts.forEach((acc: any) => {
+              if (accountIds.includes(acc.id)) {
+                names[acc.id] = acc.name;
+              }
+            });
+            setAccountNames(names);
+          })
+          .catch(console.error);
+      }
+
+      if (creditCardIds.length > 0) {
+        fetch('/api/credit-cards')
+          .then(res => res.json())
+          .then(cards => {
+            const names: Record<number, string> = {};
+            cards.forEach((card: any) => {
+              if (creditCardIds.includes(card.id)) {
+                names[card.id] = card.name;
+              }
+            });
+            setCreditCardNames(names);
+          })
+          .catch(console.error);
+      }
+    }
+  }, [hasAccountMappings, accountMappings]);
 
   const handleToggleActive = async (checked: boolean) => {
     setUpdating(true);
@@ -65,25 +134,6 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
     }
   };
 
-  const handleToggleHistorical = async (checked: boolean) => {
-    setUpdatingHistorical(true);
-    try {
-      const response = await fetch(`/api/automatic-imports/setups/${setup.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_historical: checked }),
-      });
-
-      if (!response.ok) throw new Error('Failed to update historical flag');
-      setIsHistorical(checked);
-      onUpdated();
-    } catch (error) {
-      console.error('Error updating historical flag:', error);
-      alert('Failed to update historical flag');
-    } finally {
-      setUpdatingHistorical(false);
-    }
-  };
 
   const handleDelete = async () => {
     try {
@@ -126,6 +176,45 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
     } finally {
       setFetching(false);
     }
+  };
+
+  const handleEditAccounts = async () => {
+    if (setup.source_type !== 'teller') {
+      return;
+    }
+
+    setLoadingMappings(true);
+    try {
+      const response = await fetch(`/api/automatic-imports/teller/${setup.id}/accounts`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch account mappings' }));
+        const errorMessage = errorData.error || `HTTP ${response.status}: Failed to fetch account mappings`;
+        
+        // Show user-friendly error message
+        if (response.status === 403) {
+          alert('You do not have permission to edit this import setup. Only editors and owners can modify import configurations.');
+        } else {
+          alert(errorMessage);
+        }
+        console.error('Error fetching account mappings:', errorMessage, response.status);
+        return;
+      }
+
+      const data = await response.json();
+      setMappingData(data);
+      setShowEditAccounts(true);
+    } catch (error: any) {
+      console.error('Error fetching account mappings:', error);
+      alert(error.message || 'Failed to fetch account mappings');
+    } finally {
+      setLoadingMappings(false);
+    }
+  };
+
+  const handleMappingUpdateSuccess = () => {
+    setShowEditAccounts(false);
+    setMappingData(null);
+    onUpdated();
   };
 
   const getSourceIcon = () => {
@@ -184,27 +273,31 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
                   disabled={updating}
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <Label htmlFor={`historical-${setup.id}`} className="text-sm">
-                  Historical
-                </Label>
-                <Switch
-                  id={`historical-${setup.id}`}
-                  checked={isHistorical}
-                  onCheckedChange={handleToggleHistorical}
-                  disabled={updatingHistorical}
-                />
-              </div>
               {setup.source_type === 'teller' && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleManualFetch}
-                  disabled={fetching || !isActive}
-                  title="Fetch transactions now"
-                >
-                  <RefreshCw className={`h-4 w-4 ${fetching ? 'animate-spin' : ''}`} />
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleEditAccounts}
+                    disabled={loadingMappings}
+                    title="Edit Account Mappings"
+                  >
+                    {loadingMappings ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Settings className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleManualFetch}
+                    disabled={fetching || !isActive}
+                    title="Fetch transactions now"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${fetching ? 'animate-spin' : ''}`} />
+                  </Button>
+                </>
               )}
               <Button
                 variant="ghost"
@@ -217,16 +310,76 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {isHistorical && (
+          <div className="space-y-4">
+            {/* Show account mappings for Teller integrations */}
+            {setup.source_type === 'teller' && hasAccountMappings ? (
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-muted-foreground">Linked Accounts:</div>
+                {accountMappings.map((mapping, index) => {
+                  const isEnabled = mapping.enabled;
+                  const isHistorical = mapping.is_historical || false;
+                  const tellerAccountName = mapping.account_name || `Account ${index + 1}`;
+                  const mappedAccountName = mapping.target_account_id 
+                    ? accountNames[mapping.target_account_id] 
+                    : null;
+                  const mappedCreditCardName = mapping.target_credit_card_id 
+                    ? creditCardNames[mapping.target_credit_card_id] 
+                    : null;
+                  
+                  return (
+                    <div key={mapping.teller_account_id} className="flex items-start justify-between p-3 border rounded-lg">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{tellerAccountName}</span>
+                          {isEnabled ? (
+                            <Badge variant="default" className="text-xs">Syncing</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs">Disabled</Badge>
+                          )}
+                          {isHistorical && (
+                            <Badge variant="outline" className="text-xs text-amber-600 dark:text-amber-400">
+                              Historical
+                            </Badge>
+                          )}
+                        </div>
+                        {mappedAccountName && (
+                          <div className="text-xs text-muted-foreground">
+                            → {mappedAccountName}
+                          </div>
+                        )}
+                        {mappedCreditCardName && (
+                          <div className="text-xs text-muted-foreground">
+                            → {mappedCreditCardName}
+                          </div>
+                        )}
+                        {!mappedAccountName && !mappedCreditCardName && isEnabled && (
+                          <div className="text-xs text-muted-foreground italic">
+                            Not mapped to a budget account
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : setup.source_type === 'teller' ? (
+              <div className="text-sm text-muted-foreground">
+                No accounts linked. Click the settings icon to configure account mappings.
+              </div>
+            ) : null}
+
+            {/* Legacy: Show global historical flag for non-Teller integrations */}
+            {setup.source_type !== 'teller' && setup.is_historical && (
               <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
                 <span className="font-medium">Historical transactions</span>
                 <span className="text-muted-foreground">(won't affect current budget)</span>
               </div>
             )}
-            <div className="flex items-center justify-between text-sm">
+
+            {/* Global status info */}
+            <div className="flex items-center justify-between text-sm pt-2 border-t">
               <span className="text-muted-foreground">Last successful fetch:</span>
-              <span>{formatDate(setup.last_successful_fetch_at)}</span>
+              <span>{setup.last_successful_fetch_at ? formatDate(setup.last_successful_fetch_at) : 'Never'}</span>
             </div>
             
             {setup.error_count > 0 && (
@@ -273,6 +426,21 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Edit Account Mappings Dialog */}
+      {mappingData && (
+          <TellerAccountMappingDialog
+            open={showEditAccounts}
+            onOpenChange={setShowEditAccounts}
+            enrollmentId={mappingData.enrollmentId}
+            institutionName={mappingData.institutionName}
+            accessToken={mappingData.accessToken}
+            accounts={mappingData.accounts}
+            onSuccess={handleMappingUpdateSuccess}
+            existingMappings={mappingData.currentMappings}
+            setupId={setup.id}
+          />
+      )}
     </>
   );
 }

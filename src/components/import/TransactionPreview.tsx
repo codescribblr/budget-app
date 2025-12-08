@@ -22,7 +22,13 @@ import ImportConfirmationDialog from './ImportConfirmationDialog';
 import ImportProgressDialog from './ImportProgressDialog';
 import { generateTransactionHash } from '@/lib/csv-parser';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
-import { MoreVertical, Edit, X, Check, RefreshCw, Trash2, Sparkles } from 'lucide-react';
+import { MoreVertical, Edit, X, Check, RefreshCw, Trash2, Sparkles, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAIUsage } from '@/hooks/use-ai-usage';
+import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useFeature } from '@/contexts/FeatureContext';
+import { useRouter } from 'next/navigation';
+import { Crown } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
 import { deleteTemplate } from '@/lib/mapping-templates';
 import { parseCSVFile } from '@/lib/csv-parser';
@@ -39,6 +45,7 @@ interface EditingField {
 }
 
 export default function TransactionPreview({ transactions, onImportComplete }: TransactionPreviewProps) {
+  const router = useRouter();
   const [items, setItems] = useState<ParsedTransaction[]>(transactions);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -55,6 +62,10 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   const [templateId, setTemplateId] = useState<number | null>(null);
   const [isReprocessing, setIsReprocessing] = useState(false);
   const [dateFormat, setDateFormat] = useState<string | null>(null);
+  const [isAICategorizing, setIsAICategorizing] = useState(false);
+  const { stats, refreshStats } = useAIUsage();
+  const { isPremium } = useSubscription();
+  const aiChatEnabled = useFeature('ai_chat');
 
   useEffect(() => {
     fetchCategories();
@@ -106,7 +117,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   };
 
   const handleInlineAccountChange = (transactionId: string, value: string) => {
-    setItems(items.map(item => {
+    const updatedItems = items.map(item => {
       if (item.id === transactionId) {
         if (value === 'none') {
           return { ...item, account_id: null, credit_card_id: null };
@@ -117,8 +128,18 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         }
       }
       return item;
-    }));
+    });
+    setItems(updatedItems);
     setEditingField(null);
+    
+    // Save to database if queued import
+    const updatedItem = updatedItems.find(item => item.id === transactionId);
+    if (updatedItem) {
+      saveQueuedImportChange(transactionId, {
+        target_account_id: updatedItem.account_id || null,
+        target_credit_card_id: updatedItem.credit_card_id || null,
+      });
+    }
   };
 
   const getAccountDisplayName = (transaction: ParsedTransaction): string => {
@@ -179,25 +200,57 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     setEditingTransaction(null);
   };
 
+  // Helper function to save queued import changes to database
+  const saveQueuedImportChange = async (transactionId: string, updates: any) => {
+    // Check if this is a queued import
+    if (typeof transactionId === 'string' && transactionId.startsWith('queued-')) {
+      const queuedImportId = parseInt(transactionId.replace('queued-', ''));
+      if (!isNaN(queuedImportId)) {
+        try {
+          await fetch('/api/automatic-imports/queue/update-transaction', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              queuedImportId,
+              ...updates,
+            }),
+          });
+        } catch (error) {
+          console.error('Error saving queued import change:', error);
+          // Don't show error to user - just log it
+        }
+      }
+    }
+  };
+
   const handleInlineDateChange = (transactionId: string, newDate: string) => {
-    setItems(items.map(item => {
+    const updatedItems = items.map(item => {
       if (item.id === transactionId) {
         // Recalculate hash when date changes (include originalData for uniqueness)
         const newHash = generateTransactionHash(newDate, item.description, item.amount, item.originalData);
         // Auto-include when date changes (unless it's a duplicate)
-        const newStatus = item.isDuplicate ? 'excluded' : 'pending';
+        const newStatus: 'pending' | 'confirmed' | 'excluded' = item.isDuplicate ? 'excluded' : 'pending';
         return { ...item, date: newDate, hash: newHash, isDuplicate: false, status: newStatus };
       }
       return item;
-    }));
+    });
+    setItems(updatedItems);
     setEditingField(null);
+    
+    // Save to database if queued import
+    const updatedItem = updatedItems.find(item => item.id === transactionId);
+    if (updatedItem) {
+      saveQueuedImportChange(transactionId, {
+        transaction_date: updatedItem.date,
+      });
+    }
   };
 
   const handleInlineAmountChange = (transactionId: string, newAmount: string) => {
     const amount = parseFloat(newAmount);
     if (isNaN(amount)) return;
 
-    setItems(items.map(item => {
+    const updatedItems = items.map(item => {
       if (item.id === transactionId) {
         // Recalculate hash when amount changes (include originalData for uniqueness)
         const newHash = generateTransactionHash(item.date, item.description, amount, item.originalData);
@@ -217,19 +270,28 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         return updatedItem;
       }
       return item;
-    }));
+    });
+    setItems(updatedItems);
     setEditingField(null);
+    
+    // Save to database if queued import
+    const updatedItem = updatedItems.find(item => item.id === transactionId);
+    if (updatedItem) {
+      saveQueuedImportChange(transactionId, {
+        amount: updatedItem.amount,
+      });
+    }
   };
 
   const handleInlineCategoryChange = (transactionId: string, categoryId: string) => {
     const category = categories.find(c => c.id === parseInt(categoryId));
     if (!category) return;
 
-    setItems(items.map(item => {
+    const updatedItems = items.map(item => {
       if (item.id === transactionId) {
         // Replace with a single split for the selected category
         // Auto-include when categorized (unless it's a duplicate)
-        const newStatus = item.isDuplicate ? 'excluded' : 'pending';
+        const newStatus: 'pending' | 'confirmed' | 'excluded' = item.isDuplicate ? 'excluded' : 'pending';
         return {
           ...item,
           status: newStatus,
@@ -242,13 +304,111 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         };
       }
       return item;
-    }));
+    });
+    setItems(updatedItems);
     setEditingField(null);
+    
+    // Save to database if queued import
+    const updatedItem = updatedItems.find(item => item.id === transactionId);
+    if (updatedItem && updatedItem.splits.length > 0) {
+      saveQueuedImportChange(transactionId, {
+        suggested_category_id: updatedItem.splits[0].categoryId,
+      });
+    }
   };
 
   const handleImportClick = () => {
     // Show confirmation dialog
     setShowConfirmation(true);
+  };
+
+  const handleAICategorize = async () => {
+    if (uncategorizedTransactions.length === 0) {
+      toast.error('No uncategorized transactions to categorize');
+      return;
+    }
+
+    if (!stats || stats.categorization.used >= stats.categorization.limit) {
+      toast.error('Daily categorization limit reached. Try again tomorrow.');
+      return;
+    }
+
+    setIsAICategorizing(true);
+
+    try {
+      // Use different endpoint based on whether these are queued imports
+      const endpoint = isQueuedImport 
+        ? '/api/import/ai-categorize-queued'
+        : '/api/import/ai-categorize';
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactions: uncategorizedTransactions.map(txn => ({
+            id: txn.id,
+            merchant: txn.merchant,
+            description: txn.description,
+            amount: txn.amount,
+            date: txn.date,
+            transaction_type: txn.transaction_type,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to categorize transactions' }));
+        if (response.status === 429) {
+          toast.error(`Rate limit exceeded. ${errorData.remaining || 0} requests remaining.`);
+        } else {
+          toast.error(errorData.error || 'Failed to categorize transactions');
+        }
+        return;
+      }
+
+      const result = await response.json();
+      const { suggestions = [] } = result;
+
+      if (suggestions.length === 0) {
+        toast.info('No categories could be suggested for these transactions');
+        return;
+      }
+
+      // Fetch categories to get names
+      const categoriesResponse = await fetch('/api/categories?excludeGoals=true');
+      const categories = await categoriesResponse.ok ? await categoriesResponse.json() : [];
+
+      // Update transactions with AI suggestions
+      setItems(items.map(transaction => {
+        const suggestion = suggestions.find((s: any) => s.transactionId === transaction.id);
+        
+        if (suggestion && suggestion.categoryId && !transaction.isDuplicate) {
+          const category = categories.find((c: any) => c.id === suggestion.categoryId);
+          return {
+            ...transaction,
+            suggestedCategory: suggestion.categoryId,
+            status: 'pending' as const,
+            splits: [{
+              categoryId: suggestion.categoryId,
+              categoryName: category?.name || suggestion.categoryName,
+              amount: transaction.amount,
+              isAICategorized: true,
+            }],
+          };
+        }
+        
+        return transaction;
+      }));
+
+      const categorizedCount = suggestions.filter((s: any) => s.categoryId).length;
+      toast.success(`AI categorized ${categorizedCount} transaction${categorizedCount !== 1 ? 's' : ''}`);
+      refreshStats();
+    } catch (error) {
+      console.error('Error categorizing transactions:', error);
+      toast.error('Failed to categorize transactions');
+    } finally {
+      setIsAICategorizing(false);
+    }
   };
 
   const handleConfirmImport = async () => {
@@ -268,8 +428,14 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
       return;
     }
 
+    // Check if these are queued imports (IDs start with 'queued-')
+    const isQueuedImport = toImport.some(txn => typeof txn.id === 'string' && txn.id.startsWith('queued-'));
+    
     // Get filename from sessionStorage
     const fileName = sessionStorage.getItem('csvFileName') || sessionStorage.getItem('parsedFileName') || 'Unknown';
+    
+    // Get batchId from sessionStorage if it's a queued import
+    const batchId = sessionStorage.getItem('queuedBatchId');
 
     // Show progress dialog
     setIsImporting(true);
@@ -278,19 +444,40 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     setProgressMessage(`Importing ${toImport.length} transaction${toImport.length !== 1 ? 's' : ''}...`);
 
     try {
-      const response = await fetch('/api/import/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transactions: toImport.map(txn => ({
-            ...txn,
-            // Use per-transaction is_historical if set, otherwise fall back to global flag
-            is_historical: txn.is_historical !== undefined ? txn.is_historical : isHistorical,
-          })),
-          isHistorical: isHistorical, // Keep for backward compatibility
-          fileName: fileName,
-        }),
-      });
+      let response;
+      
+      if (isQueuedImport && batchId) {
+        // Use queued import approval endpoint
+        response = await fetch('/api/automatic-imports/queue/approve-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            batchId,
+            transactions: toImport.map(txn => ({
+              ...txn,
+              // Ensure hash is included (should already be in txn.hash from queued import)
+              hash: txn.hash || '',
+              // Use per-transaction is_historical if set, otherwise fall back to global flag
+              is_historical: txn.is_historical !== undefined ? txn.is_historical : isHistorical,
+            })),
+          }),
+        });
+      } else {
+        // Use regular import endpoint
+        response = await fetch('/api/import/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transactions: toImport.map(txn => ({
+              ...txn,
+              // Use per-transaction is_historical if set, otherwise fall back to global flag
+              is_historical: txn.is_historical !== undefined ? txn.is_historical : isHistorical,
+            })),
+            isHistorical: isHistorical, // Keep for backward compatibility
+            fileName: fileName,
+          }),
+        });
+      }
 
       if (!response.ok) {
         const errorMessage = await handleApiError(response, 'Failed to import transactions');
@@ -390,6 +577,15 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   ).length;
 
   const uncategorizedCount = items.filter(item => item.splits.length === 0).length;
+  
+  // Check if these are queued imports
+  const isQueuedImport = items.some(item => typeof item.id === 'string' && item.id.startsWith('queued-'));
+  
+  // Get uncategorized transactions for AI categorization (both normal and queued imports)
+  const uncategorizedTransactions = items.filter(
+    item => !item.isDuplicate && 
+            (!item.splits || item.splits.length === 0)
+  );
 
   const databaseDuplicateCount = items.filter(item => item.duplicateType === 'database').length;
   const withinFileDuplicateCount = items.filter(item => item.duplicateType === 'within-file').length;
@@ -472,9 +668,48 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
               <span className="font-medium">Excluded:</span> {totalExcludedCount}
             </div>
           </div>
-          <Button onClick={handleImportClick} disabled={isImporting || categorizedCount === 0} className="shrink-0">
-            {isImporting ? 'Importing...' : `Import ${categorizedCount} Transaction${categorizedCount !== 1 ? 's' : ''}`}
-          </Button>
+          <div className="flex gap-2 shrink-0">
+            {uncategorizedTransactions.length > 0 && (
+              <>
+                {/* Show AI Categorize button only if premium AND AI enabled */}
+                {isPremium && aiChatEnabled && (
+                  <Button
+                    onClick={handleAICategorize}
+                    disabled={isAICategorizing || !stats || stats.categorization.used >= stats.categorization.limit}
+                    variant="default"
+                    className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    {isAICategorizing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Categorizing...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        AI Categorize ({uncategorizedTransactions.length})
+                      </>
+                    )}
+                  </Button>
+                )}
+                {/* Show upgrade button if not premium */}
+                {!isPremium && (
+                  <Button
+                    onClick={() => router.push('/settings/subscription')}
+                    variant="default"
+                    className="gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
+                  >
+                    <Crown className="h-4 w-4" />
+                    Upgrade for AI Categorization
+                  </Button>
+                )}
+                {/* If premium but AI disabled, don't show anything */}
+              </>
+            )}
+            <Button onClick={handleImportClick} disabled={isImporting || categorizedCount === 0}>
+              {isImporting ? 'Importing...' : `Import ${categorizedCount} Transaction${categorizedCount !== 1 ? 's' : ''}`}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -684,33 +919,17 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                       onCheckedChange={async (checked) => {
                         const newValue = checked === true;
                         // Update local state
-                        setItems(items.map(item => 
+                        const updatedItems = items.map(item => 
                           item.id === transaction.id 
                             ? { ...item, is_historical: newValue }
                             : item
-                        ));
+                        );
+                        setItems(updatedItems);
                         
-                        // If this is a queued import, save to database
-                        if (transaction.id.startsWith('queued-')) {
-                          const queuedImportId = parseInt(transaction.id.replace('queued-', ''));
-                          if (!isNaN(queuedImportId)) {
-                            try {
-                              await fetch(`/api/automatic-imports/queue/${queuedImportId}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ is_historical: newValue }),
-                              });
-                            } catch (error) {
-                              console.error('Error updating queued import is_historical:', error);
-                              // Revert on error
-                              setItems(items.map(item => 
-                                item.id === transaction.id 
-                                  ? { ...item, is_historical: !newValue }
-                                  : item
-                              ));
-                            }
-                          }
-                        }
+                        // Save to database if queued import
+                        saveQueuedImportChange(transaction.id, {
+                          is_historical: newValue,
+                        });
                       }}
                       title="Mark as historical (won't affect current budget)"
                     />

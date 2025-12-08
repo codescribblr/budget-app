@@ -81,12 +81,27 @@
 # Teller Application ID (from Teller Dashboard)
 NEXT_PUBLIC_TELLER_APPLICATION_ID=your-application-id
 
+# Teller Environment (for client-side Teller Connect)
+# Must match TELLER_ENV below
+NEXT_PUBLIC_TELLER_ENV=sandbox
+
 # Teller Webhook Secret (from Teller Dashboard → Webhooks)
 TELLER_WEBHOOK_SECRET=your-webhook-secret
 
-# Environment (sandbox or production)
+# Environment (for server-side API calls)
+# Must match NEXT_PUBLIC_TELLER_ENV above
 TELLER_ENV=sandbox
+
+# Teller Client Certificate (from teller.zip - cert.pem)
+# Required for development/production, optional for sandbox
+TELLER_CLIENT_CERT="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+
+# Teller Client Private Key (from teller.zip - key.pem)
+# Required for development/production, optional for sandbox
+TELLER_CLIENT_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 ```
+
+**Note:** The certificate and key are provided in `teller.zip` when you create a Teller project. Copy the entire contents of `cert.pem` and `key.pem` files, including the BEGIN/END lines. Use `\n` for line breaks in environment variables.
 
 ### Security Considerations
 
@@ -103,8 +118,13 @@ TELLER_ENV=sandbox
    - ✅ Uses `TELLER_WEBHOOK_SECRET` from environment
 
 3. **API Authentication:**
-   - Uses HTTP Basic Auth with access token
+   - ✅ **Mutual TLS (mTLS)** required for development/production environments
+   - Uses client certificate (`TELLER_CLIENT_CERT`) and private key (`TELLER_CLIENT_KEY`)
+   - Certificate and key provided in `teller.zip` when creating Teller project
+   - Uses HTTP Basic Auth with access token (in addition to mTLS)
    - Token passed in Authorization header
+   - Both certificate AND access token required for API requests
+   - Sandbox environment: certificates optional but recommended
 
 ### Transaction Conversion
 

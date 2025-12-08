@@ -115,16 +115,32 @@ export async function POST(request: Request) {
             continue;
           }
 
-          // Fetch and queue transactions for each account in the enrollment
-          for (const tellerAccountId of accountIds) {
+          // Get account mappings to check which accounts are enabled
+          const accountMappings = setup.source_config?.account_mappings || [];
+          
+          // Filter to only enabled accounts
+          const enabledAccountIds = accountMappings.length > 0
+            ? accountIds.filter(id => {
+                const mapping = accountMappings.find((m: any) => m.teller_account_id === id);
+                return mapping && mapping.enabled;
+              })
+            : accountIds; // Fallback: if no mappings, process all accounts (backwards compatibility)
+
+          // Fetch and queue transactions for each enabled account
+          for (const tellerAccountId of enabledAccountIds) {
+            // Get mapping for this account to get target account/credit card and is_historical
+            const mapping = accountMappings.find((m: any) => m.teller_account_id === tellerAccountId);
+            
             try {
               await fetchAndQueueTellerTransactions({
                 importSetupId: setup.id,
                 accessToken,
                 accountId: tellerAccountId,
-                isHistorical: setup.is_historical,
+                isHistorical: mapping?.is_historical !== undefined ? mapping.is_historical : setup.is_historical, // Use per-account is_historical if available
                 supabase,
                 budgetAccountId: setup.account_id,
+                targetAccountId: mapping?.target_account_id || null,
+                targetCreditCardId: mapping?.target_credit_card_id || null,
               });
 
               // Update last fetch time
@@ -186,11 +202,15 @@ export async function POST(request: Request) {
 
           // Fetch transactions for the account
           try {
+            // Get mapping for this account to get is_historical
+            const accountMappings = setup.source_config?.account_mappings || [];
+            const mapping = accountMappings.find((m: any) => m.teller_account_id === transaction.account_id);
+            
             await fetchAndQueueTellerTransactions({
               importSetupId: setup.id,
               accessToken,
               accountId: transaction.account_id,
-              isHistorical: setup.is_historical,
+              isHistorical: mapping?.is_historical !== undefined ? mapping.is_historical : setup.is_historical, // Use per-account is_historical if available
               supabase,
               budgetAccountId: setup.account_id,
             });

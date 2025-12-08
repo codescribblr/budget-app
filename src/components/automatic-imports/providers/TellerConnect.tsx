@@ -17,8 +17,6 @@ interface TellerConnectProps {
     userId: string;
   }) => void;
   onError?: (error: Error) => void;
-  targetAccountId?: number;
-  isHistorical?: boolean;
   autoOpen?: boolean;
 }
 
@@ -27,14 +25,15 @@ export default function TellerConnect({
   onExit,
   onSuccess,
   onError,
-  targetAccountId,
-  isHistorical,
   autoOpen = false,
 }: TellerConnectProps) {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const applicationId = process.env.NEXT_PUBLIC_TELLER_APPLICATION_ID;
+  // Get environment from public env var (defaults to sandbox for safety)
+  // Client component needs NEXT_PUBLIC_ prefix to access env vars
+  const tellerEnv = process.env.NEXT_PUBLIC_TELLER_ENV || 'sandbox';
   
   if (!applicationId) {
     return (
@@ -48,6 +47,7 @@ export default function TellerConnect({
 
   const { open, ready } = useTellerConnect({
     applicationId,
+    environment: tellerEnv === 'production' ? 'production' : 'sandbox',
     onSuccess: async (authorization) => {
       setConnecting(true);
       setError(null);

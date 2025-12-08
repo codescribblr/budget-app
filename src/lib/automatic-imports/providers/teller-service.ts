@@ -3,6 +3,7 @@
  * Handles fetching transactions from Teller API and queuing them
  */
 
+import { Agent } from 'undici';
 import { queueTransactions } from '../queue-manager';
 import type { ParsedTransaction } from '../../import-types';
 import { generateTransactionHash } from '../../csv-parser';
@@ -31,6 +32,7 @@ export interface TellerAccount {
   id: string;
   name: string;
   type: string;
+  currency?: string; // ISO 4217 currency code (e.g., "USD")
   institution: {
     id: string;
     name: string;
@@ -38,6 +40,38 @@ export interface TellerAccount {
   account_number?: {
     number?: string;
   };
+}
+
+/**
+ * Create HTTPS agent with Teller client certificate for mTLS authentication
+ * Teller requires mutual TLS (mTLS) for API requests in development/production
+ * Uses undici Agent which supports mTLS and works with Node.js fetch
+ */
+function createTellerHttpsAgent(): Agent | undefined {
+  const cert = process.env.TELLER_CLIENT_CERT;
+  const key = process.env.TELLER_CLIENT_KEY;
+
+  // In sandbox, certificates are optional
+  if (process.env.TELLER_ENV === 'sandbox' && (!cert || !key)) {
+    return undefined;
+  }
+
+  // In development/production, certificates are required
+  if (!cert || !key) {
+    throw new Error(
+      'Teller client certificate and key are required. ' +
+      'Set TELLER_CLIENT_CERT and TELLER_CLIENT_KEY environment variables. ' +
+      'These are provided in teller.zip when you create a Teller project.'
+    );
+  }
+
+  return new Agent({
+    connect: {
+      cert,
+      key,
+      rejectUnauthorized: true, // Verify server certificate
+    },
+  });
 }
 
 /**
@@ -63,11 +97,16 @@ export async function fetchTellerTransactions(
 
   const url = `${baseUrl}/accounts/${accountId}/transactions${params.toString() ? `?${params.toString()}` : ''}`;
 
+  // Create HTTPS agent with client certificate for mTLS
+  const agent = createTellerHttpsAgent();
+
   const response = await fetch(url, {
     method: 'GET',
     headers: {
       'Authorization': `Basic ${Buffer.from(`${accessToken}:`).toString('base64')}`,
     },
+    // @ts-ignore - dispatcher is the correct option for undici Agent
+    dispatcher: agent,
   });
 
   if (!response.ok) {
@@ -90,11 +129,16 @@ export async function fetchTellerAccount(
     ? 'https://api.teller.io'
     : 'https://api.teller.io';
 
+  // Create HTTPS agent with client certificate for mTLS
+  const agent = createTellerHttpsAgent();
+
   const response = await fetch(`${baseUrl}/accounts/${accountId}`, {
     method: 'GET',
     headers: {
       'Authorization': `Basic ${Buffer.from(`${accessToken}:`).toString('base64')}`,
     },
+    // @ts-ignore - dispatcher is the correct option for undici Agent
+    dispatcher: agent,
   });
 
   if (!response.ok) {
@@ -113,11 +157,16 @@ export async function fetchTellerAccounts(accessToken: string): Promise<TellerAc
     ? 'https://api.teller.io'
     : 'https://api.teller.io';
 
+  // Create HTTPS agent with client certificate for mTLS
+  const agent = createTellerHttpsAgent();
+
   const response = await fetch(`${baseUrl}/accounts`, {
     method: 'GET',
     headers: {
       'Authorization': `Basic ${Buffer.from(`${accessToken}:`).toString('base64')}`,
     },
+    // @ts-ignore - dispatcher is the correct option for undici Agent
+    dispatcher: agent,
   });
 
   if (!response.ok) {
@@ -184,12 +233,14 @@ export async function fetchAndQueueTellerTransactions(options: {
   endDate?: string;
   supabase?: any; // Optional Supabase client for webhook contexts
   budgetAccountId?: number; // Optional budget account ID for webhook contexts
+  targetAccountId?: number | null; // Optional target account ID from mapping
+  targetCreditCardId?: number | null; // Optional target credit card ID from mapping
 }): Promise<{
   fetched: number;
   queued: number;
   errors: string[];
 }> {
-  const { importSetupId, accessToken, accountId, isHistorical, startDate, endDate, supabase: providedSupabase, budgetAccountId } = options;
+  const { importSetupId, accessToken, accountId, isHistorical, startDate, endDate, supabase: providedSupabase, budgetAccountId, targetAccountId: providedTargetAccountId, targetCreditCardId: providedTargetCreditCardId } = options;
   const errors: string[] = [];
   
   try {
@@ -197,8 +248,8 @@ export async function fetchAndQueueTellerTransactions(options: {
     let supabase = providedSupabase;
     let setupAccountId = budgetAccountId;
     let actualIsHistorical = isHistorical;
-    let targetAccountId: number | null = null;
-    let targetCreditCardId: number | null = null;
+    let targetAccountId: number | null = providedTargetAccountId ?? null;
+    let targetCreditCardId: number | null = providedTargetCreditCardId ?? null;
 
     // Fetch setup to get account_id, is_historical, and account mappings
     if (!supabase || !setupAccountId) {
@@ -210,7 +261,7 @@ export async function fetchAndQueueTellerTransactions(options: {
 
       const { data: setup, error: setupError } = await supabase
         .from('automatic_import_setups')
-        .select('account_id, is_historical, target_account_id, target_credit_card_id')
+        .select('account_id, is_historical, source_config')
         .eq('id', importSetupId)
         .single();
       
@@ -219,25 +270,54 @@ export async function fetchAndQueueTellerTransactions(options: {
       }
       
       setupAccountId = setup.account_id;
-      if (actualIsHistorical === undefined) {
-        actualIsHistorical = setup.is_historical;
+      
+      // Try to get mapping for this specific Teller account
+      const accountMappings = setup.source_config?.account_mappings || [];
+      const mapping = accountMappings.find((m: any) => m.teller_account_id === accountId);
+      if (mapping) {
+        targetAccountId = mapping.target_account_id || null;
+        targetCreditCardId = mapping.target_credit_card_id || null;
+        // Use per-account is_historical if available, otherwise fall back to provided or global
+        if (actualIsHistorical === undefined && mapping.is_historical !== undefined) {
+          actualIsHistorical = mapping.is_historical;
+        }
+      } else {
+        // Fallback to global is_historical if no mapping found
+        if (actualIsHistorical === undefined) {
+          actualIsHistorical = setup.is_historical;
+        }
+        // Fallback to legacy single target_account_id/target_credit_card_id
+        // (for backwards compatibility with old setups)
+        const legacySetup = await supabase
+          .from('automatic_import_setups')
+          .select('target_account_id, target_credit_card_id')
+          .eq('id', importSetupId)
+          .single();
+        
+        if (legacySetup.data) {
+          targetAccountId = legacySetup.data.target_account_id;
+          targetCreditCardId = legacySetup.data.target_credit_card_id;
+        }
       }
-      targetAccountId = setup.target_account_id;
-      targetCreditCardId = setup.target_credit_card_id;
-    } else {
-      // If supabase and accountId provided, still fetch setup for account mappings
+    } else if (!targetAccountId && !targetCreditCardId) {
+      // If supabase and accountId provided, fetch setup for account mappings
       const { data: setup, error: setupError } = await supabase
         .from('automatic_import_setups')
-        .select('target_account_id, target_credit_card_id')
+        .select('source_config')
         .eq('id', importSetupId)
         .single();
       
-      if (setupError) {
-        console.warn(`Error fetching setup ${importSetupId} for account mappings:`, setupError);
-        // Continue with null values - account mappings are optional
-      } else if (setup) {
-        targetAccountId = setup.target_account_id;
-        targetCreditCardId = setup.target_credit_card_id;
+      if (!setupError && setup) {
+        const accountMappings = setup.source_config?.account_mappings || [];
+        const mapping = accountMappings.find((m: any) => m.teller_account_id === accountId);
+        if (mapping) {
+          targetAccountId = mapping.target_account_id || null;
+          targetCreditCardId = mapping.target_credit_card_id || null;
+          // Use per-account is_historical if available
+          if (actualIsHistorical === undefined && mapping.is_historical !== undefined) {
+            actualIsHistorical = mapping.is_historical;
+          }
+        }
       }
     }
 

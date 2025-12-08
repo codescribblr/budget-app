@@ -1644,12 +1644,12 @@ export async function importTransactions(transactions: any[], isHistorical: bool
     if (importError.code === '23505') {
       console.log('Duplicate hashes detected, filtering and retrying...');
 
-      // Get existing hashes for this account
-      const hashes = validTransactions.map(txn => txn.hash);
+      // Get existing hashes for this user (unique constraint is on user_id + hash, not account_id)
+      const hashes = validTransactions.map(txn => txn.hash).filter(h => h); // Filter out empty hashes
       const { data: existingHashes } = await supabase
         .from('imported_transactions')
         .select('hash')
-        .eq('account_id', accountId)
+        .eq('user_id', user.id)
         .in('hash', hashes);
 
       const existingHashSet = new Set(existingHashes?.map(h => h.hash) || []);
@@ -1677,7 +1677,52 @@ export async function importTransactions(transactions: any[], isHistorical: bool
 
       if (retryError) {
         console.error('Retry failed:', retryError);
-        throw retryError;
+        
+        // If still getting duplicate error, check which hashes are causing issues
+        if (retryError.code === '23505') {
+          // Get all hashes we're trying to insert
+          const insertHashes = nonDuplicateData.map(d => d.hash).filter(h => h);
+          
+          // Check for duplicates by user_id (matching the constraint)
+          const { data: conflictingHashes } = await supabase
+            .from('imported_transactions')
+            .select('hash, transaction_date, description, amount')
+            .eq('user_id', user.id)
+            .in('hash', insertHashes);
+          
+          const conflictingHashSet = new Set(conflictingHashes?.map(h => h.hash) || []);
+          const trulyNonDuplicates = nonDuplicateData.filter(d => !conflictingHashSet.has(d.hash));
+          
+          console.log(`Found ${conflictingHashSet.size} conflicting hashes by user_id (constraint check)`);
+          console.log(`Filtering to ${trulyNonDuplicates.length} truly non-duplicate transactions`);
+          
+          if (trulyNonDuplicates.length === 0) {
+            console.log('All transactions are duplicates after user_id check, skipping import');
+            return 0;
+          }
+          
+          // Final retry with truly non-duplicate transactions
+          const { data: finalImportedTxs, error: finalError } = await supabase
+            .from('imported_transactions')
+            .insert(trulyNonDuplicates)
+            .select('id, hash');
+          
+          if (finalError) {
+            console.error('Final retry failed:', finalError);
+            throw finalError;
+          }
+          
+          // Update validTransactions and importedTxs
+          const trulyNonDuplicateTransactions = validTransactions.filter((txn, i) => 
+            !conflictingHashSet.has(nonDuplicateData[i]?.hash)
+          );
+          validTransactions.splice(0, validTransactions.length, ...trulyNonDuplicateTransactions);
+          importedTxs = finalImportedTxs;
+          
+          console.log(`Successfully imported ${importedTxs?.length || 0} non-duplicate transactions after user_id check`);
+        } else {
+          throw retryError;
+        }
       }
 
       // Update validTransactions and importedTxs to only include non-duplicates

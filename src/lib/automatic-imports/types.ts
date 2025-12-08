@@ -66,6 +66,10 @@ export interface QueuedImportBatch {
   date_range: { start: string; end: string };
   created_at: string;
   status: 'pending' | 'reviewing' | 'partially_approved' | 'approved' | 'rejected';
+  target_account_name: string | null;
+  target_account_id: number | null;
+  is_credit_card: boolean;
+  is_historical: boolean | 'mixed';
 }
 
 export interface ImportProviderConfig {

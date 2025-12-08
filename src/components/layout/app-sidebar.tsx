@@ -19,6 +19,7 @@ import {
   Mail,
   Sparkles,
   ChevronDown,
+  Inbox,
 } from "lucide-react"
 
 import {
@@ -54,6 +55,7 @@ const navigationSections = [
       { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
       { label: "Transactions", path: "/transactions", icon: Receipt },
       { label: "Import", path: "/import", icon: Upload },
+      { label: "Import Queue", path: "/imports/queue", icon: Inbox },
       { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
       { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureKey: "income_buffer" },
       { label: "Income", path: "/income", icon: DollarSign },

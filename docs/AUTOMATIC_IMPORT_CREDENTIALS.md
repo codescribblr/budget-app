@@ -243,12 +243,32 @@ Since you're already using Resend for SMTP, this is the easiest option:
    - Use `sandbox` for testing
    - Use `production` for live users
 
-5. **Add to .env.local:**
+5. **Get Client Certificate:**
+   - When you create a Teller project, you'll receive a `teller.zip` file
+   - This contains:
+     - `cert.pem`: Your client certificate
+     - `key.pem`: Your private key
+   - **IMPORTANT:** Keep your private key secure and never commit it to version control
+   - If you lose these files, you can revoke and regenerate them in the Teller Dashboard → Certificates
+
+6. **Add to .env.local:**
    ```
    NEXT_PUBLIC_TELLER_APPLICATION_ID=your-application-id
+   NEXT_PUBLIC_TELLER_ENV=sandbox
    TELLER_WEBHOOK_SECRET=your-webhook-secret
    TELLER_ENV=sandbox
+   TELLER_CLIENT_CERT="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+   TELLER_CLIENT_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
    ```
+   
+   **Note:** You need both `NEXT_PUBLIC_TELLER_ENV` (for client-side Teller Connect) and `TELLER_ENV` (for server-side API calls). They should have the same value.
+   
+   **Note:** For the certificate and key:
+   - Copy the entire contents of `cert.pem` and `key.pem` files
+   - Include the `-----BEGIN CERTIFICATE-----` and `-----END CERTIFICATE-----` lines
+   - Include the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines
+   - Use `\n` for line breaks in the environment variable (or use a multi-line string)
+   - Alternatively, you can store them as files and reference the paths (requires code changes)
 
 ### How It Works:
 

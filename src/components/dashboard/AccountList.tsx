@@ -24,7 +24,9 @@ import { formatCurrency } from '@/lib/utils';
 import type { Account } from '@/lib/types';
 import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
-import { Check, X, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { Check, X, MoreVertical, Edit, Trash2, Wallet, TrendingUp, Banknote } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface AccountListProps {
   accounts: Account[];
@@ -37,6 +39,7 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [accountName, setAccountName] = useState('');
   const [newBalance, setNewBalance] = useState('');
+  const [accountType, setAccountType] = useState<'checking' | 'savings' | 'cash'>('checking');
   const [includeInTotals, setIncludeInTotals] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -54,6 +57,7 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
     const updatedAccount: Account = {
       ...editingAccount,
       balance: parseFloat(newBalance),
+      account_type: accountType,
       include_in_totals: includeInTotals,
     };
     const updatedAccounts = accounts.map(acc => 
@@ -64,6 +68,7 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
     setEditingAccount(null);
     setAccountName('');
     setNewBalance('');
+    setAccountType('checking');
     setIncludeInTotals(true);
 
     try {
@@ -72,6 +77,7 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           balance: parseFloat(newBalance),
+          account_type: accountType,
           include_in_totals: includeInTotals,
         }),
       });
@@ -102,6 +108,7 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
         body: JSON.stringify({
           name: accountName,
           balance: parseFloat(newBalance) || 0,
+          account_type: accountType,
           include_in_totals: includeInTotals,
         }),
       });
@@ -118,6 +125,7 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
       setIsAddDialogOpen(false);
       setAccountName('');
       setNewBalance('');
+      setAccountType('checking');
       setIncludeInTotals(true);
     } catch (error) {
       console.error('Error adding account:', error);
@@ -161,6 +169,7 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
     setEditingAccount(account);
     setAccountName(account.name);
     setNewBalance(account.balance.toString());
+    setAccountType(account.account_type);
     setIncludeInTotals(account.include_in_totals);
     setIsEditDialogOpen(true);
   };
@@ -168,6 +177,7 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
   const openAddDialog = () => {
     setAccountName('');
     setNewBalance('0');
+    setAccountType('checking');
     setIncludeInTotals(true);
     setIsAddDialogOpen(true);
   };
@@ -222,6 +232,21 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
 
   const totalBalance = Array.isArray(accounts) ? accounts.reduce((sum, acc) => sum + acc.balance, 0) : 0;
 
+  const getAccountTypeIcon = (type: 'checking' | 'savings' | 'cash') => {
+    switch (type) {
+      case 'checking':
+        return <Wallet className="h-4 w-4" />;
+      case 'savings':
+        return <TrendingUp className="h-4 w-4" />;
+      case 'cash':
+        return <Banknote className="h-4 w-4" />;
+    }
+  };
+
+  const getAccountTypeLabel = (type: 'checking' | 'savings' | 'cash') => {
+    return type.charAt(0).toUpperCase() + type.slice(1);
+  };
+
   return (
     <>
       <div className="mb-3">
@@ -241,7 +266,21 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
         <TableBody>
           {accounts.map((account) => (
             <TableRow key={account.id}>
-              <TableCell className="font-medium">{account.name}</TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="text-muted-foreground cursor-help">
+                        {getAccountTypeIcon(account.account_type)}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{getAccountTypeLabel(account.account_type)}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <span className="font-medium">{account.name}</span>
+                </div>
+              </TableCell>
               <TableCell className="text-right font-semibold">
                 {editingBalanceId === account.id ? (
                   <div className="flex items-center justify-end gap-1">
@@ -344,6 +383,19 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
                 placeholder="0.00"
               />
             </div>
+            <div>
+              <Label htmlFor="account-type-edit">Account Type</Label>
+              <Select value={accountType} onValueChange={(value: 'checking' | 'savings' | 'cash') => setAccountType(value)}>
+                <SelectTrigger id="account-type-edit">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="checking">Checking</SelectItem>
+                  <SelectItem value="savings">Savings</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex items-center space-x-2">
               <input
                 type="checkbox"
@@ -397,15 +449,28 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
               />
             </div>
             <div>
-              <Label htmlFor="balance">Starting Balance</Label>
+              <Label htmlFor="balance-add">Starting Balance</Label>
               <Input
-                id="balance"
+                id="balance-add"
                 type="number"
                 step="0.01"
                 value={newBalance}
                 onChange={(e) => setNewBalance(e.target.value)}
                 placeholder="0.00"
               />
+            </div>
+            <div>
+              <Label htmlFor="account-type-add">Account Type</Label>
+              <Select value={accountType} onValueChange={(value: 'checking' | 'savings' | 'cash') => setAccountType(value)}>
+                <SelectTrigger id="account-type-add">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="checking">Checking</SelectItem>
+                  <SelectItem value="savings">Savings</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-center space-x-2">
               <input
