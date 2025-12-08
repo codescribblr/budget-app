@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getActiveAccountId } from '@/lib/account-context';
 
 export async function GET() {
   try {
@@ -11,10 +12,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json({ error: 'No active account. Please select an account first.' }, { status: 400 });
+    }
+
     const { data: settings, error } = await supabase
       .from('settings')
       .select('*')
-      .eq('user_id', user.id);
+      .eq('account_id', accountId);
 
     if (error) {
       console.error('Error fetching settings:', error);
@@ -48,6 +54,11 @@ export async function POST(request: Request) {
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
 
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json({ error: 'No active account. Please select an account first.' }, { status: 400 });
+    }
+
     const body = await request.json();
     const { settings } = body;
 
@@ -60,6 +71,7 @@ export async function POST(request: Request) {
       const { error } = await supabase
         .from('settings')
         .upsert({
+          account_id: accountId,
           user_id: user.id,
           key: setting.key,
           value: setting.value,
