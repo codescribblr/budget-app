@@ -35,17 +35,23 @@ export async function PUT(request: Request) {
     };
 
     // Allow updating these fields
+    // Handle account selection: if account is provided (even null), set it and clear credit card
     if (targetAccountId !== undefined) {
       updateData.target_account_id = targetAccountId;
       updateData.target_credit_card_id = null; // Clear credit card if account is set
     }
-    if (targetCreditCardId !== undefined) {
+    // Handle credit card selection: only if credit card is explicitly provided AND account is not being set
+    // This prevents clearing account_id when targetCreditCardId is null but targetAccountId is set
+    if (targetCreditCardId !== undefined && targetAccountId === undefined) {
       updateData.target_credit_card_id = targetCreditCardId;
       updateData.target_account_id = null; // Clear account if credit card is set
     }
     if (isHistorical !== undefined) {
       updateData.is_historical = isHistorical;
     }
+    
+    // Log for debugging
+    console.log('Updating batch:', { batchId, updateData, body: { targetAccountId, targetCreditCardId, isHistorical } });
 
     // Update all queued imports in this batch
     const { data, error } = await supabase

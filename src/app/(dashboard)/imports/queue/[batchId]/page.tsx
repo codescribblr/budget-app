@@ -246,7 +246,25 @@ export default function BatchReviewPage() {
         }
       }
 
-      setTransactions(processedTransactions);
+      // Sort transactions by date descending (newest first)
+      const sortedTransactions = [...processedTransactions].sort((a, b) => {
+        // Compare dates (YYYY-MM-DD format sorts correctly as strings)
+        const dateComparison = b.date.localeCompare(a.date);
+        // If same date, maintain original order (by ID if available)
+        if (dateComparison === 0) {
+          // Try to extract numeric ID from string ID (format: "queued-123")
+          const idA = typeof a.id === 'string' && a.id.startsWith('queued-') 
+            ? parseInt(a.id.replace('queued-', '')) || 0 
+            : 0;
+          const idB = typeof b.id === 'string' && b.id.startsWith('queued-')
+            ? parseInt(b.id.replace('queued-', '')) || 0
+            : 0;
+          return idB - idA; // Descending by ID as tiebreaker
+        }
+        return dateComparison;
+      });
+
+      setTransactions(sortedTransactions);
       setBatchInfo(batchInfo);
       setLoading(false);
     } catch (err: any) {
@@ -279,7 +297,25 @@ export default function BatchReviewPage() {
         }
       }
       
-      setTransactions(processedTransactions);
+      // Sort transactions by date descending (newest first)
+      const sortedTransactions = [...processedTransactions].sort((a, b) => {
+        // Compare dates (YYYY-MM-DD format sorts correctly as strings)
+        const dateComparison = b.date.localeCompare(a.date);
+        // If same date, maintain original order (by ID if available)
+        if (dateComparison === 0) {
+          // Try to extract numeric ID from string ID (format: "queued-123")
+          const idA = typeof a.id === 'string' && a.id.startsWith('queued-') 
+            ? parseInt(a.id.replace('queued-', '')) || 0 
+            : 0;
+          const idB = typeof b.id === 'string' && b.id.startsWith('queued-')
+            ? parseInt(b.id.replace('queued-', '')) || 0
+            : 0;
+          return idB - idA; // Descending by ID as tiebreaker
+        }
+        return dateComparison;
+      });
+      
+      setTransactions(sortedTransactions);
       setBatchInfo(batchInfo);
       setLoading(false);
     } catch (err: any) {

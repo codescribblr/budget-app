@@ -27,6 +27,84 @@ import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'ignore';
 
+/**
+ * Parse amount string to number (helper function)
+ */
+function parseAmount(amountStr: string): number {
+  if (!amountStr) return 0;
+
+  let cleaned = amountStr.trim();
+
+  // Handle negative amounts in parentheses: (123.45)
+  if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
+    cleaned = '-' + cleaned.slice(1, -1);
+  }
+
+  // Remove currency symbols and spaces
+  cleaned = cleaned.replace(/[$,\s]/g, '');
+
+  // Handle European format
+  if (/^\d{1,3}(\.\d{3})+(,\d{2})?$/.test(cleaned)) {
+    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+  }
+
+  const amount = parseFloat(cleaned);
+  return isNaN(amount) ? 0 : amount;
+}
+
+/**
+ * Detect amount sign convention from CSV data
+ * Returns 'positive_is_income' if most amounts are negative (checking account style)
+ * Returns 'positive_is_expense' if most amounts are positive (credit card style)
+ */
+function detectAmountSignConvention(
+  data: string[][],
+  amountColumn: number | null,
+  hasHeaders: boolean
+): 'positive_is_expense' | 'positive_is_income' {
+  if (amountColumn === null) {
+    return 'positive_is_expense'; // Default fallback
+  }
+
+  const startRow = hasHeaders ? 1 : 0;
+  const sampleSize = Math.min(20, data.length - startRow); // Sample up to 20 rows
+  let negativeCount = 0;
+  let positiveCount = 0;
+  let validAmounts = 0;
+
+  for (let i = startRow; i < startRow + sampleSize && i < data.length; i++) {
+    const row = data[i];
+    if (!row || row.length <= amountColumn) continue;
+
+    const amountStr = row[amountColumn]?.trim();
+    if (!amountStr) continue;
+
+    const amount = parseAmount(amountStr);
+    if (amount === 0 || isNaN(amount)) continue;
+
+    validAmounts++;
+    if (amount < 0) {
+      negativeCount++;
+    } else {
+      positiveCount++;
+    }
+  }
+
+  // Need at least 3 valid amounts to make a determination
+  if (validAmounts < 3) {
+    return 'positive_is_expense'; // Default fallback
+  }
+
+  // If most amounts are negative, it's likely a checking account (negative = expense)
+  // So convention should be positive_is_income (positive = income, negative = expense)
+  if (negativeCount > positiveCount * 1.5) {
+    return 'positive_is_income';
+  }
+
+  // Otherwise default to positive_is_expense (credit card style)
+  return 'positive_is_expense';
+}
+
 export default function MapColumnsPage() {
   const router = useRouter();
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
@@ -113,6 +191,16 @@ export default function MapColumnsPage() {
       }
 
       setMappings(initialMappings);
+
+      // Detect amount sign convention from the data
+      if (analysisData.amountColumn !== null) {
+        const detectedConvention = detectAmountSignConvention(
+          csvData,
+          analysisData.amountColumn,
+          analysisData.hasHeaders
+        );
+        setAmountSignConvention(detectedConvention);
+      }
     } catch (err) {
       console.error('Error loading CSV data:', err);
       router.push('/import');

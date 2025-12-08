@@ -35,6 +35,59 @@ export async function parseCSVFile(
 }
 
 /**
+ * Detect amount sign convention from CSV data
+ * Returns 'positive_is_income' if most amounts are negative (checking account style)
+ * Returns 'positive_is_expense' if most amounts are positive (credit card style)
+ */
+function detectAmountSignConvention(
+  data: string[][],
+  amountColumn: number | null,
+  hasHeaders: boolean
+): 'positive_is_expense' | 'positive_is_income' {
+  if (amountColumn === null) {
+    return 'positive_is_expense'; // Default fallback
+  }
+
+  const startRow = hasHeaders ? 1 : 0;
+  const sampleSize = Math.min(20, data.length - startRow); // Sample up to 20 rows
+  let negativeCount = 0;
+  let positiveCount = 0;
+  let validAmounts = 0;
+
+  for (let i = startRow; i < startRow + sampleSize && i < data.length; i++) {
+    const row = data[i];
+    if (!row || row.length <= amountColumn) continue;
+
+    const amountStr = row[amountColumn]?.trim();
+    if (!amountStr) continue;
+
+    const amount = parseAmount(amountStr);
+    if (amount === 0 || isNaN(amount)) continue;
+
+    validAmounts++;
+    if (amount < 0) {
+      negativeCount++;
+    } else {
+      positiveCount++;
+    }
+  }
+
+  // Need at least 3 valid amounts to make a determination
+  if (validAmounts < 3) {
+    return 'positive_is_expense'; // Default fallback
+  }
+
+  // If most amounts are negative, it's likely a checking account (negative = expense)
+  // So convention should be positive_is_income (positive = income, negative = expense)
+  if (negativeCount > positiveCount * 1.5) {
+    return 'positive_is_income';
+  }
+
+  // Otherwise default to positive_is_expense (credit card style)
+  return 'positive_is_expense';
+}
+
+/**
  * Process CSV data with intelligent detection
  */
 async function processCSVData(
@@ -71,6 +124,13 @@ async function processCSVData(
 
   // If no template found, use analysis results
   if (!mapping) {
+    // Detect amount sign convention from the data
+    const detectedConvention = detectAmountSignConvention(
+      data,
+      analysis.amountColumn,
+      analysis.hasHeaders
+    );
+
     mapping = {
       dateColumn: analysis.dateColumn,
       amountColumn: analysis.amountColumn,
@@ -78,7 +138,7 @@ async function processCSVData(
       debitColumn: analysis.debitColumn,
       creditColumn: analysis.creditColumn,
       transactionTypeColumn: null,
-      amountSignConvention: 'positive_is_expense',
+      amountSignConvention: detectedConvention,
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
     };
@@ -117,6 +177,8 @@ async function processCSVData(
 
 /**
  * Determine transaction type from column value or fallback to amount sign
+ * Note: The fallback assumes positive_is_expense convention (positive = expense, negative = income)
+ * This is a conservative fallback - the actual convention should be determined by detectAmountSignConvention
  */
 function determineTransactionTypeFromColumn(
   transactionTypeValue: string | null,
@@ -132,7 +194,10 @@ function determineTransactionTypeFromColumn(
     }
   }
   
-  // Fallback to amount sign if column value unclear
+  // Fallback: This assumes positive_is_expense convention
+  // For checking accounts (where negative = expense), this fallback would be wrong
+  // But this function is only used with separate_column convention where the column
+  // should contain the type, so this fallback should rarely be hit
   return fallbackAmount >= 0 ? 'expense' : 'income';
 }
 

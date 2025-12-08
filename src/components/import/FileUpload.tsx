@@ -276,8 +276,9 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       const saveResult = await saveResponse.json();
       setQueuedBatchId(saveResult.batchId);
 
-      // Store processed transactions and pause for user to review options
-      setProcessedTransactions(processedTransactions);
+      // Store processed transactions with defaults applied (including account_id)
+      // This ensures the preview shows the correct account
+      setProcessedTransactions(transactionsWithDefaults);
       setProcessedFileName(file.name);
       setIsProcessing(false); // Reset processing state so button is enabled
       setProcessingComplete(true);
@@ -372,6 +373,13 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
     }
 
     // If user changed account/historical settings, update the queued imports
+    console.log('Updating batch with settings:', {
+      batchId: queuedBatchId,
+      targetAccountId: defaultAccountId,
+      targetCreditCardId: defaultCreditCardId,
+      isHistorical: isHistorical,
+    });
+    
     try {
       const updateResponse = await fetch('/api/automatic-imports/queue/update-batch', {
         method: 'PUT',
@@ -385,16 +393,22 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       });
 
       if (!updateResponse.ok) {
-        console.warn('Failed to update batch settings, continuing anyway');
+        const errorData = await updateResponse.json().catch(() => ({}));
+        console.warn('Failed to update batch settings:', errorData);
         // Continue anyway - user can edit individual transactions in preview
+      } else {
+        const result = await updateResponse.json();
+        console.log('Batch updated successfully:', result);
+        // Wait a bit to ensure database update is committed and visible
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
     } catch (err) {
       console.error('Error updating queued imports:', err);
       // Continue anyway - user can edit in preview
     }
 
-    // Navigate to the queue preview page
-    router.push(`/imports/queue/${queuedBatchId}`);
+    // Navigate to the queue preview page with timestamp to force refresh
+    router.push(`/imports/queue/${queuedBatchId}?t=${Date.now()}`);
   };
 
   return (
@@ -596,8 +610,9 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                   const saveResult = await saveResponse.json();
                   setQueuedBatchId(saveResult.batchId);
 
-                  // Store processed transactions and pause for user to review options
-                  setProcessedTransactions(processedTransactions);
+                  // Store processed transactions with defaults applied (including account_id)
+                  // This ensures the preview shows the correct account
+                  setProcessedTransactions(transactionsWithDefaults);
                   setProcessedFileName(pendingFile!.name);
                   setIsProcessing(false); // Reset processing state so button is enabled
                   setProcessingComplete(true);

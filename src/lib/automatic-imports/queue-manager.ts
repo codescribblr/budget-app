@@ -162,20 +162,44 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     .eq('account_id', accountId)
     .in('hash', Array.from(seenInBatch));
 
-  // Check against queued_imports (including same batch - in case of retry)
-  // Also check for rejected/deleted transactions to prevent re-importing them
+  // Check against queued_imports (get all statuses to check transaction_type)
   const { data: existingQueued } = await supabase
     .from('queued_imports')
-    .select('hash, source_batch_id, status')
+    .select('hash, source_batch_id, status, transaction_type')
     .eq('account_id', accountId)
     .in('hash', Array.from(seenInBatch));
 
-  // Build set of existing hashes (from imported or queued, including same batch)
-  // Also include rejected transactions to prevent re-importing deleted items
-  const existingHashes = new Set([
-    ...(existingImported?.map(t => t.hash) || []),
-    ...(existingQueued?.map(t => t.hash) || []), // Includes all statuses (pending, reviewing, approved, rejected, imported)
-  ]);
+  // Build a map of hash -> { status, transaction_type } for queued imports
+  const queuedHashInfo = new Map<string, { status: string; transaction_type: string }>();
+  existingQueued?.forEach(t => {
+    queuedHashInfo.set(t.hash, { status: t.status, transaction_type: t.transaction_type });
+  });
+
+  // Build set of existing hashes (from imported or queued)
+  // Exclude hashes where:
+  // 1. Status is 'rejected' (allow re-importing rejected transactions)
+  // 2. Transaction_type differs (allow re-importing with correct type after convention fix)
+  const existingHashes = new Set<string>();
+  
+  // Add imported transaction hashes (can't check transaction_type here, so treat as duplicates)
+  existingImported?.forEach(t => {
+    existingHashes.add(t.hash);
+  });
+  
+  // Add queued import hashes, but exclude rejected or different transaction_type
+  deduplicatedTransactions.forEach(t => {
+    const queuedInfo = queuedHashInfo.get(t.hash);
+    if (queuedInfo) {
+      // Allow re-import if rejected or transaction_type differs
+      const isRejected = queuedInfo.status === 'rejected';
+      const typeDiffers = queuedInfo.transaction_type !== t.transaction_type;
+      
+      // Only mark as duplicate if not rejected AND transaction_type matches
+      if (!isRejected && !typeDiffers) {
+        existingHashes.add(t.hash);
+      }
+    }
+  });
 
   // Filter out duplicates (both within batch and across batches)
   const newTransactions = deduplicatedTransactions.filter(t => !existingHashes.has(t.hash));
@@ -237,7 +261,7 @@ export async function getQueuedImports(options?: {
     .from('queued_imports')
     .select('*')
     .eq('account_id', accountId)
-    .order('created_at', { ascending: false });
+    .order('transaction_date', { ascending: false });
 
   if (options?.status) {
     query = query.eq('status', options.status);
