@@ -55,7 +55,6 @@ export async function POST() {
     ];
 
     const now = new Date().toISOString();
-    const now = new Date().toISOString();
     const featureFlagsToInsert = premiumFeatures.map(featureName => ({
       account_id: accountId,
       user_id: user.id, // Include for backwards compatibility (can be null after migration)
