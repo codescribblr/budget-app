@@ -63,7 +63,7 @@ export function AIChatInterface({
       setCurrentConversationId(null);
       clearMessages();
     }
-    previousConversationIdRef.current = conversationId;
+    previousConversationIdRef.current = conversationId || null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, isCreatingConversation]);
 
