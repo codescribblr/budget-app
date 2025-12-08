@@ -57,8 +57,9 @@ export function AccountSelectionPage() {
       if (response.ok) {
         // Small delay to ensure cookie is set
         await new Promise(resolve => setTimeout(resolve, 100))
-        router.refresh()
-        router.push('/dashboard')
+        // Full page reload to ensure all data, features, permissions, and contexts
+        // are refreshed for the new account
+        window.location.href = '/dashboard'
       } else {
         const data = await response.json()
         toast.error(data.error || 'Failed to select account')

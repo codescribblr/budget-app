@@ -102,8 +102,9 @@ export default function AcceptInvitationPage() {
         }
         
         setLoading(false)
-        router.push('/dashboard')
-        router.refresh()
+        // Full page reload to ensure all data, features, permissions, and contexts
+        // are refreshed for the new account
+        window.location.href = '/dashboard'
         return
       }
       
@@ -138,10 +139,10 @@ export default function AcceptInvitationPage() {
       setSuccess(true)
       setInvitation(data)
 
-      // Redirect to dashboard after 2 seconds
+      // Redirect to dashboard after 2 seconds with full page reload
+      // to ensure all data, features, permissions, and contexts are refreshed
       setTimeout(() => {
-        router.push('/dashboard')
-        router.refresh()
+        window.location.href = '/dashboard'
       }, 2000)
     } catch (err) {
       console.error('Error accepting invitation:', err)

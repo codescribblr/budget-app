@@ -80,8 +80,15 @@ export function AccountSwitcher() {
       })
 
       if (response.ok) {
-        setActiveAccountId(accountId)
-        router.refresh()
+        // Full page reload to ensure all data, features, permissions, and contexts
+        // are refreshed for the new account. This ensures:
+        // - All server-side data is re-fetched
+        // - All client-side state is reset
+        // - All hooks and contexts re-initialize
+        // - Permissions are re-checked
+        // - Subscription status is re-fetched
+        // - Feature flags are re-evaluated
+        window.location.reload()
       }
     } catch (error) {
       console.error('Error switching budget account:', error)
@@ -106,7 +113,9 @@ export function AccountSwitcher() {
         setNewAccountName("")
         setCreateError(null)
         await loadAccounts()
-        // Switch to new account
+        // Switch to new account - this will trigger a full page reload
+        // via handleSwitchAccount to ensure all data, features, permissions,
+        // and contexts are refreshed for the new account
         if (data.account?.id) {
           await handleSwitchAccount(data.account.id)
         }

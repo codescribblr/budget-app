@@ -324,5 +324,139 @@ export const HELP_CONTENT = {
       },
     ],
   },
+
+  automatic_imports: {
+    title: 'Automatic Imports',
+    tooltip: 'Set up automatic transaction imports from your bank accounts via email forwarding or API integrations.',
+    description: 'Automatic Imports allows you to connect your bank accounts and automatically import transactions without manual file uploads.',
+    sections: [
+      {
+        title: 'What is Automatic Imports?',
+        content: (
+          <>
+            <p>
+              Automatic Imports eliminates the need to manually download and upload transaction files. 
+              Instead, transactions are automatically fetched from your bank accounts and queued for review before being added to your budget.
+            </p>
+            <p className="mt-2">
+              <strong>Two Integration Methods:</strong>
+            </p>
+            <ul className="list-disc list-inside space-y-1 mt-1">
+              <li><strong>Email Forwarding:</strong> Forward bank statements or transaction emails to a special address</li>
+              <li><strong>API Integration:</strong> Connect directly via services like Teller for real-time transaction sync</li>
+            </ul>
+          </>
+        ),
+      },
+      {
+        title: 'How It Works',
+        content: (
+          <ol className="list-decimal list-inside space-y-2">
+            <li>
+              <strong>Set Up Integration:</strong> Choose email forwarding or API integration (like Teller) 
+              and configure which accounts to import from
+            </li>
+            <li>
+              <strong>Transactions Are Queued:</strong> When new transactions are detected, they're added to 
+              the import queue for review - nothing is automatically imported
+            </li>
+            <li>
+              <strong>Review & Approve:</strong> Go to the Import Queue page to review transactions, assign categories, 
+              and approve them for import
+            </li>
+            <li>
+              <strong>Automatic Processing:</strong> Transactions are automatically categorized using your merchant rules 
+              and AI categorization (if enabled)
+            </li>
+          </ol>
+        ),
+      },
+      {
+        title: 'Email Forwarding Setup',
+        content: (
+          <div className="space-y-2">
+            <p>
+              <strong>Step 1:</strong> Create an email import setup in Settings → Automatic Imports
+            </p>
+            <p>
+              <strong>Step 2:</strong> You'll receive a unique email address (e.g., import-abc123@yourdomain.com)
+            </p>
+            <p>
+              <strong>Step 3:</strong> Forward transaction emails or bank statements to this address
+            </p>
+            <p>
+              <strong>Step 4:</strong> The system automatically extracts transactions from CSV or PDF attachments
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Supported formats: CSV files, PDF statements from major banks, and transaction emails with attachments
+            </p>
+          </div>
+        ),
+      },
+      {
+        title: 'API Integration (Teller)',
+        content: (
+          <div className="space-y-2">
+            <p>
+              <strong>Teller Integration:</strong> Connect your bank accounts directly via Teller's secure API
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Real-time transaction sync (no email forwarding needed)</li>
+              <li>Supports 11,000+ banks and credit unions</li>
+              <li>Secure read-only access (we can't move money)</li>
+              <li>Automatic account detection and mapping</li>
+            </ul>
+            <p className="mt-2">
+              <strong>Setup:</strong> Click "Connect Bank Account" and follow the Teller authentication flow. 
+              You'll be redirected to your bank's login page for secure authentication.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Note: Teller may charge a small fee per account connection. Check their pricing for details.
+            </p>
+          </div>
+        ),
+      },
+      {
+        title: 'Transaction Queue & Review',
+        content: (
+          <div className="space-y-2">
+            <p>
+              All imported transactions go through a review queue before being added to your budget:
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Batch Review:</strong> Transactions are grouped by import source and date range</li>
+              <li><strong>Categorization:</strong> Transactions are pre-categorized using merchant rules and AI</li>
+              <li><strong>Account Mapping:</strong> Transactions are mapped to your budget accounts or credit cards</li>
+              <li><strong>Approval Required:</strong> You must review and approve batches before they're imported</li>
+              <li><strong>Edit Before Import:</strong> Change categories, amounts, dates, or accounts before approving</li>
+            </ul>
+            <p className="mt-2 text-sm text-muted-foreground">
+              This two-step process ensures accuracy and prevents incorrect transactions from being added to your budget.
+            </p>
+          </div>
+        ),
+      },
+      {
+        title: 'Security & Privacy',
+        content: (
+          <div className="space-y-2">
+            <p>
+              Your financial data security is our top priority:
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Email:</strong> Unique import addresses are account-specific and encrypted</li>
+              <li><strong>API Integrations:</strong> Use bank-level security (OAuth) - we never see your login credentials</li>
+              <li><strong>Read-Only Access:</strong> Integrations can only read transactions, never move money</li>
+              <li><strong>Data Storage:</strong> All transaction data is encrypted at rest</li>
+              <li><strong>You Control Everything:</strong> You can disconnect integrations or delete import setups at any time</li>
+            </ul>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Automatic Imports requires a Premium subscription. You can disable this feature at any time in Settings → Features.
+            </p>
+          </div>
+        ),
+      },
+    ],
+  },
 };
 

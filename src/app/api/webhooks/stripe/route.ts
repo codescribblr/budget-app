@@ -105,6 +105,8 @@ export async function POST(request: Request) {
           'goals',
           'loans',
           'advanced_reporting',
+          'ai_chat',
+          'automatic_imports',
         ];
 
         const now = new Date().toISOString();

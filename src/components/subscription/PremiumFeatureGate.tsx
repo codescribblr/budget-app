@@ -32,6 +32,7 @@ export function PremiumFeatureGate({
     'AI Features': 'ai_chat',
     'AI Chat Assistant': 'ai_chat', // Backward compatibility
     'Income Buffer': 'income_buffer',
+    'Automatic Imports': 'automatic_imports',
   };
 
   // Use provided featureKey or try to map from featureName

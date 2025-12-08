@@ -8,6 +8,7 @@ import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import ImportSetupCard from '@/components/automatic-imports/ImportSetupCard';
 import IntegrationSelector from '@/components/automatic-imports/IntegrationSelector';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { PremiumFeatureGate } from '@/components/subscription/PremiumFeatureGate';
 
 interface AutomaticImportSetup {
   id: number;
@@ -74,53 +75,58 @@ export default function AutomaticImportsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Automatic Imports</h1>
-          <p className="text-muted-foreground mt-2">
-            Set up automatic transaction imports from your bank accounts. Transactions will be queued for review before import.
-          </p>
+    <PremiumFeatureGate
+      featureName="Automatic Imports"
+      featureDescription="Set up automatic transaction imports from your bank accounts. Connect via email forwarding or API integrations like Teller."
+    >
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Automatic Imports</h1>
+            <p className="text-muted-foreground mt-2">
+              Set up automatic transaction imports from your bank accounts. Transactions will be queued for review before import.
+            </p>
+          </div>
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Import Setup
+          </Button>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Import Setup
-        </Button>
+
+        {setups.length === 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>No Import Setups</CardTitle>
+              <CardDescription>
+                Get started by creating your first automatic import setup. You can use email forwarding or connect via API integrations.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => setShowCreateDialog(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create First Setup
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {setups.map((setup) => (
+              <ImportSetupCard
+                key={setup.id}
+                setup={setup}
+                onDeleted={handleSetupDeleted}
+                onUpdated={fetchSetups}
+              />
+            ))}
+          </div>
+        )}
+
+        <IntegrationSelector
+          open={showCreateDialog}
+          onOpenChange={setShowCreateDialog}
+          onCreated={handleSetupCreated}
+        />
       </div>
-
-      {setups.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>No Import Setups</CardTitle>
-            <CardDescription>
-              Get started by creating your first automatic import setup. You can use email forwarding or connect via API integrations.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => setShowCreateDialog(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create First Setup
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4">
-          {setups.map((setup) => (
-            <ImportSetupCard
-              key={setup.id}
-              setup={setup}
-              onDeleted={handleSetupDeleted}
-              onUpdated={fetchSetups}
-            />
-          ))}
-        </div>
-      )}
-
-      <IntegrationSelector
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
-        onCreated={handleSetupCreated}
-      />
-    </div>
+    </PremiumFeatureGate>
   );
 }

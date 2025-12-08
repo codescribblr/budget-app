@@ -80,6 +80,14 @@ const FEATURES = {
     dataLossWarning: false,
     requiresPremium: true,
   },
+  automatic_imports: {
+    name: 'Automatic Imports',
+    description: 'Set up automatic transaction imports from your bank accounts. Connect via email forwarding or API integrations like Teller. Transactions are queued for review before import.',
+    level: 'intermediate',
+    dependencies: [],
+    dataLossWarning: false,
+    requiresPremium: true,
+  },
 } as const;
 
 export type FeatureName = keyof typeof FEATURES;
