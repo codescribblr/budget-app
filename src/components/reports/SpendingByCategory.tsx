@@ -20,7 +20,13 @@ export default function SpendingByCategory({ transactions, categories, onCategor
   const categorySpending = new Map<number, number>();
 
   transactions.forEach(transaction => {
+    if (!transaction.splits || transaction.splits.length === 0) {
+      return; // Skip transactions without splits
+    }
     transaction.splits.forEach(split => {
+      if (!split.category_id) {
+        return; // Skip splits without category_id
+      }
       const current = categorySpending.get(split.category_id) || 0;
       const amount = transaction.transaction_type === 'expense'
         ? split.amount      // Expenses add to spending
@@ -95,11 +101,54 @@ export default function SpendingByCategory({ transactions, categories, onCategor
   }
 
   if (categoriesWithSpending.length === 0) {
+    // Check if there are any transactions at all
+    const hasTransactions = transactions.length > 0;
+    
+    // Check for non-system transactions more accurately
+    // First, get all unique category IDs from transaction splits
+    const transactionCategoryIds = new Set<number>();
+    transactions.forEach(t => {
+      t.splits.forEach(split => {
+        if (split.category_id) {
+          transactionCategoryIds.add(split.category_id);
+        }
+      });
+    });
+    
+    // Then check if any of those categories exist and are non-system
+    const hasNonSystemTransactions = Array.from(transactionCategoryIds).some(categoryId => {
+      const category = categories.find(c => c.id === categoryId);
+      return category && !category.is_system;
+    });
+    
+    // Also check what categories actually have spending calculated
+    const categoriesWithAnySpending = Array.from(categorySpending.entries())
+      .filter(([categoryId, spent]) => spent !== 0)
+      .map(([categoryId, spent]) => {
+        const category = categories.find(c => c.id === categoryId);
+        return { categoryId, spent, categoryName: category?.name || 'Unknown', isSystem: category?.is_system || false };
+      });
+    
+    let message = 'No transactions in selected period';
+    if (hasTransactions) {
+      if (categories.length === 0) {
+        message = 'Categories not loaded yet';
+      } else if (!hasNonSystemTransactions && transactionCategoryIds.size > 0) {
+        message = `All ${transactionCategoryIds.size} transaction categories are system categories`;
+      } else if (categoriesWithAnySpending.length === 0) {
+        message = 'Transactions exist but all have zero spending (income equals expenses)';
+      } else if (categoriesWithAnySpending.every(cat => cat.spent <= 0)) {
+        message = 'All transactions in selected period are income (no expenses)';
+      } else {
+        message = 'No categories with positive spending in selected period';
+      }
+    }
+    
     return (
       <Card>
         <CardHeader>
           <CardTitle>Spending by Category</CardTitle>
-          <CardDescription>No transactions in selected period</CardDescription>
+          <CardDescription>{message}</CardDescription>
         </CardHeader>
       </Card>
     );

@@ -23,16 +23,26 @@ import type { TransactionWithSplits, Category } from '@/lib/types';
 import EditTransactionDialog from './EditTransactionDialog';
 import { toast } from 'sonner';
 import { parseLocalDate } from '@/lib/date-utils';
-import { MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { MoreVertical, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
 
 interface TransactionListProps {
   transactions: TransactionWithSplits[];
   categories: Category[];
   onUpdate: () => void;
+  sortBy?: 'date' | 'description' | 'merchant' | 'amount';
+  sortDirection?: 'asc' | 'desc';
+  onSort?: (column: 'date' | 'description' | 'merchant' | 'amount') => void;
 }
 
-export default function TransactionList({ transactions, categories, onUpdate }: TransactionListProps) {
+export default function TransactionList({ 
+  transactions, 
+  categories, 
+  onUpdate,
+  sortBy = 'date',
+  sortDirection = 'desc',
+  onSort
+}: TransactionListProps) {
   const [editingTransaction, setEditingTransaction] = useState<TransactionWithSplits | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -152,12 +162,76 @@ export default function TransactionList({ transactions, categories, onUpdate }: 
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-20">Date</TableHead>
-              <TableHead className="min-w-[200px]">Description</TableHead>
-              <TableHead className="w-32">Merchant</TableHead>
+              <TableHead className="w-20">
+                <button
+                  onClick={() => onSort?.('date')}
+                  className="flex items-center gap-1 hover:text-foreground transition-colors"
+                >
+                  Date
+                  {sortBy === 'date' ? (
+                    sortDirection === 'asc' ? (
+                      <ArrowUp className="h-4 w-4" />
+                    ) : (
+                      <ArrowDown className="h-4 w-4" />
+                    )
+                  ) : (
+                    <ArrowUpDown className="h-4 w-4 opacity-50" />
+                  )}
+                </button>
+              </TableHead>
+              <TableHead className="min-w-[200px]">
+                <button
+                  onClick={() => onSort?.('description')}
+                  className="flex items-center gap-1 hover:text-foreground transition-colors"
+                >
+                  Description
+                  {sortBy === 'description' ? (
+                    sortDirection === 'asc' ? (
+                      <ArrowUp className="h-4 w-4" />
+                    ) : (
+                      <ArrowDown className="h-4 w-4" />
+                    )
+                  ) : (
+                    <ArrowUpDown className="h-4 w-4 opacity-50" />
+                  )}
+                </button>
+              </TableHead>
+              <TableHead className="w-32">
+                <button
+                  onClick={() => onSort?.('merchant')}
+                  className="flex items-center gap-1 hover:text-foreground transition-colors"
+                >
+                  Merchant
+                  {sortBy === 'merchant' ? (
+                    sortDirection === 'asc' ? (
+                      <ArrowUp className="h-4 w-4" />
+                    ) : (
+                      <ArrowDown className="h-4 w-4" />
+                    )
+                  ) : (
+                    <ArrowUpDown className="h-4 w-4 opacity-50" />
+                  )}
+                </button>
+              </TableHead>
               <TableHead className="min-w-[150px]">Categories</TableHead>
               <TableHead className="w-32">Account</TableHead>
-              <TableHead className="text-right w-24">Amount</TableHead>
+              <TableHead className="text-right w-24">
+                <button
+                  onClick={() => onSort?.('amount')}
+                  className="flex items-center justify-end gap-1 ml-auto hover:text-foreground transition-colors"
+                >
+                  Amount
+                  {sortBy === 'amount' ? (
+                    sortDirection === 'asc' ? (
+                      <ArrowUp className="h-4 w-4" />
+                    ) : (
+                      <ArrowDown className="h-4 w-4" />
+                    )
+                  ) : (
+                    <ArrowUpDown className="h-4 w-4 opacity-50" />
+                  )}
+                </button>
+              </TableHead>
               <TableHead className="text-right w-32">Actions</TableHead>
             </TableRow>
           </TableHeader>

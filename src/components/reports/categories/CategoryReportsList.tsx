@@ -22,6 +22,7 @@ interface CategoryStats {
   variance: number;
   ytdSpent?: number; // For accumulation categories
   annualTarget?: number; // For accumulation categories
+  ytdBudget?: number; // For monthly_expense categories (YTD budget)
 }
 
 export default function CategoryReportsList() {
@@ -115,15 +116,30 @@ export default function CategoryReportsList() {
           averageAmount = transactionCount > 0 ? totalSpent / transactionCount : 0;
         }
         
-        const variance = monthlyBudget - totalSpent;
-
-        // For accumulation categories, calculate YTD spent and target
+        // Calculate variance based on category type
+        let variance: number;
         let ytdSpent: number | undefined;
         let annualTarget: number | undefined;
+        let ytdBudget: number | undefined;
 
-        if (categoryTypesEnabled && category.category_type === 'accumulation') {
+        if (categoryTypesEnabled && category.category_type === 'monthly_expense') {
+          // For monthly_expense: Compare YTD spending to YTD budget
+          ytdBudget = monthlyBudget * currentMonth;
+          variance = ytdBudget - totalSpent;
+        } else if (categoryTypesEnabled && category.category_type === 'accumulation') {
+          // For accumulation: Compare YTD spent to annual target
           annualTarget = category.annual_target || (monthlyBudget * 12);
           ytdSpent = totalSpent; // Already calculated as YTD above
+          variance = annualTarget - ytdSpent; // Variance from annual target
+        } else if (categoryTypesEnabled && category.category_type === 'target_balance') {
+          // For target_balance: Compare current balance to target balance
+          const targetBalance = category.target_balance || 0;
+          const currentBalance = category.current_balance || 0;
+          variance = targetBalance - currentBalance;
+        } else {
+          // Fallback for categories without type: Compare YTD spending to YTD budget
+          ytdBudget = monthlyBudget * currentMonth;
+          variance = ytdBudget - totalSpent;
         }
 
         stats.push({
@@ -137,6 +153,7 @@ export default function CategoryReportsList() {
           variance,
           ytdSpent,
           annualTarget,
+          ytdBudget,
         });
       });
 
@@ -223,12 +240,26 @@ export default function CategoryReportsList() {
                       <span className="text-xs font-normal text-muted-foreground">(per month/year)</span>
                     </div>
                   </TableHead>
-                  {categoryTypesEnabled && (
-                    <>
-                      <TableHead className="text-right">Budget</TableHead>
-                      <TableHead className="text-right">Variance</TableHead>
-                    </>
-                  )}
+                    {categoryTypesEnabled && (
+                      <>
+                        <TableHead className="text-right">
+                          <div className="flex flex-col">
+                            <span>Budget</span>
+                            <span className="text-xs font-normal text-muted-foreground">
+                              (Period)
+                            </span>
+                          </div>
+                        </TableHead>
+                        <TableHead className="text-right">
+                          <div className="flex flex-col">
+                            <span>Variance</span>
+                            <span className="text-xs font-normal text-muted-foreground">
+                              (vs Budget)
+                            </span>
+                          </div>
+                        </TableHead>
+                      </>
+                    )}
                   <TableHead className="text-right">Balance</TableHead>
                   <TableHead className="text-right">Last Transaction</TableHead>
                 </TableRow>
@@ -271,6 +302,8 @@ export default function CategoryReportsList() {
                         <TableCell className="text-right text-muted-foreground">
                           {stat.category.category_type === 'accumulation' && stat.annualTarget
                             ? formatCurrency(stat.annualTarget)
+                            : stat.category.category_type === 'monthly_expense' && stat.ytdBudget !== undefined
+                            ? formatCurrency(stat.ytdBudget)
                             : formatCurrency(stat.monthlyBudget)}
                         </TableCell>
                         <TableCell
@@ -279,7 +312,7 @@ export default function CategoryReportsList() {
                           }`}
                         >
                           {stat.category.category_type === 'accumulation' && stat.annualTarget && stat.ytdSpent !== undefined
-                            ? `${((stat.ytdSpent / stat.annualTarget) * 100).toFixed(0)}%`
+                            ? formatCurrency(stat.variance)
                             : formatCurrency(stat.variance)}
                         </TableCell>
                       </>

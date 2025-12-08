@@ -574,21 +574,38 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert transaction splits (batch with remapped IDs)
   if (backupData.transaction_splits && backupData.transaction_splits.length > 0) {
-    const transactionSplitsToInsert = backupData.transaction_splits.map(({ id, transaction_id, category_id, transactions, ...split }) => ({
-      ...split,
-      transaction_id: transaction_id ? (transactionIdMap.get(transaction_id) || null) : null,
-      category_id: category_id ? (categoryIdMap.get(category_id) || null) : null,
-    }));
+    const transactionSplitsToInsert = backupData.transaction_splits
+      .map(({ id, transaction_id, category_id, transactions, ...split }) => {
+        const newTransactionId = transaction_id ? (transactionIdMap.get(transaction_id) || null) : null;
+        const newCategoryId = category_id ? (categoryIdMap.get(category_id) || null) : null;
+        return {
+          ...split,
+          transaction_id: newTransactionId,
+          category_id: newCategoryId,
+        };
+      })
+      .filter(split => {
+        // Only include splits that have both transaction_id and category_id mapped successfully
+        if (!split.transaction_id || !split.category_id) {
+          console.warn(`[Import] Skipping split with missing mapping: transaction_id=${split.transaction_id}, category_id=${split.category_id}`);
+          return false;
+        }
+        return true;
+      });
 
-    const { error } = await supabase
-      .from('transaction_splits')
-      .insert(transactionSplitsToInsert);
+    if (transactionSplitsToInsert.length === 0) {
+      console.warn('[Import] No valid transaction splits to insert after filtering');
+    } else {
+      const { error } = await supabase
+        .from('transaction_splits')
+        .insert(transactionSplitsToInsert);
 
-    if (error) {
-      console.error('[Import] Error inserting transaction splits:', error);
-      throw error;
+      if (error) {
+        console.error('[Import] Error inserting transaction splits:', error);
+        throw error;
+      }
+      console.log('[Import] Inserted', transactionSplitsToInsert.length, 'transaction splits (filtered from', backupData.transaction_splits.length, 'total)');
     }
-    console.log('[Import] Inserted', transactionSplitsToInsert.length, 'transaction splits');
   }
 
   // Insert imported transactions (batch)

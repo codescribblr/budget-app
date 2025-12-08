@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Search, X, Upload, Filter, CalendarIcon, Copy } from 'lucide-react';
+import { Search, X, Upload, Filter, CalendarIcon, Copy, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -87,6 +87,8 @@ export default function TransactionsPage() {
   const [endDateObj, setEndDateObj] = useState<Date | undefined>(undefined);
   const [editingTransaction, setEditingTransaction] = useState<TransactionWithSplits | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<'date' | 'description' | 'merchant' | 'amount'>('date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Initialize pagination state with values from URL params or defaults
   const [currentPage, setCurrentPage] = useState(() => {
@@ -308,12 +310,59 @@ export default function TransactionsPage() {
     });
   }, [transactions, categories, searchQuery, merchantFilter, merchantGroupIdParam, categoryIdParam, transactionTypeParam, startDateParam, endDateParam]);
 
+  // Sort filtered transactions
+  const sortedTransactions = useMemo(() => {
+    const sorted = [...filteredTransactions];
+    
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'date':
+          // Compare dates (YYYY-MM-DD format sorts correctly as strings)
+          comparison = a.date.localeCompare(b.date);
+          // If same date, sort by ID for consistency
+          if (comparison === 0) {
+            comparison = a.id - b.id;
+          }
+          break;
+        case 'description':
+          comparison = a.description.localeCompare(b.description, undefined, { sensitivity: 'base' });
+          break;
+        case 'merchant':
+          const merchantA = a.merchant_name || '';
+          const merchantB = b.merchant_name || '';
+          comparison = merchantA.localeCompare(merchantB, undefined, { sensitivity: 'base' });
+          break;
+        case 'amount':
+          comparison = a.total_amount - b.total_amount;
+          break;
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+    
+    return sorted;
+  }, [filteredTransactions, sortBy, sortDirection]);
+
   // Calculate pagination
-  const totalTransactions = filteredTransactions.length;
+  const totalTransactions = sortedTransactions.length;
   const totalPages = Math.ceil(totalTransactions / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const paginatedTransactions = filteredTransactions.slice(startIndex, endIndex);
+  const paginatedTransactions = sortedTransactions.slice(startIndex, endIndex);
+
+  // Handle sort change
+  const handleSort = (column: 'date' | 'description' | 'merchant' | 'amount') => {
+    if (sortBy === column) {
+      // Toggle direction if clicking the same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new column and default to descending
+      setSortBy(column);
+      setSortDirection('desc');
+    }
+  };
 
   // Reset to page 1 if current page is out of bounds
   useEffect(() => {
@@ -634,6 +683,9 @@ export default function TransactionsPage() {
             transactions={paginatedTransactions}
             categories={categories}
             onUpdate={fetchData}
+            sortBy={sortBy}
+            sortDirection={sortDirection}
+            onSort={handleSort}
           />
 
           {/* Pagination Controls */}

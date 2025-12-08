@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -73,7 +73,7 @@ export default function ReportsPage() {
     }
 
     setIsInitialized(true);
-  }, []); // Only run on mount
+  }, [searchParams]); // Re-run when searchParams change
 
   // Fetch transactions
   useEffect(() => {
@@ -110,6 +110,18 @@ export default function ReportsPage() {
 
     fetchCategories();
   }, []);
+
+  // Update URL when filters change
+  const updateURL = useCallback((start: string, end: string, range: string, categoryId: number | null) => {
+    const params = new URLSearchParams();
+
+    if (start) params.set('startDate', start);
+    if (end) params.set('endDate', end);
+    if (range) params.set('dateRange', range);
+    if (categoryId !== null) params.set('category', categoryId.toString());
+
+    router.push(`/reports?${params.toString()}`, { scroll: false });
+  }, [router]);
 
   // Update dates when date range preset changes
   useEffect(() => {
@@ -174,29 +186,25 @@ export default function ReportsPage() {
     setStartDate(newStartDate);
     setEndDate(newEndDate);
     updateURL(newStartDate, newEndDate, dateRange, selectedCategoryId);
-  }, [dateRange, isInitialized]);
-
-  // Update URL when filters change
-  const updateURL = (start: string, end: string, range: string, categoryId: number | null) => {
-    const params = new URLSearchParams();
-
-    if (start) params.set('startDate', start);
-    if (end) params.set('endDate', end);
-    if (range) params.set('dateRange', range);
-    if (categoryId !== null) params.set('category', categoryId.toString());
-
-    router.push(`/reports?${params.toString()}`, { scroll: false });
-  };
+  }, [dateRange, isInitialized, selectedCategoryId, updateURL]);
 
   // Memoize filtered transactions to prevent unnecessary re-renders
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
+    // If dates aren't initialized yet, don't filter (show all)
+    // This prevents filtering before dates are loaded from URL params
+    const shouldFilterByDate = isInitialized && (startDate || endDate);
+    
+    const filtered = transactions.filter(t => {
       // Date filter (inclusive of both start and end dates)
-      if (startDate || endDate) {
+      if (shouldFilterByDate) {
         const transactionDate = t.date; // Keep as string for comparison (YYYY-MM-DD format)
+        
+        // Ensure transaction date is valid
+        if (!transactionDate) return false;
 
-        if (startDate && transactionDate < startDate) return false;
-        if (endDate && transactionDate > endDate) return false;
+        // Compare dates as strings (YYYY-MM-DD format works with string comparison)
+        if (startDate && startDate.trim() !== '' && transactionDate < startDate) return false;
+        if (endDate && endDate.trim() !== '' && transactionDate > endDate) return false;
       }
 
       // Category filter
@@ -206,7 +214,9 @@ export default function ReportsPage() {
 
       return true;
     });
-  }, [transactions, startDate, endDate, selectedCategoryId]);
+    
+    return filtered;
+  }, [transactions, startDate, endDate, selectedCategoryId, isInitialized]);
 
   // Memoize transaction IDs to prevent unnecessary API calls
   const filteredTransactionIds = useMemo(() => {

@@ -22,8 +22,22 @@ export default function CategoryReportStats({
     const now = new Date();
     const currentYear = now.getFullYear();
     const ytdStartDate = `${currentYear}-01-01`;
+    const currentMonth = now.getMonth() + 1; // 1-12
 
-    // Calculate spending (expenses add, income subtracts)
+    // Determine the date range for calculations
+    // If startDate/endDate are provided, use them; otherwise use YTD
+    const effectiveStartDate = startDate || ytdStartDate;
+    const effectiveEndDate = endDate || now.toISOString().split('T')[0];
+    
+    // Calculate the number of months in the period
+    const startDateObj = new Date(effectiveStartDate);
+    const endDateObj = new Date(effectiveEndDate);
+    const monthsInPeriod = Math.max(1, 
+      (endDateObj.getFullYear() - startDateObj.getFullYear()) * 12 + 
+      (endDateObj.getMonth() - startDateObj.getMonth()) + 1
+    );
+
+    // Calculate spending (expenses add, income subtracts) for the period
     let totalSpent = 0;
     let totalIncome = 0;
     let transactionCount = 0;
@@ -66,7 +80,6 @@ export default function CategoryReportStats({
       monthlyTarget = annualTarget / 12;
 
       // Calculate YTD target based on current month
-      const currentMonth = now.getMonth() + 1; // 1-12
       ytdTarget = monthlyTarget * currentMonth;
 
       // Calculate YTD spent
@@ -89,15 +102,27 @@ export default function CategoryReportStats({
       ytdProgress = annualTarget > 0 ? (ytdSpent / annualTarget) * 100 : 0;
     }
 
-    // Calculate monthly budget and variance for monthly_expense
+    // Calculate budget and variance for monthly_expense
     let monthlyBudget: number | undefined;
+    let ytdBudget: number | undefined;
     let variance: number | undefined;
     let budgetProgress: number | undefined;
 
     if (category.category_type === 'monthly_expense') {
       monthlyBudget = category.monthly_target || category.monthly_amount || 0;
-      variance = monthlyBudget - netSpending;
-      budgetProgress = monthlyBudget > 0 ? (netSpending / monthlyBudget) * 100 : 0;
+      
+      // Calculate YTD budget (or period budget if custom dates)
+      if (!startDate || !endDate) {
+        // YTD: multiply monthly budget by number of months elapsed
+        ytdBudget = monthlyBudget * currentMonth;
+        variance = ytdBudget - netSpending;
+        budgetProgress = ytdBudget > 0 ? (netSpending / ytdBudget) * 100 : 0;
+      } else {
+        // Custom period: multiply monthly budget by number of months in period
+        ytdBudget = monthlyBudget * monthsInPeriod;
+        variance = ytdBudget - netSpending;
+        budgetProgress = ytdBudget > 0 ? (netSpending / ytdBudget) * 100 : 0;
+      }
     }
 
     // Calculate target balance progress
@@ -125,13 +150,14 @@ export default function CategoryReportStats({
       ytdTarget,
       ytdProgress,
       monthlyBudget,
+      ytdBudget,
       variance,
       budgetProgress,
       targetBalance,
       currentBalance,
       balanceProgress,
     };
-  }, [category, transactions]);
+  }, [category, transactions, startDate, endDate]);
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2 md:gap-3 lg:gap-4">
@@ -214,7 +240,10 @@ export default function CategoryReportStats({
           </CardHeader>
           <CardContent className="pt-0 pb-1 md:pb-4">
             <div className="text-xs text-muted-foreground space-y-0 md:space-y-1">
-              <div>Budget: {formatCurrency(stats.monthlyBudget)}</div>
+              <div>Monthly: {formatCurrency(stats.monthlyBudget)}</div>
+              {stats.ytdBudget !== undefined && (
+                <div>Period Budget: {formatCurrency(stats.ytdBudget)}</div>
+              )}
               <div>Variance: {formatCurrency(stats.variance!)}</div>
             </div>
           </CardContent>
