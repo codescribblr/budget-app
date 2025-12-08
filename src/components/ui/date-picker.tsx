@@ -34,8 +34,48 @@ export function DatePicker({
   className,
   id,
 }: DatePickerProps) {
+  const [open, setOpen] = React.useState(false)
+  const [month, setMonth] = React.useState<Date>(() => {
+    // Initialize with the selected date, or current date
+    return date ? new Date(date.getFullYear(), date.getMonth(), 1) : new Date()
+  })
+
+  // Update month when date changes externally, but only if popover is closed
+  React.useEffect(() => {
+    if (!open && date) {
+      setMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+    }
+  }, [date, open])
+
+  // Reset calendar when popover opens to ensure clean state
+  const handleOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen)
+    if (newOpen) {
+      // Reset month to selected date or current date when opening
+      if (date) {
+        setMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+      } else {
+        const now = new Date()
+        setMonth(new Date(now.getFullYear(), now.getMonth(), 1))
+      }
+    }
+  }
+
+  const handleMonthChange = React.useCallback((newMonth: Date) => {
+    // Normalize to the 1st of the month to avoid day-of-month issues
+    const normalizedMonth = new Date(newMonth.getFullYear(), newMonth.getMonth(), 1)
+    // Only update if the month/year actually changed
+    setMonth(prevMonth => {
+      if (prevMonth.getFullYear() === normalizedMonth.getFullYear() && 
+          prevMonth.getMonth() === normalizedMonth.getMonth()) {
+        return prevMonth // No change needed
+      }
+      return normalizedMonth
+    })
+  }, [])
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           id={id}
@@ -54,8 +94,14 @@ export function DatePicker({
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"
+          month={month}
+          onMonthChange={handleMonthChange}
           selected={date}
-          onSelect={onDateChange}
+          onSelect={(selectedDate) => {
+            onDateChange?.(selectedDate)
+            // Close popover when date is selected
+            setOpen(false)
+          }}
           disabled={(date) => {
             if (minDate && date < minDate) return true
             if (maxDate && date > maxDate) return true
