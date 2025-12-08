@@ -14,6 +14,7 @@ import { WizardStep } from '@/components/wizards/WizardStep';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Callout } from '@/components/help/Callout';
 import { Rocket, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,11 +27,35 @@ const DEFAULT_CATEGORIES = [
   { name: 'Insurance', monthly_amount: 0 },
   { name: 'Dining Out', monthly_amount: 0 },
   { name: 'Entertainment', monthly_amount: 0 },
-  { name: 'Clothing', monthly_amount: 0 },
   { name: 'Personal Care', monthly_amount: 0 },
-  { name: 'Emergency Fund', monthly_amount: 0 },
   { name: 'Savings', monthly_amount: 0 },
+  { name: 'Phone/Internet', monthly_amount: 0 },
+  { name: 'Clothing', monthly_amount: 0 },
+  { name: 'Emergency Fund', monthly_amount: 0 },
+  { name: 'Subscriptions', monthly_amount: 0 },
+  { name: 'Healthcare/Medical', monthly_amount: 0 },
+  { name: 'Gas/Fuel', monthly_amount: 0 },
+  { name: 'Home Maintenance', monthly_amount: 0 },
+  { name: 'Pet Care', monthly_amount: 0 },
+  { name: 'Education', monthly_amount: 0 },
+  { name: 'Gifts/Donations', monthly_amount: 0 },
+  { name: 'Travel', monthly_amount: 0 },
+  { name: 'Debt Payment', monthly_amount: 0 },
   { name: 'Miscellaneous', monthly_amount: 0 },
+];
+
+// The 10 most common categories to enable by default
+const DEFAULT_SELECTED_CATEGORIES = [
+  'Rent/Mortgage',
+  'Utilities',
+  'Groceries',
+  'Transportation',
+  'Insurance',
+  'Dining Out',
+  'Entertainment',
+  'Personal Care',
+  'Savings',
+  'Phone/Internet',
 ];
 
 export function FirstLoginWizard() {
@@ -44,6 +69,9 @@ export function FirstLoginWizard() {
     monthlyIncome: '',
     startDate: new Date().toISOString().split('T')[0],
   });
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
+    new Set(DEFAULT_SELECTED_CATEGORIES)
+  );
 
   // Check if user has accounts or categories (first login)
   useEffect(() => {
@@ -102,11 +130,13 @@ export function FirstLoginWizard() {
         });
       }
 
-      // Prepare categories to create
-      const categoriesToCreate = DEFAULT_CATEGORIES.map((category, index) => ({
-        ...category,
-        sort_order: index,
-      }));
+      // Prepare categories to create (only selected ones)
+      const categoriesToCreate = DEFAULT_CATEGORIES
+        .filter((category) => selectedCategories.has(category.name))
+        .map((category, index) => ({
+          ...category,
+          sort_order: index,
+        }));
 
       // Create everything in a single batch request
       const response = await fetch('/api/wizard/complete', {
@@ -126,7 +156,7 @@ export function FirstLoginWizard() {
       const result = await response.json();
 
       toast.success(
-        `Budget created! Added ${result.accountsCount || accountsToCreate.length} account(s) and ${result.categoriesCount || DEFAULT_CATEGORIES.length} categories.`
+        `Budget created! Added ${result.accountsCount || accountsToCreate.length} account(s) and ${result.categoriesCount || categoriesToCreate.length} categories.`
       );
 
       setOpen(false);
@@ -272,20 +302,81 @@ export function FirstLoginWizard() {
 
             {/* Step 4: Categories */}
             <WizardStep
-              title="Create Budget Categories"
-              description="We'll create some common categories to get you started."
+              title="Select Budget Categories"
+              description="Choose which categories you'd like to start with. The most common ones are already selected."
             >
               <div className="space-y-4">
-                <Callout type="info" title="Default Categories">
-                  We'll create these categories for you:
-                  <ul className="list-disc list-inside mt-2 space-y-1">
-                    {DEFAULT_CATEGORIES.map((cat) => (
-                      <li key={cat.name}>{cat.name}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-2 text-sm">
-                    You can add, remove, or modify these categories later in Settings.
-                  </p>
+                <Callout type="info" title="Select categories">
+                  Choose from these common budget categories. Scroll to see all options. You can add more later!
+                </Callout>
+
+                <div className="relative">
+                  <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 border rounded-lg p-4 bg-muted/20">
+                    {DEFAULT_CATEGORIES.map((category) => {
+                      const isSelected = selectedCategories.has(category.name);
+                      return (
+                        <div
+                          key={category.name}
+                          className={`
+                            flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors
+                            ${isSelected ? 'bg-primary/10 border-primary' : 'bg-background hover:bg-muted'}
+                          `}
+                          onClick={() => {
+                            const newSelected = new Set(selectedCategories);
+                            if (isSelected) {
+                              newSelected.delete(category.name);
+                            } else {
+                              newSelected.add(category.name);
+                            }
+                            setSelectedCategories(newSelected);
+                          }}
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => {
+                              const newSelected = new Set(selectedCategories);
+                              if (checked) {
+                                newSelected.add(category.name);
+                              } else {
+                                newSelected.delete(category.name);
+                              }
+                              setSelectedCategories(newSelected);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <span className="text-sm font-medium flex-1">{category.name}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Fade gradient at bottom to indicate scrollability */}
+                  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none rounded-b-lg" />
+                </div>
+
+                <div className="flex items-center justify-between text-sm text-muted-foreground pt-2 border-t">
+                  <span>
+                    {selectedCategories.size} of {DEFAULT_CATEGORIES.length} categories selected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedCategories.size === DEFAULT_CATEGORIES.length) {
+                        setSelectedCategories(new Set(DEFAULT_SELECTED_CATEGORIES));
+                      } else {
+                        setSelectedCategories(new Set(DEFAULT_CATEGORIES.map((c) => c.name)));
+                      }
+                    }}
+                    className="text-primary hover:underline"
+                  >
+                    {selectedCategories.size === DEFAULT_CATEGORIES.length
+                      ? 'Reset to defaults'
+                      : 'Select all'}
+                  </button>
+                </div>
+
+                <Callout type="tip" title="Customize later">
+                  You can add, remove, or rename categories anytime after setup. These are just
+                  to get you started!
                 </Callout>
               </div>
             </WizardStep>
@@ -319,8 +410,20 @@ export function FirstLoginWizard() {
                 <div className="space-y-2">
                   <h3 className="font-semibold">Categories:</h3>
                   <p className="text-sm">
-                    {DEFAULT_CATEGORIES.length} default categories will be created
+                    {selectedCategories.size} category{selectedCategories.size !== 1 ? 'ies' : 'y'} will be created
                   </p>
+                  {selectedCategories.size > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {Array.from(selectedCategories).map((cat) => (
+                        <span
+                          key={cat}
+                          className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-md"
+                        >
+                          {cat}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <Callout type="info" title="Next Steps">
