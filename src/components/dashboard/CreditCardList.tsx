@@ -51,6 +51,11 @@ export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary,
   const handleUpdateCard = async () => {
     if (!editingCard) return;
 
+    if (!cardName.trim()) {
+      alert('Please enter a card name');
+      return;
+    }
+
     const newAvailableCredit = parseFloat(availableCredit);
     const newCreditLimit = parseFloat(creditLimit);
     const newCurrentBalance = newCreditLimit - newAvailableCredit;
@@ -58,6 +63,7 @@ export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary,
     // Optimistic update
     const updatedCard: CreditCard = {
       ...editingCard,
+      name: cardName.trim(),
       credit_limit: newCreditLimit,
       available_credit: newAvailableCredit,
       current_balance: newCurrentBalance,
@@ -79,6 +85,7 @@ export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary,
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          name: cardName.trim(),
           credit_limit: newCreditLimit,
           available_credit: newAvailableCredit,
           include_in_totals: includeInTotals,
@@ -345,9 +352,9 @@ export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary,
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit {editingCard?.name}</DialogTitle>
+            <DialogTitle>Edit Credit Card</DialogTitle>
             <DialogDescription>
-              Update the credit card limit and available credit.
+              Update the credit card name, limit, and available credit.
             </DialogDescription>
           </DialogHeader>
           <div 
@@ -359,6 +366,16 @@ export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary,
               }
             }}
           >
+            <div>
+              <Label htmlFor="card-name">Card Name</Label>
+              <Input
+                id="card-name"
+                type="text"
+                value={cardName}
+                onChange={(e) => setCardName(e.target.value)}
+                placeholder="Credit Card Name"
+              />
+            </div>
             <div>
               <Label htmlFor="credit-limit">Credit Limit</Label>
               <Input
