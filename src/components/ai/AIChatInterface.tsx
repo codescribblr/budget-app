@@ -29,59 +29,50 @@ export function AIChatInterface({
 }: AIChatInterfaceProps) {
   const [input, setInput] = useState('');
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(conversationId || null);
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const previousConversationIdRef = useRef<string | null>(conversationId || null);
   
   const { messages, sendMessage, loading, error, clearMessages, loadConversation } = useAIChat({
     conversationId: currentConversationId || undefined,
     onConversationUpdate: onConversationUpdate
       ? (id, msgs) => onConversationUpdate(id, msgs)
       : undefined,
-    onConversationCreated: onConversationCreated,
+    onConversationCreated: (id) => {
+      setIsCreatingConversation(true);
+      onConversationCreated?.(id);
+      // Reset flag after a short delay
+      setTimeout(() => setIsCreatingConversation(false), 100);
+    },
   });
   const { stats, refreshStats } = useAIUsage();
   const loadingMessage = useRotatingLoadingMessage(5000, loading);
 
   // Load conversation when conversationId prop changes
+  // But don't load if we just created it (to preserve messages)
   useEffect(() => {
-    if (conversationId) {
+    // Only load if conversationId actually changed and we're not creating a new one
+    if (conversationId && conversationId !== previousConversationIdRef.current && !isCreatingConversation) {
       setCurrentConversationId(conversationId);
       loadConversation(conversationId);
-    } else {
+    } else if (conversationId && conversationId !== previousConversationIdRef.current && isCreatingConversation) {
+      // Just update the ID without loading (messages are already in state)
+      setCurrentConversationId(conversationId);
+    } else if (!conversationId && previousConversationIdRef.current) {
+      // Conversation was cleared
       setCurrentConversationId(null);
       clearMessages();
     }
+    previousConversationIdRef.current = conversationId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId]);
+  }, [conversationId, isCreatingConversation]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or when loading state changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, loading]);
 
   const remainingQueries = stats ? stats.chat.limit - stats.chat.used : 0;
-
-  const createConversation = async (): Promise<string | null> => {
-    try {
-      const response = await fetch('/api/ai/conversations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: input.trim().slice(0, 60) + (input.trim().length > 60 ? '...' : ''),
-          messages: [],
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return data.id || null;
-      }
-    } catch (error) {
-      console.error('Error creating conversation:', error);
-    }
-    return null;
-  };
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -91,8 +82,34 @@ export function AIChatInterface({
       return;
     }
 
-    await sendMessage(input, createConversation);
-    setInput('');
+    const messageContent = input.trim();
+    setInput(''); // Clear input immediately for better UX
+    
+    // Create conversation callback that uses the message content
+    const createConversation = async (): Promise<string | null> => {
+      try {
+        const response = await fetch('/api/ai/conversations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: messageContent.slice(0, 60) + (messageContent.length > 60 ? '...' : ''),
+            messages: [],
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          return data.id || null;
+        }
+      } catch (error) {
+        console.error('Error creating conversation:', error);
+      }
+      return null;
+    };
+    
+    await sendMessage(messageContent, createConversation);
     refreshStats();
   };
 
@@ -127,7 +144,7 @@ export function AIChatInterface({
         <div className="flex-1 min-h-0 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="space-y-4 p-4">
-              {messages.length === 0 ? (
+              {messages.length === 0 && !loading ? (
                 <div className="text-center text-muted-foreground py-8">
                   <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p className="text-sm">Ask me anything about your spending, budget, or goals!</p>
@@ -136,7 +153,7 @@ export function AIChatInterface({
                 <>
                   {messages.map((msg, i) => (
                     <div
-                      key={i}
+                      key={`${msg.role}-${i}-${msg.timestamp?.getTime() || i}`}
                       className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div

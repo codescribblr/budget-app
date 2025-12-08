@@ -77,8 +77,10 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     };
 
     // Create conversation if it doesn't exist and this is the first message
+    // Check BEFORE adding the message to state
     let convId = currentConversationId;
-    if (!convId && messages.length === 0) {
+    const isFirstMessage = !convId && messages.length === 0;
+    if (isFirstMessage) {
       convId = await createConversationIfNeeded();
       if (convId) {
         setCurrentConversationId(convId);
@@ -86,14 +88,15 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       }
     }
 
-    // Add user message to state
+    // Add user message to state immediately for better UX
     setMessages((prev) => [...prev, userMessage]);
     setLoading(true);
     setError(null);
 
     try {
-      // Use ref to get current messages (includes all previous, but not the one we just added)
-      const historyForRequest = messagesRef.current; // This has all previous messages
+      // Use ref to get current messages (includes the user message we just added)
+      // But exclude it from history since we're sending it as the query
+      const historyForRequest = messagesRef.current.slice(0, -1); // All previous messages except the one we just added
       
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
@@ -133,13 +136,17 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     try {
       isLoadingConversationRef.current = true; // Mark that we're loading, not editing
       setLoading(true);
+      setError(null);
       const response = await fetch(`/api/ai/conversations/${id}`);
       if (!response.ok) {
         throw new Error('Failed to load conversation');
       }
       const data = await response.json();
-      setMessages(data.messages || []);
-      setError(null);
+      // Only update messages if we're actually loading a different conversation
+      // Don't overwrite if we have messages and are loading the same conversation
+      if (id !== currentConversationId || messages.length === 0) {
+        setMessages(data.messages || []);
+      }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load conversation'));
       console.error('Error loading conversation:', err);

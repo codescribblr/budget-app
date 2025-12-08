@@ -30,8 +30,10 @@ export async function buildUserContext(userId: string, dateRange?: { start: stri
   }
 
   // Get transactions with merchant groups and splits
+  // SECURITY: Filtered by budget_account_id = accountId
   // Note: dates are stored as TEXT in YYYY-MM-DD format
-  // Note: transactions table doesn't have a 'merchant' column - use description and merchant_groups
+  // Note: Categories are linked through transaction_splits, so we fetch them separately
+  // Note: Merchant comes from merchant_groups, not a direct column
   const startDateStr = startDate.toISOString().split('T')[0];
   const endDateStr = endDate.toISOString().split('T')[0];
   
@@ -39,14 +41,16 @@ export async function buildUserContext(userId: string, dateRange?: { start: stri
     .from('transactions')
     .select(`
       id,
+      description,
       total_amount,
       date,
-      description,
       transaction_type,
+      account_id,
+      credit_card_id,
       merchant_group_id,
-      merchant_groups (
-        display_name
-      )
+      merchant_groups(display_name),
+      accounts(name),
+      credit_cards(name)
     `)
     .eq('budget_account_id', accountId)
     .gte('date', startDateStr)
