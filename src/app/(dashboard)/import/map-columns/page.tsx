@@ -751,41 +751,66 @@ export default function MapColumnsPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Date</Label>
-                        <div className={`mt-1 p-2 rounded border ${preview.date === 'Not mapped' ? 'border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800' : 'border-green-300 bg-green-50 dark:bg-green-950 dark:border-green-800'}`}>
-                          <span className="text-sm font-medium">{preview.date}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Amount</Label>
-                        <div className={`mt-1 p-2 rounded border ${preview.amount === 'No amount' ? 'border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800' : 'border-green-300 bg-green-50 dark:bg-green-950 dark:border-green-800'}`}>
-                          <span className="text-sm font-medium">{preview.amount}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Description</Label>
-                      <div className={`mt-1 p-2 rounded border ${preview.description === 'Not mapped' ? 'border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800' : 'border-green-300 bg-green-50 dark:bg-green-950 dark:border-green-800'}`}>
-                        <span className="text-sm font-medium">{preview.description}</span>
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Transaction Type</Label>
-                      <div className="mt-1 p-2 rounded border border-blue-300 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
-                        <Badge variant={preview.transactionType === 'income' ? 'default' : 'secondary'} className="text-xs">
-                          {preview.transactionType === 'income' ? 'Income' : 'Expense'}
-                        </Badge>
-                      </div>
-                    </div>
-                    {!preview.isValid && (
-                      <div className="p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-800 dark:text-amber-200">
-                        ⚠️ Some required fields are not mapped. Please map Date, Description, and Amount columns.
-                      </div>
-                    )}
+                  <div className="border rounded-md overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-border">
+                          <TableHead className="whitespace-nowrap">Date</TableHead>
+                          <TableHead className="whitespace-nowrap">Description</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
+                          <TableHead className="whitespace-nowrap">Type</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell className={`whitespace-nowrap text-xs ${preview.date === 'Not mapped' ? 'text-red-600 dark:text-red-400' : ''}`}>
+                            {preview.date === 'Not mapped' ? (
+                              <span className="italic text-muted-foreground">Not mapped</span>
+                            ) : (
+                              preview.date
+                            )}
+                          </TableCell>
+                          <TableCell className={`font-medium text-sm max-w-[250px] truncate ${preview.description === 'Not mapped' ? 'text-red-600 dark:text-red-400' : ''}`}>
+                            {preview.description === 'Not mapped' ? (
+                              <span className="italic text-muted-foreground">Not mapped</span>
+                            ) : (
+                              preview.description
+                            )}
+                          </TableCell>
+                          <TableCell className={`text-right font-semibold text-sm whitespace-nowrap ${
+                            preview.transactionType === 'income'
+                              ? 'text-green-600 dark:text-green-400'
+                              : 'text-red-600 dark:text-red-400'
+                          } ${preview.amount === 'No amount' ? 'text-red-600 dark:text-red-400' : ''}`}>
+                            {preview.amount === 'No amount' ? (
+                              <span className="italic text-muted-foreground">Not mapped</span>
+                            ) : (
+                              preview.transactionType === 'income' ? '+' : '-'
+                            )}
+                            {preview.amount !== 'No amount' && (
+                              <span className={preview.amount.includes('(') ? '' : 'ml-1'}>
+                                {preview.amount.includes('Debit:') || preview.amount.includes('Credit:') 
+                                  ? preview.amount.replace(/^(Debit|Credit):\s*/, '')
+                                  : preview.amount.includes('(') 
+                                    ? preview.amount 
+                                    : preview.amount.replace(/[^0-9.-]/g, '')}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <Badge variant={preview.transactionType === 'income' ? 'default' : 'secondary'} className="text-xs">
+                              {preview.transactionType === 'income' ? 'Income' : 'Expense'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
                   </div>
+                  {!preview.isValid && (
+                    <div className="mt-4 p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-800 dark:text-amber-200">
+                      ⚠️ Some required fields are not mapped. Please map Date, Description, and Amount columns.
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
