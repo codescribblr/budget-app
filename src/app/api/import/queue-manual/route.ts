@@ -18,7 +18,11 @@ export async function POST(request: Request) {
       fileName, 
       targetAccountId, 
       targetCreditCardId,
-      isHistorical = false 
+      isHistorical = false,
+      csvData,
+      csvAnalysis,
+      csvFingerprint,
+      csvMappingTemplateId,
     } = body;
 
     if (!Array.isArray(transactions) || transactions.length === 0) {
@@ -63,6 +67,11 @@ export async function POST(request: Request) {
       transactions: transactionsWithFilename as ParsedTransaction[],
       sourceBatchId: batchId,
       isHistorical,
+      csvData,
+      csvAnalysis,
+      csvFingerprint,
+      csvMappingTemplateId,
+      csvFileName: fileName,
     });
 
     if (queuedCount === 0) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -17,13 +17,22 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import type { CSVAnalysisResult, ColumnAnalysis } from '@/lib/column-analyzer';
 import type { ColumnMapping } from '@/lib/mapping-templates';
 import { CheckCircle2, AlertCircle, XCircle, ArrowLeft } from 'lucide-react';
 import { saveTemplate } from '@/lib/mapping-templates';
-import { parseCSVWithMapping, processTransactions } from '@/lib/csv-parser-helpers';
+import { parseCSVWithMapping } from '@/lib/csv-parser-helpers';
 import type { ParsedTransaction } from '@/lib/import-types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
+import { toast } from 'sonner';
 
 type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'ignore';
 
@@ -107,6 +116,8 @@ function detectAmountSignConvention(
 
 export default function MapColumnsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isRemap = searchParams.get('remap') === 'true';
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [mappings, setMappings] = useState<Record<number, FieldType>>({});
   const [shouldSaveTemplate, setShouldSaveTemplate] = useState(false);
@@ -118,6 +129,13 @@ export default function MapColumnsPage() {
   const [fileName, setFileName] = useState<string>('');
   const [transactionTypeColumn, setTransactionTypeColumn] = useState<number | null>(null);
   const [amountSignConvention, setAmountSignConvention] = useState<'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit'>('positive_is_expense');
+  const [remapBatchId, setRemapBatchId] = useState<string | null>(null);
+  const [currentTemplateId, setCurrentTemplateId] = useState<number | null>(null);
+  const [currentTemplateName, setCurrentTemplateName] = useState<string | null>(null);
+  const [showTemplateOptions, setShowTemplateOptions] = useState(false);
+  const [templateSaveMode, setTemplateSaveMode] = useState<'none' | 'overwrite' | 'new'>('none');
+  const [overwriteTemplateId, setOverwriteTemplateId] = useState<number | null>(null);
+  const [deleteOldTemplate, setDeleteOldTemplate] = useState(false);
 
   useEffect(() => {
     // Check permissions - redirect if read-only user
@@ -128,84 +146,135 @@ export default function MapColumnsPage() {
   }, [isEditor, permissionsLoading, router]);
 
   useEffect(() => {
-    // Load CSV data from sessionStorage
-    const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
-    const csvDataStr = sessionStorage.getItem('csvData');
-    const fileNameStr = sessionStorage.getItem('csvFileName');
-
-    if (!csvAnalysisStr || !csvDataStr || !fileNameStr) {
-      // No data found, redirect back to import
-      router.push('/import');
-      return;
-    }
-    
-    // Also redirect if read-only user
-    if (!permissionsLoading && !isEditor) {
-      router.push('/import');
-      return;
-    }
-
-    try {
-      const analysisData = JSON.parse(csvAnalysisStr);
-      const csvData = JSON.parse(csvDataStr);
-      
-      // Validate data structure
-      if (!analysisData || typeof analysisData !== 'object') {
-        throw new Error('Invalid analysis data');
+    // Load CSV data from sessionStorage or remap API
+    const loadData = async () => {
+      if (!permissionsLoading && !isEditor) {
+        router.push('/import');
+        return;
       }
-      if (!Array.isArray(csvData)) {
-        throw new Error('Invalid CSV data');
-      }
-      
-      setAnalysis(analysisData);
-      setSampleData(csvData.slice(0, 5));
-      setFileName(fileNameStr);
 
-      // Initialize mappings from analysis
-      const initialMappings: Record<number, FieldType> = {};
-      
-      // Safely check if columns exists and is an array
-      if (Array.isArray(analysisData.columns)) {
-        analysisData.columns.forEach((col: ColumnAnalysis) => {
-          if (col && col.fieldType !== 'unknown' && col.confidence > 0.5) {
-            initialMappings[col.columnIndex] = col.fieldType as FieldType;
+      try {
+        let analysisData: CSVAnalysisResult;
+        let csvData: string[][];
+        let fileNameStr: string;
+        let currentMapping: ColumnMapping | null = null;
+        let templateId: number | null = null;
+        let templateName: string | null = null;
+        let batchId: string | null = null;
+
+        if (isRemap) {
+          // Load from remap API
+          batchId = sessionStorage.getItem('remapBatchId');
+          if (!batchId) {
+            throw new Error('Remap batch ID not found');
           }
-        });
-      }
 
-      // Set required fields if detected
-      if (analysisData.dateColumn !== null) {
-        initialMappings[analysisData.dateColumn] = 'date';
-      }
-      if (analysisData.amountColumn !== null) {
-        initialMappings[analysisData.amountColumn] = 'amount';
-      }
-      if (analysisData.descriptionColumn !== null) {
-        initialMappings[analysisData.descriptionColumn] = 'description';
-      }
-      if (analysisData.debitColumn !== null) {
-        initialMappings[analysisData.debitColumn] = 'debit';
-      }
-      if (analysisData.creditColumn !== null) {
-        initialMappings[analysisData.creditColumn] = 'credit';
-      }
+          const response = await fetch(`/api/import/queue/${batchId}/remap`);
+          if (!response.ok) {
+            throw new Error('Failed to load remap data');
+          }
 
-      setMappings(initialMappings);
+          const remapData = await response.json();
+          analysisData = remapData.csvAnalysis;
+          csvData = remapData.csvData;
+          fileNameStr = remapData.csvFileName;
+          currentMapping = remapData.currentMapping || null;
+          templateId = remapData.currentTemplateId || null;
+          templateName = remapData.currentTemplateName || null;
+          setRemapBatchId(batchId);
+          setCurrentTemplateId(templateId);
+          setCurrentTemplateName(templateName);
+          
+          // Store in sessionStorage for template dialog
+          sessionStorage.setItem('csvData', JSON.stringify(csvData));
+          sessionStorage.setItem('csvAnalysis', JSON.stringify(analysisData));
+          sessionStorage.setItem('csvFileName', fileNameStr);
+        } else {
+          // Load from sessionStorage
+          const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
+          const csvDataStr = sessionStorage.getItem('csvData');
+          fileNameStr = sessionStorage.getItem('csvFileName') || '';
 
-      // Detect amount sign convention from the data
-      if (analysisData.amountColumn !== null) {
-        const detectedConvention = detectAmountSignConvention(
-          csvData,
-          analysisData.amountColumn,
-          analysisData.hasHeaders
-        );
-        setAmountSignConvention(detectedConvention);
+          if (!csvAnalysisStr || !csvDataStr) {
+            router.push('/import');
+            return;
+          }
+
+          analysisData = JSON.parse(csvAnalysisStr);
+          csvData = JSON.parse(csvDataStr);
+        }
+
+        // Validate data structure
+        if (!analysisData || typeof analysisData !== 'object') {
+          throw new Error('Invalid analysis data');
+        }
+        if (!Array.isArray(csvData)) {
+          throw new Error('Invalid CSV data');
+        }
+
+        setAnalysis(analysisData);
+        setSampleData(csvData.slice(0, 5));
+        setFileName(fileNameStr);
+
+        // Initialize mappings from current mapping or analysis
+        const initialMappings: Record<number, FieldType> = {};
+
+        if (currentMapping) {
+          // Use existing mapping
+          if (currentMapping.dateColumn !== null) initialMappings[currentMapping.dateColumn] = 'date';
+          if (currentMapping.amountColumn !== null) initialMappings[currentMapping.amountColumn] = 'amount';
+          if (currentMapping.descriptionColumn !== null) initialMappings[currentMapping.descriptionColumn] = 'description';
+          if (currentMapping.debitColumn !== null) initialMappings[currentMapping.debitColumn] = 'debit';
+          if (currentMapping.creditColumn !== null) initialMappings[currentMapping.creditColumn] = 'credit';
+          setAmountSignConvention(currentMapping.amountSignConvention);
+          setTransactionTypeColumn(currentMapping.transactionTypeColumn);
+        } else {
+          // Initialize from analysis
+          if (Array.isArray(analysisData.columns)) {
+            analysisData.columns.forEach((col: ColumnAnalysis) => {
+              if (col && col.fieldType !== 'unknown' && col.confidence > 0.5) {
+                initialMappings[col.columnIndex] = col.fieldType as FieldType;
+              }
+            });
+          }
+
+          if (analysisData.dateColumn !== null) {
+            initialMappings[analysisData.dateColumn] = 'date';
+          }
+          if (analysisData.amountColumn !== null) {
+            initialMappings[analysisData.amountColumn] = 'amount';
+          }
+          if (analysisData.descriptionColumn !== null) {
+            initialMappings[analysisData.descriptionColumn] = 'description';
+          }
+          if (analysisData.debitColumn !== null) {
+            initialMappings[analysisData.debitColumn] = 'debit';
+          }
+          if (analysisData.creditColumn !== null) {
+            initialMappings[analysisData.creditColumn] = 'credit';
+          }
+
+          // Detect amount sign convention
+          if (analysisData.amountColumn !== null) {
+            const detectedConvention = detectAmountSignConvention(
+              csvData,
+              analysisData.amountColumn,
+              analysisData.hasHeaders
+            );
+            setAmountSignConvention(detectedConvention);
+          }
+        }
+
+        setMappings(initialMappings);
+      } catch (err) {
+        console.error('Error loading CSV data:', err);
+        toast.error(err instanceof Error ? err.message : 'Failed to load CSV data');
+        router.push('/import');
       }
-    } catch (err) {
-      console.error('Error loading CSV data:', err);
-      router.push('/import');
-    }
-  }, [router]);
+    };
+
+    loadData();
+  }, [router, isRemap, permissionsLoading, isEditor]);
 
   const handleMappingChange = (columnIndex: number, fieldType: FieldType) => {
     setMappings((prev) => {
@@ -303,39 +372,81 @@ export default function MapColumnsPage() {
         return;
       }
 
-      // Save template if requested
+      // Handle remap flow
+      if (isRemap && remapBatchId) {
+        // Show template options dialog if user wants to save template
+        if (shouldSaveTemplate || templateSaveMode !== 'none') {
+          setShowTemplateOptions(true);
+          setIsProcessing(false);
+          return;
+        }
+
+        // Apply remap directly without saving template
+        const remapResponse = await fetch(`/api/import/queue/${remapBatchId}/apply-remap`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mapping,
+            saveAsTemplate: false,
+          }),
+        });
+
+        if (!remapResponse.ok) {
+          const errorData = await remapResponse.json().catch(() => ({ error: 'Failed to apply remap' }));
+          throw new Error(errorData.error || 'Failed to apply remap');
+        }
+
+        toast.success('Import re-mapped successfully');
+        sessionStorage.removeItem('remapBatchId');
+        router.push('/imports/queue');
+        return;
+      }
+
+      // Normal flow: queue transactions
+      let savedTemplateId: number | undefined;
       if (shouldSaveTemplate) {
         try {
-          await saveTemplate({
+          const savedTemplate = await saveTemplate({
             userId: '', // Will be set by API
             templateName: templateName || undefined,
             fingerprint: analysis.fingerprint,
             columnCount: analysis.columns.length,
             mapping,
           });
+          savedTemplateId = savedTemplate.id;
         } catch (err) {
           console.warn('Failed to save template:', err);
           // Non-critical error, continue with import
         }
       }
 
-      // Check for duplicates and auto-categorize
-      const processedTransactions = await processTransactions(transactions);
+      // Queue transactions (NOT processed - let queue handle that)
+      const queueResponse = await fetch('/api/import/queue-manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactions, // Raw parsed transactions, NOT processed
+          fileName,
+          csvData,
+          csvAnalysis: analysis,
+          csvFingerprint: analysis.fingerprint,
+          csvMappingTemplateId: savedTemplateId,
+        }),
+      });
 
-      // Store transactions in sessionStorage and navigate back
-      sessionStorage.setItem('parsedTransactions', JSON.stringify(processedTransactions));
-      sessionStorage.setItem('parsedFileName', fileName);
-      if (mapping.dateFormat) {
-        sessionStorage.setItem('csvDateFormat', mapping.dateFormat);
+      if (!queueResponse.ok) {
+        const errorData = await queueResponse.json().catch(() => ({ error: 'Failed to queue import' }));
+        throw new Error(errorData.error || 'Failed to queue import');
       }
-      
-      // Clear CSV data
+
+      // Clear CSV data from sessionStorage
       sessionStorage.removeItem('csvAnalysis');
       sessionStorage.removeItem('csvData');
       sessionStorage.removeItem('csvFileName');
+      sessionStorage.removeItem('remapBatchId');
 
-      // Navigate back to import page which will show the preview
-      router.push('/import');
+      toast.success(`Queued ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''} for review`);
+      router.push('/imports/queue');
     } catch (err) {
       console.error('Error processing file with mapping:', err);
       setError(err instanceof Error ? err.message : 'Failed to process file');
@@ -529,7 +640,7 @@ export default function MapColumnsPage() {
             </Label>
           </div>
 
-          {shouldSaveTemplate && (
+          {shouldSaveTemplate && !isRemap && (
             <div className="space-y-2">
               <Label htmlFor="template-name">Template Name (optional)</Label>
               <Input
@@ -538,6 +649,75 @@ export default function MapColumnsPage() {
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
               />
+            </div>
+          )}
+
+          {isRemap && (
+            <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="remap-save-template"
+                  checked={templateSaveMode !== 'none'}
+                  onCheckedChange={(checked) => setTemplateSaveMode(checked ? 'new' : 'none')}
+                />
+                <Label htmlFor="remap-save-template" className="cursor-pointer">
+                  Save this mapping as a template
+                </Label>
+              </div>
+
+              {templateSaveMode !== 'none' && (
+                <div className="space-y-4 ml-6">
+                  <div>
+                    <Label>Save Option</Label>
+                    <Select
+                      value={templateSaveMode}
+                      onValueChange={(value) => setTemplateSaveMode(value as typeof templateSaveMode)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="overwrite">Overwrite existing template</SelectItem>
+                        <SelectItem value="new">Create new template</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {templateSaveMode === 'overwrite' && currentTemplateId && (
+                    <div className="p-2 bg-yellow-50 dark:bg-yellow-950 rounded">
+                      <p className="text-sm">
+                        Will overwrite: <strong>{currentTemplateName || 'Current Template'}</strong>
+                      </p>
+                    </div>
+                  )}
+
+                  {templateSaveMode === 'new' && (
+                    <>
+                      <div>
+                        <Label htmlFor="remap-template-name">Template Name</Label>
+                        <Input
+                          id="remap-template-name"
+                          placeholder="e.g., Bank of America Checking (Updated)"
+                          value={templateName}
+                          onChange={(e) => setTemplateName(e.target.value)}
+                        />
+                      </div>
+                      {currentTemplateId && (
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="delete-old-template"
+                            checked={deleteOldTemplate}
+                            onCheckedChange={(checked) => setDeleteOldTemplate(checked === true)}
+                          />
+                          <Label htmlFor="delete-old-template" className="cursor-pointer text-sm">
+                            Delete old template: {currentTemplateName || 'Current Template'}
+                          </Label>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -580,11 +760,145 @@ export default function MapColumnsPage() {
               Cancel
             </Button>
             <Button onClick={handleConfirm} disabled={isProcessing}>
-              {isProcessing ? 'Processing...' : 'Continue Import'}
+              {isProcessing ? 'Processing...' : isRemap ? 'Apply Re-mapping' : 'Continue Import'}
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Template Options Dialog for Remap */}
+      <Dialog open={showTemplateOptions} onOpenChange={setShowTemplateOptions}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save Template</DialogTitle>
+            <DialogDescription>
+              Choose how to save this mapping as a template.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Save Option</Label>
+              <Select
+                value={templateSaveMode}
+                onValueChange={(value) => setTemplateSaveMode(value as typeof templateSaveMode)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="overwrite">Overwrite existing template</SelectItem>
+                  <SelectItem value="new">Create new template</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {templateSaveMode === 'overwrite' && currentTemplateId && (
+              <div className="p-2 bg-yellow-50 dark:bg-yellow-950 rounded">
+                <p className="text-sm">
+                  Will overwrite: <strong>{currentTemplateName || 'Current Template'}</strong>
+                </p>
+              </div>
+            )}
+
+            {templateSaveMode === 'new' && (
+              <>
+                <div>
+                  <Label htmlFor="dialog-template-name">Template Name</Label>
+                  <Input
+                    id="dialog-template-name"
+                    placeholder="e.g., Bank of America Checking (Updated)"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                  />
+                </div>
+                {currentTemplateId && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="dialog-delete-old-template"
+                      checked={deleteOldTemplate}
+                      onCheckedChange={(checked) => setDeleteOldTemplate(checked === true)}
+                    />
+                    <Label htmlFor="dialog-delete-old-template" className="cursor-pointer text-sm">
+                      Delete old template: {currentTemplateName || 'Current Template'}
+                    </Label>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTemplateOptions(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!analysis || !remapBatchId) return;
+
+                setIsProcessing(true);
+                setShowTemplateOptions(false);
+
+                try {
+                  // Get CSV data from sessionStorage (stored during remap load)
+                  const csvDataStr = sessionStorage.getItem('csvData');
+                  if (!csvDataStr) {
+                    throw new Error('CSV data not found');
+                  }
+                  const csvData = JSON.parse(csvDataStr);
+                  
+                  // Get analysis from sessionStorage
+                  const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
+                  if (!csvAnalysisStr) {
+                    throw new Error('CSV analysis not found');
+                  }
+                  const csvAnalysis = JSON.parse(csvAnalysisStr);
+
+                  const mapping: ColumnMapping = {
+                    dateColumn: findColumnForField('date'),
+                    amountColumn: findColumnForField('amount'),
+                    descriptionColumn: findColumnForField('description'),
+                    debitColumn: findColumnForField('debit'),
+                    creditColumn: findColumnForField('credit'),
+                    transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
+                    amountSignConvention,
+                    dateFormat: analysis.dateFormat,
+                    hasHeaders: analysis.hasHeaders,
+                  };
+
+                  const remapResponse = await fetch(`/api/import/queue/${remapBatchId}/apply-remap`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      mapping,
+                      saveAsTemplate: true,
+                      templateName: templateSaveMode === 'new' ? (templateName || undefined) : undefined,
+                      overwriteTemplateId: templateSaveMode === 'overwrite' ? (currentTemplateId || undefined) : undefined,
+                      deleteOldTemplate: deleteOldTemplate,
+                    }),
+                  });
+
+                  if (!remapResponse.ok) {
+                    const errorData = await remapResponse.json().catch(() => ({ error: 'Failed to apply remap' }));
+                    throw new Error(errorData.error || 'Failed to apply remap');
+                  }
+
+                  toast.success('Import re-mapped and template saved successfully');
+                  sessionStorage.removeItem('remapBatchId');
+                  sessionStorage.removeItem('csvData');
+                  sessionStorage.removeItem('csvAnalysis');
+                  sessionStorage.removeItem('csvFileName');
+                  router.push('/imports/queue');
+                } catch (err) {
+                  console.error('Error applying remap:', err);
+                  setError(err instanceof Error ? err.message : 'Failed to apply remap');
+                  setIsProcessing(false);
+                }
+              }}
+            >
+              Apply & Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

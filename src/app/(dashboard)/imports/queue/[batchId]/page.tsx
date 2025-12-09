@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import TransactionPreview from '@/components/import/TransactionPreview';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { ArrowLeft, Wallet, CreditCard, Clock, Trash2 } from 'lucide-react';
+import { ArrowLeft, Wallet, CreditCard, Clock, Trash2, RefreshCw } from 'lucide-react';
 import type { ParsedTransaction } from '@/lib/import-types';
 import { processTransactions } from '@/lib/csv-parser-helpers';
 import {
@@ -456,13 +456,34 @@ export default function BatchReviewPage() {
             </div>
           )}
         </div>
-        <Button 
-          variant="outline" 
-          size="icon"
-          onClick={() => setDeleteDialogOpen(true)}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Re-map button - only show for manual imports */}
+          {batchInfo?.source_type === 'manual' && (
+            <Button 
+              variant="outline" 
+              onClick={async () => {
+                try {
+                  // Store batch ID for remap flow
+                  sessionStorage.setItem('remapBatchId', batchId);
+                  router.push('/import/map-columns?remap=true');
+                } catch (err) {
+                  console.error('Error initiating remap:', err);
+                  toast.error('Failed to start re-mapping');
+                }
+              }}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Re-map Fields
+            </Button>
+          )}
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {transactions.length > 0 && (

@@ -127,6 +127,11 @@ export interface QueueTransactionOptions {
   isHistorical?: boolean;
   accountId?: number; // Optional: provide accountId for webhook contexts
   supabase?: SupabaseClient; // Optional: provide supabase client for webhook contexts
+  csvData?: string[][]; // Optional: Raw CSV data for re-mapping
+  csvAnalysis?: any; // Optional: CSV analysis result (CSVAnalysisResult)
+  csvFingerprint?: string; // Optional: CSV fingerprint for template matching
+  csvMappingTemplateId?: number; // Optional: Associated template ID
+  csvFileName?: string; // Optional: Original CSV filename
 }
 
 /**
@@ -140,7 +145,17 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
   const accountId = options.accountId || await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
-  const { importSetupId, transactions, sourceBatchId, isHistorical = false } = options;
+  const { 
+    importSetupId, 
+    transactions, 
+    sourceBatchId, 
+    isHistorical = false,
+    csvData,
+    csvAnalysis,
+    csvFingerprint,
+    csvMappingTemplateId,
+    csvFileName,
+  } = options;
 
   // Get existing hashes to check for duplicates
   const hashes = transactions.map(t => t.hash);
@@ -210,7 +225,8 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
 
   // Prepare queued imports
   // Use per-transaction is_historical if provided, otherwise fall back to batch-level isHistorical
-  const queuedImports = newTransactions.map(txn => ({
+  // CSV data fields are stored only once per batch (on first transaction), others get null
+  const queuedImports = newTransactions.map((txn, index) => ({
     account_id: accountId,
     import_setup_id: importSetupId,
     transaction_date: txn.date,
@@ -228,6 +244,12 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     is_historical: txn.is_historical !== undefined ? txn.is_historical : isHistorical,
     source_batch_id: sourceBatchId,
     source_fetched_at: new Date().toISOString(),
+    // CSV mapping fields - store only on first transaction to avoid duplication
+    csv_data: index === 0 ? (csvData || null) : null,
+    csv_analysis: index === 0 ? (csvAnalysis || null) : null,
+    csv_fingerprint: index === 0 ? (csvFingerprint || null) : null,
+    csv_mapping_template_id: index === 0 ? (csvMappingTemplateId || null) : null,
+    csv_file_name: index === 0 ? (csvFileName || null) : null,
   }));
 
   // Insert queued imports
