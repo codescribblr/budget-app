@@ -383,7 +383,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
       const csvFingerprintStr = sessionStorage.getItem('csvFingerprint');
       const csvTemplateIdStr = sessionStorage.getItem('csvTemplateId');
-      const csvMappingNameStr = sessionStorage.getItem('csvMappingName');
+      // csvMappingNameStr already retrieved above for importInfo
       
       const csvData = csvDataStr ? JSON.parse(csvDataStr) : undefined;
       const csvAnalysis = csvAnalysisStr ? JSON.parse(csvAnalysisStr) : undefined;
