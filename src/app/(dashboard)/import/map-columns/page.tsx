@@ -738,6 +738,59 @@ export default function MapColumnsPage() {
             </CardContent>
           </Card>
 
+          {/* Preview Row */}
+          {(() => {
+            const preview = getPreviewTransaction();
+            if (!preview) return null;
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Preview</CardTitle>
+                  <CardDescription>
+                    How the first transaction will appear with your current mappings
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Date</Label>
+                        <div className={`mt-1 p-2 rounded border ${preview.date === 'Not mapped' ? 'border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800' : 'border-green-300 bg-green-50 dark:bg-green-950 dark:border-green-800'}`}>
+                          <span className="text-sm font-medium">{preview.date}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Amount</Label>
+                        <div className={`mt-1 p-2 rounded border ${preview.amount === 'No amount' ? 'border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800' : 'border-green-300 bg-green-50 dark:bg-green-950 dark:border-green-800'}`}>
+                          <span className="text-sm font-medium">{preview.amount}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Description</Label>
+                      <div className={`mt-1 p-2 rounded border ${preview.description === 'Not mapped' ? 'border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800' : 'border-green-300 bg-green-50 dark:bg-green-950 dark:border-green-800'}`}>
+                        <span className="text-sm font-medium">{preview.description}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Transaction Type</Label>
+                      <div className="mt-1 p-2 rounded border border-blue-300 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
+                        <Badge variant={preview.transactionType === 'income' ? 'default' : 'secondary'} className="text-xs">
+                          {preview.transactionType === 'income' ? 'Income' : 'Expense'}
+                        </Badge>
+                      </div>
+                    </div>
+                    {!preview.isValid && (
+                      <div className="p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-800 dark:text-amber-200">
+                        ⚠️ Some required fields are not mapped. Please map Date, Description, and Amount columns.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* Only show this checkbox for non-remap flows */}
           {!isRemap && (
             <>
