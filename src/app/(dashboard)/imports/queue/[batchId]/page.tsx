@@ -153,9 +153,9 @@ export default function BatchReviewPage() {
           id: firstImport.id,
         });
         
-        // If CSV fields are missing, try fetching them directly by ID
-        if (!firstImport.csv_data && !firstImport.csv_file_name && firstImport.id) {
-          console.log('CSV fields missing, fetching directly by ID...');
+        // If CSV fields are missing, try fetching them directly (workaround for PostgREST schema cache issues)
+        if (!firstImport.csv_data && !firstImport.csv_file_name) {
+          console.log('CSV fields missing from main query, fetching directly...');
           try {
             const csvResponse = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}&csvFields=true`);
             if (csvResponse.ok) {
