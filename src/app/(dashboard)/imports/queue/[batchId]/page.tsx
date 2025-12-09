@@ -353,6 +353,11 @@ export default function BatchReviewPage() {
         if (!importFileName && firstImport.csv_file_name) {
           setImportFileName(firstImport.csv_file_name);
         }
+        
+        // Also ensure hasCsvData is set if csv_data or csv_analysis exists
+        if (!hasCsvData && (firstImport.csv_data || firstImport.csv_analysis)) {
+          setHasCsvData(true);
+        }
       }
       
       setLoading(false);
