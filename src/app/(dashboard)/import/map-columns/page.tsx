@@ -502,6 +502,97 @@ export default function MapColumnsPage() {
     }
   };
 
+  // Generate preview transaction from first data row
+  const getPreviewTransaction = () => {
+    if (!analysis || sampleData.length === 0) return null;
+    
+    const startRow = analysis.hasHeaders ? 1 : 0;
+    const dataRowIndex = startRow < sampleData.length ? startRow : 0;
+    const dataRow = sampleData[dataRowIndex];
+    
+    if (!dataRow) return null;
+
+    const mapping: ColumnMapping = {
+      dateColumn: findColumnForField('date'),
+      amountColumn: findColumnForField('amount'),
+      descriptionColumn: findColumnForField('description'),
+      debitColumn: findColumnForField('debit'),
+      creditColumn: findColumnForField('credit'),
+      transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
+      amountSignConvention,
+      dateFormat: analysis.dateFormat,
+      hasHeaders: analysis.hasHeaders,
+    };
+
+    // Extract values
+    const dateValue = mapping.dateColumn !== null ? dataRow[mapping.dateColumn] : null;
+    const descriptionValue = mapping.descriptionColumn !== null ? dataRow[mapping.descriptionColumn] : null;
+    
+    let amount = 0;
+    let transactionType: 'income' | 'expense' = 'expense';
+    let amountDisplay = '';
+
+    if (amountSignConvention === 'separate_debit_credit') {
+      const debitValue = mapping.debitColumn !== null ? dataRow[mapping.debitColumn] : '';
+      const creditValue = mapping.creditColumn !== null ? dataRow[mapping.creditColumn] : '';
+      const debitAmount = parseAmount(debitValue);
+      const creditAmount = parseAmount(creditValue);
+      
+      if (debitAmount > 0) {
+        amount = debitAmount;
+        transactionType = 'expense';
+        amountDisplay = `Debit: ${debitValue}`;
+      } else if (creditAmount > 0) {
+        amount = creditAmount;
+        transactionType = 'income';
+        amountDisplay = `Credit: ${creditValue}`;
+      } else {
+        amountDisplay = 'No amount';
+      }
+    } else if (amountSignConvention === 'separate_column') {
+      const amountValue = mapping.amountColumn !== null ? dataRow[mapping.amountColumn] : '';
+      const typeValue = mapping.transactionTypeColumn !== null ? dataRow[mapping.transactionTypeColumn] : '';
+      amount = parseAmount(amountValue);
+      
+      if (amount > 0) {
+        // Determine type from column value
+        const typeStr = (typeValue || '').toUpperCase();
+        if (typeStr.includes('INCOME') || typeStr.includes('CREDIT') || typeStr.includes('DEPOSIT')) {
+          transactionType = 'income';
+        } else {
+          transactionType = 'expense';
+        }
+        amountDisplay = `${amountValue} (${typeValue || 'N/A'})`;
+      } else {
+        amountDisplay = 'No amount';
+      }
+    } else {
+      const amountValue = mapping.amountColumn !== null ? dataRow[mapping.amountColumn] : '';
+      amount = parseAmount(amountValue);
+      
+      if (amount !== 0) {
+        if (amountSignConvention === 'positive_is_income') {
+          transactionType = amount > 0 ? 'income' : 'expense';
+        } else {
+          transactionType = amount > 0 ? 'expense' : 'income';
+        }
+        amountDisplay = amountValue;
+      } else {
+        amountDisplay = 'No amount';
+      }
+    }
+
+    return {
+      date: dateValue || 'Not mapped',
+      description: descriptionValue || 'Not mapped',
+      amount: amountDisplay,
+      transactionType,
+      isValid: dateValue && descriptionValue && amount !== 0,
+    };
+  };
+
+  const previewTransaction = getPreviewTransaction();
+
   if (!analysis) {
     return (
       <div className="container mx-auto p-6">
