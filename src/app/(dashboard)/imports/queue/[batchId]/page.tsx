@@ -584,7 +584,8 @@ export default function BatchReviewPage() {
         <div className="flex items-center gap-2">
           {/* Re-map button - show for manual imports (CSV or PDF) with CSV data */}
           {/* Check both batchInfo.source_type and batchId pattern for manual imports */}
-          {hasCsvData && (batchInfo?.source_type === 'manual' || batchId.startsWith('manual-')) && (
+          {/* Also check if we have csv_analysis as fallback (for PDFs converted to CSV) */}
+          {((hasCsvData || importFileName) && (batchInfo?.source_type === 'manual' || batchId.startsWith('manual-'))) && (
             <Button 
               variant="outline" 
               onClick={async () => {
