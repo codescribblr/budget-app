@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { getActiveAccountId } from '@/lib/account-context';
 import { getOrCreateManualImportSetup, queueTransactions } from '@/lib/automatic-imports/queue-manager';
 import { parseCSVWithMapping } from '@/lib/csv-parser-helpers';
@@ -166,12 +166,9 @@ export async function POST(
     }));
 
     // Delete old queued imports for this batch BEFORE queueing new ones
-    // Use service role client to bypass RLS (there's no DELETE policy for queued_imports)
     // This ensures queueTransactions doesn't see them as duplicates
-    const serviceSupabase = createServiceRoleClient();
-    
     // First, get count of records to delete for logging
-    const { count: countBeforeDelete } = await serviceSupabase
+    const { count: countBeforeDelete } = await supabase
       .from('queued_imports')
       .select('*', { count: 'exact', head: true })
       .eq('account_id', accountId)
@@ -179,8 +176,9 @@ export async function POST(
     
     console.log(`About to delete ${countBeforeDelete || 0} old queued imports for batch ${batchId}`);
     
-    // Delete all queued imports for this batch using service role client
-    const { error: deleteError, data: deletedData } = await serviceSupabase
+    // Delete all queued imports for this batch
+    // DELETE policy allows editors to delete queued imports for their accounts
+    const { error: deleteError, data: deletedData } = await supabase
       .from('queued_imports')
       .delete()
       .eq('account_id', accountId)
@@ -190,7 +188,7 @@ export async function POST(
     if (deleteError) {
       console.error('Error deleting old queued imports:', deleteError);
       return NextResponse.json(
-        { error: 'Failed to delete old queued imports' },
+        { error: 'Failed to delete old queued imports', details: deleteError.message },
         { status: 500 }
       );
     }
@@ -198,7 +196,7 @@ export async function POST(
     console.log(`Successfully deleted ${deletedData?.length || 0} old queued imports for batch ${batchId}`);
 
     // Verify deletion by checking count after delete
-    const { count: countAfterDelete } = await serviceSupabase
+    const { count: countAfterDelete } = await supabase
       .from('queued_imports')
       .select('*', { count: 'exact', head: true })
       .eq('account_id', accountId)
