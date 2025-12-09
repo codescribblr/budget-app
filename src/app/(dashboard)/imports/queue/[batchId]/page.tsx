@@ -575,10 +575,10 @@ export default function BatchReviewPage() {
                 )}
                 {/* Import File Name */}
                 {importFileName && (
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <span className="text-muted-foreground">File:</span>
+                  <Badge variant="outline" className="text-xs">
+                    <span className="mr-1">File:</span>
                     <span className="font-medium">{importFileName}</span>
-                  </div>
+                  </Badge>
                 )}
                 
                 {/* Mapping Method and Name - Always show if we have any mapping info */}
