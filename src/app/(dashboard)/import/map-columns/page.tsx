@@ -397,7 +397,7 @@ export default function MapColumnsPage() {
           return;
         }
 
-        // Apply remap directly without saving template
+        // Apply remap directly without saving template, then process client-side
         const remapResponse = await fetch(`/api/import/queue/${remapBatchId}/apply-remap`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -412,9 +412,140 @@ export default function MapColumnsPage() {
           throw new Error(errorData.error || 'Failed to apply remap');
         }
 
-        toast.success('Import re-mapped successfully');
-        sessionStorage.removeItem('remapBatchId');
-        router.push('/imports/queue');
+        // Start client-side processing (same flow as template save)
+        setIsProcessing(false); // Close the mapping dialog
+        setIsProcessingRemap(true);
+        setRemapBatchIdState(remapBatchId);
+        setProcessingProgress(0);
+        setProcessingStage('Loading queued transactions...');
+
+        // Process transactions on client side (same flow as review button)
+        try {
+          // Fetch all queued imports for this batch
+          const fetchResponse = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(remapBatchId)}`);
+          if (!fetchResponse.ok) {
+            throw new Error('Failed to fetch batch transactions');
+          }
+
+          const fetchData = await fetchResponse.json();
+          const queuedImports = fetchData.imports || [];
+
+          if (queuedImports.length === 0) {
+            throw new Error('No transactions found for this batch');
+          }
+
+          setProcessingProgress(10);
+          setProcessingStage(`Found ${queuedImports.length} transaction${queuedImports.length !== 1 ? 's' : ''}. Converting format...`);
+
+          // Convert queued imports to ParsedTransaction format
+          const initialTransactions: ParsedTransaction[] = queuedImports.map((qi: any) => ({
+            id: `queued-${qi.id}`,
+            date: qi.transaction_date,
+            description: qi.description,
+            amount: qi.amount,
+            transaction_type: qi.transaction_type,
+            merchant: qi.merchant,
+            suggestedCategory: qi.suggested_category_id || undefined,
+            account_id: qi.target_account_id || undefined,
+            credit_card_id: qi.target_credit_card_id || undefined,
+            is_historical: qi.is_historical || false,
+            splits: [],
+            status: 'pending' as const,
+            isDuplicate: false,
+            originalData: qi.original_data,
+            hash: qi.hash || '',
+          }));
+
+          // Process transactions: check duplicates and auto-categorize
+          setProcessingProgress(20);
+          setProcessingStage('Processing transactions...');
+          const updateProgress = (progress: number, stage: string) => {
+            setProcessingProgress(progress);
+            setProcessingStage(stage);
+          };
+
+          const processedTransactions = await processTransactions(
+            initialTransactions,
+            initialTransactions[0]?.account_id || undefined,
+            initialTransactions[0]?.credit_card_id || undefined,
+            true, // Skip AI categorization initially
+            updateProgress
+          );
+
+          // Update queued imports in database with categorization results
+          setProcessingProgress(95);
+          setProcessingStage('Updating categorization results...');
+          const updateResponse = await fetch('/api/automatic-imports/queue/update-categorization', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transactions: processedTransactions }),
+          });
+
+          if (!updateResponse.ok) {
+            console.warn('Failed to update queued imports with categorization results');
+          }
+
+          // Store processed transactions and batch info in sessionStorage
+          sessionStorage.setItem('queuedBatchId', remapBatchId);
+          sessionStorage.setItem('queuedProcessedTransactions', JSON.stringify(processedTransactions));
+          
+          // Store batch info
+          const firstImport = queuedImports[0];
+          const batchInfo = {
+            setup_name: 'Manual Import',
+            source_type: 'manual',
+            target_account_name: null as string | null,
+            is_credit_card: false,
+            is_historical: false as boolean | 'mixed',
+          };
+
+          if (firstImport) {
+            batchInfo.is_credit_card = !!firstImport.target_credit_card_id;
+            const allHistorical = queuedImports.every((qi: any) => qi.is_historical === true);
+            const someHistorical = queuedImports.some((qi: any) => qi.is_historical === true);
+            batchInfo.is_historical = allHistorical ? true : someHistorical ? 'mixed' : false;
+
+            // Fetch account/credit card name if mapped
+            try {
+              if (firstImport.target_account_id) {
+                const accountResponse = await fetch(`/api/accounts/${firstImport.target_account_id}`);
+                if (accountResponse.ok) {
+                  const account = await accountResponse.json();
+                  batchInfo.target_account_name = account.name;
+                }
+              } else if (firstImport.target_credit_card_id) {
+                const cardResponse = await fetch(`/api/credit-cards/${firstImport.target_credit_card_id}`);
+                if (cardResponse.ok) {
+                  const card = await cardResponse.json();
+                  batchInfo.target_account_name = card.name;
+                }
+              }
+            } catch (err) {
+              console.warn('Failed to fetch account/card name:', err);
+            }
+          }
+          
+          sessionStorage.setItem('queuedBatchInfo', JSON.stringify(batchInfo));
+
+          setProcessingProgress(100);
+          setProcessingStage('Processing complete!');
+
+          // Clear remap-related sessionStorage
+          sessionStorage.removeItem('remapBatchId');
+          sessionStorage.removeItem('csvData');
+          sessionStorage.removeItem('csvAnalysis');
+          sessionStorage.removeItem('csvFileName');
+
+          // Navigate to batch review page after a short delay
+          setTimeout(() => {
+            setIsProcessingRemap(false);
+            window.location.href = `/imports/queue/${remapBatchId}`;
+          }, 500);
+        } catch (processError: any) {
+          console.error('Error processing remapped transactions:', processError);
+          setIsProcessingRemap(false);
+          toast.error(processError.message || 'Failed to process remapped transactions');
+        }
         return;
       }
 
