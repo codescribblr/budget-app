@@ -391,6 +391,16 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       const csvMappingTemplateId = csvTemplateIdStr ? parseInt(csvTemplateIdStr, 10) : undefined;
       const csvMappingName = csvMappingNameStr || undefined;
       
+      // Debug logging
+      console.log('Queueing transactions with CSV data:', {
+        hasCsvData: !!csvData,
+        csvDataLength: csvData ? (Array.isArray(csvData) ? csvData.length : 'not array') : 0,
+        hasCsvAnalysis: !!csvAnalysis,
+        csvFileName: file.name,
+        csvMappingName,
+        csvMappingTemplateId,
+      });
+      
       const saveResponse = await fetch('/api/import/queue-manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

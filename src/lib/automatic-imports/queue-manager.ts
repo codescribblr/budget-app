@@ -229,6 +229,19 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     return 0; // All duplicates (shouldn't happen for manual imports, but keep as safety check)
   }
 
+  // Debug logging
+  if (newTransactions.length > 0) {
+    console.log('queueTransactions storing CSV data:', {
+      hasCsvData: !!csvData,
+      csvDataLength: csvData ? (Array.isArray(csvData) ? csvData.length : 'not array') : 0,
+      hasCsvAnalysis: !!csvAnalysis,
+      csvFileName,
+      csvMappingName,
+      csvMappingTemplateId,
+      transactionCount: newTransactions.length,
+    });
+  }
+
   // Prepare queued imports
   // Use per-transaction is_historical if provided, otherwise fall back to batch-level isHistorical
   // CSV data fields are stored only once per batch (on first transaction), others get null
