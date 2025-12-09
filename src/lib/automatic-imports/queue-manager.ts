@@ -180,11 +180,19 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     .in('hash', Array.from(seenInBatch));
 
   // Check against queued_imports (get all statuses to check transaction_type)
-  const { data: existingQueued } = await supabase
+  // Exclude the current batchId to avoid false positives during remap
+  let query = supabase
     .from('queued_imports')
     .select('hash, source_batch_id, status, transaction_type')
     .eq('account_id', accountId)
     .in('hash', Array.from(seenInBatch));
+  
+  // Exclude current batch to prevent false duplicates during remap
+  if (sourceBatchId) {
+    query = query.neq('source_batch_id', sourceBatchId);
+  }
+  
+  const { data: existingQueued } = await query;
 
   // Build a map of hash -> { status, transaction_type } for queued imports
   const queuedHashInfo = new Map<string, { status: string; transaction_type: string }>();

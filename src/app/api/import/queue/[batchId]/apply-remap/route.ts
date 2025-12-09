@@ -165,7 +165,18 @@ export async function POST(
       is_historical: queuedImport.is_historical || false,
     }));
 
-    // Delete old queued imports for this batch
+    // Delete old queued imports for this batch BEFORE queueing new ones
+    // This ensures queueTransactions doesn't see them as duplicates
+    // First, get count of records to delete for logging
+    const { count: countBeforeDelete } = await supabase
+      .from('queued_imports')
+      .select('*', { count: 'exact', head: true })
+      .eq('account_id', accountId)
+      .eq('source_batch_id', batchId);
+    
+    console.log(`About to delete ${countBeforeDelete || 0} old queued imports for batch ${batchId}`);
+    
+    // Delete all queued imports for this batch
     const { error: deleteError } = await supabase
       .from('queued_imports')
       .delete()
@@ -180,10 +191,29 @@ export async function POST(
       );
     }
 
+    console.log(`Successfully deleted old queued imports for batch ${batchId}`);
+
+    // Verify deletion by checking count after delete
+    const { count: countAfterDelete } = await supabase
+      .from('queued_imports')
+      .select('*', { count: 'exact', head: true })
+      .eq('account_id', accountId)
+      .eq('source_batch_id', batchId);
+    
+    if (countAfterDelete && countAfterDelete > 0) {
+      console.warn(`Warning: ${countAfterDelete} records still exist for batch ${batchId} after delete`);
+    }
+
+    // Small delay to ensure delete is committed before queueing
+    // This prevents race conditions where queueTransactions might still see old records
+    await new Promise(resolve => setTimeout(resolve, 200));
+
     // Queue transactions with SAME batch ID (replacing the old ones)
     // Processing (deduplication, categorization) will happen on client side
     // Preserve is_historical from original batch
+    // Pass supabase client to ensure we're using the same connection
     const queuedCount = await queueTransactions({
+      supabase, // Use same supabase client to ensure consistency
       importSetupId,
       transactions: transactionsWithMetadata,
       sourceBatchId: batchId, // Reuse existing batchId
