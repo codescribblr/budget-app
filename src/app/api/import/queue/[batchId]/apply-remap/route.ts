@@ -166,13 +166,17 @@ export async function POST(
     }));
 
     // Process transactions: check duplicates and auto-categorize (skip AI initially)
+    // Need to provide base URL for server-side fetch calls
     const { processTransactions } = await import('@/lib/csv-parser-helpers');
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
     const processedTransactions = await processTransactions(
       transactionsWithMetadata,
       queuedImport.target_account_id || undefined,
       queuedImport.target_credit_card_id || undefined,
       true, // Skip AI categorization initially
-      undefined // No progress callback needed
+      undefined, // No progress callback needed
+      baseUrl // Provide base URL for server-side fetch calls
     );
 
     // Delete old queued imports for this batch (AFTER processing to preserve any categorization)
