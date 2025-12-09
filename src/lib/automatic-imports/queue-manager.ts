@@ -328,7 +328,7 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     const firstInsertedId = insertedData[0].id;
     const { data: verifyData, error: verifyError } = await supabase
       .from('queued_imports')
-      .select('id, csv_data, csv_analysis, csv_file_name, csv_mapping_name')
+      .select('id, csv_data, csv_analysis, csv_file_name, csv_mapping_name, csv_mapping_template_id')
       .eq('id', firstInsertedId)
       .single();
     
@@ -341,6 +341,8 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
         has_csv_analysis: !!verifyData.csv_analysis,
         csv_file_name: verifyData.csv_file_name,
         csv_mapping_name: verifyData.csv_mapping_name,
+        csv_mapping_template_id: verifyData.csv_mapping_template_id,
+        expected_template_id: csvMappingTemplateId,
       });
     } else if (verifyError) {
       console.error('Error verifying CSV data:', verifyError);
@@ -736,6 +738,66 @@ export async function approveAndImportQueuedTransactions(queuedImportIds: number
   
   // Update queued imports to mark as imported
   if (importedQueuedIds.length > 0) {
+    // Before marking as imported, check if ANY imports from this batch have already been imported
+    // to prevent double-counting template usage
+    const { data: existingBatchImports } = await supabase
+      .from('queued_imports')
+      .select('id, status')
+      .eq('source_batch_id', batchId)
+      .eq('account_id', accountId)
+      .eq('status', 'imported')
+      .limit(1);
+    
+    const isFirstImportForBatch = !existingBatchImports || existingBatchImports.length === 0;
+    
+    // Increment template usage counts for this batch (once per unique template per batch)
+    if (isFirstImportForBatch) {
+      // Fetch all queued imports for this batch to get template IDs
+      const { data: batchImports } = await supabase
+        .from('queued_imports')
+        .select('csv_mapping_template_id')
+        .eq('source_batch_id', batchId)
+        .eq('account_id', accountId)
+        .not('csv_mapping_template_id', 'is', null);
+      
+      if (batchImports && batchImports.length > 0) {
+        // Get unique template IDs
+        const uniqueTemplateIds = [...new Set(
+          batchImports
+            .map(qi => qi.csv_mapping_template_id)
+            .filter((id): id is number => id !== null && id !== undefined)
+        )];
+        
+        // Increment usage_count for each unique template (once per batch)
+        for (const templateId of uniqueTemplateIds) {
+          try {
+            const { data: template } = await supabase
+              .from('csv_import_templates')
+              .select('usage_count, user_id')
+              .eq('id', templateId)
+              .single();
+            
+            if (template) {
+              await supabase
+                .from('csv_import_templates')
+                .update({
+                  usage_count: (template.usage_count || 0) + 1,
+                  last_used: new Date().toISOString(),
+                })
+                .eq('id', templateId)
+                .eq('user_id', template.user_id);
+              
+              console.log(`Incremented usage_count for template ${templateId} (batch ${batchId})`);
+            }
+          } catch (err) {
+            console.warn(`Failed to increment usage_count for template ${templateId}:`, err);
+            // Non-critical error, continue
+          }
+        }
+      }
+    }
+    
+    // Mark queued imports as imported
     await supabase
       .from('queued_imports')
       .update({

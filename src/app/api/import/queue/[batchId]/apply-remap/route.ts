@@ -3,7 +3,6 @@ import { createClient } from '@/lib/supabase/server';
 import { getActiveAccountId } from '@/lib/account-context';
 import { getOrCreateManualImportSetup, queueTransactions } from '@/lib/automatic-imports/queue-manager';
 import { parseCSVWithMapping } from '@/lib/csv-parser-helpers';
-import { saveTemplate } from '@/lib/mapping-templates';
 import type { ColumnMapping } from '@/lib/mapping-templates';
 import type { ParsedTransaction } from '@/lib/import-types';
 import { generateAutomaticMappingName } from '@/lib/mapping-name-generator';
@@ -92,7 +91,7 @@ export async function POST(
     if (saveAsTemplate) {
       if (overwriteTemplateId) {
         // Update existing template
-        const { data: updated } = await supabase
+        const { data: updated, error: updateError } = await supabase
           .from('csv_import_templates')
           .update({
             template_name: templateName || undefined,
@@ -113,25 +112,94 @@ export async function POST(
           .select('id, template_name')
           .single();
 
+        if (updateError) {
+          console.error('Error updating template:', updateError);
+          throw new Error(`Failed to update template: ${updateError.message}`);
+        }
+
         if (updated) {
           newTemplateId = updated.id;
           mappingName = updated.template_name || templateName || 'Saved Template';
+          console.log('Template updated successfully:', { templateId: newTemplateId, templateName: mappingName });
+        } else {
+          throw new Error('Template update returned no data');
         }
       } else {
-        // Create new template
+        // Create new template - use Supabase directly since we're server-side
         try {
-          const savedTemplate = await saveTemplate({
-            userId: user.id,
-            templateName: templateName || undefined,
-            fingerprint: csvAnalysis.fingerprint || queuedImport.csv_fingerprint || '',
-            columnCount: csvData[0]?.length || 0,
-            mapping,
-          });
-          newTemplateId = savedTemplate.id;
-          mappingName = savedTemplate.template_name || templateName || 'Saved Template';
+          const fingerprint = csvAnalysis.fingerprint || queuedImport.csv_fingerprint || '';
+          const { data: savedTemplate, error: insertError } = await supabase
+            .from('csv_import_templates')
+            .insert({
+              user_id: user.id,
+              template_name: templateName || undefined,
+              fingerprint: fingerprint,
+              column_count: csvData[0]?.length || 0,
+              date_column: mapping.dateColumn,
+              amount_column: mapping.amountColumn,
+              description_column: mapping.descriptionColumn,
+              debit_column: mapping.debitColumn,
+              credit_column: mapping.creditColumn,
+              transaction_type_column: mapping.transactionTypeColumn,
+              amount_sign_convention: mapping.amountSignConvention || 'positive_is_expense',
+              date_format: mapping.dateFormat,
+              has_headers: mapping.hasHeaders,
+              skip_rows: mapping.skipRows || 0,
+              usage_count: 0,
+              last_used: new Date().toISOString(),
+            })
+            .select('id, template_name')
+            .single();
+
+          if (insertError) {
+            // Handle unique constraint violation (template already exists)
+            if (insertError.code === '23505') {
+              // Update existing template instead
+              const { data: updated, error: updateError } = await supabase
+                .from('csv_import_templates')
+                .update({
+                  template_name: templateName,
+                  date_column: mapping.dateColumn,
+                  amount_column: mapping.amountColumn,
+                  description_column: mapping.descriptionColumn,
+                  debit_column: mapping.debitColumn,
+                  credit_column: mapping.creditColumn,
+                  transaction_type_column: mapping.transactionTypeColumn,
+                  amount_sign_convention: mapping.amountSignConvention || 'positive_is_expense',
+                  date_format: mapping.dateFormat,
+                  has_headers: mapping.hasHeaders,
+                  skip_rows: mapping.skipRows || 0,
+                  last_used: new Date().toISOString(),
+                })
+                .eq('user_id', user.id)
+                .eq('fingerprint', fingerprint)
+                .select('id, template_name')
+                .single();
+
+              if (updateError) {
+                throw updateError;
+              }
+              
+              if (updated) {
+                newTemplateId = updated.id;
+                mappingName = updated.template_name || templateName || 'Saved Template';
+                console.log('Template updated (duplicate fingerprint):', { templateId: newTemplateId, templateName: mappingName });
+              } else {
+                throw new Error('Template update returned no data');
+              }
+            } else {
+              throw insertError;
+            }
+          } else if (savedTemplate) {
+            newTemplateId = savedTemplate.id;
+            mappingName = savedTemplate.template_name || templateName || 'Saved Template';
+            console.log('Template created successfully:', { templateId: newTemplateId, templateName: mappingName });
+          } else {
+            throw new Error('Template insert returned no data');
+          }
         } catch (err) {
-          console.warn('Failed to save template:', err);
-          // Non-critical error, continue
+          console.error('Failed to save template:', err);
+          throw new Error(`Failed to save template: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
       }
 
@@ -142,6 +210,11 @@ export async function POST(
           .delete()
           .eq('id', oldTemplateId)
           .eq('user_id', user.id);
+      }
+
+      // Verify template was saved successfully
+      if (!newTemplateId) {
+        throw new Error('Template save was requested but template ID was not set');
       }
     }
     
@@ -218,6 +291,13 @@ export async function POST(
     // Processing (deduplication, categorization) will happen on client side
     // Preserve is_historical from original batch
     // Pass supabase client to ensure we're using the same connection
+    console.log('Queueing transactions with template info:', {
+      saveAsTemplate,
+      newTemplateId,
+      mappingName,
+      batchId,
+    });
+    
     const queuedCount = await queueTransactions({
       supabase, // Use same supabase client to ensure consistency
       importSetupId,

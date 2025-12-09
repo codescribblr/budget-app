@@ -35,14 +35,14 @@ export async function PUT(request: Request) {
     };
 
     // Allow updating these fields
-    // Handle account selection: if account is provided (even null), set it and clear credit card
-    if (targetAccountId !== undefined) {
+    // Handle account selection: if account is provided and it's a valid ID (not null), set it and clear credit card
+    if (targetAccountId !== undefined && targetAccountId !== null) {
       updateData.target_account_id = targetAccountId;
       updateData.target_credit_card_id = null; // Clear credit card if account is set
     }
-    // Handle credit card selection: only if credit card is explicitly provided AND account is not being set
-    // This prevents clearing account_id when targetCreditCardId is null but targetAccountId is set
-    if (targetCreditCardId !== undefined && targetAccountId === undefined) {
+    // Handle credit card selection: if credit card is provided AND account is not a valid ID
+    // This handles both cases: targetAccountId is undefined OR targetAccountId is null
+    if (targetCreditCardId !== undefined && (targetAccountId === undefined || targetAccountId === null)) {
       updateData.target_credit_card_id = targetCreditCardId;
       updateData.target_account_id = null; // Clear account if credit card is set
     }

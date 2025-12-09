@@ -95,7 +95,7 @@ export default function BatchReviewPage() {
         const storedBatchInfo = sessionStorage.getItem('queuedBatchInfo');
         
         if (storedTransactions) {
-          loadFromStorage(storedTransactions, storedBatchInfo);
+          await loadFromStorage(storedTransactions, storedBatchInfo);
           return;
         }
         
@@ -407,7 +407,7 @@ export default function BatchReviewPage() {
     }
   };
 
-  const loadFromStorage = (storedTransactions: string, storedBatchInfo: string | null) => {
+  const loadFromStorage = async (storedTransactions: string, storedBatchInfo: string | null) => {
     try {
       // Load processed transactions from sessionStorage
       const processedTransactions = JSON.parse(storedTransactions);
@@ -428,6 +428,62 @@ export default function BatchReviewPage() {
           console.warn('Failed to parse batch info:', err);
           // Use defaults
         }
+      }
+      
+      // Fetch CSV fields from database to ensure we have filename, mapping name, etc.
+      // This is especially important after remap when data might have changed
+      try {
+        const csvResponse = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}&limit=1`);
+        if (csvResponse.ok) {
+          const csvData = await csvResponse.json();
+          const firstImport = csvData.imports?.[0];
+          
+          if (firstImport) {
+            // Set CSV-related fields
+            const csvDataExists = !!firstImport.csv_data || !!firstImport.csv_analysis;
+            setHasCsvData(csvDataExists);
+            setMappingTemplateId(firstImport.csv_mapping_template_id || null);
+            setImportFileName(firstImport.csv_file_name || null);
+            
+            // Get mapping name
+            let mappingNameValue = firstImport.csv_mapping_name || null;
+            
+            // If no mapping name stored but we have CSV analysis, generate one
+            if (!mappingNameValue && firstImport.csv_analysis) {
+              try {
+                const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+                const analysis = firstImport.csv_analysis;
+                const fileName = firstImport.csv_file_name || 'unknown.csv';
+                mappingNameValue = generateAutomaticMappingName(analysis, fileName);
+              } catch (err) {
+                console.warn('Failed to generate mapping name:', err);
+              }
+            }
+            
+            // Fallback to "Automatic Mapping" if still no name
+            if (!mappingNameValue) {
+              mappingNameValue = firstImport.csv_mapping_template_id ? 'Template Mapping' : 'Automatic Mapping';
+            }
+            
+            setMappingName(mappingNameValue);
+            
+            // Fetch template name if template ID exists
+            if (firstImport.csv_mapping_template_id) {
+              try {
+                const templateResponse = await fetch(`/api/import/templates/${firstImport.csv_mapping_template_id}`);
+                if (templateResponse.ok) {
+                  const template = await templateResponse.json();
+                  setMappingTemplateName(template.template_name || null);
+                }
+              } catch (err) {
+                console.warn('Failed to fetch template name:', err);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch CSV fields from database:', err);
+        // Continue without CSV fields - they'll be missing but page will still work
       }
       
       // Sort transactions by date descending (newest first)
@@ -629,15 +685,6 @@ export default function BatchReviewPage() {
         </div>
         <div className="flex items-center gap-2">
           {/* Re-map button - show for manual imports (CSV or PDF) with CSV data */}
-          {/* Check both batchInfo.source_type and batchId pattern for manual imports */}
-          {/* Debug logging */}
-          {console.log('Re-map button check:', {
-            hasCsvData,
-            source_type: batchInfo?.source_type,
-            batchId,
-            batchIdStartsWithManual: batchId.startsWith('manual-'),
-            shouldShow: hasCsvData && (batchInfo?.source_type === 'manual' || batchId.startsWith('manual-')),
-          })}
           {hasCsvData && (batchInfo?.source_type === 'manual' || batchId.startsWith('manual-')) && (
             <Button 
               variant="outline" 

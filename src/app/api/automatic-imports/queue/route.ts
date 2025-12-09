@@ -33,7 +33,8 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
       
-      const accountId = await (await import('@/lib/automatic-imports/queue-manager')).getActiveAccountId();
+      const { getActiveAccountId } = await import('@/lib/account-context');
+      const accountId = await getActiveAccountId();
       if (!accountId) {
         return NextResponse.json({ error: 'No active account' }, { status: 400 });
       }
