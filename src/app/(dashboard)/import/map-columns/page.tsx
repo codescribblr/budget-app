@@ -380,6 +380,10 @@ export default function MapColumnsPage() {
       if (isRemap && remapBatchId) {
         // Show template options dialog if user wants to save template
         if (shouldSaveTemplate || templateSaveMode !== 'none') {
+          // If no current template and user selected overwrite, default to new
+          if (templateSaveMode === 'overwrite' && !currentTemplateId) {
+            setTemplateSaveMode('new');
+          }
           setShowTemplateOptions(true);
           setIsProcessing(false);
           return;
@@ -696,7 +700,9 @@ export default function MapColumnsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="overwrite">Overwrite existing template</SelectItem>
+                        {currentTemplateId && (
+                          <SelectItem value="overwrite">Overwrite existing template</SelectItem>
+                        )}
                         <SelectItem value="new">Create new template</SelectItem>
                       </SelectContent>
                     </Select>
@@ -805,7 +811,9 @@ export default function MapColumnsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="overwrite">Overwrite existing template</SelectItem>
+                  {currentTemplateId && (
+                    <SelectItem value="overwrite">Overwrite existing template</SelectItem>
+                  )}
                   <SelectItem value="new">Create new template</SelectItem>
                 </SelectContent>
               </Select>
