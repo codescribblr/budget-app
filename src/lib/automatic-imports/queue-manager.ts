@@ -302,25 +302,41 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
   });
 
   // Insert queued imports
+  // Note: We don't select CSV fields in the insert response because PostgREST may not return them
+  // Instead, we'll verify by querying back after insert
   const { data: insertedData, error } = await supabase
     .from('queued_imports')
     .insert(queuedImports)
-    .select('id, csv_data, csv_file_name, csv_mapping_name');
+    .select('id, source_batch_id');
 
   if (error) {
     console.error('Error queueing transactions:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     throw error;
   }
 
-  // Debug: Check if CSV data was actually inserted
-  if (insertedData && insertedData.length > 0) {
-    const firstInserted = insertedData[0];
-    console.log('First inserted queued import:', {
-      id: firstInserted.id,
-      has_csv_data: !!firstInserted.csv_data,
-      csv_file_name: firstInserted.csv_file_name,
-      csv_mapping_name: firstInserted.csv_mapping_name,
-    });
+  // Verify CSV data was stored by querying back the first inserted record
+  if (insertedData && insertedData.length > 0 && sourceBatchId) {
+    const firstInsertedId = insertedData[0].id;
+    const { data: verifyData, error: verifyError } = await supabase
+      .from('queued_imports')
+      .select('id, csv_data, csv_analysis, csv_file_name, csv_mapping_name')
+      .eq('id', firstInsertedId)
+      .single();
+    
+    if (!verifyError && verifyData) {
+      console.log('Verified inserted CSV data:', {
+        id: verifyData.id,
+        has_csv_data: !!verifyData.csv_data,
+        csv_data_type: verifyData.csv_data ? typeof verifyData.csv_data : 'null',
+        csv_data_is_array: Array.isArray(verifyData.csv_data),
+        has_csv_analysis: !!verifyData.csv_analysis,
+        csv_file_name: verifyData.csv_file_name,
+        csv_mapping_name: verifyData.csv_mapping_name,
+      });
+    } else if (verifyError) {
+      console.error('Error verifying CSV data:', verifyError);
+    }
   }
 
   return newTransactions.length;
