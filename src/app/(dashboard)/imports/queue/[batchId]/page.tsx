@@ -38,6 +38,7 @@ export default function BatchReviewPage() {
     is_historical: boolean | 'mixed';
   } | null>(null);
   const [hasCsvData, setHasCsvData] = useState<boolean>(false);
+  const [mappingName, setMappingName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -224,6 +225,7 @@ export default function BatchReviewPage() {
         // Check if CSV data exists (for re-mapping capability)
         // CSV data is stored on the first transaction of the batch
         setHasCsvData(!!firstImport.csv_data);
+        setMappingName(firstImport.csv_mapping_name || null);
 
         // Use setup info we already fetched
         if (setupInfo) {
@@ -276,6 +278,7 @@ export default function BatchReviewPage() {
       if (queuedImports.length > 0) {
         const firstImport = queuedImports[0];
         setHasCsvData(!!firstImport.csv_data);
+        setMappingName(firstImport.csv_mapping_name || null);
       }
       
       setLoading(false);
@@ -451,6 +454,12 @@ export default function BatchReviewPage() {
                     )}
                     <span className="font-medium">{batchInfo.target_account_name}</span>
                   </div>
+                )}
+                {mappingName && (
+                  <Badge variant="outline" className="text-xs">
+                    <span className="mr-1">Mapping:</span>
+                    <span className="font-medium">{mappingName}</span>
+                  </Badge>
                 )}
                 {batchInfo.is_historical === true && (
                   <Badge variant="outline" className="text-xs text-amber-600 dark:text-amber-400">

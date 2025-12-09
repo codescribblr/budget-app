@@ -132,6 +132,7 @@ export interface QueueTransactionOptions {
   csvFingerprint?: string; // Optional: CSV fingerprint for template matching
   csvMappingTemplateId?: number; // Optional: Associated template ID
   csvFileName?: string; // Optional: Original CSV filename
+  csvMappingName?: string; // Optional: Human-readable mapping name (template name or auto-generated)
 }
 
 /**
@@ -155,6 +156,7 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     csvFingerprint,
     csvMappingTemplateId,
     csvFileName,
+    csvMappingName,
   } = options;
 
   // Get existing hashes to check for duplicates
@@ -250,6 +252,7 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     csv_fingerprint: index === 0 ? (csvFingerprint || null) : null,
     csv_mapping_template_id: index === 0 ? (csvMappingTemplateId || null) : null,
     csv_file_name: index === 0 ? (csvFileName || null) : null,
+    csv_mapping_name: index === 0 ? (csvMappingName || null) : null,
   }));
 
   // Insert queued imports
@@ -281,7 +284,7 @@ export async function getQueuedImports(options?: {
 
   let query = supabase
     .from('queued_imports')
-    .select('*, csv_data, csv_analysis, csv_file_name, csv_fingerprint, csv_mapping_template_id')
+    .select('*, csv_data, csv_analysis, csv_file_name, csv_fingerprint, csv_mapping_template_id, csv_mapping_name')
     .eq('account_id', accountId)
     .order('transaction_date', { ascending: false });
 

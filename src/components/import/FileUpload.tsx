@@ -114,6 +114,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         // Analyze CSV structure
         const analysis = analyzeCSV(rawData);
         
+        updateProgress(20, 'Mapping CSV fields...');
+        
         // Check if we have high confidence for all required fields
         const hasRequiredFields = 
           analysis.dateColumn !== null &&
@@ -135,14 +137,36 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           });
 
         if (highConfidence) {
-          updateProgress(25, 'Parsing CSV transactions...');
+          updateProgress(30, 'Parsing CSV transactions...');
           // Auto-import with detected mapping
           const result = await parseCSVFile(file);
           transactions = result.transactions;
           
+          // Get mapping name (template name or auto-generated)
+          let mappingName: string | undefined;
+          if (result.templateId) {
+            // Try to get template name
+            try {
+              const templateResponse = await fetch(`/api/import/templates/${result.templateId}`);
+              if (templateResponse.ok) {
+                const template = await templateResponse.json();
+                mappingName = template.template_name || 'Saved Template';
+              }
+            } catch (err) {
+              console.warn('Failed to fetch template name:', err);
+            }
+          }
+          
+          // If no template, generate automatic mapping name
+          if (!mappingName) {
+            const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+            mappingName = generateAutomaticMappingName(analysis, file.name);
+          }
+          
           // Store CSV data and template info for potential re-processing
           sessionStorage.setItem('csvData', JSON.stringify(rawData));
           sessionStorage.setItem('csvFileName', file.name);
+          sessionStorage.setItem('csvMappingName', mappingName);
           if (result.templateId) {
             sessionStorage.setItem('csvTemplateId', result.templateId.toString());
           }
@@ -212,6 +236,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
             updateProgress(25, 'Analyzing PDF structure...');
             const analysis = analyzeCSV(csvData);
             
+            updateProgress(30, 'Mapping CSV fields...');
+            
             // Check if we have high confidence for all required fields
             const hasRequiredFields = 
               analysis.dateColumn !== null &&
@@ -233,11 +259,16 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
               });
 
             if (highConfidence) {
+              // Generate mapping name for PDF
+              const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+              const mappingName = generateAutomaticMappingName(analysis, file.name);
+              
               // Auto-process PDF transactions (they're already parsed)
               // Store CSV data for potential re-mapping
               sessionStorage.setItem('csvData', JSON.stringify(csvData));
               sessionStorage.setItem('csvFileName', file.name);
               sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
+              sessionStorage.setItem('csvMappingName', mappingName);
               // Use analysis fingerprint for PDF CSV data
               sessionStorage.setItem('csvFingerprint', analysis.fingerprint);
             } else {
@@ -317,11 +348,13 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
       const csvFingerprintStr = sessionStorage.getItem('csvFingerprint');
       const csvTemplateIdStr = sessionStorage.getItem('csvTemplateId');
+      const csvMappingNameStr = sessionStorage.getItem('csvMappingName');
       
       const csvData = csvDataStr ? JSON.parse(csvDataStr) : undefined;
       const csvAnalysis = csvAnalysisStr ? JSON.parse(csvAnalysisStr) : undefined;
       const csvFingerprint = csvFingerprintStr || undefined;
       const csvMappingTemplateId = csvTemplateIdStr ? parseInt(csvTemplateIdStr, 10) : undefined;
+      const csvMappingName = csvMappingNameStr || undefined;
       
       const saveResponse = await fetch('/api/import/queue-manual', {
         method: 'POST',
@@ -336,6 +369,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           csvAnalysis,
           csvFingerprint,
           csvMappingTemplateId,
+          csvMappingName,
         }),
       });
 

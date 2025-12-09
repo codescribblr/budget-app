@@ -408,6 +408,7 @@ export default function MapColumnsPage() {
 
       // Normal flow: queue transactions
       let savedTemplateId: number | undefined;
+      let mappingName: string | undefined;
       if (shouldSaveTemplate) {
         try {
           const savedTemplate = await saveTemplate({
@@ -418,10 +419,17 @@ export default function MapColumnsPage() {
             mapping,
           });
           savedTemplateId = savedTemplate.id;
+          mappingName = savedTemplate.template_name || templateName || 'Saved Template';
         } catch (err) {
           console.warn('Failed to save template:', err);
           // Non-critical error, continue with import
         }
+      }
+      
+      // If no template was saved, generate automatic mapping name
+      if (!mappingName) {
+        const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+        mappingName = generateAutomaticMappingName(analysis, fileName);
       }
 
       // csvData is already parsed from sessionStorage above, use it directly
@@ -436,6 +444,7 @@ export default function MapColumnsPage() {
           csvAnalysis: analysis,
           csvFingerprint: analysis.fingerprint,
           csvMappingTemplateId: savedTemplateId,
+          csvMappingName: mappingName,
         }),
       });
 
@@ -869,6 +878,18 @@ export default function MapColumnsPage() {
                     hasHeaders: analysis.hasHeaders,
                   };
 
+                  // Generate mapping name if not saving template
+                  let mappingNameForRemap: string | undefined;
+                  if (templateSaveMode === 'new' && templateName) {
+                    mappingNameForRemap = templateName;
+                  } else if (templateSaveMode === 'overwrite' && currentTemplateName) {
+                    mappingNameForRemap = currentTemplateName;
+                  } else {
+                    // Generate automatic name
+                    const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+                    mappingNameForRemap = generateAutomaticMappingName(csvAnalysis, fileName);
+                  }
+                  
                   const remapResponse = await fetch(`/api/import/queue/${remapBatchId}/apply-remap`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

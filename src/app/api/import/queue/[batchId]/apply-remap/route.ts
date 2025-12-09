@@ -6,6 +6,7 @@ import { parseCSVWithMapping } from '@/lib/csv-parser-helpers';
 import { saveTemplate } from '@/lib/mapping-templates';
 import type { ColumnMapping } from '@/lib/mapping-templates';
 import type { ParsedTransaction } from '@/lib/import-types';
+import { generateAutomaticMappingName } from '@/lib/mapping-name-generator';
 
 /**
  * POST /api/import/queue/[batchId]/apply-remap
@@ -51,7 +52,7 @@ export async function POST(
     // Get CSV data and current template info
     const { data: queuedImport, error: fetchError } = await supabase
       .from('queued_imports')
-      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, import_setup_id, target_account_id, target_credit_card_id')
+      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, import_setup_id, target_account_id, target_credit_card_id')
       .eq('account_id', accountId)
       .eq('source_batch_id', batchId)
       .not('csv_data', 'is', null)
@@ -86,6 +87,8 @@ export async function POST(
 
     // Handle template save/update
     let newTemplateId: number | undefined;
+    let mappingName: string | undefined;
+    
     if (saveAsTemplate) {
       if (overwriteTemplateId) {
         // Update existing template
@@ -107,11 +110,12 @@ export async function POST(
           })
           .eq('id', overwriteTemplateId)
           .eq('user_id', user.id)
-          .select('id')
+          .select('id, template_name')
           .single();
 
         if (updated) {
           newTemplateId = updated.id;
+          mappingName = updated.template_name || templateName || 'Saved Template';
         }
       } else {
         // Create new template
@@ -124,6 +128,7 @@ export async function POST(
             mapping,
           });
           newTemplateId = savedTemplate.id;
+          mappingName = savedTemplate.template_name || templateName || 'Saved Template';
         } catch (err) {
           console.warn('Failed to save template:', err);
           // Non-critical error, continue
@@ -138,6 +143,11 @@ export async function POST(
           .eq('id', oldTemplateId)
           .eq('user_id', user.id);
       }
+    }
+    
+    // If no template was saved, generate automatic mapping name
+    if (!mappingName) {
+      mappingName = generateAutomaticMappingName(csvAnalysis, csvFileName);
     }
 
     // Delete old queued imports for this batch
@@ -172,6 +182,7 @@ export async function POST(
       csvFingerprint: csvAnalysis.fingerprint || queuedImport.csv_fingerprint || undefined,
       csvMappingTemplateId: newTemplateId,
       csvFileName,
+      csvMappingName: mappingName,
     });
 
     return NextResponse.json({

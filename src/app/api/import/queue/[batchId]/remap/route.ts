@@ -28,7 +28,7 @@ export async function GET(
     // Get first queued import from batch to extract CSV data
     const { data: queuedImport, error } = await supabase
       .from('queued_imports')
-      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint')
+      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name')
       .eq('account_id', accountId)
       .eq('source_batch_id', batchId)
       .not('csv_data', 'is', null) // Only get one that has CSV data
@@ -79,6 +79,7 @@ export async function GET(
       currentMapping: currentTemplate?.mapping,
       currentTemplateId: currentTemplate?.id,
       currentTemplateName: currentTemplate?.name,
+      currentMappingName: queuedImport.csv_mapping_name || null,
     });
   } catch (error: any) {
     console.error('Error fetching remap data:', error);

@@ -23,6 +23,7 @@ export async function POST(request: Request) {
       csvAnalysis,
       csvFingerprint,
       csvMappingTemplateId,
+      csvMappingName,
     } = body;
 
     if (!Array.isArray(transactions) || transactions.length === 0) {
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
       csvFingerprint,
       csvMappingTemplateId,
       csvFileName: fileName,
+      csvMappingName,
     });
 
     if (queuedCount === 0) {

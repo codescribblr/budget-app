@@ -10,7 +10,8 @@ ALTER TABLE queued_imports
   ADD COLUMN IF NOT EXISTS csv_analysis JSONB, -- Store CSV analysis result
   ADD COLUMN IF NOT EXISTS csv_mapping_template_id BIGINT REFERENCES csv_import_templates(id) ON DELETE SET NULL, -- Associated template
   ADD COLUMN IF NOT EXISTS csv_fingerprint TEXT, -- CSV fingerprint for template matching
-  ADD COLUMN IF NOT EXISTS csv_file_name TEXT; -- Original filename
+  ADD COLUMN IF NOT EXISTS csv_file_name TEXT, -- Original filename
+  ADD COLUMN IF NOT EXISTS csv_mapping_name TEXT; -- Human-readable mapping name (template name or auto-generated)
 
 -- Index for template lookups
 CREATE INDEX IF NOT EXISTS idx_queued_imports_template_id ON queued_imports(csv_mapping_template_id);
@@ -24,5 +25,6 @@ COMMENT ON COLUMN queued_imports.csv_analysis IS 'CSV analysis result (column de
 COMMENT ON COLUMN queued_imports.csv_mapping_template_id IS 'Reference to the CSV import template used for this import';
 COMMENT ON COLUMN queued_imports.csv_fingerprint IS 'CSV fingerprint used for template matching';
 COMMENT ON COLUMN queued_imports.csv_file_name IS 'Original CSV filename';
+COMMENT ON COLUMN queued_imports.csv_mapping_name IS 'Human-readable mapping name: template name if template used, or auto-generated name like "Wells Fargo Style Data"';
 
 COMMIT;
