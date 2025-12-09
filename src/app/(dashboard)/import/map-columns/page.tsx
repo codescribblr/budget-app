@@ -169,9 +169,13 @@ export default function MapColumnsPage() {
             throw new Error('Remap batch ID not found');
           }
 
-          const response = await fetch(`/api/import/queue/${batchId}/remap`);
+          const response = await fetch(`/api/import/queue/${encodeURIComponent(batchId)}/remap`);
           if (!response.ok) {
-            throw new Error('Failed to load remap data');
+            if (response.status === 404) {
+              throw new Error('CSV data not available for this import. Re-mapping is only available for CSV files that were mapped during upload.');
+            }
+            const errorData = await response.json().catch(() => ({ error: 'Failed to load remap data' }));
+            throw new Error(errorData.error || 'Failed to load remap data');
           }
 
           const remapData = await response.json();

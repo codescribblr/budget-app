@@ -37,6 +37,7 @@ export default function BatchReviewPage() {
     is_credit_card: boolean;
     is_historical: boolean | 'mixed';
   } | null>(null);
+  const [hasCsvData, setHasCsvData] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -220,6 +221,10 @@ export default function BatchReviewPage() {
         const someHistorical = queuedImports.some((qi: any) => qi.is_historical === true);
         batchInfo.is_historical = allHistorical ? true : someHistorical ? 'mixed' : false;
 
+        // Check if CSV data exists (for re-mapping capability)
+        // CSV data is stored on the first transaction of the batch
+        setHasCsvData(!!firstImport.csv_data);
+
         // Use setup info we already fetched
         if (setupInfo) {
           batchInfo.setup_name = setupInfo.integration_name || 'Unknown';
@@ -266,6 +271,13 @@ export default function BatchReviewPage() {
 
       setTransactions(sortedTransactions);
       setBatchInfo(batchInfo);
+      
+      // Check if CSV data exists (for re-mapping capability)
+      if (queuedImports.length > 0) {
+        const firstImport = queuedImports[0];
+        setHasCsvData(!!firstImport.csv_data);
+      }
+      
       setLoading(false);
     } catch (err: any) {
       console.error('Error loading from database:', err);
@@ -457,8 +469,8 @@ export default function BatchReviewPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* Re-map button - only show for manual imports */}
-          {batchInfo?.source_type === 'manual' && (
+          {/* Re-map button - only show for manual imports with CSV data */}
+          {batchInfo?.source_type === 'manual' && hasCsvData && (
             <Button 
               variant="outline" 
               onClick={async () => {

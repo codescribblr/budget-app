@@ -281,7 +281,7 @@ export async function getQueuedImports(options?: {
 
   let query = supabase
     .from('queued_imports')
-    .select('*')
+    .select('*, csv_data, csv_analysis, csv_file_name, csv_fingerprint, csv_mapping_template_id')
     .eq('account_id', accountId)
     .order('transaction_date', { ascending: false });
 
