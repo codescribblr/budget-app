@@ -49,10 +49,10 @@ export async function POST(
       deleteOldTemplate?: boolean;
     };
 
-    // Get CSV data and current template info
+    // Get CSV data and current template info, plus batch metadata
     const { data: queuedImport, error: fetchError } = await supabase
       .from('queued_imports')
-      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, import_setup_id, target_account_id, target_credit_card_id')
+      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, import_setup_id, target_account_id, target_credit_card_id, is_historical')
       .eq('account_id', accountId)
       .eq('source_batch_id', batchId)
       .not('csv_data', 'is', null)
@@ -157,10 +157,18 @@ export async function POST(
       queuedImport.target_credit_card_id || null
     );
 
+    // Apply batch metadata to transactions before processing
+    const transactionsWithMetadata = transactions.map(txn => ({
+      ...txn,
+      account_id: queuedImport.target_account_id || undefined,
+      credit_card_id: queuedImport.target_credit_card_id || undefined,
+      is_historical: queuedImport.is_historical || false,
+    }));
+
     // Process transactions: check duplicates and auto-categorize (skip AI initially)
     const { processTransactions } = await import('@/lib/csv-parser-helpers');
     const processedTransactions = await processTransactions(
-      transactions,
+      transactionsWithMetadata,
       queuedImport.target_account_id || undefined,
       queuedImport.target_credit_card_id || undefined,
       true, // Skip AI categorization initially
@@ -183,10 +191,12 @@ export async function POST(
     }
 
     // Queue processed transactions with SAME batch ID (replacing the old ones)
+    // Preserve is_historical from original batch
     const queuedCount = await queueTransactions({
       importSetupId,
       transactions: processedTransactions,
       sourceBatchId: batchId, // Reuse existing batchId
+      isHistorical: queuedImport.is_historical || false,
       csvData,
       csvAnalysis,
       csvFingerprint: csvAnalysis.fingerprint || queuedImport.csv_fingerprint || undefined,
