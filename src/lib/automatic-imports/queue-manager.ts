@@ -257,6 +257,22 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
       ? 'pending' as const  // Allow duplicates for manual review
       : 'pending' as const; // Default status
     
+    // Prepare CSV data for first transaction
+    const csvDataForInsert = index === 0 ? csvData : null;
+    const csvAnalysisForInsert = index === 0 ? csvAnalysis : null;
+    
+    // Debug first transaction CSV data
+    if (index === 0) {
+      console.log('First transaction CSV data being inserted:', {
+        csvDataType: csvDataForInsert ? typeof csvDataForInsert : 'null',
+        csvDataIsArray: Array.isArray(csvDataForInsert),
+        csvDataLength: Array.isArray(csvDataForInsert) ? csvDataForInsert.length : 'N/A',
+        csvAnalysisType: csvAnalysisForInsert ? typeof csvAnalysisForInsert : 'null',
+        csvFileName,
+        csvMappingName,
+      });
+    }
+    
     return {
       account_id: accountId,
       import_setup_id: importSetupId,
@@ -275,24 +291,36 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
       is_historical: txn.is_historical !== undefined ? txn.is_historical : isHistorical,
       source_batch_id: sourceBatchId,
       source_fetched_at: new Date().toISOString(),
-    // CSV mapping fields - store only on first transaction to avoid duplication
-    csv_data: index === 0 ? (csvData || null) : null,
-    csv_analysis: index === 0 ? (csvAnalysis || null) : null,
-    csv_fingerprint: index === 0 ? (csvFingerprint || null) : null,
-    csv_mapping_template_id: index === 0 ? (csvMappingTemplateId || null) : null,
+      // CSV mapping fields - store only on first transaction to avoid duplication
+      csv_data: csvDataForInsert,
+      csv_analysis: csvAnalysisForInsert,
+      csv_fingerprint: index === 0 ? (csvFingerprint || null) : null,
+      csv_mapping_template_id: index === 0 ? (csvMappingTemplateId || null) : null,
       csv_file_name: index === 0 ? (csvFileName || null) : null,
       csv_mapping_name: index === 0 ? (csvMappingName || null) : null,
     };
   });
 
   // Insert queued imports
-  const { error } = await supabase
+  const { data: insertedData, error } = await supabase
     .from('queued_imports')
-    .insert(queuedImports);
+    .insert(queuedImports)
+    .select('id, csv_data, csv_file_name, csv_mapping_name');
 
   if (error) {
     console.error('Error queueing transactions:', error);
     throw error;
+  }
+
+  // Debug: Check if CSV data was actually inserted
+  if (insertedData && insertedData.length > 0) {
+    const firstInserted = insertedData[0];
+    console.log('First inserted queued import:', {
+      id: firstInserted.id,
+      has_csv_data: !!firstInserted.csv_data,
+      csv_file_name: firstInserted.csv_file_name,
+      csv_mapping_name: firstInserted.csv_mapping_name,
+    });
   }
 
   return newTransactions.length;
