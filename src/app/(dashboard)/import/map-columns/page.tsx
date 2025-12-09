@@ -885,9 +885,10 @@ export default function MapColumnsPage() {
                   } else if (templateSaveMode === 'overwrite' && currentTemplateName) {
                     mappingNameForRemap = currentTemplateName;
                   } else {
-                    // Generate automatic name
+                    // Generate automatic name using analysis from sessionStorage
                     const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
-                    mappingNameForRemap = generateAutomaticMappingName(csvAnalysisForRemap, fileNameForRemap);
+                    const storedFileName = sessionStorage.getItem('csvFileName') || fileName || 'unknown.csv';
+                    mappingNameForRemap = generateAutomaticMappingName(csvAnalysis, storedFileName);
                   }
                   
                   const remapResponse = await fetch(`/api/import/queue/${remapBatchId}/apply-remap`, {

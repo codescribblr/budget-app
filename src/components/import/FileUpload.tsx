@@ -40,6 +40,14 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
   const [processedFileName, setProcessedFileName] = useState<string>('');
   const [processingComplete, setProcessingComplete] = useState(false);
   const [queuedBatchId, setQueuedBatchId] = useState<string | null>(null);
+  const [importInfo, setImportInfo] = useState<{
+    fileName: string;
+    mappingName: string | null;
+    totalTransactions: number;
+    databaseDuplicates: number;
+    withinFileDuplicates: number;
+    categorizedCount: number;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
@@ -114,7 +122,9 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         // Analyze CSV structure
         const analysis = analyzeCSV(rawData);
         
+        // Show mapping step for longer so user can see it
         updateProgress(20, 'Mapping CSV fields...');
+        await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to make it visible
         
         // Check if we have high confidence for all required fields
         const hasRequiredFields = 
@@ -184,6 +194,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           router.push('/import/map-columns');
           setIsProcessing(false);
           setProcessingComplete(false);
+          setImportInfo(null);
           return;
         }
       } else if (
@@ -236,7 +247,9 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
             updateProgress(25, 'Analyzing PDF structure...');
             const analysis = analyzeCSV(csvData);
             
+            // Show mapping step for longer so user can see it
             updateProgress(30, 'Mapping CSV fields...');
+            await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to make it visible
             
             // Check if we have high confidence for all required fields
             const hasRequiredFields = 
@@ -279,6 +292,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
               router.push('/import/map-columns');
               setIsProcessing(false);
               setProcessingComplete(false);
+              setImportInfo(null);
               return;
             }
           } else {
@@ -303,6 +317,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         setProcessingComplete(false);
         setProgress(0);
         setProgressStage('');
+        setImportInfo(null);
         return;
       }
 
@@ -312,6 +327,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         setProcessingComplete(false);
         setProgress(0);
         setProgressStage('');
+        setImportInfo(null);
         return;
       }
 
@@ -327,6 +343,25 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         true, // Always skip AI categorization - user can trigger it manually in preview
         updateProgress
       );
+      
+      // Calculate import statistics
+      const databaseDuplicates = processedTransactions.filter(t => t.duplicateType === 'database').length;
+      const withinFileDuplicates = processedTransactions.filter(t => t.duplicateType === 'within-file').length;
+      const categorizedCount = processedTransactions.filter(t => t.suggestedCategory !== null && t.suggestedCategory !== undefined).length;
+      
+      // Get mapping name from sessionStorage
+      const csvMappingNameStr = sessionStorage.getItem('csvMappingName');
+      const mappingName = csvMappingNameStr || null;
+      
+      // Store import info for display
+      setImportInfo({
+        fileName: file.name,
+        mappingName,
+        totalTransactions: transactions.length,
+        databaseDuplicates,
+        withinFileDuplicates,
+        categorizedCount,
+      });
 
       // Apply default account/card and historical flag to transactions before saving
       // Note: At this point, defaultAccountId/defaultCreditCardId/isHistorical may not be set yet
@@ -397,6 +432,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       setProcessingComplete(false);
       setProcessedTransactions(null);
       setProcessedFileName('');
+      setImportInfo(null);
+      setImportInfo(null);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -566,6 +603,43 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
               {/* Import Options - shown during and after processing */}
               <div className="mt-6 pt-4 border-t space-y-4">
                 <div className="text-sm font-medium text-foreground">Import Options</div>
+                
+                {/* Import Information */}
+                {importInfo && (
+                  <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                    <div className="text-sm font-medium text-foreground">Import Information</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">File:</span>
+                        <span className="ml-2 font-medium">{importInfo.fileName}</span>
+                      </div>
+                      {importInfo.mappingName && (
+                        <div>
+                          <span className="text-muted-foreground">Mapping:</span>
+                          <span className="ml-2 font-medium">{importInfo.mappingName}</span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-muted-foreground">Total Transactions:</span>
+                        <span className="ml-2 font-medium">{importInfo.totalTransactions}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Categorized:</span>
+                        <span className="ml-2 font-medium">{importInfo.categorizedCount} / {importInfo.totalTransactions}</span>
+                      </div>
+                      {(importInfo.databaseDuplicates > 0 || importInfo.withinFileDuplicates > 0) && (
+                        <div className="sm:col-span-2">
+                          <span className="text-muted-foreground">Duplicates Found:</span>
+                          <span className="ml-2 font-medium">
+                            {importInfo.databaseDuplicates > 0 && `${importInfo.databaseDuplicates} existing`}
+                            {importInfo.databaseDuplicates > 0 && importInfo.withinFileDuplicates > 0 && ', '}
+                            {importInfo.withinFileDuplicates > 0 && `${importInfo.withinFileDuplicates} within file`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 
                 {/* Historical Import Option */}
                 <div className="flex items-center space-x-2">
