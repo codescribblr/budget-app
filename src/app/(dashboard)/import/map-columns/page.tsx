@@ -144,7 +144,6 @@ export default function MapColumnsPage() {
   const [isProcessingRemap, setIsProcessingRemap] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [processingStage, setProcessingStage] = useState('');
-  const [remapBatchId, setRemapBatchIdState] = useState<string | null>(null);
 
   useEffect(() => {
     // Check permissions - redirect if read-only user
@@ -421,7 +420,7 @@ export default function MapColumnsPage() {
         // Start client-side processing (same flow as template save)
         setIsProcessing(false); // Close the mapping dialog
         setIsProcessingRemap(true);
-        setRemapBatchIdState(remapBatchId);
+        setRemapBatchId(remapBatchId); // Update state with batchId
         setProcessingProgress(0);
         setProcessingStage('Loading queued transactions...');
 
