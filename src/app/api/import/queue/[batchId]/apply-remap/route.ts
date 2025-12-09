@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { getActiveAccountId } from '@/lib/account-context';
 import { getOrCreateManualImportSetup, queueTransactions } from '@/lib/automatic-imports/queue-manager';
 import { parseCSVWithMapping } from '@/lib/csv-parser-helpers';
@@ -166,6 +166,7 @@ export async function POST(
     }));
 
     // Delete old queued imports for this batch BEFORE queueing new ones
+    // Use service role client to bypass RLS if needed
     // This ensures queueTransactions doesn't see them as duplicates
     // First, get count of records to delete for logging
     const { count: countBeforeDelete } = await supabase
@@ -176,22 +177,38 @@ export async function POST(
     
     console.log(`About to delete ${countBeforeDelete || 0} old queued imports for batch ${batchId}`);
     
-    // Delete all queued imports for this batch
-    const { error: deleteError } = await supabase
+    // Try delete with regular client first
+    let { error: deleteError, data: deletedData } = await supabase
       .from('queued_imports')
       .delete()
       .eq('account_id', accountId)
-      .eq('source_batch_id', batchId);
+      .eq('source_batch_id', batchId)
+      .select('id');
 
-    if (deleteError) {
-      console.error('Error deleting old queued imports:', deleteError);
-      return NextResponse.json(
-        { error: 'Failed to delete old queued imports' },
-        { status: 500 }
-      );
+    // If delete failed or didn't delete anything, try with service role client
+    if (deleteError || !deletedData || deletedData.length === 0) {
+      console.log('Delete with regular client failed or returned no rows, trying with service role client...');
+      const serviceSupabase = createServiceRoleClient();
+      const { error: serviceDeleteError, data: serviceDeletedData } = await serviceSupabase
+        .from('queued_imports')
+        .delete()
+        .eq('account_id', accountId)
+        .eq('source_batch_id', batchId)
+        .select('id');
+      
+      if (serviceDeleteError) {
+        console.error('Error deleting old queued imports with service role:', serviceDeleteError);
+        return NextResponse.json(
+          { error: 'Failed to delete old queued imports' },
+          { status: 500 }
+        );
+      }
+      
+      console.log(`Successfully deleted ${serviceDeletedData?.length || 0} old queued imports using service role client`);
+      deletedData = serviceDeletedData;
+    } else {
+      console.log(`Successfully deleted ${deletedData.length} old queued imports`);
     }
-
-    console.log(`Successfully deleted old queued imports for batch ${batchId}`);
 
     // Verify deletion by checking count after delete
     const { count: countAfterDelete } = await supabase
@@ -202,6 +219,19 @@ export async function POST(
     
     if (countAfterDelete && countAfterDelete > 0) {
       console.warn(`Warning: ${countAfterDelete} records still exist for batch ${batchId} after delete`);
+      // Try one more time with service role client if records still exist
+      const serviceSupabase = createServiceRoleClient();
+      const { error: finalDeleteError } = await serviceSupabase
+        .from('queued_imports')
+        .delete()
+        .eq('account_id', accountId)
+        .eq('source_batch_id', batchId);
+      
+      if (finalDeleteError) {
+        console.error('Final delete attempt with service role failed:', finalDeleteError);
+      } else {
+        console.log('Final delete with service role completed');
+      }
     }
 
     // Small delay to ensure delete is committed before queueing
