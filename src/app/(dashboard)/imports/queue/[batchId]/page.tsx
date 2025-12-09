@@ -236,10 +236,18 @@ export default function BatchReviewPage() {
         setMappingTemplateId(firstImport.csv_mapping_template_id || null);
         setImportFileName(firstImport.csv_file_name || null);
         
-        // Calculate duplicate counts from transactions
-        const databaseDups = transactions.filter(t => t.isDuplicate && t.duplicateType === 'database').length;
-        const withinFileDups = transactions.filter(t => t.isDuplicate && t.duplicateType === 'within-file').length;
-        setDuplicateCounts({ database: databaseDups, withinFile: withinFileDups });
+        // Fetch template name if template ID exists
+        if (firstImport.csv_mapping_template_id) {
+          try {
+            const templateResponse = await fetch(`/api/import/templates/${firstImport.csv_mapping_template_id}`);
+            if (templateResponse.ok) {
+              const template = await templateResponse.json();
+              setMappingTemplateName(template.template_name || null);
+            }
+          } catch (err) {
+            console.warn('Failed to fetch template name:', err);
+          }
+        }
 
         // Use setup info we already fetched
         if (setupInfo) {
@@ -288,19 +296,10 @@ export default function BatchReviewPage() {
       setTransactions(sortedTransactions);
       setBatchInfo(batchInfo);
       
-      // Check if CSV data exists (for re-mapping capability)
-      if (queuedImports.length > 0) {
-        const firstImport = queuedImports[0];
-        setHasCsvData(!!firstImport.csv_data);
-        setMappingName(firstImport.csv_mapping_name || null);
-        setMappingTemplateId(firstImport.csv_mapping_template_id || null);
-        setImportFileName(firstImport.csv_file_name || null);
-        
-        // Calculate duplicate counts from transactions
-        const databaseDups = transactions.filter(t => t.isDuplicate && t.duplicateType === 'database').length;
-        const withinFileDups = transactions.filter(t => t.isDuplicate && t.duplicateType === 'within-file').length;
-        setDuplicateCounts({ database: databaseDups, withinFile: withinFileDups });
-      }
+      // Calculate duplicate counts from processed transactions
+      const databaseDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'database').length;
+      const withinFileDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'within-file').length;
+      setDuplicateCounts({ database: databaseDups, withinFile: withinFileDups });
       
       setLoading(false);
     } catch (err: any) {
