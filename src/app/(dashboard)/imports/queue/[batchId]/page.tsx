@@ -39,6 +39,13 @@ export default function BatchReviewPage() {
   } | null>(null);
   const [hasCsvData, setHasCsvData] = useState<boolean>(false);
   const [mappingName, setMappingName] = useState<string | null>(null);
+  const [mappingTemplateId, setMappingTemplateId] = useState<number | null>(null);
+  const [mappingTemplateName, setMappingTemplateName] = useState<string | null>(null);
+  const [importFileName, setImportFileName] = useState<string | null>(null);
+  const [duplicateCounts, setDuplicateCounts] = useState<{
+    database: number;
+    withinFile: number;
+  }>({ database: 0, withinFile: 0 });
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -226,6 +233,13 @@ export default function BatchReviewPage() {
         // CSV data is stored on the first transaction of the batch
         setHasCsvData(!!firstImport.csv_data);
         setMappingName(firstImport.csv_mapping_name || null);
+        setMappingTemplateId(firstImport.csv_mapping_template_id || null);
+        setImportFileName(firstImport.csv_file_name || null);
+        
+        // Calculate duplicate counts from transactions
+        const databaseDups = transactions.filter(t => t.isDuplicate && t.duplicateType === 'database').length;
+        const withinFileDups = transactions.filter(t => t.isDuplicate && t.duplicateType === 'within-file').length;
+        setDuplicateCounts({ database: databaseDups, withinFile: withinFileDups });
 
         // Use setup info we already fetched
         if (setupInfo) {
@@ -279,6 +293,13 @@ export default function BatchReviewPage() {
         const firstImport = queuedImports[0];
         setHasCsvData(!!firstImport.csv_data);
         setMappingName(firstImport.csv_mapping_name || null);
+        setMappingTemplateId(firstImport.csv_mapping_template_id || null);
+        setImportFileName(firstImport.csv_file_name || null);
+        
+        // Calculate duplicate counts from transactions
+        const databaseDups = transactions.filter(t => t.isDuplicate && t.duplicateType === 'database').length;
+        const withinFileDups = transactions.filter(t => t.isDuplicate && t.duplicateType === 'within-file').length;
+        setDuplicateCounts({ database: databaseDups, withinFile: withinFileDups });
       }
       
       setLoading(false);
@@ -455,10 +476,42 @@ export default function BatchReviewPage() {
                     <span className="font-medium">{batchInfo.target_account_name}</span>
                   </div>
                 )}
+                {/* Import File Name */}
+                {importFileName && (
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <span className="text-muted-foreground">File:</span>
+                    <span className="font-medium">{importFileName}</span>
+                  </div>
+                )}
+                
+                {/* Mapping Method and Name */}
                 {mappingName && (
                   <Badge variant="outline" className="text-xs">
                     <span className="mr-1">Mapping:</span>
-                    <span className="font-medium">{mappingName}</span>
+                    <span className="font-medium">
+                      {mappingTemplateId ? 'Template' : 'Automatic'} - {mappingName}
+                    </span>
+                    {mappingTemplateName && mappingTemplateId && (
+                      <span className="ml-1 text-muted-foreground">({mappingTemplateName})</span>
+                    )}
+                  </Badge>
+                )}
+                
+                {/* Duplicates */}
+                {(duplicateCounts.database > 0 || duplicateCounts.withinFile > 0) && (
+                  <Badge variant="outline" className="text-xs text-amber-600 dark:text-amber-400">
+                    <span className="mr-1">Duplicates:</span>
+                    <span className="font-medium">
+                      {duplicateCounts.database > 0 && `${duplicateCounts.database} existing`}
+                      {duplicateCounts.database > 0 && duplicateCounts.withinFile > 0 && ', '}
+                      {duplicateCounts.withinFile > 0 && `${duplicateCounts.withinFile} within file`}
+                    </span>
+                  </Badge>
+                )}
+                {duplicateCounts.database === 0 && duplicateCounts.withinFile === 0 && (
+                  <Badge variant="outline" className="text-xs text-green-600 dark:text-green-400">
+                    <span className="mr-1">Duplicates:</span>
+                    <span className="font-medium">None</span>
                   </Badge>
                 )}
                 {batchInfo.is_historical === true && (
