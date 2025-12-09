@@ -661,8 +661,6 @@ export default function MapColumnsPage() {
     return previews;
   };
 
-  const previewTransaction = getPreviewTransaction();
-
   if (!analysis) {
     return (
       <div className="container mx-auto p-6">
