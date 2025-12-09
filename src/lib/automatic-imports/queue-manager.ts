@@ -219,41 +219,58 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
   });
 
   // Filter out duplicates (both within batch and across batches)
-  const newTransactions = deduplicatedTransactions.filter(t => !existingHashes.has(t.hash));
+  // For manual imports (sourceBatchId starts with "manual-"), allow duplicates to be queued for review
+  const isManualImport = sourceBatchId.startsWith('manual-');
+  const newTransactions = isManualImport 
+    ? deduplicatedTransactions // Allow all transactions for manual imports (user can review duplicates)
+    : deduplicatedTransactions.filter(t => !existingHashes.has(t.hash)); // Filter duplicates for automatic imports
 
   if (newTransactions.length === 0) {
-    return 0; // All duplicates
+    return 0; // All duplicates (shouldn't happen for manual imports, but keep as safety check)
   }
 
   // Prepare queued imports
   // Use per-transaction is_historical if provided, otherwise fall back to batch-level isHistorical
   // CSV data fields are stored only once per batch (on first transaction), others get null
-  const queuedImports = newTransactions.map((txn, index) => ({
-    account_id: accountId,
-    import_setup_id: importSetupId,
-    transaction_date: txn.date,
-    description: txn.description,
-    merchant: txn.merchant,
-    amount: txn.amount,
-    transaction_type: txn.transaction_type,
-    hash: txn.hash,
-    original_data: txn.originalData ? (typeof txn.originalData === 'string' ? JSON.parse(txn.originalData) : txn.originalData) : null,
-    suggested_category_id: txn.suggestedCategory || null,
-    suggested_merchant: txn.merchant || null,
-    target_account_id: txn.account_id || null,
-    target_credit_card_id: txn.credit_card_id || null,
-    status: 'pending' as const,
-    is_historical: txn.is_historical !== undefined ? txn.is_historical : isHistorical,
-    source_batch_id: sourceBatchId,
-    source_fetched_at: new Date().toISOString(),
+  const queuedImports = newTransactions.map((txn, index) => {
+    // Check if this transaction is a duplicate (for manual imports, we still queue them but mark status)
+    const isDuplicate = existingHashes.has(txn.hash);
+    const queuedInfo = queuedHashInfo.get(txn.hash);
+    const isRejected = queuedInfo?.status === 'rejected';
+    
+    // For manual imports, mark duplicates as 'pending' so user can review them
+    // For automatic imports, duplicates are already filtered out above
+    const status = (isManualImport && isDuplicate && !isRejected) 
+      ? 'pending' as const  // Allow duplicates for manual review
+      : 'pending' as const; // Default status
+    
+    return {
+      account_id: accountId,
+      import_setup_id: importSetupId,
+      transaction_date: txn.date,
+      description: txn.description,
+      merchant: txn.merchant,
+      amount: txn.amount,
+      transaction_type: txn.transaction_type,
+      hash: txn.hash,
+      original_data: txn.originalData ? (typeof txn.originalData === 'string' ? JSON.parse(txn.originalData) : txn.originalData) : null,
+      suggested_category_id: txn.suggestedCategory || null,
+      suggested_merchant: txn.merchant || null,
+      target_account_id: txn.account_id || null,
+      target_credit_card_id: txn.credit_card_id || null,
+      status,
+      is_historical: txn.is_historical !== undefined ? txn.is_historical : isHistorical,
+      source_batch_id: sourceBatchId,
+      source_fetched_at: new Date().toISOString(),
     // CSV mapping fields - store only on first transaction to avoid duplication
     csv_data: index === 0 ? (csvData || null) : null,
     csv_analysis: index === 0 ? (csvAnalysis || null) : null,
     csv_fingerprint: index === 0 ? (csvFingerprint || null) : null,
     csv_mapping_template_id: index === 0 ? (csvMappingTemplateId || null) : null,
-    csv_file_name: index === 0 ? (csvFileName || null) : null,
-    csv_mapping_name: index === 0 ? (csvMappingName || null) : null,
-  }));
+      csv_file_name: index === 0 ? (csvFileName || null) : null,
+      csv_mapping_name: index === 0 ? (csvMappingName || null) : null,
+    };
+  });
 
   // Insert queued imports
   const { error } = await supabase
