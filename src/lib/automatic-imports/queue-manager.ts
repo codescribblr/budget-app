@@ -357,11 +357,36 @@ export async function getQueuedImports(options?: {
   if (!accountId) throw new Error('No active account');
 
   // Explicitly select all fields including CSV mapping fields
-  // PostgREST may not return JSONB fields with * selector in some cases
+  // PostgREST requires explicit selection of JSONB fields - using * alone may not return them
+  // Select all standard fields first, then explicitly add CSV mapping fields
   let query = supabase
     .from('queued_imports')
     .select(`
-      *,
+      id,
+      account_id,
+      import_setup_id,
+      transaction_date,
+      description,
+      merchant,
+      amount,
+      transaction_type,
+      hash,
+      original_data,
+      suggested_category_id,
+      suggested_merchant,
+      target_account_id,
+      target_credit_card_id,
+      status,
+      is_historical,
+      reviewed_by,
+      reviewed_at,
+      review_notes,
+      imported_transaction_id,
+      imported_at,
+      source_batch_id,
+      source_fetched_at,
+      created_at,
+      updated_at,
       csv_data,
       csv_analysis,
       csv_file_name,
