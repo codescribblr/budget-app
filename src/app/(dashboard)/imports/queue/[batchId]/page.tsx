@@ -469,7 +469,7 @@ export default function BatchReviewPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* Re-map button - only show for manual imports with CSV data */}
+          {/* Re-map button - show for manual imports (CSV or PDF) with CSV data */}
           {batchInfo?.source_type === 'manual' && hasCsvData && (
             <Button 
               variant="outline" 

@@ -424,6 +424,10 @@ export default function MapColumnsPage() {
         }
       }
 
+      // Get CSV data from sessionStorage if available (for PDFs that were converted)
+      const csvDataStr = sessionStorage.getItem('csvData');
+      const csvDataForQueue = csvDataStr ? JSON.parse(csvDataStr) : csvData;
+      
       // Queue transactions (NOT processed - let queue handle that)
       const queueResponse = await fetch('/api/import/queue-manual', {
         method: 'POST',
@@ -431,7 +435,7 @@ export default function MapColumnsPage() {
         body: JSON.stringify({
           transactions, // Raw parsed transactions, NOT processed
           fileName,
-          csvData,
+          csvData: csvDataForQueue,
           csvAnalysis: analysis,
           csvFingerprint: analysis.fingerprint,
           csvMappingTemplateId: savedTemplateId,

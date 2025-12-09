@@ -194,7 +194,62 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           const result = await response.json();
           if (result.transactions && result.transactions.length > 0) {
             transactions = result.transactions;
-            sessionStorage.setItem('csvFileName', file.name);
+            
+            // Convert PDF transactions to CSV format for mapping support
+            // Create CSV data: [headers, ...rows]
+            // Format: Date, Description, Amount, Transaction Type
+            const csvData: string[][] = [
+              ['Date', 'Description', 'Amount', 'Transaction Type'], // Headers
+              ...transactions.map(txn => [
+                txn.date,
+                txn.description,
+                (txn.transaction_type === 'expense' ? '-' : '') + txn.amount.toFixed(2),
+                txn.transaction_type,
+              ]),
+            ];
+            
+            // Analyze CSV structure (same as regular CSV)
+            updateProgress(25, 'Analyzing PDF structure...');
+            const analysis = analyzeCSV(csvData);
+            
+            // Check if we have high confidence for all required fields
+            const hasRequiredFields = 
+              analysis.dateColumn !== null &&
+              analysis.amountColumn !== null &&
+              analysis.descriptionColumn !== null;
+            
+            const highConfidence = hasRequiredFields &&
+              analysis.columns.every(col => {
+                if (col.fieldType === 'date' && col.columnIndex === analysis.dateColumn) {
+                  return col.confidence >= 0.85;
+                }
+                if (col.fieldType === 'amount' && col.columnIndex === analysis.amountColumn) {
+                  return col.confidence >= 0.85;
+                }
+                if (col.fieldType === 'description' && col.columnIndex === analysis.descriptionColumn) {
+                  return col.confidence >= 0.85;
+                }
+                return true;
+              });
+
+            if (highConfidence) {
+              // Auto-process PDF transactions (they're already parsed)
+              // Store CSV data for potential re-mapping
+              sessionStorage.setItem('csvData', JSON.stringify(csvData));
+              sessionStorage.setItem('csvFileName', file.name);
+              sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
+              // Use analysis fingerprint for PDF CSV data
+              sessionStorage.setItem('csvFingerprint', analysis.fingerprint);
+            } else {
+              // Navigate to mapping page for PDF (same as CSV)
+              sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
+              sessionStorage.setItem('csvData', JSON.stringify(csvData));
+              sessionStorage.setItem('csvFileName', file.name);
+              router.push('/import/map-columns');
+              setIsProcessing(false);
+              setProcessingComplete(false);
+              return;
+            }
           } else {
             throw new Error('No transactions found in PDF');
           }
@@ -256,6 +311,18 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
 
       // Save to import queue automatically after processing
       updateProgress(90, 'Saving to import queue...');
+      
+      // Get CSV data from sessionStorage if available (for PDFs and CSVs that went through mapping)
+      const csvDataStr = sessionStorage.getItem('csvData');
+      const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
+      const csvFingerprintStr = sessionStorage.getItem('csvFingerprint');
+      const csvTemplateIdStr = sessionStorage.getItem('csvTemplateId');
+      
+      const csvData = csvDataStr ? JSON.parse(csvDataStr) : undefined;
+      const csvAnalysis = csvAnalysisStr ? JSON.parse(csvAnalysisStr) : undefined;
+      const csvFingerprint = csvFingerprintStr || undefined;
+      const csvMappingTemplateId = csvTemplateIdStr ? parseInt(csvTemplateIdStr, 10) : undefined;
+      
       const saveResponse = await fetch('/api/import/queue-manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -265,6 +332,10 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           targetAccountId: defaultAccountId,
           targetCreditCardId: defaultCreditCardId,
           isHistorical: isHistorical,
+          csvData,
+          csvAnalysis,
+          csvFingerprint,
+          csvMappingTemplateId,
         }),
       });
 
@@ -607,18 +678,25 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                     throw new Error(errorData.error || 'Failed to save import');
                   }
 
-                  const saveResult = await saveResponse.json();
-                  setQueuedBatchId(saveResult.batchId);
+      const saveResult = await saveResponse.json();
+      setQueuedBatchId(saveResult.batchId);
 
-                  // Store processed transactions with defaults applied (including account_id)
-                  // This ensures the preview shows the correct account
-                  setProcessedTransactions(transactionsWithDefaults);
-                  setProcessedFileName(pendingFile!.name);
-                  setIsProcessing(false); // Reset processing state so button is enabled
-                  setProcessingComplete(true);
-                  updateProgress(100, 'Processing complete! Review your import options below.');
-                  sessionStorage.setItem('csvFileName', pendingFile!.name);
-                  setPendingFile(null);
+      // Store processed transactions with defaults applied (including account_id)
+      // This ensures the preview shows the correct account
+      setProcessedTransactions(transactionsWithDefaults);
+      setProcessedFileName(pendingFile!.name);
+      setIsProcessing(false); // Reset processing state so button is enabled
+      setProcessingComplete(true);
+      updateProgress(100, 'Processing complete! Review your import options below.');
+      sessionStorage.setItem('csvFileName', pendingFile!.name);
+      
+      // Clear CSV data from sessionStorage after queuing (it's now stored in the database)
+      sessionStorage.removeItem('csvData');
+      sessionStorage.removeItem('csvAnalysis');
+      sessionStorage.removeItem('csvFingerprint');
+      sessionStorage.removeItem('csvTemplateId');
+      
+      setPendingFile(null);
                 } catch (err) {
                   console.error('Error processing file with AI:', err);
                   setError(err instanceof Error ? err.message : 'Failed to process file with AI');
