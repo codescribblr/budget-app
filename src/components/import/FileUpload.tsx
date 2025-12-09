@@ -627,16 +627,30 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                         <span className="text-muted-foreground">Categorized:</span>
                         <span className="ml-2 font-medium">{importInfo.categorizedCount} / {importInfo.totalTransactions}</span>
                       </div>
-                      {(importInfo.databaseDuplicates > 0 || importInfo.withinFileDuplicates > 0) && (
-                        <div className="sm:col-span-2">
-                          <span className="text-muted-foreground">Duplicates Found:</span>
-                          <span className="ml-2 font-medium">
-                            {importInfo.databaseDuplicates > 0 && `${importInfo.databaseDuplicates} existing`}
-                            {importInfo.databaseDuplicates > 0 && importInfo.withinFileDuplicates > 0 && ', '}
-                            {importInfo.withinFileDuplicates > 0 && `${importInfo.withinFileDuplicates} within file`}
-                          </span>
-                        </div>
-                      )}
+                      <div className="sm:col-span-2">
+                        <span className="text-muted-foreground">Duplicates:</span>
+                        <span className="ml-2 font-medium">
+                          {importInfo.databaseDuplicates === 0 && importInfo.withinFileDuplicates === 0 ? (
+                            <span className="text-green-600 dark:text-green-400">None</span>
+                          ) : (
+                            <>
+                              {importInfo.databaseDuplicates > 0 && (
+                                <span className="text-amber-600 dark:text-amber-400">
+                                  {importInfo.databaseDuplicates} existing{importInfo.databaseDuplicates !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                              {importInfo.databaseDuplicates > 0 && importInfo.withinFileDuplicates > 0 && (
+                                <span className="mx-1">•</span>
+                              )}
+                              {importInfo.withinFileDuplicates > 0 && (
+                                <span className="text-amber-600 dark:text-amber-400">
+                                  {importInfo.withinFileDuplicates} within file{importInfo.withinFileDuplicates !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
