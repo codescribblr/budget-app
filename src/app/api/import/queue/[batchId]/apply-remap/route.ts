@@ -157,7 +157,7 @@ export async function POST(
       queuedImport.target_credit_card_id || null
     );
 
-    // Apply batch metadata to transactions before processing
+    // Apply batch metadata to transactions
     const transactionsWithMetadata = transactions.map(txn => ({
       ...txn,
       account_id: queuedImport.target_account_id || undefined,
@@ -165,21 +165,7 @@ export async function POST(
       is_historical: queuedImport.is_historical || false,
     }));
 
-    // Process transactions: check duplicates and auto-categorize (skip AI initially)
-    // Need to provide base URL for server-side fetch calls
-    const { processTransactions } = await import('@/lib/csv-parser-helpers');
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
-    const processedTransactions = await processTransactions(
-      transactionsWithMetadata,
-      queuedImport.target_account_id || undefined,
-      queuedImport.target_credit_card_id || undefined,
-      true, // Skip AI categorization initially
-      undefined, // No progress callback needed
-      baseUrl // Provide base URL for server-side fetch calls
-    );
-
-    // Delete old queued imports for this batch (AFTER processing to preserve any categorization)
+    // Delete old queued imports for this batch
     const { error: deleteError } = await supabase
       .from('queued_imports')
       .delete()
@@ -194,11 +180,12 @@ export async function POST(
       );
     }
 
-    // Queue processed transactions with SAME batch ID (replacing the old ones)
+    // Queue transactions with SAME batch ID (replacing the old ones)
+    // Processing (deduplication, categorization) will happen on client side
     // Preserve is_historical from original batch
     const queuedCount = await queueTransactions({
       importSetupId,
-      transactions: processedTransactions,
+      transactions: transactionsWithMetadata,
       sourceBatchId: batchId, // Reuse existing batchId
       isHistorical: queuedImport.is_historical || false,
       csvData,
