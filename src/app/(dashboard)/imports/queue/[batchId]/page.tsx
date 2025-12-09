@@ -231,7 +231,9 @@ export default function BatchReviewPage() {
 
         // Check if CSV data exists (for re-mapping capability)
         // CSV data is stored on the first transaction of the batch
-        setHasCsvData(!!firstImport.csv_data);
+        // Also check csv_analysis as indicator that CSV data should be available
+        const csvDataExists = !!firstImport.csv_data || !!firstImport.csv_analysis;
+        setHasCsvData(csvDataExists);
         setMappingTemplateId(firstImport.csv_mapping_template_id || null);
         setImportFileName(firstImport.csv_file_name || null);
         
