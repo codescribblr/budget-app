@@ -150,7 +150,24 @@ export async function POST(
       mappingName = generateAutomaticMappingName(csvAnalysis, csvFileName);
     }
 
-    // Delete old queued imports for this batch
+    // Get or create manual import setup
+    const importSetupId = await getOrCreateManualImportSetup(
+      undefined,
+      queuedImport.target_account_id || null,
+      queuedImport.target_credit_card_id || null
+    );
+
+    // Process transactions: check duplicates and auto-categorize (skip AI initially)
+    const { processTransactions } = await import('@/lib/csv-parser-helpers');
+    const processedTransactions = await processTransactions(
+      transactions,
+      queuedImport.target_account_id || undefined,
+      queuedImport.target_credit_card_id || undefined,
+      true, // Skip AI categorization initially
+      undefined // No progress callback needed
+    );
+
+    // Delete old queued imports for this batch (AFTER processing to preserve any categorization)
     const { error: deleteError } = await supabase
       .from('queued_imports')
       .delete()
@@ -159,24 +176,17 @@ export async function POST(
 
     if (deleteError) {
       console.error('Error deleting old queued imports:', deleteError);
-      // Continue anyway - worst case we have duplicates
+      return NextResponse.json(
+        { error: 'Failed to delete old queued imports' },
+        { status: 500 }
+      );
     }
 
-    // Get or create manual import setup
-    const importSetupId = await getOrCreateManualImportSetup(
-      undefined,
-      queuedImport.target_account_id || null,
-      queuedImport.target_credit_card_id || null
-    );
-
-    // Generate new batch ID
-    const newBatchId = `manual-${Date.now()}-${csvFileName.replace(/[^a-zA-Z0-9]/g, '-')}`;
-
-    // Queue new transactions with new mapping
+    // Queue processed transactions with SAME batch ID (replacing the old ones)
     const queuedCount = await queueTransactions({
       importSetupId,
-      transactions,
-      sourceBatchId: newBatchId,
+      transactions: processedTransactions,
+      sourceBatchId: batchId, // Reuse existing batchId
       csvData,
       csvAnalysis,
       csvFingerprint: csvAnalysis.fingerprint || queuedImport.csv_fingerprint || undefined,
@@ -187,7 +197,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      batchId: newBatchId,
+      batchId: batchId, // Return same batchId
       queuedCount,
       templateId: newTemplateId,
     });
