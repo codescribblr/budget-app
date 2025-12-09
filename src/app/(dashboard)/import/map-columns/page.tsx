@@ -643,27 +643,32 @@ export default function MapColumnsPage() {
             </CardContent>
           </Card>
 
-          <div className="flex items-center space-x-2 p-4 bg-muted/50 rounded-lg">
-            <Checkbox
-              id="save-template"
-              checked={shouldSaveTemplate}
-              onCheckedChange={(checked) => setShouldSaveTemplate(checked === true)}
-            />
-            <Label htmlFor="save-template" className="cursor-pointer">
-              Save this mapping as a template for future imports
-            </Label>
-          </div>
+          {/* Only show this checkbox for non-remap flows */}
+          {!isRemap && (
+            <>
+              <div className="flex items-center space-x-2 p-4 bg-muted/50 rounded-lg">
+                <Checkbox
+                  id="save-template"
+                  checked={shouldSaveTemplate}
+                  onCheckedChange={(checked) => setShouldSaveTemplate(checked === true)}
+                />
+                <Label htmlFor="save-template" className="cursor-pointer">
+                  Save this mapping as a template for future imports
+                </Label>
+              </div>
 
-          {shouldSaveTemplate && !isRemap && (
-            <div className="space-y-2">
-              <Label htmlFor="template-name">Template Name (optional)</Label>
-              <Input
-                id="template-name"
-                placeholder="e.g., Bank of America Checking"
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-              />
-            </div>
+              {shouldSaveTemplate && (
+                <div className="space-y-2">
+                  <Label htmlFor="template-name">Template Name (optional)</Label>
+                  <Input
+                    id="template-name"
+                    placeholder="e.g., Bank of America Checking"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                  />
+                </div>
+              )}
+            </>
           )}
 
           {isRemap && (
