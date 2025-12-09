@@ -232,9 +232,30 @@ export default function BatchReviewPage() {
         // Check if CSV data exists (for re-mapping capability)
         // CSV data is stored on the first transaction of the batch
         setHasCsvData(!!firstImport.csv_data);
-        setMappingName(firstImport.csv_mapping_name || null);
         setMappingTemplateId(firstImport.csv_mapping_template_id || null);
         setImportFileName(firstImport.csv_file_name || null);
+        
+        // Get mapping name - use stored value or generate from analysis if available
+        let mappingNameValue = firstImport.csv_mapping_name || null;
+        
+        // If no mapping name stored but we have CSV analysis, generate one
+        if (!mappingNameValue && firstImport.csv_analysis) {
+          try {
+            const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+            const analysis = firstImport.csv_analysis;
+            const fileName = firstImport.csv_file_name || 'unknown.csv';
+            mappingNameValue = generateAutomaticMappingName(analysis, fileName);
+          } catch (err) {
+            console.warn('Failed to generate mapping name:', err);
+          }
+        }
+        
+        // Fallback to "Automatic Mapping" if still no name
+        if (!mappingNameValue) {
+          mappingNameValue = firstImport.csv_mapping_template_id ? 'Template Mapping' : 'Automatic Mapping';
+        }
+        
+        setMappingName(mappingNameValue);
         
         // Fetch template name if template ID exists
         if (firstImport.csv_mapping_template_id) {
@@ -300,6 +321,37 @@ export default function BatchReviewPage() {
       const databaseDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'database').length;
       const withinFileDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'within-file').length;
       setDuplicateCounts({ database: databaseDups, withinFile: withinFileDups });
+      
+      // Ensure mapping info is set even if not in first import (for old imports)
+      if (queuedImports.length > 0 && !mappingName) {
+        const firstImport = queuedImports[0];
+        let mappingNameValue = firstImport.csv_mapping_name || null;
+        
+        // If no mapping name stored but we have CSV analysis, generate one
+        if (!mappingNameValue && firstImport.csv_analysis) {
+          try {
+            const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+            const analysis = firstImport.csv_analysis;
+            const fileName = firstImport.csv_file_name || 'unknown.csv';
+            mappingNameValue = generateAutomaticMappingName(analysis, fileName);
+          } catch (err) {
+            console.warn('Failed to generate mapping name:', err);
+          }
+        }
+        
+        // Fallback to "Automatic Mapping" if still no name
+        if (!mappingNameValue) {
+          mappingNameValue = firstImport.csv_mapping_template_id ? 'Template Mapping' : 'Automatic Mapping';
+        }
+        
+        if (mappingNameValue) {
+          setMappingName(mappingNameValue);
+        }
+        
+        if (!importFileName && firstImport.csv_file_name) {
+          setImportFileName(firstImport.csv_file_name);
+        }
+      }
       
       setLoading(false);
     } catch (err: any) {
@@ -483,12 +535,12 @@ export default function BatchReviewPage() {
                   </div>
                 )}
                 
-                {/* Mapping Method and Name */}
-                {mappingName && (
+                {/* Mapping Method and Name - Always show if we have any mapping info */}
+                {(mappingName || importFileName || mappingTemplateId !== null) && (
                   <Badge variant="outline" className="text-xs">
                     <span className="mr-1">Mapping:</span>
                     <span className="font-medium">
-                      {mappingTemplateId ? 'Template' : 'Automatic'} - {mappingName}
+                      {mappingTemplateId ? 'Template' : 'Automatic'} - {mappingName || 'Unknown'}
                     </span>
                     {mappingTemplateName && mappingTemplateId && (
                       <span className="ml-1 text-muted-foreground">({mappingTemplateName})</span>
