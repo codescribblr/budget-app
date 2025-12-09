@@ -503,15 +503,9 @@ export default function MapColumnsPage() {
     }
   };
 
-  // Generate preview transaction from first data row
-  const getPreviewTransaction = () => {
-    if (!analysis || sampleData.length === 0) return null;
-    
-    const startRow = analysis.hasHeaders ? 1 : 0;
-    const dataRowIndex = startRow < sampleData.length ? startRow : 0;
-    const dataRow = sampleData[dataRowIndex];
-    
-    if (!dataRow) return null;
+  // Generate preview transactions - try to get one income and one expense
+  const getPreviewTransactions = () => {
+    if (!analysis || sampleData.length === 0) return [];
 
     const mapping: ColumnMapping = {
       dateColumn: findColumnForField('date'),
@@ -525,72 +519,146 @@ export default function MapColumnsPage() {
       hasHeaders: analysis.hasHeaders,
     };
 
-    // Extract values
-    const dateValue = mapping.dateColumn !== null ? dataRow[mapping.dateColumn] : null;
-    const descriptionValue = mapping.descriptionColumn !== null ? dataRow[mapping.descriptionColumn] : null;
-    
-    let amount = 0;
-    let transactionType: 'income' | 'expense' = 'expense';
-    let amountDisplay = '';
+    const startRow = analysis.hasHeaders ? 1 : 0;
+    const previews: Array<{
+      date: string;
+      description: string;
+      amount: string;
+      amountValue: number;
+      transactionType: 'income' | 'expense';
+      isValid: boolean;
+    }> = [];
 
-    if (amountSignConvention === 'separate_debit_credit') {
-      const debitValue = mapping.debitColumn !== null ? dataRow[mapping.debitColumn] : '';
-      const creditValue = mapping.creditColumn !== null ? dataRow[mapping.creditColumn] : '';
-      const debitAmount = parseAmount(debitValue);
-      const creditAmount = parseAmount(creditValue);
+    // Helper function to parse a single row
+    const parseRow = (dataRow: string[]) => {
+      const dateValue = mapping.dateColumn !== null ? dataRow[mapping.dateColumn] : null;
+      const descriptionValue = mapping.descriptionColumn !== null ? dataRow[mapping.descriptionColumn] : null;
       
-      if (debitAmount > 0) {
-        amount = debitAmount;
-        transactionType = 'expense';
-        amountDisplay = `Debit: ${debitValue}`;
-      } else if (creditAmount > 0) {
-        amount = creditAmount;
-        transactionType = 'income';
-        amountDisplay = `Credit: ${creditValue}`;
-      } else {
-        amountDisplay = 'No amount';
-      }
-    } else if (amountSignConvention === 'separate_column') {
-      const amountValue = mapping.amountColumn !== null ? dataRow[mapping.amountColumn] : '';
-      const typeValue = mapping.transactionTypeColumn !== null ? dataRow[mapping.transactionTypeColumn] : '';
-      amount = parseAmount(amountValue);
-      
-      if (amount > 0) {
-        // Determine type from column value
-        const typeStr = (typeValue || '').toUpperCase();
-        if (typeStr.includes('INCOME') || typeStr.includes('CREDIT') || typeStr.includes('DEPOSIT')) {
-          transactionType = 'income';
-        } else {
+      let amount = 0;
+      let transactionType: 'income' | 'expense' = 'expense';
+      let amountDisplay = '';
+
+      if (amountSignConvention === 'separate_debit_credit') {
+        const debitValue = mapping.debitColumn !== null ? dataRow[mapping.debitColumn] : '';
+        const creditValue = mapping.creditColumn !== null ? dataRow[mapping.creditColumn] : '';
+        const debitAmount = parseAmount(debitValue);
+        const creditAmount = parseAmount(creditValue);
+        
+        if (debitAmount > 0) {
+          amount = debitAmount;
           transactionType = 'expense';
-        }
-        amountDisplay = `${amountValue} (${typeValue || 'N/A'})`;
-      } else {
-        amountDisplay = 'No amount';
-      }
-    } else {
-      const amountValue = mapping.amountColumn !== null ? dataRow[mapping.amountColumn] : '';
-      amount = parseAmount(amountValue);
-      
-      if (amount !== 0) {
-        if (amountSignConvention === 'positive_is_income') {
-          transactionType = amount > 0 ? 'income' : 'expense';
+          amountDisplay = `Debit: ${debitValue}`;
+        } else if (creditAmount > 0) {
+          amount = creditAmount;
+          transactionType = 'income';
+          amountDisplay = `Credit: ${creditValue}`;
         } else {
-          transactionType = amount > 0 ? 'expense' : 'income';
+          amountDisplay = 'No amount';
         }
-        amountDisplay = amountValue;
+      } else if (amountSignConvention === 'separate_column') {
+        const amountValue = mapping.amountColumn !== null ? dataRow[mapping.amountColumn] : '';
+        const typeValue = mapping.transactionTypeColumn !== null ? dataRow[mapping.transactionTypeColumn] : '';
+        amount = parseAmount(amountValue);
+        
+        if (amount > 0) {
+          // Determine type from column value
+          const typeStr = (typeValue || '').toUpperCase();
+          if (typeStr.includes('INCOME') || typeStr.includes('CREDIT') || typeStr.includes('DEPOSIT')) {
+            transactionType = 'income';
+          } else {
+            transactionType = 'expense';
+          }
+          amountDisplay = `${amountValue} (${typeValue || 'N/A'})`;
+        } else {
+          amountDisplay = 'No amount';
+        }
       } else {
-        amountDisplay = 'No amount';
+        const amountValue = mapping.amountColumn !== null ? dataRow[mapping.amountColumn] : '';
+        amount = parseAmount(amountValue);
+        
+        if (amount !== 0) {
+          if (amountSignConvention === 'positive_is_income') {
+            transactionType = amount > 0 ? 'income' : 'expense';
+          } else {
+            transactionType = amount > 0 ? 'expense' : 'income';
+          }
+          amountDisplay = amountValue;
+        } else {
+          amountDisplay = 'No amount';
+        }
+      }
+
+      return {
+        date: dateValue || 'Not mapped',
+        description: descriptionValue || 'Not mapped',
+        amount: amountDisplay,
+        amountValue: amount,
+        transactionType,
+        isValid: dateValue && descriptionValue && amount !== 0,
+      };
+    };
+
+    // Try to find one income and one expense
+    let incomeFound = false;
+    let expenseFound = false;
+
+    for (let i = startRow; i < sampleData.length && previews.length < 2; i++) {
+      const dataRow = sampleData[i];
+      if (!dataRow) continue;
+
+      const preview = parseRow(dataRow);
+      
+      // Skip invalid rows
+      if (!preview.isValid) continue;
+
+      // If we haven't found an income yet and this is income, add it
+      if (!incomeFound && preview.transactionType === 'income') {
+        previews.push(preview);
+        incomeFound = true;
+      }
+      // If we haven't found an expense yet and this is expense, add it
+      else if (!expenseFound && preview.transactionType === 'expense') {
+        previews.push(preview);
+        expenseFound = true;
+      }
+      // If we've found both types, we're done
+      else if (incomeFound && expenseFound) {
+        break;
+      }
+      // If we haven't found both types and this is the first row, add it
+      else if (previews.length === 0) {
+        previews.push(preview);
+        if (preview.transactionType === 'income') incomeFound = true;
+        else expenseFound = true;
       }
     }
 
-    return {
-      date: dateValue || 'Not mapped',
-      description: descriptionValue || 'Not mapped',
-      amount: amountDisplay,
-      amountValue: amount, // Store numeric value for formatting
-      transactionType,
-      isValid: dateValue && descriptionValue && amount !== 0,
-    };
+    // If we only found one type, try to get a second row of any type
+    if (previews.length === 1) {
+      for (let i = startRow; i < sampleData.length && previews.length < 2; i++) {
+        const dataRow = sampleData[i];
+        if (!dataRow) continue;
+
+        const preview = parseRow(dataRow);
+        
+        // Skip invalid rows or rows we've already added
+        if (!preview.isValid) continue;
+        
+        // Check if this row is different from what we already have
+        const alreadyAdded = previews.some(p => 
+          p.date === preview.date && 
+          p.description === preview.description && 
+          p.amountValue === preview.amountValue
+        );
+        
+        if (!alreadyAdded) {
+          previews.push(preview);
+          break;
+        }
+      }
+    }
+
+    return previews;
   };
 
   const previewTransaction = getPreviewTransaction();
@@ -740,16 +808,19 @@ export default function MapColumnsPage() {
             </CardContent>
           </Card>
 
-          {/* Preview Row */}
+          {/* Preview Rows */}
           {(() => {
-            const preview = getPreviewTransaction();
-            if (!preview) return null;
+            const previews = getPreviewTransactions();
+            if (previews.length === 0) return null;
+            
+            const hasInvalid = previews.some(p => !p.isValid);
+            
             return (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Preview</CardTitle>
                   <CardDescription>
-                    How the first transaction will appear with your current mappings
+                    How transactions will appear with your current mappings
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -764,62 +835,64 @@ export default function MapColumnsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        <TableRow>
-                          <TableCell className={`whitespace-nowrap text-xs ${preview.date === 'Not mapped' ? 'text-red-600 dark:text-red-400' : ''}`}>
-                            {preview.date === 'Not mapped' ? (
-                              <span className="italic text-muted-foreground">Not mapped</span>
-                            ) : (
-                              preview.date
-                            )}
-                          </TableCell>
-                          <TableCell className={`font-medium text-sm max-w-[250px] truncate ${preview.description === 'Not mapped' ? 'text-red-600 dark:text-red-400' : ''}`}>
-                            {preview.description === 'Not mapped' ? (
-                              <span className="italic text-muted-foreground">Not mapped</span>
-                            ) : (
-                              preview.description
-                            )}
-                          </TableCell>
-                          <TableCell className={`text-right font-semibold text-sm whitespace-nowrap ${
-                            preview.transactionType === 'income'
-                              ? 'text-green-600 dark:text-green-400'
-                              : 'text-red-600 dark:text-red-400'
-                          } ${preview.amount === 'No amount' ? 'text-red-600 dark:text-red-400' : ''}`}>
-                            {preview.amount === 'No amount' ? (
-                              <span className="italic text-muted-foreground">Not mapped</span>
-                            ) : preview.amount.includes('(') ? (
-                              // Show full amount with type column value in parentheses
-                              <span>
-                                {preview.transactionType === 'income' ? '+' : '-'}
-                                {formatCurrency(Math.abs(preview.amountValue))}
-                                {' '}
-                                <span className="text-xs text-muted-foreground">
-                                  ({preview.amount.match(/\(([^)]+)\)/)?.[1] || ''})
+                        {previews.map((preview, index) => (
+                          <TableRow key={index}>
+                            <TableCell className={`whitespace-nowrap text-xs ${preview.date === 'Not mapped' ? 'text-red-600 dark:text-red-400' : ''}`}>
+                              {preview.date === 'Not mapped' ? (
+                                <span className="italic text-muted-foreground">Not mapped</span>
+                              ) : (
+                                preview.date
+                              )}
+                            </TableCell>
+                            <TableCell className={`font-medium text-sm max-w-[250px] truncate ${preview.description === 'Not mapped' ? 'text-red-600 dark:text-red-400' : ''}`}>
+                              {preview.description === 'Not mapped' ? (
+                                <span className="italic text-muted-foreground">Not mapped</span>
+                              ) : (
+                                preview.description
+                              )}
+                            </TableCell>
+                            <TableCell className={`text-right font-semibold text-sm whitespace-nowrap ${
+                              preview.transactionType === 'income'
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-red-600 dark:text-red-400'
+                            } ${preview.amount === 'No amount' ? 'text-red-600 dark:text-red-400' : ''}`}>
+                              {preview.amount === 'No amount' ? (
+                                <span className="italic text-muted-foreground">Not mapped</span>
+                              ) : preview.amount.includes('(') ? (
+                                // Show full amount with type column value in parentheses
+                                <span>
+                                  {preview.transactionType === 'income' ? '+' : '-'}
+                                  {formatCurrency(Math.abs(preview.amountValue))}
+                                  {' '}
+                                  <span className="text-xs text-muted-foreground">
+                                    ({preview.amount.match(/\(([^)]+)\)/)?.[1] || ''})
+                                  </span>
                                 </span>
-                              </span>
-                            ) : preview.amount.includes('Debit:') || preview.amount.includes('Credit:') ? (
-                              // Show debit/credit with formatted amount
-                              <span>
-                                {preview.transactionType === 'income' ? '+' : '-'}
-                                {formatCurrency(Math.abs(preview.amountValue))}
-                              </span>
-                            ) : (
-                              // Regular amount formatting
-                              <>
-                                {preview.transactionType === 'income' ? '+' : '-'}
-                                {formatCurrency(Math.abs(preview.amountValue))}
-                              </>
-                            )}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            <Badge variant={preview.transactionType === 'income' ? 'default' : 'secondary'} className="text-xs">
-                              {preview.transactionType === 'income' ? 'Income' : 'Expense'}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
+                              ) : preview.amount.includes('Debit:') || preview.amount.includes('Credit:') ? (
+                                // Show debit/credit with formatted amount
+                                <span>
+                                  {preview.transactionType === 'income' ? '+' : '-'}
+                                  {formatCurrency(Math.abs(preview.amountValue))}
+                                </span>
+                              ) : (
+                                // Regular amount formatting
+                                <>
+                                  {preview.transactionType === 'income' ? '+' : '-'}
+                                  {formatCurrency(Math.abs(preview.amountValue))}
+                                </>
+                              )}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <Badge variant={preview.transactionType === 'income' ? 'default' : 'secondary'} className="text-xs">
+                                {preview.transactionType === 'income' ? 'Income' : 'Expense'}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
                       </TableBody>
                     </Table>
                   </div>
-                  {!preview.isValid && (
+                  {hasInvalid && (
                     <div className="mt-4 p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-800 dark:text-amber-200">
                       ⚠️ Some required fields are not mapped. Please map Date, Description, and Amount columns.
                     </div>
