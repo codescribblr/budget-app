@@ -122,6 +122,7 @@ export default function MapColumnsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isRemap = searchParams.get('remap') === 'true';
+  const batchIdFromUrl = searchParams.get('batchId'); // Get batchId from URL for remap
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [mappings, setMappings] = useState<Record<number, FieldType>>({});
   const [shouldSaveTemplate, setShouldSaveTemplate] = useState(false);
@@ -171,10 +172,15 @@ export default function MapColumnsPage() {
         let batchId: string | null = null;
 
         if (isRemap) {
-          // Load from remap API
-          batchId = sessionStorage.getItem('remapBatchId');
+          // Load from remap API - prefer batchId from URL, fallback to sessionStorage
+          batchId = batchIdFromUrl || sessionStorage.getItem('remapBatchId');
           if (!batchId) {
-            throw new Error('Remap batch ID not found');
+            throw new Error('Remap batch ID not found. Please use the Re-map Fields button from the import batch review page.');
+          }
+          
+          // Store batchId in sessionStorage for backward compatibility
+          if (batchIdFromUrl) {
+            sessionStorage.setItem('remapBatchId', batchId);
           }
 
           const response = await fetch(`/api/import/queue/${encodeURIComponent(batchId)}/remap`);

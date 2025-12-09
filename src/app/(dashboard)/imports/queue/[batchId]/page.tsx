@@ -643,9 +643,8 @@ export default function BatchReviewPage() {
               variant="outline" 
               onClick={async () => {
                 try {
-                  // Store batch ID for remap flow
-                  sessionStorage.setItem('remapBatchId', batchId);
-                  router.push('/import/map-columns?remap=true');
+                  // Include batchId in URL so page can be reloaded/bookmarked
+                  router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
                 } catch (err) {
                   console.error('Error initiating remap:', err);
                   toast.error('Failed to start re-mapping');
