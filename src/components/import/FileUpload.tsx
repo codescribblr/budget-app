@@ -40,6 +40,14 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
   const [processedFileName, setProcessedFileName] = useState<string>('');
   const [processingComplete, setProcessingComplete] = useState(false);
   const [queuedBatchId, setQueuedBatchId] = useState<string | null>(null);
+  const [importInfo, setImportInfo] = useState<{
+    fileName: string;
+    mappingName: string | null;
+    totalTransactions: number;
+    databaseDuplicates: number;
+    withinFileDuplicates: number;
+    categorizedCount: number;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
@@ -114,6 +122,10 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         // Analyze CSV structure
         const analysis = analyzeCSV(rawData);
         
+        // Show mapping step for longer so user can see it
+        updateProgress(20, 'Mapping CSV fields...');
+        await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to make it visible
+        
         // Check if we have high confidence for all required fields
         const hasRequiredFields = 
           analysis.dateColumn !== null &&
@@ -135,14 +147,36 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           });
 
         if (highConfidence) {
-          updateProgress(25, 'Parsing CSV transactions...');
+          updateProgress(30, 'Parsing CSV transactions...');
           // Auto-import with detected mapping
           const result = await parseCSVFile(file);
           transactions = result.transactions;
           
+          // Get mapping name (template name or auto-generated)
+          let mappingName: string | undefined;
+          if (result.templateId) {
+            // Try to get template name
+            try {
+              const templateResponse = await fetch(`/api/import/templates/${result.templateId}`);
+              if (templateResponse.ok) {
+                const template = await templateResponse.json();
+                mappingName = template.template_name || 'Saved Template';
+              }
+            } catch (err) {
+              console.warn('Failed to fetch template name:', err);
+            }
+          }
+          
+          // If no template, generate automatic mapping name
+          if (!mappingName) {
+            const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+            mappingName = generateAutomaticMappingName(analysis, file.name);
+          }
+          
           // Store CSV data and template info for potential re-processing
           sessionStorage.setItem('csvData', JSON.stringify(rawData));
           sessionStorage.setItem('csvFileName', file.name);
+          sessionStorage.setItem('csvMappingName', mappingName);
           if (result.templateId) {
             sessionStorage.setItem('csvTemplateId', result.templateId.toString());
           }
@@ -160,6 +194,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           router.push('/import/map-columns');
           setIsProcessing(false);
           setProcessingComplete(false);
+          setImportInfo(null);
           return;
         }
       } else if (
@@ -194,7 +229,72 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           const result = await response.json();
           if (result.transactions && result.transactions.length > 0) {
             transactions = result.transactions;
-            sessionStorage.setItem('csvFileName', file.name);
+            
+            // Convert PDF transactions to CSV format for mapping support
+            // Create CSV data: [headers, ...rows]
+            // Format: Date, Description, Amount, Transaction Type
+            const csvData: string[][] = [
+              ['Date', 'Description', 'Amount', 'Transaction Type'], // Headers
+              ...transactions.map(txn => [
+                txn.date,
+                txn.description,
+                (txn.transaction_type === 'expense' ? '-' : '') + txn.amount.toFixed(2),
+                txn.transaction_type,
+              ]),
+            ];
+            
+            // Analyze CSV structure (same as regular CSV)
+            updateProgress(25, 'Analyzing PDF structure...');
+            const analysis = analyzeCSV(csvData);
+            
+            // Show mapping step for longer so user can see it
+            updateProgress(30, 'Mapping CSV fields...');
+            await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to make it visible
+            
+            // Check if we have high confidence for all required fields
+            const hasRequiredFields = 
+              analysis.dateColumn !== null &&
+              analysis.amountColumn !== null &&
+              analysis.descriptionColumn !== null;
+            
+            const highConfidence = hasRequiredFields &&
+              analysis.columns.every(col => {
+                if (col.fieldType === 'date' && col.columnIndex === analysis.dateColumn) {
+                  return col.confidence >= 0.85;
+                }
+                if (col.fieldType === 'amount' && col.columnIndex === analysis.amountColumn) {
+                  return col.confidence >= 0.85;
+                }
+                if (col.fieldType === 'description' && col.columnIndex === analysis.descriptionColumn) {
+                  return col.confidence >= 0.85;
+                }
+                return true;
+              });
+
+            if (highConfidence) {
+              // Generate mapping name for PDF
+              const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+              const mappingName = generateAutomaticMappingName(analysis, file.name);
+              
+              // Auto-process PDF transactions (they're already parsed)
+              // Store CSV data for potential re-mapping
+              sessionStorage.setItem('csvData', JSON.stringify(csvData));
+              sessionStorage.setItem('csvFileName', file.name);
+              sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
+              sessionStorage.setItem('csvMappingName', mappingName);
+              // Use analysis fingerprint for PDF CSV data
+              sessionStorage.setItem('csvFingerprint', analysis.fingerprint);
+            } else {
+              // Navigate to mapping page for PDF (same as CSV)
+              sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
+              sessionStorage.setItem('csvData', JSON.stringify(csvData));
+              sessionStorage.setItem('csvFileName', file.name);
+              router.push('/import/map-columns');
+              setIsProcessing(false);
+              setProcessingComplete(false);
+              setImportInfo(null);
+              return;
+            }
           } else {
             throw new Error('No transactions found in PDF');
           }
@@ -217,6 +317,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         setProcessingComplete(false);
         setProgress(0);
         setProgressStage('');
+        setImportInfo(null);
         return;
       }
 
@@ -226,6 +327,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         setProcessingComplete(false);
         setProgress(0);
         setProgressStage('');
+        setImportInfo(null);
         return;
       }
 
@@ -241,6 +343,25 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         true, // Always skip AI categorization - user can trigger it manually in preview
         updateProgress
       );
+      
+      // Calculate import statistics
+      const databaseDuplicates = processedTransactions.filter(t => t.duplicateType === 'database').length;
+      const withinFileDuplicates = processedTransactions.filter(t => t.duplicateType === 'within-file').length;
+      const categorizedCount = processedTransactions.filter(t => t.suggestedCategory !== null && t.suggestedCategory !== undefined).length;
+      
+      // Get mapping name from sessionStorage
+      const csvMappingNameStr = sessionStorage.getItem('csvMappingName');
+      const mappingName = csvMappingNameStr || null;
+      
+      // Store import info for display
+      setImportInfo({
+        fileName: file.name,
+        mappingName,
+        totalTransactions: transactions.length,
+        databaseDuplicates,
+        withinFileDuplicates,
+        categorizedCount,
+      });
 
       // Apply default account/card and historical flag to transactions before saving
       // Note: At this point, defaultAccountId/defaultCreditCardId/isHistorical may not be set yet
@@ -256,6 +377,30 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
 
       // Save to import queue automatically after processing
       updateProgress(90, 'Saving to import queue...');
+      
+      // Get CSV data from sessionStorage if available (for PDFs and CSVs that went through mapping)
+      const csvDataStr = sessionStorage.getItem('csvData');
+      const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
+      const csvFingerprintStr = sessionStorage.getItem('csvFingerprint');
+      const csvTemplateIdStr = sessionStorage.getItem('csvTemplateId');
+      // csvMappingNameStr already retrieved above for importInfo
+      
+      const csvData = csvDataStr ? JSON.parse(csvDataStr) : undefined;
+      const csvAnalysis = csvAnalysisStr ? JSON.parse(csvAnalysisStr) : undefined;
+      const csvFingerprint = csvFingerprintStr || undefined;
+      const csvMappingTemplateId = csvTemplateIdStr ? parseInt(csvTemplateIdStr, 10) : undefined;
+      const csvMappingName = csvMappingNameStr || undefined;
+      
+      // Debug logging
+      console.log('Queueing transactions with CSV data:', {
+        hasCsvData: !!csvData,
+        csvDataLength: csvData ? (Array.isArray(csvData) ? csvData.length : 'not array') : 0,
+        hasCsvAnalysis: !!csvAnalysis,
+        csvFileName: file.name,
+        csvMappingName,
+        csvMappingTemplateId,
+      });
+      
       const saveResponse = await fetch('/api/import/queue-manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -265,6 +410,11 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           targetAccountId: defaultAccountId,
           targetCreditCardId: defaultCreditCardId,
           isHistorical: isHistorical,
+          csvData,
+          csvAnalysis,
+          csvFingerprint,
+          csvMappingTemplateId,
+          csvMappingName,
         }),
       });
 
@@ -292,6 +442,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       setProcessingComplete(false);
       setProcessedTransactions(null);
       setProcessedFileName('');
+      setImportInfo(null);
+      setImportInfo(null);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -462,6 +614,57 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
               <div className="mt-6 pt-4 border-t space-y-4">
                 <div className="text-sm font-medium text-foreground">Import Options</div>
                 
+                {/* Import Information */}
+                {importInfo && (
+                  <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                    <div className="text-sm font-medium text-foreground">Import Information</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">File:</span>
+                        <span className="ml-2 font-medium">{importInfo.fileName}</span>
+                      </div>
+                      {importInfo.mappingName && (
+                        <div>
+                          <span className="text-muted-foreground">Mapping:</span>
+                          <span className="ml-2 font-medium">{importInfo.mappingName}</span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-muted-foreground">Total Transactions:</span>
+                        <span className="ml-2 font-medium">{importInfo.totalTransactions}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Categorized:</span>
+                        <span className="ml-2 font-medium">{importInfo.categorizedCount} / {importInfo.totalTransactions}</span>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <span className="text-muted-foreground">Duplicates:</span>
+                        <span className="ml-2 font-medium">
+                          {importInfo.databaseDuplicates === 0 && importInfo.withinFileDuplicates === 0 ? (
+                            <span className="text-green-600 dark:text-green-400">None</span>
+                          ) : (
+                            <>
+                              {importInfo.databaseDuplicates > 0 && (
+                                <span className="text-amber-600 dark:text-amber-400">
+                                  {importInfo.databaseDuplicates} existing{importInfo.databaseDuplicates !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                              {importInfo.databaseDuplicates > 0 && importInfo.withinFileDuplicates > 0 && (
+                                <span className="mx-1">•</span>
+                              )}
+                              {importInfo.withinFileDuplicates > 0 && (
+                                <span className="text-amber-600 dark:text-amber-400">
+                                  {importInfo.withinFileDuplicates} within file{importInfo.withinFileDuplicates !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 {/* Historical Import Option */}
                 <div className="flex items-center space-x-2">
                   <Checkbox
@@ -607,18 +810,25 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                     throw new Error(errorData.error || 'Failed to save import');
                   }
 
-                  const saveResult = await saveResponse.json();
-                  setQueuedBatchId(saveResult.batchId);
+      const saveResult = await saveResponse.json();
+      setQueuedBatchId(saveResult.batchId);
 
-                  // Store processed transactions with defaults applied (including account_id)
-                  // This ensures the preview shows the correct account
-                  setProcessedTransactions(transactionsWithDefaults);
-                  setProcessedFileName(pendingFile!.name);
-                  setIsProcessing(false); // Reset processing state so button is enabled
-                  setProcessingComplete(true);
-                  updateProgress(100, 'Processing complete! Review your import options below.');
-                  sessionStorage.setItem('csvFileName', pendingFile!.name);
-                  setPendingFile(null);
+      // Store processed transactions with defaults applied (including account_id)
+      // This ensures the preview shows the correct account
+      setProcessedTransactions(transactionsWithDefaults);
+      setProcessedFileName(pendingFile!.name);
+      setIsProcessing(false); // Reset processing state so button is enabled
+      setProcessingComplete(true);
+      updateProgress(100, 'Processing complete! Review your import options below.');
+      sessionStorage.setItem('csvFileName', pendingFile!.name);
+      
+      // Clear CSV data from sessionStorage after queuing (it's now stored in the database)
+      sessionStorage.removeItem('csvData');
+      sessionStorage.removeItem('csvAnalysis');
+      sessionStorage.removeItem('csvFingerprint');
+      sessionStorage.removeItem('csvTemplateId');
+      
+      setPendingFile(null);
                 } catch (err) {
                   console.error('Error processing file with AI:', err);
                   setError(err instanceof Error ? err.message : 'Failed to process file with AI');

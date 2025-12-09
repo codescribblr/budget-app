@@ -107,7 +107,31 @@ export async function listTemplates(): Promise<CSVImportTemplate[]> {
     throw new Error(error.message || 'Failed to list templates');
   }
 
-  return response.json();
+  const templates = await response.json();
+  
+  // Transform database format to our format
+  return templates.map((template: any) => ({
+    id: template.id,
+    userId: template.user_id,
+    templateName: template.template_name,
+    fingerprint: template.fingerprint,
+    columnCount: template.column_count,
+    mapping: {
+      dateColumn: template.date_column ?? null,
+      amountColumn: template.amount_column ?? null,
+      descriptionColumn: template.description_column ?? null,
+      debitColumn: template.debit_column ?? null,
+      creditColumn: template.credit_column ?? null,
+      transactionTypeColumn: template.transaction_type_column ?? null,
+      amountSignConvention: template.amount_sign_convention ?? 'positive_is_expense',
+      dateFormat: template.date_format ?? null,
+      hasHeaders: template.has_headers ?? true,
+      skipRows: template.skip_rows ?? 0,
+    },
+    usageCount: template.usage_count,
+    lastUsed: template.last_used,
+    createdAt: template.created_at,
+  }));
 }
 
 /**

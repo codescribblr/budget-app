@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -21,9 +21,13 @@ import type { CSVAnalysisResult, ColumnAnalysis } from '@/lib/column-analyzer';
 import type { ColumnMapping } from '@/lib/mapping-templates';
 import { CheckCircle2, AlertCircle, XCircle, ArrowLeft } from 'lucide-react';
 import { saveTemplate } from '@/lib/mapping-templates';
-import { parseCSVWithMapping, processTransactions } from '@/lib/csv-parser-helpers';
+import { parseCSVWithMapping } from '@/lib/csv-parser-helpers';
 import type { ParsedTransaction } from '@/lib/import-types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
+import { toast } from 'sonner';
+import { formatCurrency } from '@/lib/utils';
+import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
+import { processTransactions } from '@/lib/csv-parser-helpers';
 
 type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'ignore';
 
@@ -107,6 +111,9 @@ function detectAmountSignConvention(
 
 export default function MapColumnsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isRemap = searchParams.get('remap') === 'true';
+  const batchIdFromUrl = searchParams.get('batchId'); // Get batchId from URL for remap
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [mappings, setMappings] = useState<Record<number, FieldType>>({});
   const [shouldSaveTemplate, setShouldSaveTemplate] = useState(false);
@@ -118,6 +125,15 @@ export default function MapColumnsPage() {
   const [fileName, setFileName] = useState<string>('');
   const [transactionTypeColumn, setTransactionTypeColumn] = useState<number | null>(null);
   const [amountSignConvention, setAmountSignConvention] = useState<'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit'>('positive_is_expense');
+  const [remapBatchId, setRemapBatchId] = useState<string | null>(null);
+  const [currentTemplateId, setCurrentTemplateId] = useState<number | null>(null);
+  const [currentTemplateName, setCurrentTemplateName] = useState<string | null>(null);
+  const [templateSaveMode, setTemplateSaveMode] = useState<'none' | 'overwrite' | 'new'>('none');
+  const [overwriteTemplateId, setOverwriteTemplateId] = useState<number | null>(null);
+  const [deleteOldTemplate, setDeleteOldTemplate] = useState(false);
+  const [isProcessingRemap, setIsProcessingRemap] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [processingStage, setProcessingStage] = useState('');
 
   useEffect(() => {
     // Check permissions - redirect if read-only user
@@ -128,84 +144,144 @@ export default function MapColumnsPage() {
   }, [isEditor, permissionsLoading, router]);
 
   useEffect(() => {
-    // Load CSV data from sessionStorage
-    const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
-    const csvDataStr = sessionStorage.getItem('csvData');
-    const fileNameStr = sessionStorage.getItem('csvFileName');
-
-    if (!csvAnalysisStr || !csvDataStr || !fileNameStr) {
-      // No data found, redirect back to import
-      router.push('/import');
-      return;
-    }
-    
-    // Also redirect if read-only user
-    if (!permissionsLoading && !isEditor) {
-      router.push('/import');
-      return;
-    }
-
-    try {
-      const analysisData = JSON.parse(csvAnalysisStr);
-      const csvData = JSON.parse(csvDataStr);
-      
-      // Validate data structure
-      if (!analysisData || typeof analysisData !== 'object') {
-        throw new Error('Invalid analysis data');
+    // Load CSV data from sessionStorage or remap API
+    const loadData = async () => {
+      if (!permissionsLoading && !isEditor) {
+        router.push('/import');
+        return;
       }
-      if (!Array.isArray(csvData)) {
-        throw new Error('Invalid CSV data');
-      }
-      
-      setAnalysis(analysisData);
-      setSampleData(csvData.slice(0, 5));
-      setFileName(fileNameStr);
 
-      // Initialize mappings from analysis
-      const initialMappings: Record<number, FieldType> = {};
-      
-      // Safely check if columns exists and is an array
-      if (Array.isArray(analysisData.columns)) {
-        analysisData.columns.forEach((col: ColumnAnalysis) => {
-          if (col && col.fieldType !== 'unknown' && col.confidence > 0.5) {
-            initialMappings[col.columnIndex] = col.fieldType as FieldType;
+      try {
+        let analysisData: CSVAnalysisResult;
+        let csvData: string[][];
+        let fileNameStr: string;
+        let currentMapping: ColumnMapping | null = null;
+        let templateId: number | null = null;
+        let templateName: string | null = null;
+        let batchId: string | null = null;
+
+        if (isRemap) {
+          // Load from remap API - prefer batchId from URL, fallback to sessionStorage
+          batchId = batchIdFromUrl || sessionStorage.getItem('remapBatchId');
+          if (!batchId) {
+            throw new Error('Remap batch ID not found. Please use the Re-map Fields button from the import batch review page.');
           }
-        });
-      }
+          
+          // Store batchId in sessionStorage for backward compatibility
+          if (batchIdFromUrl) {
+            sessionStorage.setItem('remapBatchId', batchId);
+          }
 
-      // Set required fields if detected
-      if (analysisData.dateColumn !== null) {
-        initialMappings[analysisData.dateColumn] = 'date';
-      }
-      if (analysisData.amountColumn !== null) {
-        initialMappings[analysisData.amountColumn] = 'amount';
-      }
-      if (analysisData.descriptionColumn !== null) {
-        initialMappings[analysisData.descriptionColumn] = 'description';
-      }
-      if (analysisData.debitColumn !== null) {
-        initialMappings[analysisData.debitColumn] = 'debit';
-      }
-      if (analysisData.creditColumn !== null) {
-        initialMappings[analysisData.creditColumn] = 'credit';
-      }
+          const response = await fetch(`/api/import/queue/${encodeURIComponent(batchId)}/remap`);
+          if (!response.ok) {
+            if (response.status === 404) {
+              throw new Error('CSV data not available for this import. Re-mapping is only available for CSV files that were mapped during upload.');
+            }
+            const errorData = await response.json().catch(() => ({ error: 'Failed to load remap data' }));
+            throw new Error(errorData.error || 'Failed to load remap data');
+          }
 
-      setMappings(initialMappings);
+          const remapData = await response.json();
+          analysisData = remapData.csvAnalysis;
+          csvData = remapData.csvData;
+          fileNameStr = remapData.csvFileName;
+          currentMapping = remapData.currentMapping || null;
+          templateId = remapData.currentTemplateId || null;
+          templateName = remapData.currentTemplateName || null;
+          setRemapBatchId(batchId);
+          setCurrentTemplateId(templateId);
+          setCurrentTemplateName(templateName);
+          
+          // Store in sessionStorage for template dialog
+          sessionStorage.setItem('csvData', JSON.stringify(csvData));
+          sessionStorage.setItem('csvAnalysis', JSON.stringify(analysisData));
+          sessionStorage.setItem('csvFileName', fileNameStr);
+        } else {
+          // Load from sessionStorage
+          const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
+          const csvDataStr = sessionStorage.getItem('csvData');
+          fileNameStr = sessionStorage.getItem('csvFileName') || '';
 
-      // Detect amount sign convention from the data
-      if (analysisData.amountColumn !== null) {
-        const detectedConvention = detectAmountSignConvention(
-          csvData,
-          analysisData.amountColumn,
-          analysisData.hasHeaders
-        );
-        setAmountSignConvention(detectedConvention);
+          if (!csvAnalysisStr || !csvDataStr) {
+            router.push('/import');
+            return;
+          }
+
+          analysisData = JSON.parse(csvAnalysisStr);
+          csvData = JSON.parse(csvDataStr);
+        }
+
+        // Validate data structure
+        if (!analysisData || typeof analysisData !== 'object') {
+          throw new Error('Invalid analysis data');
+        }
+        if (!Array.isArray(csvData)) {
+          throw new Error('Invalid CSV data');
+        }
+
+        setAnalysis(analysisData);
+        setSampleData(csvData.slice(0, 5));
+        setFileName(fileNameStr);
+
+        // Initialize mappings from current mapping or analysis
+        const initialMappings: Record<number, FieldType> = {};
+
+        if (currentMapping) {
+          // Use existing mapping
+          if (currentMapping.dateColumn !== null) initialMappings[currentMapping.dateColumn] = 'date';
+          if (currentMapping.amountColumn !== null) initialMappings[currentMapping.amountColumn] = 'amount';
+          if (currentMapping.descriptionColumn !== null) initialMappings[currentMapping.descriptionColumn] = 'description';
+          if (currentMapping.debitColumn !== null) initialMappings[currentMapping.debitColumn] = 'debit';
+          if (currentMapping.creditColumn !== null) initialMappings[currentMapping.creditColumn] = 'credit';
+          setAmountSignConvention(currentMapping.amountSignConvention);
+          setTransactionTypeColumn(currentMapping.transactionTypeColumn);
+        } else {
+          // Initialize from analysis
+          if (Array.isArray(analysisData.columns)) {
+            analysisData.columns.forEach((col: ColumnAnalysis) => {
+              if (col && col.fieldType !== 'unknown' && col.confidence > 0.5) {
+                initialMappings[col.columnIndex] = col.fieldType as FieldType;
+              }
+            });
+          }
+
+          if (analysisData.dateColumn !== null) {
+            initialMappings[analysisData.dateColumn] = 'date';
+          }
+          if (analysisData.amountColumn !== null) {
+            initialMappings[analysisData.amountColumn] = 'amount';
+          }
+          if (analysisData.descriptionColumn !== null) {
+            initialMappings[analysisData.descriptionColumn] = 'description';
+          }
+          if (analysisData.debitColumn !== null) {
+            initialMappings[analysisData.debitColumn] = 'debit';
+          }
+          if (analysisData.creditColumn !== null) {
+            initialMappings[analysisData.creditColumn] = 'credit';
+          }
+
+          // Detect amount sign convention
+          if (analysisData.amountColumn !== null) {
+            const detectedConvention = detectAmountSignConvention(
+              csvData,
+              analysisData.amountColumn,
+              analysisData.hasHeaders
+            );
+            setAmountSignConvention(detectedConvention);
+          }
+        }
+
+        setMappings(initialMappings);
+      } catch (err) {
+        console.error('Error loading CSV data:', err);
+        toast.error(err instanceof Error ? err.message : 'Failed to load CSV data');
+        router.push('/import');
       }
-    } catch (err) {
-      console.error('Error loading CSV data:', err);
-      router.push('/import');
-    }
-  }, [router]);
+    };
+
+    loadData();
+  }, [router, isRemap, permissionsLoading, isEditor]);
 
   const handleMappingChange = (columnIndex: number, fieldType: FieldType) => {
     setMappings((prev) => {
@@ -303,39 +379,241 @@ export default function MapColumnsPage() {
         return;
       }
 
-      // Save template if requested
+      // Handle remap flow
+      if (isRemap && remapBatchId) {
+        // If no current template and user selected overwrite, default to new
+        const effectiveTemplateSaveMode = templateSaveMode === 'overwrite' && !currentTemplateId ? 'new' : templateSaveMode;
+        
+        // Determine if we should save as template based on page fields
+        const shouldSaveAsTemplate = effectiveTemplateSaveMode !== 'none';
+        
+        // Generate mapping name if saving template
+        let mappingNameForRemap: string | undefined;
+        if (shouldSaveAsTemplate) {
+          if (effectiveTemplateSaveMode === 'new' && templateName) {
+            mappingNameForRemap = templateName;
+          } else if (effectiveTemplateSaveMode === 'overwrite' && currentTemplateName) {
+            mappingNameForRemap = currentTemplateName;
+          } else {
+            // Generate automatic name
+            const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+            const storedFileName = sessionStorage.getItem('csvFileName') || fileName || 'unknown.csv';
+            const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
+            const csvAnalysis = csvAnalysisStr ? JSON.parse(csvAnalysisStr) : analysis;
+            mappingNameForRemap = generateAutomaticMappingName(csvAnalysis, storedFileName);
+          }
+        }
+
+        // Apply remap with template options from page fields
+        const remapResponse = await fetch(`/api/import/queue/${remapBatchId}/apply-remap`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mapping,
+            saveAsTemplate: shouldSaveAsTemplate,
+            templateName: effectiveTemplateSaveMode === 'new' ? (templateName || undefined) : undefined,
+            overwriteTemplateId: effectiveTemplateSaveMode === 'overwrite' ? (currentTemplateId || undefined) : undefined,
+            deleteOldTemplate: deleteOldTemplate,
+          }),
+        });
+
+        if (!remapResponse.ok) {
+          const errorData = await remapResponse.json().catch(() => ({ error: 'Failed to apply remap' }));
+          throw new Error(errorData.error || 'Failed to apply remap');
+        }
+
+        // Start client-side processing (same flow as template save)
+        setIsProcessing(false); // Close the mapping dialog
+        setIsProcessingRemap(true);
+        setRemapBatchId(remapBatchId); // Update state with batchId
+        setProcessingProgress(0);
+        setProcessingStage('Loading queued transactions...');
+
+        // Process transactions on client side (same flow as review button)
+        try {
+          // Fetch all queued imports for this batch
+          const fetchResponse = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(remapBatchId)}`);
+          if (!fetchResponse.ok) {
+            throw new Error('Failed to fetch batch transactions');
+          }
+
+          const fetchData = await fetchResponse.json();
+          const queuedImports = fetchData.imports || [];
+
+          if (queuedImports.length === 0) {
+            throw new Error('No transactions found for this batch');
+          }
+
+          setProcessingProgress(10);
+          setProcessingStage(`Found ${queuedImports.length} transaction${queuedImports.length !== 1 ? 's' : ''}. Converting format...`);
+
+          // Convert queued imports to ParsedTransaction format
+          const initialTransactions: ParsedTransaction[] = queuedImports.map((qi: any) => ({
+            id: `queued-${qi.id}`,
+            date: qi.transaction_date,
+            description: qi.description,
+            amount: qi.amount,
+            transaction_type: qi.transaction_type,
+            merchant: qi.merchant,
+            suggestedCategory: qi.suggested_category_id || undefined,
+            account_id: qi.target_account_id || undefined,
+            credit_card_id: qi.target_credit_card_id || undefined,
+            is_historical: qi.is_historical || false,
+            splits: [],
+            status: 'pending' as const,
+            isDuplicate: false,
+            originalData: qi.original_data,
+            hash: qi.hash || '',
+          }));
+
+          // Process transactions: check duplicates and auto-categorize
+          setProcessingProgress(20);
+          setProcessingStage('Processing transactions...');
+          const updateProgress = (progress: number, stage: string) => {
+            setProcessingProgress(progress);
+            setProcessingStage(stage);
+          };
+
+          const processedTransactions = await processTransactions(
+            initialTransactions,
+            initialTransactions[0]?.account_id || undefined,
+            initialTransactions[0]?.credit_card_id || undefined,
+            true, // Skip AI categorization initially
+            updateProgress
+          );
+
+          // Update queued imports in database with categorization results
+          setProcessingProgress(95);
+          setProcessingStage('Updating categorization results...');
+          const updateResponse = await fetch('/api/automatic-imports/queue/update-categorization', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transactions: processedTransactions }),
+          });
+
+          if (!updateResponse.ok) {
+            console.warn('Failed to update queued imports with categorization results');
+          }
+
+          // Store processed transactions and batch info in sessionStorage
+          sessionStorage.setItem('queuedBatchId', remapBatchId);
+          sessionStorage.setItem('queuedProcessedTransactions', JSON.stringify(processedTransactions));
+          
+          // Store batch info
+          const firstImport = queuedImports[0];
+          const batchInfo = {
+            setup_name: 'Manual Import',
+            source_type: 'manual',
+            target_account_name: null as string | null,
+            is_credit_card: false,
+            is_historical: false as boolean | 'mixed',
+          };
+
+          if (firstImport) {
+            batchInfo.is_credit_card = !!firstImport.target_credit_card_id;
+            const allHistorical = queuedImports.every((qi: any) => qi.is_historical === true);
+            const someHistorical = queuedImports.some((qi: any) => qi.is_historical === true);
+            batchInfo.is_historical = allHistorical ? true : someHistorical ? 'mixed' : false;
+
+            // Fetch account/credit card name if mapped
+            try {
+              if (firstImport.target_account_id) {
+                const accountResponse = await fetch(`/api/accounts/${firstImport.target_account_id}`);
+                if (accountResponse.ok) {
+                  const account = await accountResponse.json();
+                  batchInfo.target_account_name = account.name;
+                }
+              } else if (firstImport.target_credit_card_id) {
+                const cardResponse = await fetch(`/api/credit-cards/${firstImport.target_credit_card_id}`);
+                if (cardResponse.ok) {
+                  const card = await cardResponse.json();
+                  batchInfo.target_account_name = card.name;
+                }
+              }
+            } catch (err) {
+              console.warn('Failed to fetch account/card name:', err);
+            }
+          }
+          
+          sessionStorage.setItem('queuedBatchInfo', JSON.stringify(batchInfo));
+
+          setProcessingProgress(100);
+          setProcessingStage('Processing complete!');
+
+          // Clear remap-related sessionStorage
+          sessionStorage.removeItem('remapBatchId');
+          sessionStorage.removeItem('csvData');
+          sessionStorage.removeItem('csvAnalysis');
+          sessionStorage.removeItem('csvFileName');
+
+          // Navigate to batch review page after a short delay
+          setTimeout(() => {
+            setIsProcessingRemap(false);
+            window.location.href = `/imports/queue/${remapBatchId}`;
+          }, 500);
+        } catch (processError: any) {
+          console.error('Error processing remapped transactions:', processError);
+          setIsProcessingRemap(false);
+          toast.error(processError.message || 'Failed to process remapped transactions');
+        }
+        return;
+      }
+
+      // Normal flow: queue transactions
+      let savedTemplateId: number | undefined;
+      let mappingName: string | undefined;
       if (shouldSaveTemplate) {
         try {
-          await saveTemplate({
+          const savedTemplate = await saveTemplate({
             userId: '', // Will be set by API
             templateName: templateName || undefined,
             fingerprint: analysis.fingerprint,
             columnCount: analysis.columns.length,
             mapping,
           });
+          savedTemplateId = savedTemplate.id;
+          mappingName = savedTemplate.templateName || templateName || 'Saved Template';
         } catch (err) {
           console.warn('Failed to save template:', err);
           // Non-critical error, continue with import
         }
       }
-
-      // Check for duplicates and auto-categorize
-      const processedTransactions = await processTransactions(transactions);
-
-      // Store transactions in sessionStorage and navigate back
-      sessionStorage.setItem('parsedTransactions', JSON.stringify(processedTransactions));
-      sessionStorage.setItem('parsedFileName', fileName);
-      if (mapping.dateFormat) {
-        sessionStorage.setItem('csvDateFormat', mapping.dateFormat);
-      }
       
-      // Clear CSV data
+      // If no template was saved, generate automatic mapping name
+      if (!mappingName) {
+        const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+        mappingName = generateAutomaticMappingName(analysis, fileName);
+      }
+
+      // csvData is already parsed from sessionStorage above, use it directly
+      // Queue transactions (NOT processed - let queue handle that)
+      const queueResponse = await fetch('/api/import/queue-manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactions, // Raw parsed transactions, NOT processed
+          fileName,
+          csvData, // csvData is already parsed from sessionStorage above
+          csvAnalysis: analysis,
+          csvFingerprint: analysis.fingerprint,
+          csvMappingTemplateId: savedTemplateId,
+          csvMappingName: mappingName,
+        }),
+      });
+
+      if (!queueResponse.ok) {
+        const errorData = await queueResponse.json().catch(() => ({ error: 'Failed to queue import' }));
+        throw new Error(errorData.error || 'Failed to queue import');
+      }
+
+      // Clear CSV data from sessionStorage
       sessionStorage.removeItem('csvAnalysis');
       sessionStorage.removeItem('csvData');
       sessionStorage.removeItem('csvFileName');
+      sessionStorage.removeItem('remapBatchId');
 
-      // Navigate back to import page which will show the preview
-      router.push('/import');
+      toast.success(`Queued ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''} for review`);
+      router.push('/imports/queue');
     } catch (err) {
       console.error('Error processing file with mapping:', err);
       setError(err instanceof Error ? err.message : 'Failed to process file');
@@ -371,6 +649,164 @@ export default function MapColumnsPage() {
         </Badge>
       );
     }
+  };
+
+  // Generate preview transactions - try to get one income and one expense
+  const getPreviewTransactions = () => {
+    if (!analysis || sampleData.length === 0) return [];
+
+    const mapping: ColumnMapping = {
+      dateColumn: findColumnForField('date'),
+      amountColumn: findColumnForField('amount'),
+      descriptionColumn: findColumnForField('description'),
+      debitColumn: findColumnForField('debit'),
+      creditColumn: findColumnForField('credit'),
+      transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
+      amountSignConvention,
+      dateFormat: analysis.dateFormat,
+      hasHeaders: analysis.hasHeaders,
+    };
+
+    const startRow = analysis.hasHeaders ? 1 : 0;
+    const previews: Array<{
+      date: string;
+      description: string;
+      amount: string;
+      amountValue: number;
+      transactionType: 'income' | 'expense';
+      isValid: boolean;
+    }> = [];
+
+    // Helper function to parse a single row
+    const parseRow = (dataRow: string[]) => {
+      const dateValue = mapping.dateColumn !== null ? dataRow[mapping.dateColumn] : null;
+      const descriptionValue = mapping.descriptionColumn !== null ? dataRow[mapping.descriptionColumn] : null;
+      
+      let amount = 0;
+      let transactionType: 'income' | 'expense' = 'expense';
+      let amountDisplay = '';
+
+      if (amountSignConvention === 'separate_debit_credit') {
+        const debitValue = mapping.debitColumn !== null ? dataRow[mapping.debitColumn] : '';
+        const creditValue = mapping.creditColumn !== null ? dataRow[mapping.creditColumn] : '';
+        const debitAmount = parseAmount(debitValue);
+        const creditAmount = parseAmount(creditValue);
+        
+        if (debitAmount > 0) {
+          amount = debitAmount;
+          transactionType = 'expense';
+          amountDisplay = `Debit: ${debitValue}`;
+        } else if (creditAmount > 0) {
+          amount = creditAmount;
+          transactionType = 'income';
+          amountDisplay = `Credit: ${creditValue}`;
+        } else {
+          amountDisplay = 'No amount';
+        }
+      } else if (amountSignConvention === 'separate_column') {
+        const amountValue = mapping.amountColumn !== null ? dataRow[mapping.amountColumn] : '';
+        const typeValue = mapping.transactionTypeColumn !== null ? dataRow[mapping.transactionTypeColumn] : '';
+        amount = parseAmount(amountValue);
+        
+        if (amount > 0) {
+          // Determine type from column value
+          const typeStr = (typeValue || '').toUpperCase();
+          if (typeStr.includes('INCOME') || typeStr.includes('CREDIT') || typeStr.includes('DEPOSIT')) {
+            transactionType = 'income';
+          } else {
+            transactionType = 'expense';
+          }
+          amountDisplay = `${amountValue} (${typeValue || 'N/A'})`;
+        } else {
+          amountDisplay = 'No amount';
+        }
+      } else {
+        const amountValue = mapping.amountColumn !== null ? dataRow[mapping.amountColumn] : '';
+        amount = parseAmount(amountValue);
+        
+        if (amount !== 0) {
+          if (amountSignConvention === 'positive_is_income') {
+            transactionType = amount > 0 ? 'income' : 'expense';
+          } else {
+            transactionType = amount > 0 ? 'expense' : 'income';
+          }
+          amountDisplay = amountValue;
+        } else {
+          amountDisplay = 'No amount';
+        }
+      }
+
+      return {
+        date: dateValue || 'Not mapped',
+        description: descriptionValue || 'Not mapped',
+        amount: amountDisplay,
+        amountValue: amount,
+        transactionType,
+        isValid: !!(dateValue && descriptionValue && amount !== 0),
+      };
+    };
+
+    // Try to find one income and one expense
+    let incomeFound = false;
+    let expenseFound = false;
+
+    for (let i = startRow; i < sampleData.length && previews.length < 2; i++) {
+      const dataRow = sampleData[i];
+      if (!dataRow) continue;
+
+      const preview = parseRow(dataRow);
+      
+      // Skip invalid rows
+      if (!preview.isValid) continue;
+
+      // If we haven't found an income yet and this is income, add it
+      if (!incomeFound && preview.transactionType === 'income') {
+        previews.push(preview);
+        incomeFound = true;
+      }
+      // If we haven't found an expense yet and this is expense, add it
+      else if (!expenseFound && preview.transactionType === 'expense') {
+        previews.push(preview);
+        expenseFound = true;
+      }
+      // If we've found both types, we're done
+      else if (incomeFound && expenseFound) {
+        break;
+      }
+      // If we haven't found both types and this is the first row, add it
+      else if (previews.length === 0) {
+        previews.push(preview);
+        if (preview.transactionType === 'income') incomeFound = true;
+        else expenseFound = true;
+      }
+    }
+
+    // If we only found one type, try to get a second row of any type
+    if (previews.length === 1) {
+      for (let i = startRow; i < sampleData.length && previews.length < 2; i++) {
+        const dataRow = sampleData[i];
+        if (!dataRow) continue;
+
+        const preview = parseRow(dataRow);
+        
+        // Skip invalid rows or rows we've already added
+        if (!preview.isValid) continue;
+        
+        // Check if this row is different from what we already have
+        const alreadyAdded = previews.some(p => 
+          p.date === preview.date && 
+          p.description === preview.description && 
+          p.amountValue === preview.amountValue
+        );
+        
+        if (!alreadyAdded) {
+          previews.push(preview);
+          break;
+        }
+      }
+    }
+
+    return previews;
   };
 
   if (!analysis) {
@@ -518,26 +954,196 @@ export default function MapColumnsPage() {
             </CardContent>
           </Card>
 
-          <div className="flex items-center space-x-2 p-4 bg-muted/50 rounded-lg">
-            <Checkbox
-              id="save-template"
-              checked={shouldSaveTemplate}
-              onCheckedChange={(checked) => setShouldSaveTemplate(checked === true)}
-            />
-            <Label htmlFor="save-template" className="cursor-pointer">
-              Save this mapping as a template for future imports
-            </Label>
-          </div>
+          {/* Preview Rows */}
+          {(() => {
+            const previews = getPreviewTransactions();
+            if (previews.length === 0) return null;
+            
+            const hasInvalid = previews.some(p => !p.isValid);
+            
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Preview</CardTitle>
+                  <CardDescription>
+                    How transactions will appear with your current mappings
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="border rounded-md overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-border">
+                          <TableHead className="whitespace-nowrap">Date</TableHead>
+                          <TableHead className="whitespace-nowrap">Description</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
+                          <TableHead className="whitespace-nowrap">Type</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {previews.map((preview, index) => (
+                          <TableRow key={index}>
+                            <TableCell className={`whitespace-nowrap text-xs ${preview.date === 'Not mapped' ? 'text-red-600 dark:text-red-400' : ''}`}>
+                              {preview.date === 'Not mapped' ? (
+                                <span className="italic text-muted-foreground">Not mapped</span>
+                              ) : (
+                                preview.date
+                              )}
+                            </TableCell>
+                            <TableCell className={`font-medium text-sm max-w-[250px] truncate ${preview.description === 'Not mapped' ? 'text-red-600 dark:text-red-400' : ''}`}>
+                              {preview.description === 'Not mapped' ? (
+                                <span className="italic text-muted-foreground">Not mapped</span>
+                              ) : (
+                                preview.description
+                              )}
+                            </TableCell>
+                            <TableCell className={`text-right font-semibold text-sm whitespace-nowrap ${
+                              preview.transactionType === 'income'
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-red-600 dark:text-red-400'
+                            } ${preview.amount === 'No amount' ? 'text-red-600 dark:text-red-400' : ''}`}>
+                              {preview.amount === 'No amount' ? (
+                                <span className="italic text-muted-foreground">Not mapped</span>
+                              ) : preview.amount.includes('(') ? (
+                                // Show full amount with type column value in parentheses
+                                <span>
+                                  {preview.transactionType === 'income' ? '+' : '-'}
+                                  {formatCurrency(Math.abs(preview.amountValue))}
+                                  {' '}
+                                  <span className="text-xs text-muted-foreground">
+                                    ({preview.amount.match(/\(([^)]+)\)/)?.[1] || ''})
+                                  </span>
+                                </span>
+                              ) : preview.amount.includes('Debit:') || preview.amount.includes('Credit:') ? (
+                                // Show debit/credit with formatted amount
+                                <span>
+                                  {preview.transactionType === 'income' ? '+' : '-'}
+                                  {formatCurrency(Math.abs(preview.amountValue))}
+                                </span>
+                              ) : (
+                                // Regular amount formatting
+                                <>
+                                  {preview.transactionType === 'income' ? '+' : '-'}
+                                  {formatCurrency(Math.abs(preview.amountValue))}
+                                </>
+                              )}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <Badge variant={preview.transactionType === 'income' ? 'default' : 'secondary'} className="text-xs">
+                                {preview.transactionType === 'income' ? 'Income' : 'Expense'}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {hasInvalid && (
+                    <div className="mt-4 p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-800 dark:text-amber-200">
+                      ⚠️ Some required fields are not mapped. Please map Date, Description, and Amount columns.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
-          {shouldSaveTemplate && (
-            <div className="space-y-2">
-              <Label htmlFor="template-name">Template Name (optional)</Label>
-              <Input
-                id="template-name"
-                placeholder="e.g., Bank of America Checking"
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-              />
+          {/* Only show this checkbox for non-remap flows */}
+          {!isRemap && (
+            <>
+              <div className="flex items-center space-x-2 p-4 bg-muted/50 rounded-lg">
+                <Checkbox
+                  id="save-template"
+                  checked={shouldSaveTemplate}
+                  onCheckedChange={(checked) => setShouldSaveTemplate(checked === true)}
+                />
+                <Label htmlFor="save-template" className="cursor-pointer">
+                  Save this mapping as a template for future imports
+                </Label>
+              </div>
+
+              {shouldSaveTemplate && (
+                <div className="space-y-2">
+                  <Label htmlFor="template-name">Template Name (optional)</Label>
+                  <Input
+                    id="template-name"
+                    placeholder="e.g., Bank of America Checking"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          {isRemap && (
+            <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="remap-save-template"
+                  checked={templateSaveMode !== 'none'}
+                  onCheckedChange={(checked) => setTemplateSaveMode(checked ? 'new' : 'none')}
+                />
+                <Label htmlFor="remap-save-template" className="cursor-pointer">
+                  Save this mapping as a template
+                </Label>
+              </div>
+
+              {templateSaveMode !== 'none' && (
+                <div className="space-y-4 ml-6">
+                  <div>
+                    <Label>Save Option</Label>
+                    <Select
+                      value={templateSaveMode}
+                      onValueChange={(value) => setTemplateSaveMode(value as typeof templateSaveMode)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {currentTemplateId && (
+                          <SelectItem value="overwrite">Overwrite existing template</SelectItem>
+                        )}
+                        <SelectItem value="new">Create new template</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {templateSaveMode === 'overwrite' && currentTemplateId && (
+                    <div className="p-2 bg-yellow-50 dark:bg-yellow-950 rounded">
+                      <p className="text-sm">
+                        Will overwrite: <strong>{currentTemplateName || 'Current Template'}</strong>
+                      </p>
+                    </div>
+                  )}
+
+                  {templateSaveMode === 'new' && (
+                    <>
+                      <div>
+                        <Label htmlFor="remap-template-name">Template Name</Label>
+                        <Input
+                          id="remap-template-name"
+                          placeholder="e.g., Bank of America Checking (Updated)"
+                          value={templateName}
+                          onChange={(e) => setTemplateName(e.target.value)}
+                        />
+                      </div>
+                      {currentTemplateId && (
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="delete-old-template"
+                            checked={deleteOldTemplate}
+                            onCheckedChange={(checked) => setDeleteOldTemplate(checked === true)}
+                          />
+                          <Label htmlFor="delete-old-template" className="cursor-pointer text-sm">
+                            Delete old template: {currentTemplateName || 'Current Template'}
+                          </Label>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -580,11 +1186,19 @@ export default function MapColumnsPage() {
               Cancel
             </Button>
             <Button onClick={handleConfirm} disabled={isProcessing}>
-              {isProcessing ? 'Processing...' : 'Continue Import'}
+              {isProcessing ? 'Processing...' : isRemap ? 'Apply Re-mapping' : 'Continue Import'}
             </Button>
           </div>
         </CardContent>
       </Card>
+
+
+      {/* Processing Dialog for Remap */}
+      <QueuedImportProcessingDialog
+        open={isProcessingRemap}
+        progress={processingProgress}
+        stage={processingStage}
+      />
     </div>
   );
 }

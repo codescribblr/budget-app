@@ -18,7 +18,12 @@ export async function POST(request: Request) {
       fileName, 
       targetAccountId, 
       targetCreditCardId,
-      isHistorical = false 
+      isHistorical = false,
+      csvData,
+      csvAnalysis,
+      csvFingerprint,
+      csvMappingTemplateId,
+      csvMappingName,
     } = body;
 
     if (!Array.isArray(transactions) || transactions.length === 0) {
@@ -55,6 +60,17 @@ export async function POST(request: Request) {
         : JSON.stringify({ _uploadFileName: fileName }),
     }));
 
+    // Debug logging
+    console.log('queue-manual API received:', {
+      fileName,
+      transactionCount: transactionsWithFilename.length,
+      hasCsvData: !!csvData,
+      csvDataLength: csvData ? (Array.isArray(csvData) ? csvData.length : 'not array') : 0,
+      hasCsvAnalysis: !!csvAnalysis,
+      csvMappingName,
+      csvMappingTemplateId,
+    });
+
     // Queue transactions
     // Note: isHistorical is applied per-transaction if provided in transaction.is_historical
     // Otherwise, the batch-level isHistorical is used
@@ -63,6 +79,12 @@ export async function POST(request: Request) {
       transactions: transactionsWithFilename as ParsedTransaction[],
       sourceBatchId: batchId,
       isHistorical,
+      csvData,
+      csvAnalysis,
+      csvFingerprint,
+      csvMappingTemplateId,
+      csvFileName: fileName,
+      csvMappingName,
     });
 
     if (queuedCount === 0) {

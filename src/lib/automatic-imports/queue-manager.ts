@@ -127,6 +127,12 @@ export interface QueueTransactionOptions {
   isHistorical?: boolean;
   accountId?: number; // Optional: provide accountId for webhook contexts
   supabase?: SupabaseClient; // Optional: provide supabase client for webhook contexts
+  csvData?: string[][]; // Optional: Raw CSV data for re-mapping
+  csvAnalysis?: any; // Optional: CSV analysis result (CSVAnalysisResult)
+  csvFingerprint?: string; // Optional: CSV fingerprint for template matching
+  csvMappingTemplateId?: number; // Optional: Associated template ID
+  csvFileName?: string; // Optional: Original CSV filename
+  csvMappingName?: string; // Optional: Human-readable mapping name (template name or auto-generated)
 }
 
 /**
@@ -140,7 +146,18 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
   const accountId = options.accountId || await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
-  const { importSetupId, transactions, sourceBatchId, isHistorical = false } = options;
+  const { 
+    importSetupId, 
+    transactions, 
+    sourceBatchId, 
+    isHistorical = false,
+    csvData,
+    csvAnalysis,
+    csvFingerprint,
+    csvMappingTemplateId,
+    csvFileName,
+    csvMappingName,
+  } = options;
 
   // Get existing hashes to check for duplicates
   const hashes = transactions.map(t => t.hash);
@@ -163,11 +180,19 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     .in('hash', Array.from(seenInBatch));
 
   // Check against queued_imports (get all statuses to check transaction_type)
-  const { data: existingQueued } = await supabase
+  // Exclude the current batchId to avoid false positives during remap
+  let query = supabase
     .from('queued_imports')
     .select('hash, source_batch_id, status, transaction_type')
     .eq('account_id', accountId)
     .in('hash', Array.from(seenInBatch));
+  
+  // Exclude current batch to prevent false duplicates during remap
+  if (sourceBatchId) {
+    query = query.neq('source_batch_id', sourceBatchId);
+  }
+  
+  const { data: existingQueued } = await query;
 
   // Build a map of hash -> { status, transaction_type } for queued imports
   const queuedHashInfo = new Map<string, { status: string; transaction_type: string }>();
@@ -202,42 +227,126 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
   });
 
   // Filter out duplicates (both within batch and across batches)
-  const newTransactions = deduplicatedTransactions.filter(t => !existingHashes.has(t.hash));
+  // For manual imports (sourceBatchId starts with "manual-"), allow duplicates to be queued for review
+  const isManualImport = sourceBatchId.startsWith('manual-');
+  const newTransactions = isManualImport 
+    ? deduplicatedTransactions // Allow all transactions for manual imports (user can review duplicates)
+    : deduplicatedTransactions.filter(t => !existingHashes.has(t.hash)); // Filter duplicates for automatic imports
 
   if (newTransactions.length === 0) {
-    return 0; // All duplicates
+    return 0; // All duplicates (shouldn't happen for manual imports, but keep as safety check)
+  }
+
+  // Debug logging
+  if (newTransactions.length > 0) {
+    console.log('queueTransactions storing CSV data:', {
+      hasCsvData: !!csvData,
+      csvDataLength: csvData ? (Array.isArray(csvData) ? csvData.length : 'not array') : 0,
+      hasCsvAnalysis: !!csvAnalysis,
+      csvFileName,
+      csvMappingName,
+      csvMappingTemplateId,
+      transactionCount: newTransactions.length,
+    });
   }
 
   // Prepare queued imports
   // Use per-transaction is_historical if provided, otherwise fall back to batch-level isHistorical
-  const queuedImports = newTransactions.map(txn => ({
-    account_id: accountId,
-    import_setup_id: importSetupId,
-    transaction_date: txn.date,
-    description: txn.description,
-    merchant: txn.merchant,
-    amount: txn.amount,
-    transaction_type: txn.transaction_type,
-    hash: txn.hash,
-    original_data: txn.originalData ? (typeof txn.originalData === 'string' ? JSON.parse(txn.originalData) : txn.originalData) : null,
-    suggested_category_id: txn.suggestedCategory || null,
-    suggested_merchant: txn.merchant || null,
-    target_account_id: txn.account_id || null,
-    target_credit_card_id: txn.credit_card_id || null,
-    status: 'pending' as const,
-    is_historical: txn.is_historical !== undefined ? txn.is_historical : isHistorical,
-    source_batch_id: sourceBatchId,
-    source_fetched_at: new Date().toISOString(),
-  }));
+  // CSV data fields are stored only once per batch (on first transaction), others get null
+  const queuedImports = newTransactions.map((txn, index) => {
+    // Check if this transaction is a duplicate (for manual imports, we still queue them but mark status)
+    const isDuplicate = existingHashes.has(txn.hash);
+    const queuedInfo = queuedHashInfo.get(txn.hash);
+    const isRejected = queuedInfo?.status === 'rejected';
+    
+    // For manual imports, mark duplicates as 'pending' so user can review them
+    // For automatic imports, duplicates are already filtered out above
+    const status = (isManualImport && isDuplicate && !isRejected) 
+      ? 'pending' as const  // Allow duplicates for manual review
+      : 'pending' as const; // Default status
+    
+    // Prepare CSV data for first transaction
+    const csvDataForInsert = index === 0 ? csvData : null;
+    const csvAnalysisForInsert = index === 0 ? csvAnalysis : null;
+    
+    // Debug first transaction CSV data
+    if (index === 0) {
+      console.log('First transaction CSV data being inserted:', {
+        csvDataType: csvDataForInsert ? typeof csvDataForInsert : 'null',
+        csvDataIsArray: Array.isArray(csvDataForInsert),
+        csvDataLength: Array.isArray(csvDataForInsert) ? csvDataForInsert.length : 'N/A',
+        csvAnalysisType: csvAnalysisForInsert ? typeof csvAnalysisForInsert : 'null',
+        csvFileName,
+        csvMappingName,
+      });
+    }
+    
+    return {
+      account_id: accountId,
+      import_setup_id: importSetupId,
+      transaction_date: txn.date,
+      description: txn.description,
+      merchant: txn.merchant,
+      amount: txn.amount,
+      transaction_type: txn.transaction_type,
+      hash: txn.hash,
+      original_data: txn.originalData ? (typeof txn.originalData === 'string' ? JSON.parse(txn.originalData) : txn.originalData) : null,
+      suggested_category_id: txn.suggestedCategory || null,
+      suggested_merchant: txn.merchant || null,
+      target_account_id: txn.account_id || null,
+      target_credit_card_id: txn.credit_card_id || null,
+      status,
+      is_historical: txn.is_historical !== undefined ? txn.is_historical : isHistorical,
+      source_batch_id: sourceBatchId,
+      source_fetched_at: new Date().toISOString(),
+      // CSV mapping fields - store only on first transaction to avoid duplication
+      csv_data: csvDataForInsert,
+      csv_analysis: csvAnalysisForInsert,
+      csv_fingerprint: index === 0 ? (csvFingerprint || null) : null,
+      csv_mapping_template_id: index === 0 ? (csvMappingTemplateId || null) : null,
+      csv_file_name: index === 0 ? (csvFileName || null) : null,
+      csv_mapping_name: index === 0 ? (csvMappingName || null) : null,
+    };
+  });
 
   // Insert queued imports
-  const { error } = await supabase
+  // Note: We don't select CSV fields in the insert response because PostgREST may not return them
+  // Instead, we'll verify by querying back after insert
+  const { data: insertedData, error } = await supabase
     .from('queued_imports')
-    .insert(queuedImports);
+    .insert(queuedImports)
+    .select('id, source_batch_id');
 
   if (error) {
     console.error('Error queueing transactions:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     throw error;
+  }
+
+  // Verify CSV data was stored by querying back the first inserted record
+  if (insertedData && insertedData.length > 0 && sourceBatchId) {
+    const firstInsertedId = insertedData[0].id;
+    const { data: verifyData, error: verifyError } = await supabase
+      .from('queued_imports')
+      .select('id, csv_data, csv_analysis, csv_file_name, csv_mapping_name, csv_mapping_template_id')
+      .eq('id', firstInsertedId)
+      .single();
+    
+    if (!verifyError && verifyData) {
+      console.log('Verified inserted CSV data:', {
+        id: verifyData.id,
+        has_csv_data: !!verifyData.csv_data,
+        csv_data_type: verifyData.csv_data ? typeof verifyData.csv_data : 'null',
+        csv_data_is_array: Array.isArray(verifyData.csv_data),
+        has_csv_analysis: !!verifyData.csv_analysis,
+        csv_file_name: verifyData.csv_file_name,
+        csv_mapping_name: verifyData.csv_mapping_name,
+        csv_mapping_template_id: verifyData.csv_mapping_template_id,
+        expected_template_id: csvMappingTemplateId,
+      });
+    } else if (verifyError) {
+      console.error('Error verifying CSV data:', verifyError);
+    }
   }
 
   return newTransactions.length;
@@ -257,11 +366,13 @@ export async function getQueuedImports(options?: {
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
+  // Explicitly select all fields including CSV mapping fields
+  // PostgREST requires explicit selection of JSONB fields - using * alone may not return them
+  // Use a simpler approach: select * and explicitly add CSV fields
   let query = supabase
     .from('queued_imports')
-    .select('*')
-    .eq('account_id', accountId)
-    .order('transaction_date', { ascending: false });
+    .select('*, csv_data, csv_analysis, csv_file_name, csv_fingerprint, csv_mapping_template_id, csv_mapping_name')
+    .eq('account_id', accountId);
 
   if (options?.status) {
     query = query.eq('status', options.status);
@@ -275,6 +386,14 @@ export async function getQueuedImports(options?: {
     query = query.eq('source_batch_id', options.batchId);
   }
 
+  // Apply ordering - order by transaction_date descending by default
+  // But for batch queries, we want the first record (with CSV data) first
+  if (options?.batchId) {
+    query = query.order('id', { ascending: true }); // First record has CSV data
+  } else {
+    query = query.order('transaction_date', { ascending: false });
+  }
+
   if (options?.limit) {
     query = query.limit(options.limit);
   }
@@ -284,6 +403,20 @@ export async function getQueuedImports(options?: {
   }
 
   const { data, error } = await query;
+  
+  // Debug: Log what we got back
+  if (data && data.length > 0 && options?.batchId) {
+    const first = data[0];
+    console.log('getQueuedImports returned CSV fields:', {
+      id: first.id,
+      source_batch_id: first.source_batch_id,
+      has_csv_data: !!first.csv_data,
+      csv_data_type: first.csv_data ? typeof first.csv_data : 'null',
+      has_csv_analysis: !!first.csv_analysis,
+      csv_file_name: first.csv_file_name,
+      csv_mapping_name: first.csv_mapping_name,
+    });
+  }
 
   if (error) {
     console.error('Error fetching queued imports:', error);
@@ -605,6 +738,66 @@ export async function approveAndImportQueuedTransactions(queuedImportIds: number
   
   // Update queued imports to mark as imported
   if (importedQueuedIds.length > 0) {
+    // Before marking as imported, check if ANY imports from this batch have already been imported
+    // to prevent double-counting template usage
+    const { data: existingBatchImports } = await supabase
+      .from('queued_imports')
+      .select('id, status')
+      .eq('source_batch_id', batchId)
+      .eq('account_id', accountId)
+      .eq('status', 'imported')
+      .limit(1);
+    
+    const isFirstImportForBatch = !existingBatchImports || existingBatchImports.length === 0;
+    
+    // Increment template usage counts for this batch (once per unique template per batch)
+    if (isFirstImportForBatch) {
+      // Fetch all queued imports for this batch to get template IDs
+      const { data: batchImports } = await supabase
+        .from('queued_imports')
+        .select('csv_mapping_template_id')
+        .eq('source_batch_id', batchId)
+        .eq('account_id', accountId)
+        .not('csv_mapping_template_id', 'is', null);
+      
+      if (batchImports && batchImports.length > 0) {
+        // Get unique template IDs
+        const uniqueTemplateIds = [...new Set(
+          batchImports
+            .map(qi => qi.csv_mapping_template_id)
+            .filter((id): id is number => id !== null && id !== undefined)
+        )];
+        
+        // Increment usage_count for each unique template (once per batch)
+        for (const templateId of uniqueTemplateIds) {
+          try {
+            const { data: template } = await supabase
+              .from('csv_import_templates')
+              .select('usage_count, user_id')
+              .eq('id', templateId)
+              .single();
+            
+            if (template) {
+              await supabase
+                .from('csv_import_templates')
+                .update({
+                  usage_count: (template.usage_count || 0) + 1,
+                  last_used: new Date().toISOString(),
+                })
+                .eq('id', templateId)
+                .eq('user_id', template.user_id);
+              
+              console.log(`Incremented usage_count for template ${templateId} (batch ${batchId})`);
+            }
+          } catch (err) {
+            console.warn(`Failed to increment usage_count for template ${templateId}:`, err);
+            // Non-critical error, continue
+          }
+        }
+      }
+    }
+    
+    // Mark queued imports as imported
     await supabase
       .from('queued_imports')
       .update({

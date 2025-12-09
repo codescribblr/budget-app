@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import TransactionPreview from '@/components/import/TransactionPreview';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { ArrowLeft, Wallet, CreditCard, Clock, Trash2 } from 'lucide-react';
+import { ArrowLeft, Wallet, CreditCard, Clock, Trash2, RefreshCw } from 'lucide-react';
 import type { ParsedTransaction } from '@/lib/import-types';
 import { processTransactions } from '@/lib/csv-parser-helpers';
 import {
@@ -37,6 +37,15 @@ export default function BatchReviewPage() {
     is_credit_card: boolean;
     is_historical: boolean | 'mixed';
   } | null>(null);
+  const [hasCsvData, setHasCsvData] = useState<boolean>(false);
+  const [mappingName, setMappingName] = useState<string | null>(null);
+  const [mappingTemplateId, setMappingTemplateId] = useState<number | null>(null);
+  const [mappingTemplateName, setMappingTemplateName] = useState<string | null>(null);
+  const [importFileName, setImportFileName] = useState<string | null>(null);
+  const [duplicateCounts, setDuplicateCounts] = useState<{
+    database: number;
+    withinFile: number;
+  }>({ database: 0, withinFile: 0 });
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -86,7 +95,7 @@ export default function BatchReviewPage() {
         const storedBatchInfo = sessionStorage.getItem('queuedBatchInfo');
         
         if (storedTransactions) {
-          loadFromStorage(storedTransactions, storedBatchInfo);
+          await loadFromStorage(storedTransactions, storedBatchInfo);
           return;
         }
         
@@ -129,6 +138,38 @@ export default function BatchReviewPage() {
         setError('No transactions found for this batch');
         setLoading(false);
         return;
+      }
+
+      // Debug: Log first import to see what fields are available
+      if (queuedImports.length > 0) {
+        const firstImport = queuedImports[0];
+        console.log('First queued import fields:', {
+          has_csv_data: !!firstImport.csv_data,
+          has_csv_analysis: !!firstImport.csv_analysis,
+          csv_file_name: firstImport.csv_file_name,
+          csv_mapping_name: firstImport.csv_mapping_name,
+          csv_mapping_template_id: firstImport.csv_mapping_template_id,
+          source_batch_id: firstImport.source_batch_id,
+          id: firstImport.id,
+        });
+        
+        // If CSV fields are missing, try fetching them directly (workaround for PostgREST schema cache issues)
+        if (!firstImport.csv_data && !firstImport.csv_file_name) {
+          console.log('CSV fields missing from main query, fetching directly...');
+          try {
+            const csvResponse = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}&csvFields=true`);
+            if (csvResponse.ok) {
+              const csvData = await csvResponse.json();
+              if (csvData.csvFields) {
+                console.log('Fetched CSV fields directly:', csvData.csvFields);
+                // Update the first import with CSV fields
+                Object.assign(firstImport, csvData.csvFields);
+              }
+            }
+          } catch (err) {
+            console.warn('Failed to fetch CSV fields directly:', err);
+          }
+        }
       }
 
       // Fetch setup info to determine if this is a manual upload
@@ -220,6 +261,56 @@ export default function BatchReviewPage() {
         const someHistorical = queuedImports.some((qi: any) => qi.is_historical === true);
         batchInfo.is_historical = allHistorical ? true : someHistorical ? 'mixed' : false;
 
+        // Check if CSV data exists (for re-mapping capability)
+        // CSV data is stored on the first transaction of the batch
+        // Also check csv_analysis as indicator that CSV data should be available
+        const csvDataExists = !!firstImport.csv_data || !!firstImport.csv_analysis;
+        console.log('Setting CSV data state:', {
+          csv_data: !!firstImport.csv_data,
+          csv_analysis: !!firstImport.csv_analysis,
+          csv_file_name: firstImport.csv_file_name,
+          csv_mapping_name: firstImport.csv_mapping_name,
+          csvDataExists,
+        });
+        setHasCsvData(csvDataExists);
+        setMappingTemplateId(firstImport.csv_mapping_template_id || null);
+        setImportFileName(firstImport.csv_file_name || null);
+        
+        // Get mapping name - use stored value or generate from analysis if available
+        let mappingNameValue = firstImport.csv_mapping_name || null;
+        
+        // If no mapping name stored but we have CSV analysis, generate one
+        if (!mappingNameValue && firstImport.csv_analysis) {
+          try {
+            const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+            const analysis = firstImport.csv_analysis;
+            const fileName = firstImport.csv_file_name || 'unknown.csv';
+            mappingNameValue = generateAutomaticMappingName(analysis, fileName);
+          } catch (err) {
+            console.warn('Failed to generate mapping name:', err);
+          }
+        }
+        
+        // Fallback to "Automatic Mapping" if still no name
+        if (!mappingNameValue) {
+          mappingNameValue = firstImport.csv_mapping_template_id ? 'Template Mapping' : 'Automatic Mapping';
+        }
+        
+        setMappingName(mappingNameValue);
+        
+        // Fetch template name if template ID exists
+        if (firstImport.csv_mapping_template_id) {
+          try {
+            const templateResponse = await fetch(`/api/import/templates/${firstImport.csv_mapping_template_id}`);
+            if (templateResponse.ok) {
+              const template = await templateResponse.json();
+              setMappingTemplateName(template.template_name || null);
+            }
+          } catch (err) {
+            console.warn('Failed to fetch template name:', err);
+          }
+        }
+
         // Use setup info we already fetched
         if (setupInfo) {
           batchInfo.setup_name = setupInfo.integration_name || 'Unknown';
@@ -266,6 +357,48 @@ export default function BatchReviewPage() {
 
       setTransactions(sortedTransactions);
       setBatchInfo(batchInfo);
+      
+      // Calculate duplicate counts from processed transactions
+      const databaseDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'database').length;
+      const withinFileDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'within-file').length;
+      setDuplicateCounts({ database: databaseDups, withinFile: withinFileDups });
+      
+      // Ensure mapping info is set even if not in first import (for old imports)
+      if (queuedImports.length > 0 && !mappingName) {
+        const firstImport = queuedImports[0];
+        let mappingNameValue = firstImport.csv_mapping_name || null;
+        
+        // If no mapping name stored but we have CSV analysis, generate one
+        if (!mappingNameValue && firstImport.csv_analysis) {
+          try {
+            const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+            const analysis = firstImport.csv_analysis;
+            const fileName = firstImport.csv_file_name || 'unknown.csv';
+            mappingNameValue = generateAutomaticMappingName(analysis, fileName);
+          } catch (err) {
+            console.warn('Failed to generate mapping name:', err);
+          }
+        }
+        
+        // Fallback to "Automatic Mapping" if still no name
+        if (!mappingNameValue) {
+          mappingNameValue = firstImport.csv_mapping_template_id ? 'Template Mapping' : 'Automatic Mapping';
+        }
+        
+        if (mappingNameValue) {
+          setMappingName(mappingNameValue);
+        }
+        
+        if (!importFileName && firstImport.csv_file_name) {
+          setImportFileName(firstImport.csv_file_name);
+        }
+        
+        // Also ensure hasCsvData is set if csv_data or csv_analysis exists
+        if (!hasCsvData && (firstImport.csv_data || firstImport.csv_analysis)) {
+          setHasCsvData(true);
+        }
+      }
+      
       setLoading(false);
     } catch (err: any) {
       console.error('Error loading from database:', err);
@@ -274,7 +407,7 @@ export default function BatchReviewPage() {
     }
   };
 
-  const loadFromStorage = (storedTransactions: string, storedBatchInfo: string | null) => {
+  const loadFromStorage = async (storedTransactions: string, storedBatchInfo: string | null) => {
     try {
       // Load processed transactions from sessionStorage
       const processedTransactions = JSON.parse(storedTransactions);
@@ -295,6 +428,62 @@ export default function BatchReviewPage() {
           console.warn('Failed to parse batch info:', err);
           // Use defaults
         }
+      }
+      
+      // Fetch CSV fields from database to ensure we have filename, mapping name, etc.
+      // This is especially important after remap when data might have changed
+      try {
+        const csvResponse = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}&limit=1`);
+        if (csvResponse.ok) {
+          const csvData = await csvResponse.json();
+          const firstImport = csvData.imports?.[0];
+          
+          if (firstImport) {
+            // Set CSV-related fields
+            const csvDataExists = !!firstImport.csv_data || !!firstImport.csv_analysis;
+            setHasCsvData(csvDataExists);
+            setMappingTemplateId(firstImport.csv_mapping_template_id || null);
+            setImportFileName(firstImport.csv_file_name || null);
+            
+            // Get mapping name
+            let mappingNameValue = firstImport.csv_mapping_name || null;
+            
+            // If no mapping name stored but we have CSV analysis, generate one
+            if (!mappingNameValue && firstImport.csv_analysis) {
+              try {
+                const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+                const analysis = firstImport.csv_analysis;
+                const fileName = firstImport.csv_file_name || 'unknown.csv';
+                mappingNameValue = generateAutomaticMappingName(analysis, fileName);
+              } catch (err) {
+                console.warn('Failed to generate mapping name:', err);
+              }
+            }
+            
+            // Fallback to "Automatic Mapping" if still no name
+            if (!mappingNameValue) {
+              mappingNameValue = firstImport.csv_mapping_template_id ? 'Template Mapping' : 'Automatic Mapping';
+            }
+            
+            setMappingName(mappingNameValue);
+            
+            // Fetch template name if template ID exists
+            if (firstImport.csv_mapping_template_id) {
+              try {
+                const templateResponse = await fetch(`/api/import/templates/${firstImport.csv_mapping_template_id}`);
+                if (templateResponse.ok) {
+                  const template = await templateResponse.json();
+                  setMappingTemplateName(template.template_name || null);
+                }
+              } catch (err) {
+                console.warn('Failed to fetch template name:', err);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch CSV fields from database:', err);
+        // Continue without CSV fields - they'll be missing but page will still work
       }
       
       // Sort transactions by date descending (newest first)
@@ -440,6 +629,44 @@ export default function BatchReviewPage() {
                     <span className="font-medium">{batchInfo.target_account_name}</span>
                   </div>
                 )}
+                {/* Import File Name */}
+                {importFileName && (
+                  <Badge variant="outline" className="text-xs">
+                    <span className="mr-1">File:</span>
+                    <span className="font-medium">{importFileName}</span>
+                  </Badge>
+                )}
+                
+                {/* Mapping Method and Name - Always show if we have any mapping info */}
+                {(mappingName || importFileName || mappingTemplateId !== null) && (
+                  <Badge variant="outline" className="text-xs">
+                    <span className="mr-1">Mapping:</span>
+                    <span className="font-medium">
+                      {mappingTemplateId ? 'Template' : 'Automatic'} - {mappingName || 'Unknown'}
+                    </span>
+                    {mappingTemplateName && mappingTemplateId && (
+                      <span className="ml-1 text-muted-foreground">({mappingTemplateName})</span>
+                    )}
+                  </Badge>
+                )}
+                
+                {/* Duplicates */}
+                {(duplicateCounts.database > 0 || duplicateCounts.withinFile > 0) && (
+                  <Badge variant="outline" className="text-xs text-amber-600 dark:text-amber-400">
+                    <span className="mr-1">Duplicates:</span>
+                    <span className="font-medium">
+                      {duplicateCounts.database > 0 && `${duplicateCounts.database} existing`}
+                      {duplicateCounts.database > 0 && duplicateCounts.withinFile > 0 && ', '}
+                      {duplicateCounts.withinFile > 0 && `${duplicateCounts.withinFile} within file`}
+                    </span>
+                  </Badge>
+                )}
+                {duplicateCounts.database === 0 && duplicateCounts.withinFile === 0 && (
+                  <Badge variant="outline" className="text-xs text-green-600 dark:text-green-400">
+                    <span className="mr-1">Duplicates:</span>
+                    <span className="font-medium">None</span>
+                  </Badge>
+                )}
                 {batchInfo.is_historical === true && (
                   <Badge variant="outline" className="text-xs text-amber-600 dark:text-amber-400">
                     <Clock className="h-3 w-3 mr-1" />
@@ -456,13 +683,33 @@ export default function BatchReviewPage() {
             </div>
           )}
         </div>
-        <Button 
-          variant="outline" 
-          size="icon"
-          onClick={() => setDeleteDialogOpen(true)}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Re-map button - show for manual imports (CSV or PDF) with CSV data */}
+          {hasCsvData && (batchInfo?.source_type === 'manual' || batchId.startsWith('manual-')) && (
+            <Button 
+              variant="outline" 
+              onClick={async () => {
+                try {
+                  // Include batchId in URL so page can be reloaded/bookmarked
+                  router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
+                } catch (err) {
+                  console.error('Error initiating remap:', err);
+                  toast.error('Failed to start re-mapping');
+                }
+              }}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Re-map Fields
+            </Button>
+          )}
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {transactions.length > 0 && (

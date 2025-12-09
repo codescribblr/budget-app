@@ -270,7 +270,8 @@ export async function processTransactions(
   defaultAccountId?: number | null,
   defaultCreditCardId?: number | null,
   skipAICategorization: boolean = false,
-  progressCallback?: (progress: number, stage: string) => void
+  progressCallback?: (progress: number, stage: string) => void,
+  baseUrl?: string // Optional base URL for server-side calls
 ): Promise<ParsedTransaction[]> {
   // Step 1: Check for duplicates within the file itself
   if (progressCallback) progressCallback(45, 'Checking for duplicate transactions...');
@@ -288,7 +289,10 @@ export async function processTransactions(
   // Step 2: Fetch existing transaction hashes for deduplication against database
   // Also send transaction data for fallback duplicate detection (by date + description + amount)
   if (progressCallback) progressCallback(50, 'Checking against existing transactions...');
-  const response = await fetch('/api/import/check-duplicates', {
+  const checkDuplicatesUrl = baseUrl 
+    ? `${baseUrl}/api/import/check-duplicates`
+    : '/api/import/check-duplicates';
+  const response = await fetch(checkDuplicatesUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -307,13 +311,15 @@ export async function processTransactions(
 
   // Step 3: Fetch categories for auto-categorization
   if (progressCallback) progressCallback(55, 'Loading categories...');
-  const categoriesResponse = await fetch('/api/categories');
+  const categoriesUrl = baseUrl ? `${baseUrl}/api/categories` : '/api/categories';
+  const categoriesResponse = await fetch(categoriesUrl);
   const categories = await categoriesResponse.json();
 
   // Step 4: Get smart category suggestions for all merchants
   if (progressCallback) progressCallback(60, 'Applying categorization rules...');
   const merchants = transactions.map(t => t.merchant);
-  const categorizationResponse = await fetch('/api/categorize', {
+  const categorizeUrl = baseUrl ? `${baseUrl}/api/categorize` : '/api/categorize';
+  const categorizationResponse = await fetch(categorizeUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ merchants }),

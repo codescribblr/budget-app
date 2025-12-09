@@ -2,7 +2,7 @@ import Papa from 'papaparse';
 import type { ParsedTransaction } from './import-types';
 import { analyzeCSV, type CSVAnalysisResult } from './column-analyzer';
 import { parseDate, normalizeDate } from './date-parser';
-import { loadTemplate, updateTemplateUsage } from './mapping-templates';
+import { loadTemplate } from './mapping-templates';
 import type { ColumnMapping } from './mapping-templates';
 import { extractMerchant, generateTransactionHash } from './csv-parser-helpers';
 
@@ -112,10 +112,8 @@ async function processCSVData(
       if (template) {
         mapping = template.mapping;
         templateId = template.id;
-        // Update template usage
-        if (template.id) {
-          await updateTemplateUsage(template.id).catch(console.warn);
-        }
+        // Note: Template usage is now tracked when batches are imported, not during parsing
+        // This ensures usage_count reflects actual imports, not just queued batches
       }
     } catch (error) {
       console.warn('Failed to load template:', error);

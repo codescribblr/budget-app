@@ -14,7 +14,8 @@ import {
   Trash2,
   Crown,
   UserPlus,
-  RefreshCw
+  RefreshCw,
+  FileText
 } from 'lucide-react';
 
 const settingsNavItems = [
@@ -41,6 +42,12 @@ const settingsNavItems = [
     href: '/settings/automatic-imports',
     icon: RefreshCw,
     description: 'Manage automatic transaction imports',
+  },
+  {
+    title: 'Import Templates',
+    href: '/settings/import-templates',
+    icon: FileText,
+    description: 'Manage CSV import mapping templates',
   },
   {
     title: 'Duplicates',
