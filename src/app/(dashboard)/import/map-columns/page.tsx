@@ -887,7 +887,7 @@ export default function MapColumnsPage() {
                   } else {
                     // Generate automatic name
                     const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
-                    mappingNameForRemap = generateAutomaticMappingName(csvAnalysis, fileName);
+                    mappingNameForRemap = generateAutomaticMappingName(csvAnalysisForRemap, fileNameForRemap);
                   }
                   
                   const remapResponse = await fetch(`/api/import/queue/${remapBatchId}/apply-remap`, {
