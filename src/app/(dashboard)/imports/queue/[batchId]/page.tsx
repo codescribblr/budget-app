@@ -140,6 +140,19 @@ export default function BatchReviewPage() {
         return;
       }
 
+      // Debug: Log first import to see what fields are available
+      if (queuedImports.length > 0) {
+        const firstImport = queuedImports[0];
+        console.log('First queued import fields:', {
+          has_csv_data: !!firstImport.csv_data,
+          has_csv_analysis: !!firstImport.csv_analysis,
+          csv_file_name: firstImport.csv_file_name,
+          csv_mapping_name: firstImport.csv_mapping_name,
+          csv_mapping_template_id: firstImport.csv_mapping_template_id,
+          source_batch_id: firstImport.source_batch_id,
+        });
+      }
+
       // Fetch setup info to determine if this is a manual upload
       let isManualUpload = false;
       let setupInfo: any = null;
@@ -233,6 +246,13 @@ export default function BatchReviewPage() {
         // CSV data is stored on the first transaction of the batch
         // Also check csv_analysis as indicator that CSV data should be available
         const csvDataExists = !!firstImport.csv_data || !!firstImport.csv_analysis;
+        console.log('Setting CSV data state:', {
+          csv_data: !!firstImport.csv_data,
+          csv_analysis: !!firstImport.csv_analysis,
+          csv_file_name: firstImport.csv_file_name,
+          csv_mapping_name: firstImport.csv_mapping_name,
+          csvDataExists,
+        });
         setHasCsvData(csvDataExists);
         setMappingTemplateId(firstImport.csv_mapping_template_id || null);
         setImportFileName(firstImport.csv_file_name || null);
@@ -591,6 +611,14 @@ export default function BatchReviewPage() {
         <div className="flex items-center gap-2">
           {/* Re-map button - show for manual imports (CSV or PDF) with CSV data */}
           {/* Check both batchInfo.source_type and batchId pattern for manual imports */}
+          {/* Debug logging */}
+          {console.log('Re-map button check:', {
+            hasCsvData,
+            source_type: batchInfo?.source_type,
+            batchId,
+            batchIdStartsWithManual: batchId.startsWith('manual-'),
+            shouldShow: hasCsvData && (batchInfo?.source_type === 'manual' || batchId.startsWith('manual-')),
+          })}
           {hasCsvData && (batchInfo?.source_type === 'manual' || batchId.startsWith('manual-')) && (
             <Button 
               variant="outline" 

@@ -299,9 +299,19 @@ export async function getQueuedImports(options?: {
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
+  // Explicitly select all fields including CSV mapping fields
+  // PostgREST may not return JSONB fields with * selector in some cases
   let query = supabase
     .from('queued_imports')
-    .select('*, csv_data, csv_analysis, csv_file_name, csv_fingerprint, csv_mapping_template_id, csv_mapping_name')
+    .select(`
+      *,
+      csv_data,
+      csv_analysis,
+      csv_file_name,
+      csv_fingerprint,
+      csv_mapping_template_id,
+      csv_mapping_name
+    `)
     .eq('account_id', accountId)
     .order('transaction_date', { ascending: false });
 
