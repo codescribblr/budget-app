@@ -33,6 +33,7 @@ import { parseCSVWithMapping } from '@/lib/csv-parser-helpers';
 import type { ParsedTransaction } from '@/lib/import-types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { toast } from 'sonner';
+import { formatCurrency } from '@/lib/utils';
 
 type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'ignore';
 
@@ -586,6 +587,7 @@ export default function MapColumnsPage() {
       date: dateValue || 'Not mapped',
       description: descriptionValue || 'Not mapped',
       amount: amountDisplay,
+      amountValue: amount, // Store numeric value for formatting
       transactionType,
       isValid: dateValue && descriptionValue && amount !== 0,
     };
@@ -784,17 +786,28 @@ export default function MapColumnsPage() {
                           } ${preview.amount === 'No amount' ? 'text-red-600 dark:text-red-400' : ''}`}>
                             {preview.amount === 'No amount' ? (
                               <span className="italic text-muted-foreground">Not mapped</span>
-                            ) : (
-                              preview.transactionType === 'income' ? '+' : '-'
-                            )}
-                            {preview.amount !== 'No amount' && (
-                              <span className={preview.amount.includes('(') ? '' : 'ml-1'}>
-                                {preview.amount.includes('Debit:') || preview.amount.includes('Credit:') 
-                                  ? preview.amount.replace(/^(Debit|Credit):\s*/, '')
-                                  : preview.amount.includes('(') 
-                                    ? preview.amount 
-                                    : preview.amount.replace(/[^0-9.-]/g, '')}
+                            ) : preview.amount.includes('(') ? (
+                              // Show full amount with type column value in parentheses
+                              <span>
+                                {preview.transactionType === 'income' ? '+' : '-'}
+                                {formatCurrency(Math.abs(preview.amountValue))}
+                                {' '}
+                                <span className="text-xs text-muted-foreground">
+                                  ({preview.amount.match(/\(([^)]+)\)/)?.[1] || ''})
+                                </span>
                               </span>
+                            ) : preview.amount.includes('Debit:') || preview.amount.includes('Credit:') ? (
+                              // Show debit/credit with formatted amount
+                              <span>
+                                {preview.transactionType === 'income' ? '+' : '-'}
+                                {formatCurrency(Math.abs(preview.amountValue))}
+                              </span>
+                            ) : (
+                              // Regular amount formatting
+                              <>
+                                {preview.transactionType === 'income' ? '+' : '-'}
+                                {formatCurrency(Math.abs(preview.amountValue))}
+                              </>
                             )}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
