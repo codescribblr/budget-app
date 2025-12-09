@@ -1322,7 +1322,7 @@ export default function MapColumnsPage() {
                   // Close dialog and start client-side processing
                   setShowTemplateOptions(false);
                   setIsProcessingRemap(true);
-                  setRemapBatchIdState(remapBatchId);
+                  setRemapBatchId(remapBatchId);
                   setProcessingProgress(0);
                   setProcessingStage('Loading queued transactions...');
 
