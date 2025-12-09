@@ -358,44 +358,11 @@ export async function getQueuedImports(options?: {
 
   // Explicitly select all fields including CSV mapping fields
   // PostgREST requires explicit selection of JSONB fields - using * alone may not return them
-  // Select all standard fields first, then explicitly add CSV mapping fields
+  // Use a simpler approach: select * and explicitly add CSV fields
   let query = supabase
     .from('queued_imports')
-    .select(`
-      id,
-      account_id,
-      import_setup_id,
-      transaction_date,
-      description,
-      merchant,
-      amount,
-      transaction_type,
-      hash,
-      original_data,
-      suggested_category_id,
-      suggested_merchant,
-      target_account_id,
-      target_credit_card_id,
-      status,
-      is_historical,
-      reviewed_by,
-      reviewed_at,
-      review_notes,
-      imported_transaction_id,
-      imported_at,
-      source_batch_id,
-      source_fetched_at,
-      created_at,
-      updated_at,
-      csv_data,
-      csv_analysis,
-      csv_file_name,
-      csv_fingerprint,
-      csv_mapping_template_id,
-      csv_mapping_name
-    `)
-    .eq('account_id', accountId)
-    .order('transaction_date', { ascending: false });
+    .select('*, csv_data, csv_analysis, csv_file_name, csv_fingerprint, csv_mapping_template_id, csv_mapping_name')
+    .eq('account_id', accountId);
 
   if (options?.status) {
     query = query.eq('status', options.status);
@@ -409,6 +376,14 @@ export async function getQueuedImports(options?: {
     query = query.eq('source_batch_id', options.batchId);
   }
 
+  // Apply ordering - order by transaction_date descending by default
+  // But for batch queries, we want the first record (with CSV data) first
+  if (options?.batchId) {
+    query = query.order('id', { ascending: true }); // First record has CSV data
+  } else {
+    query = query.order('transaction_date', { ascending: false });
+  }
+
   if (options?.limit) {
     query = query.limit(options.limit);
   }
@@ -418,6 +393,20 @@ export async function getQueuedImports(options?: {
   }
 
   const { data, error } = await query;
+  
+  // Debug: Log what we got back
+  if (data && data.length > 0 && options?.batchId) {
+    const first = data[0];
+    console.log('getQueuedImports returned CSV fields:', {
+      id: first.id,
+      source_batch_id: first.source_batch_id,
+      has_csv_data: !!first.csv_data,
+      csv_data_type: first.csv_data ? typeof first.csv_data : 'null',
+      has_csv_analysis: !!first.csv_analysis,
+      csv_file_name: first.csv_file_name,
+      csv_mapping_name: first.csv_mapping_name,
+    });
+  }
 
   if (error) {
     console.error('Error fetching queued imports:', error);
