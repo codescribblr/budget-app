@@ -150,7 +150,26 @@ export default function BatchReviewPage() {
           csv_mapping_name: firstImport.csv_mapping_name,
           csv_mapping_template_id: firstImport.csv_mapping_template_id,
           source_batch_id: firstImport.source_batch_id,
+          id: firstImport.id,
         });
+        
+        // If CSV fields are missing, try fetching them directly by ID
+        if (!firstImport.csv_data && !firstImport.csv_file_name && firstImport.id) {
+          console.log('CSV fields missing, fetching directly by ID...');
+          try {
+            const csvResponse = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}&csvFields=true`);
+            if (csvResponse.ok) {
+              const csvData = await csvResponse.json();
+              if (csvData.csvFields) {
+                console.log('Fetched CSV fields directly:', csvData.csvFields);
+                // Update the first import with CSV fields
+                Object.assign(firstImport, csvData.csvFields);
+              }
+            }
+          } catch (err) {
+            console.warn('Failed to fetch CSV fields directly:', err);
+          }
+        }
       }
 
       // Fetch setup info to determine if this is a manual upload

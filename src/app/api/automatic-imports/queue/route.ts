@@ -16,6 +16,7 @@ export async function GET(request: Request) {
     const importSetupId = searchParams.get('importSetupId') ? parseInt(searchParams.get('importSetupId')!) : undefined;
     const batchId = searchParams.get('batchId') || undefined;
     const batches = searchParams.get('batches') === 'true';
+    const csvFieldsOnly = searchParams.get('csvFields') === 'true';
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined;
     const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : undefined;
 
@@ -23,6 +24,35 @@ export async function GET(request: Request) {
       // Return batches
       const batchList = await getQueuedImportBatches();
       return NextResponse.json({ batches: batchList });
+    } else if (csvFieldsOnly && batchId) {
+      // Special endpoint to fetch CSV fields directly (workaround for PostgREST schema cache issues)
+      const { createClient } = await import('@/lib/supabase/server');
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      
+      const accountId = await (await import('@/lib/automatic-imports/queue-manager')).getActiveAccountId();
+      if (!accountId) {
+        return NextResponse.json({ error: 'No active account' }, { status: 400 });
+      }
+      
+      // Query first record by batch ID to get CSV fields
+      const { data: csvRecord, error: csvError } = await supabase
+        .from('queued_imports')
+        .select('csv_data, csv_analysis, csv_file_name, csv_mapping_name, csv_mapping_template_id, csv_fingerprint')
+        .eq('account_id', accountId)
+        .eq('source_batch_id', batchId)
+        .not('csv_data', 'is', null)
+        .limit(1)
+        .single();
+      
+      if (csvError || !csvRecord) {
+        return NextResponse.json({ csvFields: null });
+      }
+      
+      return NextResponse.json({ csvFields: csvRecord });
     } else {
       // Return individual imports
       const imports = await getQueuedImports({
