@@ -44,9 +44,6 @@ export default function QueueReviewPage() {
   const router = useRouter();
   const [batches, setBatches] = useState<QueuedImportBatch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingProgress, setProcessingProgress] = useState(0);
-  const [processingStage, setProcessingStage] = useState('');
   const [processingBatchId, setProcessingBatchId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [batchToDelete, setBatchToDelete] = useState<QueuedImportBatch | null>(null);
@@ -69,11 +66,6 @@ export default function QueueReviewPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const updateProcessingProgress = (progress: number, stage: string) => {
-    setProcessingProgress(progress);
-    setProcessingStage(stage);
   };
 
   const handleReviewBatch = async (batchId: string, sourceType?: string) => {
@@ -117,154 +109,11 @@ export default function QueueReviewPage() {
         }
       }
 
-      // For automatic imports, show processing dialog
-      setIsProcessing(true);
+      // Show processing dialog - it will check status and process if needed
       setProcessingBatchId(batchId);
-      setProcessingProgress(0);
-      setProcessingStage('Loading queued transactions...');
-
-      // Fetch all queued imports for this batch
-      const response = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch batch transactions');
-      }
-
-      const data = await response.json();
-      const queuedImports = data.imports || [];
-
-      if (queuedImports.length === 0) {
-        throw new Error('No transactions found for this batch');
-      }
-
-      updateProcessingProgress(10, `Found ${queuedImports.length} transaction${queuedImports.length !== 1 ? 's' : ''}. Converting format...`);
-
-      // Convert queued imports to ParsedTransaction format (before processing)
-      const initialTransactions: ParsedTransaction[] = queuedImports.map((qi: any) => ({
-        id: `queued-${qi.id}`, // Prefix with 'queued-' so TransactionPreview knows it's a queued import
-        date: qi.transaction_date,
-        description: qi.description,
-        amount: qi.amount,
-        transaction_type: qi.transaction_type,
-        merchant: qi.merchant,
-        suggestedCategory: qi.suggested_category_id || undefined,
-        account_id: qi.target_account_id || undefined,
-        credit_card_id: qi.target_credit_card_id || undefined,
-        is_historical: qi.is_historical || false,
-        splits: [], // Will be populated by processTransactions
-        status: 'pending' as const,
-        isDuplicate: false,
-        originalData: qi.original_data,
-        hash: qi.hash || '', // Include hash for duplicate checking
-      }));
-
-      // Process transactions: check duplicates and auto-categorize (skip AI initially)
-      updateProcessingProgress(20, 'Processing transactions...');
-      const processedTransactions = await processTransactions(
-        initialTransactions,
-        initialTransactions[0]?.account_id || undefined,
-        initialTransactions[0]?.credit_card_id || undefined,
-        true, // Skip AI categorization initially
-        updateProcessingProgress
-      );
-
-      // Update queued imports in database with categorization results
-      updateProcessingProgress(95, 'Updating categorization results...');
-      const updateResponse = await fetch('/api/automatic-imports/queue/update-categorization', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactions: processedTransactions }),
-      });
-
-      if (!updateResponse.ok) {
-        console.warn('Failed to update queued imports with categorization results');
-        // Continue anyway - categorization is still shown in UI
-      }
-
-      // Store processed transactions and batch info in sessionStorage
-      sessionStorage.setItem('queuedBatchId', batchId);
-      sessionStorage.setItem('queuedProcessedTransactions', JSON.stringify(processedTransactions));
-      
-      // Store batch info (always set, even if minimal)
-      const firstImport = queuedImports[0];
-      const batchInfo = {
-        setup_name: 'Unknown',
-        source_type: 'unknown',
-        target_account_name: null as string | null,
-        is_credit_card: false,
-        is_historical: false as boolean | 'mixed',
-      };
-
-      if (firstImport) {
-        batchInfo.is_credit_card = !!firstImport.target_credit_card_id;
-        const allHistorical = queuedImports.every((qi: any) => qi.is_historical === true);
-        const someHistorical = queuedImports.some((qi: any) => qi.is_historical === true);
-        batchInfo.is_historical = allHistorical ? true : someHistorical ? 'mixed' : false;
-
-        try {
-          const setupResponse = await fetch(`/api/automatic-imports/setups/${firstImport.import_setup_id}`);
-          if (setupResponse.ok) {
-            const setup = await setupResponse.json();
-            batchInfo.setup_name = setup.setup?.integration_name || 'Unknown';
-            batchInfo.source_type = setup.setup?.source_type || 'unknown';
-          }
-        } catch (err) {
-          console.warn('Failed to fetch setup info:', err);
-          // Continue with default values
-        }
-        
-        // Fetch account/credit card name if mapped
-        try {
-          if (firstImport.target_account_id) {
-            const accountResponse = await fetch(`/api/accounts/${firstImport.target_account_id}`);
-            if (accountResponse.ok) {
-              const account = await accountResponse.json();
-              batchInfo.target_account_name = account.name;
-            }
-          } else if (firstImport.target_credit_card_id) {
-            const cardResponse = await fetch(`/api/credit-cards/${firstImport.target_credit_card_id}`);
-            if (cardResponse.ok) {
-              const card = await cardResponse.json();
-              batchInfo.target_account_name = card.name;
-            }
-          }
-        } catch (err) {
-          console.warn('Failed to fetch account/card name:', err);
-          // Continue without account name
-        }
-      }
-      
-      // Always set batchInfo, even if minimal
-      sessionStorage.setItem('queuedBatchInfo', JSON.stringify(batchInfo));
-
-      updateProcessingProgress(100, 'Processing complete!');
-      
-      // Ensure sessionStorage is set before navigation
-      // Double-check that data is actually in sessionStorage
-      const verifyStorage = sessionStorage.getItem('queuedProcessedTransactions');
-      if (!verifyStorage) {
-        console.error('Failed to verify sessionStorage before navigation');
-        console.log('Available sessionStorage keys:', Object.keys(sessionStorage));
-        throw new Error('Failed to save processed transactions');
-      }
-      
-      console.log('SessionStorage verified before navigation:', {
-        hasTransactions: !!sessionStorage.getItem('queuedProcessedTransactions'),
-        hasBatchInfo: !!sessionStorage.getItem('queuedBatchInfo'),
-        batchId: sessionStorage.getItem('queuedBatchId'),
-      });
-      
-      // Small delay to show completion and ensure sessionStorage is persisted, then navigate
-      setTimeout(() => {
-        setIsProcessing(false);
-        // Use window.location instead of router.push to avoid RSC issues
-        // This ensures a full page navigation that preserves sessionStorage
-        window.location.href = `/imports/queue/${batchId}`;
-      }, 500);
     } catch (error: any) {
-      console.error('Error processing batch:', error);
-      setIsProcessing(false);
-      setProcessingBatchId(null);
-      alert(error.message || 'Failed to process batch');
+      console.error('Error reviewing batch:', error);
+      toast.error(error.message || 'Failed to review batch');
     }
   };
 
@@ -311,13 +160,27 @@ export default function QueueReviewPage() {
     );
   }
 
+  const handleProcessingComplete = () => {
+    const batchId = processingBatchId;
+    setProcessingBatchId(null);
+    // Navigate to review page
+    if (batchId) {
+      window.location.href = `/imports/queue/${batchId}`;
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <QueuedImportProcessingDialog
-        open={isProcessing}
-        progress={processingProgress}
-        stage={processingStage}
-      />
+      {processingBatchId && (
+        <QueuedImportProcessingDialog
+          open={!!processingBatchId}
+          progress={0}
+          stage=""
+          batchId={processingBatchId}
+          onComplete={handleProcessingComplete}
+          onCancel={() => setProcessingBatchId(null)}
+        />
+      )}
 
       <div>
         <h1 className="text-3xl font-bold">Import Queue</h1>

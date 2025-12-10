@@ -8,6 +8,7 @@ import { getActiveAccountId } from '../account-context';
 import type { ParsedTransaction } from '../import-types';
 import { generateTransactionHash } from '../csv-parser';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ProcessingTasksStatus } from '../processing-tasks';
 
 /**
  * Get or create a single shared manual import setup for the current account
@@ -133,6 +134,7 @@ export interface QueueTransactionOptions {
   csvMappingTemplateId?: number; // Optional: Associated template ID
   csvFileName?: string; // Optional: Original CSV filename
   csvMappingName?: string; // Optional: Human-readable mapping name (template name or auto-generated)
+  processingTasks?: ProcessingTasksStatus; // Optional: Processing tasks completion status
 }
 
 /**
@@ -157,6 +159,7 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     csvMappingTemplateId,
     csvFileName,
     csvMappingName,
+    processingTasks,
   } = options;
 
   // Get existing hashes to check for duplicates
@@ -237,19 +240,6 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     return 0; // All duplicates (shouldn't happen for manual imports, but keep as safety check)
   }
 
-  // Debug logging
-  if (newTransactions.length > 0) {
-    console.log('queueTransactions storing CSV data:', {
-      hasCsvData: !!csvData,
-      csvDataLength: csvData ? (Array.isArray(csvData) ? csvData.length : 'not array') : 0,
-      hasCsvAnalysis: !!csvAnalysis,
-      csvFileName,
-      csvMappingName,
-      csvMappingTemplateId,
-      transactionCount: newTransactions.length,
-    });
-  }
-
   // Prepare queued imports
   // Use per-transaction is_historical if provided, otherwise fall back to batch-level isHistorical
   // CSV data fields are stored only once per batch (on first transaction), others get null
@@ -268,18 +258,6 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     // Prepare CSV data for first transaction
     const csvDataForInsert = index === 0 ? csvData : null;
     const csvAnalysisForInsert = index === 0 ? csvAnalysis : null;
-    
-    // Debug first transaction CSV data
-    if (index === 0) {
-      console.log('First transaction CSV data being inserted:', {
-        csvDataType: csvDataForInsert ? typeof csvDataForInsert : 'null',
-        csvDataIsArray: Array.isArray(csvDataForInsert),
-        csvDataLength: Array.isArray(csvDataForInsert) ? csvDataForInsert.length : 'N/A',
-        csvAnalysisType: csvAnalysisForInsert ? typeof csvAnalysisForInsert : 'null',
-        csvFileName,
-        csvMappingName,
-      });
-    }
     
     return {
       account_id: accountId,
@@ -306,6 +284,7 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
       csv_mapping_template_id: index === 0 ? (csvMappingTemplateId || null) : null,
       csv_file_name: index === 0 ? (csvFileName || null) : null,
       csv_mapping_name: index === 0 ? (csvMappingName || null) : null,
+      processing_tasks: index === 0 ? (processingTasks || null) : null, // Store only on first transaction
     };
   });
 
@@ -332,21 +311,7 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
       .eq('id', firstInsertedId)
       .single();
     
-    if (!verifyError && verifyData) {
-      console.log('Verified inserted CSV data:', {
-        id: verifyData.id,
-        has_csv_data: !!verifyData.csv_data,
-        csv_data_type: verifyData.csv_data ? typeof verifyData.csv_data : 'null',
-        csv_data_is_array: Array.isArray(verifyData.csv_data),
-        has_csv_analysis: !!verifyData.csv_analysis,
-        csv_file_name: verifyData.csv_file_name,
-        csv_mapping_name: verifyData.csv_mapping_name,
-        csv_mapping_template_id: verifyData.csv_mapping_template_id,
-        expected_template_id: csvMappingTemplateId,
-      });
-    } else if (verifyError) {
-      console.error('Error verifying CSV data:', verifyError);
-    }
+    // CSV data verification complete
   }
 
   return newTransactions.length;
@@ -366,12 +331,12 @@ export async function getQueuedImports(options?: {
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
-  // Explicitly select all fields including CSV mapping fields
+  // Explicitly select all fields including CSV mapping fields and processing tasks
   // PostgREST requires explicit selection of JSONB fields - using * alone may not return them
-  // Use a simpler approach: select * and explicitly add CSV fields
+  // Use a simpler approach: select * and explicitly add CSV fields and processing_tasks
   let query = supabase
     .from('queued_imports')
-    .select('*, csv_data, csv_analysis, csv_file_name, csv_fingerprint, csv_mapping_template_id, csv_mapping_name')
+    .select('*, csv_data, csv_analysis, csv_file_name, csv_fingerprint, csv_mapping_template_id, csv_mapping_name, processing_tasks')
     .eq('account_id', accountId);
 
   if (options?.status) {
@@ -403,20 +368,6 @@ export async function getQueuedImports(options?: {
   }
 
   const { data, error } = await query;
-  
-  // Debug: Log what we got back
-  if (data && data.length > 0 && options?.batchId) {
-    const first = data[0];
-    console.log('getQueuedImports returned CSV fields:', {
-      id: first.id,
-      source_batch_id: first.source_batch_id,
-      has_csv_data: !!first.csv_data,
-      csv_data_type: first.csv_data ? typeof first.csv_data : 'null',
-      has_csv_analysis: !!first.csv_analysis,
-      csv_file_name: first.csv_file_name,
-      csv_mapping_name: first.csv_mapping_name,
-    });
-  }
 
   if (error) {
     console.error('Error fetching queued imports:', error);
@@ -786,11 +737,8 @@ export async function approveAndImportQueuedTransactions(queuedImportIds: number
                 })
                 .eq('id', templateId)
                 .eq('user_id', template.user_id);
-              
-              console.log(`Incremented usage_count for template ${templateId} (batch ${batchId})`);
             }
           } catch (err) {
-            console.warn(`Failed to increment usage_count for template ${templateId}:`, err);
             // Non-critical error, continue
           }
         }

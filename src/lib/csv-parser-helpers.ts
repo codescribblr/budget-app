@@ -271,7 +271,8 @@ export async function processTransactions(
   defaultCreditCardId?: number | null,
   skipAICategorization: boolean = false,
   progressCallback?: (progress: number, stage: string) => void,
-  baseUrl?: string // Optional base URL for server-side calls
+  baseUrl?: string, // Optional base URL for server-side calls
+  batchId?: string // Optional batch ID for tracking processing tasks
 ): Promise<ParsedTransaction[]> {
   // Step 1: Check for duplicates within the file itself
   if (progressCallback) progressCallback(45, 'Checking for duplicate transactions...');
@@ -303,6 +304,7 @@ export async function processTransactions(
         description: t.description,
         amount: t.amount,
       })),
+      batchId, // Pass batchId to mark task complete
     }),
   });
 
@@ -322,7 +324,7 @@ export async function processTransactions(
   const categorizationResponse = await fetch(categorizeUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ merchants }),
+    body: JSON.stringify({ merchants, batchId }), // Pass batchId to mark task complete
   });
   const { suggestions } = await categorizationResponse.json();
 
@@ -361,6 +363,21 @@ export async function processTransactions(
     };
   });
 
+  // Mark default_account_assignment and historical_flag_assignment as complete
+  // These are applied above when setting account_id and is_historical
+  // Note: This is only called from client-side, so we use the API endpoint
+  if (batchId && (defaultAccountId !== undefined || defaultCreditCardId !== undefined)) {
+    try {
+      // Use client-side API endpoint (this function is only called from client)
+      const { markTaskCompleteForBatch } = await import('@/lib/processing-tasks-helpers');
+      await markTaskCompleteForBatch(batchId, 'default_account_assignment');
+      await markTaskCompleteForBatch(batchId, 'historical_flag_assignment');
+    } catch (error) {
+      // Log but don't fail - task tracking is not critical
+      console.warn('Failed to mark account/historical tasks complete:', error);
+    }
+  }
+
   // Step 6: AI categorization for remaining uncategorized transactions (if enabled)
   if (skipAICategorization) {
     if (progressCallback) progressCallback(100, 'Processing complete!');
@@ -377,7 +394,7 @@ export async function processTransactions(
       const aiCategorizationResponse = await fetch('/api/import/ai-categorize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactions: uncategorizedTransactions }),
+        body: JSON.stringify({ transactions: uncategorizedTransactions, batchId }), // Pass batchId to mark task complete
       });
 
       if (aiCategorizationResponse.ok || aiCategorizationResponse.status === 503) {

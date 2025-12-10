@@ -10,9 +10,10 @@ interface TransactionData {
 
 export async function POST(request: Request) {
   try {
-    const { hashes, transactions } = await request.json() as {
+    const { hashes, transactions, batchId } = await request.json() as {
       hashes?: string[];
       transactions?: TransactionData[];
+      batchId?: string;
     };
 
     const supabase = await createClient();
@@ -74,6 +75,17 @@ export async function POST(request: Request) {
           // Mark all current transactions with this combination as duplicates
           txns.forEach(txn => duplicateHashes.add(txn.hash));
         }
+      }
+    }
+
+    // Mark duplicate_detection task as complete if batchId provided
+    if (batchId) {
+      try {
+        const { markTaskCompleteForBatchServer } = await import('@/lib/processing-tasks-server');
+        await markTaskCompleteForBatchServer(batchId, 'duplicate_detection');
+      } catch (error) {
+        // Log but don't fail - task tracking is not critical
+        console.warn('Failed to mark duplicate_detection complete:', error);
       }
     }
 

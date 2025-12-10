@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
 import { parseCSVFile } from '@/lib/csv-parser';
 import { parseImageFile } from '@/lib/image-parser';
 import { analyzeCSV } from '@/lib/column-analyzer';
@@ -36,18 +37,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
   const [isHistorical, setIsHistorical] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
-  const [processedTransactions, setProcessedTransactions] = useState<ParsedTransaction[] | null>(null);
-  const [processedFileName, setProcessedFileName] = useState<string>('');
-  const [processingComplete, setProcessingComplete] = useState(false);
   const [queuedBatchId, setQueuedBatchId] = useState<string | null>(null);
-  const [importInfo, setImportInfo] = useState<{
-    fileName: string;
-    mappingName: string | null;
-    totalTransactions: number;
-    databaseDuplicates: number;
-    withinFileDuplicates: number;
-    categorizedCount: number;
-  } | null>(null);
+  const [showProcessingDialog, setShowProcessingDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
@@ -122,64 +113,41 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         // Analyze CSV structure
         const analysis = analyzeCSV(rawData);
         
-        // Show mapping step for longer so user can see it
-        updateProgress(20, 'Mapping CSV fields...');
-        await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to make it visible
+        // Check for matching template FIRST (before checking confidence)
+        // This allows templates to automatically apply even if auto-detection has low confidence
+        updateProgress(20, 'Checking for saved templates...');
+        let templateFound = false;
+        let templateId: number | undefined;
+        let templateName: string | undefined;
         
-        // Check if we have high confidence for all required fields
-        const hasRequiredFields = 
-          analysis.dateColumn !== null &&
-          analysis.amountColumn !== null &&
-          analysis.descriptionColumn !== null;
+        try {
+          const { loadTemplate } = await import('@/lib/mapping-templates');
+          const template = await loadTemplate(analysis.fingerprint);
+          
+          if (template && template.id) {
+            templateFound = true;
+            templateId = template.id;
+            templateName = template.templateName;
+            console.log('Found matching template:', { templateId, templateName, fingerprint: analysis.fingerprint });
+          }
+        } catch (err) {
+          console.warn('Failed to check for template:', err);
+          // Continue without template
+        }
         
-        const highConfidence = hasRequiredFields &&
-          analysis.columns.every(col => {
-            if (col.fieldType === 'date' && col.columnIndex === analysis.dateColumn) {
-              return col.confidence >= 0.85;
-            }
-            if (col.fieldType === 'amount' && col.columnIndex === analysis.amountColumn) {
-              return col.confidence >= 0.85;
-            }
-            if (col.fieldType === 'description' && col.columnIndex === analysis.descriptionColumn) {
-              return col.confidence >= 0.85;
-            }
-            return true; // Other columns don't need high confidence
-          });
-
-        if (highConfidence) {
-          updateProgress(30, 'Parsing CSV transactions...');
-          // Auto-import with detected mapping
+        // If template found, use it automatically (skip mapping page)
+        if (templateFound) {
+          updateProgress(30, `Using template: ${templateName || 'Saved Template'}...`);
+          // Parse CSV with template mapping
           const result = await parseCSVFile(file);
           transactions = result.transactions;
           
-          // Get mapping name (template name or auto-generated)
-          let mappingName: string | undefined;
-          if (result.templateId) {
-            // Try to get template name
-            try {
-              const templateResponse = await fetch(`/api/import/templates/${result.templateId}`);
-              if (templateResponse.ok) {
-                const template = await templateResponse.json();
-                mappingName = template.template_name || 'Saved Template';
-              }
-            } catch (err) {
-              console.warn('Failed to fetch template name:', err);
-            }
-          }
-          
-          // If no template, generate automatic mapping name
-          if (!mappingName) {
-            const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
-            mappingName = generateAutomaticMappingName(analysis, file.name);
-          }
-          
-          // Store CSV data and template info for potential re-processing
+          // Store CSV data and template info
           sessionStorage.setItem('csvData', JSON.stringify(rawData));
           sessionStorage.setItem('csvFileName', file.name);
-          sessionStorage.setItem('csvMappingName', mappingName);
-          if (result.templateId) {
-            sessionStorage.setItem('csvTemplateId', result.templateId.toString());
-          }
+          sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
+          sessionStorage.setItem('csvMappingName', templateName || 'Saved Template');
+          sessionStorage.setItem('csvTemplateId', templateId!.toString());
           if (result.fingerprint) {
             sessionStorage.setItem('csvFingerprint', result.fingerprint);
           }
@@ -187,15 +155,60 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
             sessionStorage.setItem('csvDateFormat', result.dateFormat);
           }
         } else {
-          // Navigate to mapping page
-          sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
-          sessionStorage.setItem('csvData', JSON.stringify(rawData));
-          sessionStorage.setItem('csvFileName', file.name);
-          router.push('/import/map-columns');
-          setIsProcessing(false);
-          setProcessingComplete(false);
-          setImportInfo(null);
-          return;
+          // No template found - check if we have high confidence for auto-detection
+          updateProgress(20, 'Mapping CSV fields...');
+          await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to make it visible
+          
+          // Check if we have high confidence for all required fields
+          const hasRequiredFields = 
+            analysis.dateColumn !== null &&
+            analysis.amountColumn !== null &&
+            analysis.descriptionColumn !== null;
+          
+          const highConfidence = hasRequiredFields &&
+            analysis.columns.every(col => {
+              if (col.fieldType === 'date' && col.columnIndex === analysis.dateColumn) {
+                return col.confidence >= 0.85;
+              }
+              if (col.fieldType === 'amount' && col.columnIndex === analysis.amountColumn) {
+                return col.confidence >= 0.85;
+              }
+              if (col.fieldType === 'description' && col.columnIndex === analysis.descriptionColumn) {
+                return col.confidence >= 0.85;
+              }
+              return true; // Other columns don't need high confidence
+            });
+
+          if (highConfidence) {
+            updateProgress(30, 'Parsing CSV transactions...');
+            // Auto-import with detected mapping (no template)
+            const result = await parseCSVFile(file);
+            transactions = result.transactions;
+            
+            // Generate automatic mapping name
+            const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
+            const mappingName = generateAutomaticMappingName(analysis, file.name);
+            
+            // Store CSV data and template info for potential re-processing
+            sessionStorage.setItem('csvData', JSON.stringify(rawData));
+            sessionStorage.setItem('csvFileName', file.name);
+            sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
+            sessionStorage.setItem('csvMappingName', mappingName);
+            if (result.fingerprint) {
+              sessionStorage.setItem('csvFingerprint', result.fingerprint);
+            }
+            if (result.dateFormat) {
+              sessionStorage.setItem('csvDateFormat', result.dateFormat);
+            }
+          } else {
+            // No template and low confidence - navigate to mapping page
+            sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
+            sessionStorage.setItem('csvData', JSON.stringify(rawData));
+            sessionStorage.setItem('csvFileName', file.name);
+            router.push('/import/map-columns');
+            setIsProcessing(false);
+            return;
+          }
         }
       } else if (
         fileType.startsWith('image/') ||
@@ -291,8 +304,6 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
               sessionStorage.setItem('csvFileName', file.name);
               router.push('/import/map-columns');
               setIsProcessing(false);
-              setProcessingComplete(false);
-              setImportInfo(null);
               return;
             }
           } else {
@@ -306,7 +317,6 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
             setFallbackError(errorData.error || 'PDF parsing failed. AI fallback available.');
             setShowAIFallback(true);
             setIsProcessing(false);
-            setProcessingComplete(false);
             return;
           }
           throw new Error(errorData.error || 'Failed to parse PDF');
@@ -314,68 +324,19 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       } else {
         setError('Unsupported file type. Please upload a CSV or image file.');
         setIsProcessing(false);
-        setProcessingComplete(false);
         setProgress(0);
         setProgressStage('');
-        setImportInfo(null);
         return;
       }
 
       if (transactions.length === 0) {
         setError('No transactions found in the file');
         setIsProcessing(false);
-        setProcessingComplete(false);
         setProgress(0);
         setProgressStage('');
-        setImportInfo(null);
         return;
       }
 
-      updateProgress(40, `Found ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''}. Checking for duplicates...`);
-
-      // Check for duplicates and auto-categorize
-      // AI categorization is now done on-demand in TransactionPreview
-      const { processTransactions } = await import('@/lib/csv-parser-helpers');
-      const processedTransactions = await processTransactions(
-        transactions,
-        undefined,
-        undefined,
-        true, // Always skip AI categorization - user can trigger it manually in preview
-        updateProgress
-      );
-      
-      // Calculate import statistics
-      const databaseDuplicates = processedTransactions.filter(t => t.duplicateType === 'database').length;
-      const withinFileDuplicates = processedTransactions.filter(t => t.duplicateType === 'within-file').length;
-      const categorizedCount = processedTransactions.filter(t => t.suggestedCategory !== null && t.suggestedCategory !== undefined).length;
-      
-      // Get mapping name from sessionStorage
-      const csvMappingNameStr = sessionStorage.getItem('csvMappingName');
-      const mappingName = csvMappingNameStr || null;
-      
-      // Store import info for display
-      setImportInfo({
-        fileName: file.name,
-        mappingName,
-        totalTransactions: transactions.length,
-        databaseDuplicates,
-        withinFileDuplicates,
-        categorizedCount,
-      });
-
-      // Apply default account/card and historical flag to transactions before saving
-      // Note: At this point, defaultAccountId/defaultCreditCardId/isHistorical may not be set yet
-      // So we'll save with whatever is currently selected, and user can change before clicking continue
-      const transactionsWithDefaults = processedTransactions.map(txn => ({
-        ...txn,
-        // Only set default if transaction doesn't already have an account/card set
-        account_id: (txn.account_id !== undefined && txn.account_id !== null) ? txn.account_id : (defaultAccountId || null),
-        credit_card_id: (txn.credit_card_id !== undefined && txn.credit_card_id !== null) ? txn.credit_card_id : (defaultCreditCardId || null),
-        // Apply historical flag from user selection
-        is_historical: isHistorical,
-      }));
-
-      // Save to import queue automatically after processing
       updateProgress(90, 'Saving to import queue...');
       
       // Get CSV data from sessionStorage if available (for PDFs and CSVs that went through mapping)
@@ -383,7 +344,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
       const csvFingerprintStr = sessionStorage.getItem('csvFingerprint');
       const csvTemplateIdStr = sessionStorage.getItem('csvTemplateId');
-      // csvMappingNameStr already retrieved above for importInfo
+      const csvMappingNameStr = sessionStorage.getItem('csvMappingName');
       
       const csvData = csvDataStr ? JSON.parse(csvDataStr) : undefined;
       const csvAnalysis = csvAnalysisStr ? JSON.parse(csvAnalysisStr) : undefined;
@@ -391,21 +352,12 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       const csvMappingTemplateId = csvTemplateIdStr ? parseInt(csvTemplateIdStr, 10) : undefined;
       const csvMappingName = csvMappingNameStr || undefined;
       
-      // Debug logging
-      console.log('Queueing transactions with CSV data:', {
-        hasCsvData: !!csvData,
-        csvDataLength: csvData ? (Array.isArray(csvData) ? csvData.length : 'not array') : 0,
-        hasCsvAnalysis: !!csvAnalysis,
-        csvFileName: file.name,
-        csvMappingName,
-        csvMappingTemplateId,
-      });
-      
+      // Save raw transactions to queue (without processing - dialog will handle that)
       const saveResponse = await fetch('/api/import/queue-manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          transactions: transactionsWithDefaults,
+          transactions: transactions, // Raw transactions, not processed
           fileName: file.name,
           targetAccountId: defaultAccountId,
           targetCreditCardId: defaultCreditCardId,
@@ -425,25 +377,16 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
 
       const saveResult = await saveResponse.json();
       setQueuedBatchId(saveResult.batchId);
-
-      // Store processed transactions with defaults applied (including account_id)
-      // This ensures the preview shows the correct account
-      setProcessedTransactions(transactionsWithDefaults);
-      setProcessedFileName(file.name);
-      setIsProcessing(false); // Reset processing state so button is enabled
-      setProcessingComplete(true);
-      updateProgress(100, 'Processing complete! Review your import options below.');
+      setIsProcessing(false);
+      setShowProcessingDialog(true); // Show dialog to handle processing
     } catch (err) {
       console.error('Error processing file:', err);
       setError(err instanceof Error ? err.message : 'Failed to process file');
       setProgress(0);
       setProgressStage('');
       setIsProcessing(false);
-      setProcessingComplete(false);
-      setProcessedTransactions(null);
-      setProcessedFileName('');
-      setImportInfo(null);
-      setImportInfo(null);
+      setShowProcessingDialog(false);
+      setQueuedBatchId(null);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -518,49 +461,13 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
     fileInputRef.current?.click();
   };
 
-  const handleContinueToPreview = async () => {
-    if (!queuedBatchId) {
-      setError('Batch ID not found. Please try uploading again.');
-      return;
-    }
-
-    // If user changed account/historical settings, update the queued imports
-    console.log('Updating batch with settings:', {
-      batchId: queuedBatchId,
-      targetAccountId: defaultAccountId,
-      targetCreditCardId: defaultCreditCardId,
-      isHistorical: isHistorical,
-    });
-    
-    try {
-      const updateResponse = await fetch('/api/automatic-imports/queue/update-batch', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          batchId: queuedBatchId,
-          targetAccountId: defaultAccountId,
-          targetCreditCardId: defaultCreditCardId,
-          isHistorical: isHistorical,
-        }),
-      });
-
-      if (!updateResponse.ok) {
-        const errorData = await updateResponse.json().catch(() => ({}));
-        console.warn('Failed to update batch settings:', errorData);
-        // Continue anyway - user can edit individual transactions in preview
-      } else {
-        const result = await updateResponse.json();
-        console.log('Batch updated successfully:', result);
-        // Wait a bit to ensure database update is committed and visible
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-    } catch (err) {
-      console.error('Error updating queued imports:', err);
-      // Continue anyway - user can edit in preview
-    }
-
-    // Navigate to the queue preview page with timestamp to force refresh
-    router.push(`/imports/queue/${queuedBatchId}?t=${Date.now()}`);
+  const handleProcessingComplete = () => {
+    if (!queuedBatchId) return;
+    setShowProcessingDialog(false);
+    // Navigate to review page with a small delay to ensure database updates are committed
+    setTimeout(() => {
+      router.push(`/imports/queue/${queuedBatchId}?t=${Date.now()}`);
+    }, 300);
   };
 
   return (
@@ -598,144 +505,24 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           <Button onClick={handleButtonClick} disabled={isProcessing || disabled}>
             {isProcessing ? 'Processing...' : 'Choose File'}
           </Button>
-          {(isProcessing || processingComplete) && (
-            <div className="w-full space-y-4 mt-4">
-              {isProcessing && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">{progressStage || 'Processing...'}</span>
-                    <span className="text-muted-foreground">{Math.round(progress)}%</span>
-                  </div>
-                  <Progress value={progress} className="h-2" />
-                </div>
-              )}
-              
-              {/* Import Options - shown during and after processing */}
-              <div className="mt-6 pt-4 border-t space-y-4">
-                <div className="text-sm font-medium text-foreground">Import Options</div>
-                
-                {/* Import Information */}
-                {importInfo && (
-                  <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                    <div className="text-sm font-medium text-foreground">Import Information</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">File:</span>
-                        <span className="ml-2 font-medium">{importInfo.fileName}</span>
-                      </div>
-                      {importInfo.mappingName && (
-                        <div>
-                          <span className="text-muted-foreground">Mapping:</span>
-                          <span className="ml-2 font-medium">{importInfo.mappingName}</span>
-                        </div>
-                      )}
-                      <div>
-                        <span className="text-muted-foreground">Total Transactions:</span>
-                        <span className="ml-2 font-medium">{importInfo.totalTransactions}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Categorized:</span>
-                        <span className="ml-2 font-medium">{importInfo.categorizedCount} / {importInfo.totalTransactions}</span>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <span className="text-muted-foreground">Duplicates:</span>
-                        <span className="ml-2 font-medium">
-                          {importInfo.databaseDuplicates === 0 && importInfo.withinFileDuplicates === 0 ? (
-                            <span className="text-green-600 dark:text-green-400">None</span>
-                          ) : (
-                            <>
-                              {importInfo.databaseDuplicates > 0 && (
-                                <span className="text-amber-600 dark:text-amber-400">
-                                  {importInfo.databaseDuplicates} existing{importInfo.databaseDuplicates !== 1 ? 's' : ''}
-                                </span>
-                              )}
-                              {importInfo.databaseDuplicates > 0 && importInfo.withinFileDuplicates > 0 && (
-                                <span className="mx-1">•</span>
-                              )}
-                              {importInfo.withinFileDuplicates > 0 && (
-                                <span className="text-amber-600 dark:text-amber-400">
-                                  {importInfo.withinFileDuplicates} within file{importInfo.withinFileDuplicates !== 1 ? 's' : ''}
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Historical Import Option */}
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="historical-processing"
-                    checked={isHistorical}
-                    onCheckedChange={(checked) => setIsHistorical(checked as boolean)}
-                  />
-                  <Label
-                    htmlFor="historical-processing"
-                    className="text-sm font-normal cursor-pointer"
-                  >
-                    Import as historical (won&apos;t affect current envelope balances)
-                  </Label>
-                </div>
-
-                {/* Default Account/Card Option */}
-                <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
-                  <Label htmlFor="default-account-processing" className="text-sm font-medium sm:min-w-[140px]">
-                    Default Account/Card:
-                  </Label>
-                  <Select 
-                    value={getDefaultAccountValue()} 
-                    onValueChange={handleDefaultAccountChange}
-                  >
-                    <SelectTrigger id="default-account-processing" className="w-full sm:w-[250px]">
-                      <SelectValue placeholder="None" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {accounts.length > 0 && (
-                        <>
-                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Accounts</div>
-                          {accounts.map((account) => (
-                            <SelectItem key={account.id} value={`account-${account.id}`}>
-                              {account.name}
-                            </SelectItem>
-                          ))}
-                        </>
-                      )}
-                      {creditCards.length > 0 && (
-                        <>
-                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Credit Cards</div>
-                          {creditCards.map((card) => (
-                            <SelectItem key={card.id} value={`card-${card.id}`}>
-                              {card.name}
-                            </SelectItem>
-                          ))}
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Continue Button - shown only when processing is complete */}
-                {processingComplete && (
-                  <div className="pt-2">
-                    <Button 
-                      onClick={handleContinueToPreview} 
-                      className="w-full"
-                      disabled={isProcessing || !queuedBatchId}
-                    >
-                      Continue to Preview
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
+
+      {/* Processing Dialog */}
+      {queuedBatchId && (
+        <QueuedImportProcessingDialog
+          open={showProcessingDialog}
+          progress={progress}
+          stage={progressStage}
+          batchId={queuedBatchId}
+          onComplete={handleProcessingComplete}
+          onCancel={() => {
+            setShowProcessingDialog(false);
+            setQueuedBatchId(null);
+          }}
+        />
+      )}
 
       {error && (
         <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
@@ -791,13 +578,13 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                     is_historical: isHistorical,
                   }));
 
-                  // Save to import queue automatically after processing
+                  // Save raw transactions to queue (without processing - dialog will handle that)
                   updateProgress(90, 'Saving to import queue...');
                   const saveResponse = await fetch('/api/import/queue-manual', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      transactions: transactionsWithDefaults,
+                      transactions: aiResult.transactions, // Raw transactions, not processed
                       fileName: pendingFile!.name,
                       targetAccountId: defaultAccountId,
                       targetCreditCardId: defaultCreditCardId,
@@ -810,25 +597,11 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                     throw new Error(errorData.error || 'Failed to save import');
                   }
 
-      const saveResult = await saveResponse.json();
-      setQueuedBatchId(saveResult.batchId);
-
-      // Store processed transactions with defaults applied (including account_id)
-      // This ensures the preview shows the correct account
-      setProcessedTransactions(transactionsWithDefaults);
-      setProcessedFileName(pendingFile!.name);
-      setIsProcessing(false); // Reset processing state so button is enabled
-      setProcessingComplete(true);
-      updateProgress(100, 'Processing complete! Review your import options below.');
-      sessionStorage.setItem('csvFileName', pendingFile!.name);
-      
-      // Clear CSV data from sessionStorage after queuing (it's now stored in the database)
-      sessionStorage.removeItem('csvData');
-      sessionStorage.removeItem('csvAnalysis');
-      sessionStorage.removeItem('csvFingerprint');
-      sessionStorage.removeItem('csvTemplateId');
-      
-      setPendingFile(null);
+                  const saveResult = await saveResponse.json();
+                  setQueuedBatchId(saveResult.batchId);
+                  setIsProcessing(false);
+                  setShowProcessingDialog(true); // Show dialog to handle processing
+                  setPendingFile(null);
                 } catch (err) {
                   console.error('Error processing file with AI:', err);
                   setError(err instanceof Error ? err.message : 'Failed to process file with AI');

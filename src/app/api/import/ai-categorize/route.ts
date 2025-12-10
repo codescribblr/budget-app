@@ -45,8 +45,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const { transactions } = await request.json() as {
+    const { transactions, batchId } = await request.json() as {
       transactions: ParsedTransaction[];
+      batchId?: string;
     };
 
     if (!Array.isArray(transactions) || transactions.length === 0) {
@@ -153,6 +154,17 @@ export async function POST(request: Request) {
         isAICategorized: true, // Mark as AI-categorized
       };
     }).filter((s): s is NonNullable<typeof s> => s !== null);
+
+    // Mark ai_categorization task as complete if batchId provided
+    if (batchId) {
+      try {
+        const { markTaskCompleteForBatchServer } = await import('@/lib/processing-tasks-server');
+        await markTaskCompleteForBatchServer(batchId, 'ai_categorization');
+      } catch (error) {
+        // Log but don't fail - task tracking is not critical
+        console.warn('Failed to mark ai_categorization complete:', error);
+      }
+    }
 
     return NextResponse.json({
       suggestions,

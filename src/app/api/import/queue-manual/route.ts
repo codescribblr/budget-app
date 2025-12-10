@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import { getOrCreateManualImportSetup, queueTransactions } from '@/lib/automatic-imports/queue-manager';
+import { initializeProcessingTasks } from '@/lib/processing-tasks';
 import type { ParsedTransaction } from '@/lib/import-types';
 
 /**
@@ -60,15 +61,58 @@ export async function POST(request: Request) {
         : JSON.stringify({ _uploadFileName: fileName }),
     }));
 
+    // Validate template ID exists if provided
+    let validatedTemplateId: number | undefined = undefined;
+    if (csvMappingTemplateId) {
+      try {
+        const { createClient } = await import('@/lib/supabase/server');
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          const { getActiveAccountId } = await import('@/lib/account-context');
+          const accountId = await getActiveAccountId();
+          
+          if (accountId) {
+            // Check if template exists and belongs to user
+            const { data: template, error: templateError } = await supabase
+              .from('csv_import_templates')
+              .select('id')
+              .eq('id', csvMappingTemplateId)
+              .eq('user_id', user.id)
+              .single();
+            
+            if (!templateError && template) {
+              validatedTemplateId = csvMappingTemplateId;
+            } else {
+              console.warn('Template ID provided but not found or not accessible:', csvMappingTemplateId);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Error validating template ID:', err);
+        // Continue without template ID
+      }
+    }
+
+    // Initialize processing tasks
+    // For manual imports from mapping view, csv_mapping is already done
+    // For other manual imports, check if CSV data exists
+    const hasCsvData = !!csvData;
+    const isPdf = fileName.toLowerCase().endsWith('.pdf');
+    const processingTasks = initializeProcessingTasks('manual', hasCsvData, isPdf);
+
     // Debug logging
     console.log('queue-manual API received:', {
       fileName,
       transactionCount: transactionsWithFilename.length,
-      hasCsvData: !!csvData,
+      hasCsvData,
       csvDataLength: csvData ? (Array.isArray(csvData) ? csvData.length : 'not array') : 0,
       hasCsvAnalysis: !!csvAnalysis,
       csvMappingName,
       csvMappingTemplateId,
+      validatedTemplateId,
+      processingTasks,
     });
 
     // Queue transactions
@@ -82,9 +126,10 @@ export async function POST(request: Request) {
       csvData,
       csvAnalysis,
       csvFingerprint,
-      csvMappingTemplateId,
+      csvMappingTemplateId: validatedTemplateId, // Use validated template ID
       csvFileName: fileName,
       csvMappingName,
+      processingTasks,
     });
 
     if (queuedCount === 0) {

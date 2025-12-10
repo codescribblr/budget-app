@@ -49,9 +49,6 @@ export async function PUT(request: Request) {
     if (isHistorical !== undefined) {
       updateData.is_historical = isHistorical;
     }
-    
-    // Log for debugging
-    console.log('Updating batch:', { batchId, updateData, body: { targetAccountId, targetCreditCardId, isHistorical } });
 
     // Update all queued imports in this batch
     const { data, error } = await supabase
@@ -64,6 +61,15 @@ export async function PUT(request: Request) {
     if (error) {
       console.error('Error updating queued import batch:', error);
       return NextResponse.json({ error: 'Failed to update queued import batch' }, { status: 500 });
+    }
+
+    // Mark import_defaults_assignment as complete since we're updating the batch with defaults
+    // This task is complete once the user has reviewed and submitted the defaults
+    try {
+      const { markTaskCompleteForBatchServer } = await import('@/lib/processing-tasks-server');
+      await markTaskCompleteForBatchServer(batchId, 'import_defaults_assignment');
+    } catch (taskError) {
+      // Non-critical - continue without failing the request
     }
 
     return NextResponse.json({ 

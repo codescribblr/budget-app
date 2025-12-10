@@ -4,7 +4,10 @@ import { getAllCategories } from '@/lib/supabase-queries';
 
 export async function POST(request: Request) {
   try {
-    const { merchants } = await request.json() as { merchants: string[] };
+    const { merchants, batchId } = await request.json() as { 
+      merchants: string[];
+      batchId?: string;
+    };
 
     if (!Array.isArray(merchants)) {
       return NextResponse.json(
@@ -29,6 +32,17 @@ export async function POST(request: Request) {
         };
       })
     );
+
+    // Mark categorization task as complete if batchId provided
+    if (batchId) {
+      try {
+        const { markTaskCompleteForBatchServer } = await import('@/lib/processing-tasks-server');
+        await markTaskCompleteForBatchServer(batchId, 'categorization');
+      } catch (error) {
+        // Log but don't fail - task tracking is not critical
+        console.warn('Failed to mark categorization complete:', error);
+      }
+    }
 
     return NextResponse.json({ suggestions });
   } catch (error: any) {

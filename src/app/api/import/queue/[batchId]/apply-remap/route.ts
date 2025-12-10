@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getActiveAccountId } from '@/lib/account-context';
 import { getOrCreateManualImportSetup, queueTransactions } from '@/lib/automatic-imports/queue-manager';
 import { parseCSVWithMapping } from '@/lib/csv-parser-helpers';
+import { resetTasksAfterRemap } from '@/lib/processing-tasks';
 import type { ColumnMapping } from '@/lib/mapping-templates';
 import type { ParsedTransaction } from '@/lib/import-types';
 import { generateAutomaticMappingName } from '@/lib/mapping-name-generator';
@@ -51,7 +52,7 @@ export async function POST(
     // Get CSV data and current template info, plus batch metadata
     const { data: queuedImport, error: fetchError } = await supabase
       .from('queued_imports')
-      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, import_setup_id, target_account_id, target_credit_card_id, is_historical')
+      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, import_setup_id, target_account_id, target_credit_card_id, is_historical, processing_tasks')
       .eq('account_id', accountId)
       .eq('source_batch_id', batchId)
       .not('csv_data', 'is', null)
@@ -287,6 +288,11 @@ export async function POST(
     // This prevents race conditions where queueTransactions might still see old records
     await new Promise(resolve => setTimeout(resolve, 200));
 
+    // Reset processing tasks after re-mapping
+    // Keep csv_mapping as true (since we just re-mapped), reset all others
+    const currentTasks = (queuedImport.processing_tasks as any) || {};
+    const resetTasks = resetTasksAfterRemap(currentTasks);
+
     // Queue transactions with SAME batch ID (replacing the old ones)
     // Processing (deduplication, categorization) will happen on client side
     // Preserve is_historical from original batch
@@ -296,6 +302,7 @@ export async function POST(
       newTemplateId,
       mappingName,
       batchId,
+      resetTasks,
     });
     
     const queuedCount = await queueTransactions({
@@ -310,6 +317,7 @@ export async function POST(
       csvMappingTemplateId: newTemplateId,
       csvFileName,
       csvMappingName: mappingName,
+      processingTasks: resetTasks,
     });
 
     return NextResponse.json({

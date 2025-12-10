@@ -22,7 +22,7 @@ import ImportConfirmationDialog from './ImportConfirmationDialog';
 import ImportProgressDialog from './ImportProgressDialog';
 import { generateTransactionHash } from '@/lib/csv-parser';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
-import { MoreVertical, Edit, X, Check, RefreshCw, Trash2, Sparkles, Loader2 } from 'lucide-react';
+import { MoreVertical, Edit, X, Check, Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAIUsage } from '@/hooks/use-ai-usage';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -30,9 +30,6 @@ import { useFeature } from '@/contexts/FeatureContext';
 import { useRouter } from 'next/navigation';
 import { Crown } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
-import { deleteTemplate } from '@/lib/mapping-templates';
-import { parseCSVFile } from '@/lib/csv-parser';
-import { processTransactions } from '@/lib/csv-parser-helpers';
 
 interface TransactionPreviewProps {
   transactions: ParsedTransaction[];
@@ -60,7 +57,6 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   const [progressMessage, setProgressMessage] = useState('');
   const [importedCount, setImportedCount] = useState(0);
   const [templateId, setTemplateId] = useState<number | null>(null);
-  const [isReprocessing, setIsReprocessing] = useState(false);
   const [dateFormat, setDateFormat] = useState<string | null>(null);
   const [isAICategorizing, setIsAICategorizing] = useState(false);
   const { stats, refreshStats } = useAIUsage();
@@ -508,66 +504,6 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     }
   };
 
-  const handleDeleteTemplateAndReprocess = async () => {
-    if (!templateId) return;
-    
-    setIsReprocessing(true);
-    try {
-      // Delete the template
-      await deleteTemplate(templateId);
-      
-      // Get CSV data from sessionStorage
-      const csvDataStr = sessionStorage.getItem('csvData');
-      const fileName = sessionStorage.getItem('csvFileName');
-      
-      if (!csvDataStr || !fileName) {
-        throw new Error('CSV data not found. Please re-upload the file.');
-      }
-      
-      const csvData = JSON.parse(csvDataStr);
-      
-      // Reconstruct CSV content from parsed data
-      // Handle quoted values and commas properly
-      const csvRows = csvData.map((row: string[]) => {
-        return row.map(cell => {
-          const cellStr = String(cell || '');
-          // If cell contains comma, quote, or newline, wrap in quotes and escape quotes
-          if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
-            return `"${cellStr.replace(/"/g, '""')}"`;
-          }
-          return cellStr;
-        }).join(',');
-      });
-      const csvContent = csvRows.join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const file = new File([blob], fileName, { type: 'text/csv' });
-      
-      // Re-process without template
-      const result = await parseCSVFile(file, { skipTemplate: true });
-      
-      // Process transactions
-      const processedTransactions = await processTransactions(result.transactions);
-      
-      // Update state
-      setItems(processedTransactions);
-      setTemplateId(null);
-      setDateFormat(result.dateFormat || null);
-      
-      // Clear old template from sessionStorage and save new date format
-      sessionStorage.removeItem('csvTemplateId');
-      if (result.dateFormat) {
-        sessionStorage.setItem('csvDateFormat', result.dateFormat);
-      } else {
-        sessionStorage.removeItem('csvDateFormat');
-      }
-      
-    } catch (error) {
-      console.error('Error re-processing:', error);
-      alert(error instanceof Error ? error.message : 'Failed to re-process CSV');
-    } finally {
-      setIsReprocessing(false);
-    }
-  };
 
   // Calculate counts for display and confirmation
   const categorizedCount = items.filter(item =>
@@ -601,40 +537,6 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
 
   return (
     <div className="space-y-4 max-w-full overflow-hidden">
-      {templateId && (
-        <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md flex items-center justify-between">
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-blue-800 dark:text-blue-200">
-              Using saved template{dateFormat ? ` with date format: ${dateFormat}` : ''}
-            </span>
-            <span className="text-blue-700 dark:text-blue-300 text-xs">
-              If dates look wrong, delete the template and re-process.
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDeleteTemplateAndReprocess}
-              disabled={isReprocessing}
-              className="text-xs shrink-0"
-            >
-              {isReprocessing ? (
-                <>
-                  <RefreshCw className="mr-2 h-3 w-3 animate-spin" />
-                  Re-processing...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-3 w-3" />
-                  Delete Template & Re-process
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* Historical Import Indicator */}
       {isHistorical && (
         <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">

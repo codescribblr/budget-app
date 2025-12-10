@@ -46,10 +46,31 @@ export async function POST(request: Request) {
         ? txn.splits[0].categoryId
         : null;
 
+      // Store duplicate information in original_data
+      // For manual imports, we want to show duplicates for review, so don't set status to 'rejected'
+      let originalData: any = {};
+      if (txn.originalData) {
+        try {
+          // Handle both string and object formats
+          originalData = typeof txn.originalData === 'string' 
+            ? JSON.parse(txn.originalData) 
+            : txn.originalData;
+        } catch (err) {
+          // If parsing fails, use empty object
+          originalData = {};
+        }
+      }
+      const updatedOriginalData = {
+        ...originalData,
+        isDuplicate: txn.isDuplicate || false,
+        duplicateType: txn.duplicateType || null,
+      };
+
       return {
         id: queuedImportId,
         suggested_category_id: suggestedCategoryId,
-        status: txn.isDuplicate ? 'rejected' : 'reviewing' as const,
+        status: 'reviewing' as const, // Keep as 'reviewing' so duplicates can be reviewed
+        original_data: updatedOriginalData,
       };
     }).filter((update): update is NonNullable<typeof update> => update !== null);
 
@@ -60,13 +81,13 @@ export async function POST(request: Request) {
         .update({
           suggested_category_id: update.suggested_category_id,
           status: update.status,
+          original_data: update.original_data,
           updated_at: new Date().toISOString(),
         })
         .eq('id', update.id)
         .eq('account_id', accountId);
 
       if (error) {
-        console.error(`Error updating queued import ${update.id}:`, error);
         // Continue with other updates even if one fails
       }
     }

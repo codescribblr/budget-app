@@ -1,16 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import TransactionPreview from '@/components/import/TransactionPreview';
+import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { ArrowLeft, Wallet, CreditCard, Clock, Trash2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Wallet, CreditCard, Clock, Trash2, RefreshCw, Search, Tag, MoreVertical } from 'lucide-react';
 import type { ParsedTransaction } from '@/lib/import-types';
-import { processTransactions } from '@/lib/csv-parser-helpers';
+import { getIncompleteTasks } from '@/lib/processing-tasks';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +22,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 
 export default function BatchReviewPage() {
@@ -49,6 +56,9 @@ export default function BatchReviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showProcessingDialog, setShowProcessingDialog] = useState(false);
+  const [isRerunningDuplicates, setIsRerunningDuplicates] = useState(false);
+  const [isRerunningCategorization, setIsRerunningCategorization] = useState(false);
 
   useEffect(() => {
     if (!permissionsLoading && batchId) {
@@ -81,7 +91,39 @@ export default function BatchReviewPage() {
       
       return () => clearTimeout(timer);
     }
+    return () => {}; // Always return a cleanup function
   }, [transactions.length, loading]);
+
+  // Define checkProcessingStatus before the useEffect that uses it
+  // Use useCallback to memoize the function and prevent unnecessary re-renders
+  const checkProcessingStatus = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/import/queue/${encodeURIComponent(batchId)}/processing-status`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.needsProcessing) {
+          setShowProcessingDialog(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking processing status:', error);
+    }
+  }, [batchId]);
+
+  // Check processing status on mount (only if we don't have transactions yet)
+  // This is a fallback - the main loading happens in loadProcessedTransactions
+  // IMPORTANT: This hook must be called before any conditional returns
+  useEffect(() => {
+    if (!permissionsLoading && batchId && !loading && transactions.length === 0 && !showProcessingDialog) {
+      // Only check if we haven't already started loading
+      const timer = setTimeout(() => {
+        checkProcessingStatus();
+      }, 500); // Delay to avoid race conditions
+      return () => clearTimeout(timer);
+    }
+    // Always return a cleanup function (no-op if condition wasn't met)
+    return () => {};
+  }, [permissionsLoading, batchId, loading, transactions.length, showProcessingDialog, checkProcessingStatus]);
 
   const loadProcessedTransactions = async () => {
     // Retry logic to handle RSC timing issues
@@ -205,6 +247,37 @@ export default function BatchReviewPage() {
           ? categories.find((c: any) => c.id === qi.suggested_category_id)
           : null;
 
+        // Extract duplicate information from original_data
+        let isDuplicate = false;
+        let duplicateType: 'database' | 'within-file' | null = null;
+        if (qi.original_data) {
+          try {
+            const originalData = typeof qi.original_data === 'string' 
+              ? JSON.parse(qi.original_data) 
+              : qi.original_data;
+            isDuplicate = originalData.isDuplicate === true;
+            duplicateType = originalData.duplicateType || null;
+          } catch (err) {
+            // If original_data is not valid JSON, ignore
+            console.warn('Failed to parse original_data for duplicate info:', err);
+          }
+        }
+
+        // Determine status: duplicates and uncategorized transactions should be excluded
+        // Otherwise use database status
+        const hasCategory = !!qi.suggested_category_id;
+        let transactionStatus: 'pending' | 'confirmed' | 'excluded' = 'pending';
+        if (isDuplicate || !hasCategory) {
+          // Duplicates and uncategorized transactions are excluded
+          transactionStatus = 'excluded';
+        } else if (qi.status === 'reviewing' || qi.status === 'pending') {
+          transactionStatus = 'pending';
+        } else if (qi.status === 'approved') {
+          transactionStatus = 'confirmed';
+        } else if (qi.status === 'rejected') {
+          transactionStatus = 'excluded';
+        }
+
         return {
           id: `queued-${qi.id}`,
           date: qi.transaction_date,
@@ -221,28 +294,28 @@ export default function BatchReviewPage() {
             categoryName: category?.name || '',
             amount: qi.amount,
           }] : [],
-          status: 'pending' as const,
-          isDuplicate: false, // Duplicates are filtered out before saving to queue
-          originalData: qi.original_data,
+          status: transactionStatus,
+          isDuplicate,
+          duplicateType,
+          originalData: typeof qi.original_data === 'string' ? qi.original_data : JSON.stringify(qi.original_data || {}),
           hash: qi.hash || '',
         };
       });
 
-      // For manual uploads, transactions are already processed during upload
-      // Skip processing to avoid duplicate deduplication and categorization
-      let processedTransactions: ParsedTransaction[];
-      if (isManualUpload) {
-        // Manual uploads are already processed - use as-is
-        processedTransactions = initialTransactions;
-      } else {
-        // Automatic imports need processing (from queue list "Review" button)
-        processedTransactions = await processTransactions(
-          initialTransactions,
-          initialTransactions[0]?.account_id || undefined,
-          initialTransactions[0]?.credit_card_id || undefined,
-          true, // Skip AI categorization initially
-          undefined // No progress callback needed here
-        );
+      // Check if processing is needed
+      const firstImport = queuedImports[0];
+      const tasks = (firstImport?.processing_tasks as any) || null;
+      const incompleteTasks = tasks ? getIncompleteTasks(tasks) : [];
+      const needsProcessing = incompleteTasks.length > 0;
+
+      // Always load transactions - even if processing is needed, show them
+      // The dialog will handle processing if needed
+      const processedTransactions = initialTransactions;
+
+      // If processing is needed and dialog isn't already shown, show it
+      // But don't return early - we still want to load and display transactions
+      if (needsProcessing && !showProcessingDialog) {
+        setShowProcessingDialog(true);
       }
 
       // Fetch setup info for batch info (reuse the fetch we did earlier)
@@ -506,6 +579,12 @@ export default function BatchReviewPage() {
       
       setTransactions(sortedTransactions);
       setBatchInfo(batchInfo);
+      
+      // Calculate duplicate counts from processed transactions
+      const databaseDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'database').length;
+      const withinFileDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'within-file').length;
+      setDuplicateCounts({ database: databaseDups, withinFile: withinFileDups });
+      
       setLoading(false);
     } catch (err: any) {
       console.error('Error parsing stored data:', err);
@@ -605,8 +684,194 @@ export default function BatchReviewPage() {
     );
   }
 
+  const handleProcessingComplete = () => {
+    setShowProcessingDialog(false);
+    // Reload transactions after processing with a small delay to ensure database updates are committed
+    setTimeout(() => {
+      loadProcessedTransactions();
+    }, 300);
+  };
+
+  const handleRerunDuplicateCheck = async () => {
+    if (!batchId || transactions.length === 0) return;
+    
+    setIsRerunningDuplicates(true);
+    try {
+      // Check for duplicates
+      const response = await fetch('/api/import/check-duplicates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hashes: transactions.map(t => t.hash),
+          transactions: transactions.map(t => ({
+            hash: t.hash,
+            date: t.date,
+            description: t.description,
+            amount: t.amount,
+          })),
+          batchId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to check duplicates');
+      }
+
+      const { duplicates } = await response.json();
+      const databaseDuplicateSet = new Set(duplicates);
+
+      // Check for within-file duplicates
+      const seenHashes = new Map<string, number>();
+      const withinFileDuplicates = new Set<number>();
+      transactions.forEach((txn, index) => {
+        if (seenHashes.has(txn.hash)) {
+          withinFileDuplicates.add(index);
+        } else {
+          seenHashes.set(txn.hash, index);
+        }
+      });
+
+      // Update transactions with duplicate information
+      const updatedTransactions = transactions.map((txn, index) => {
+        const isDatabaseDuplicate = databaseDuplicateSet.has(txn.hash);
+        const isWithinFileDuplicate = withinFileDuplicates.has(index);
+        const isDuplicate = isDatabaseDuplicate || isWithinFileDuplicate;
+
+        const duplicateType = isDatabaseDuplicate
+          ? 'database' as const
+          : isWithinFileDuplicate
+          ? 'within-file' as const
+          : null;
+
+        const hasCategory = !!txn.suggestedCategory;
+        const status = (isDuplicate || !hasCategory ? 'excluded' : 'pending') as 'pending' | 'confirmed' | 'excluded';
+
+        // Update original_data with duplicate info
+        let originalData: any = {};
+        try {
+          originalData = typeof txn.originalData === 'string' 
+            ? JSON.parse(txn.originalData) 
+            : txn.originalData || {};
+        } catch (err) {
+          originalData = {};
+        }
+
+        const updatedOriginalData = {
+          ...originalData,
+          isDuplicate,
+          duplicateType,
+        };
+
+        return {
+          ...txn,
+          isDuplicate,
+          duplicateType,
+          status,
+          originalData: JSON.stringify(updatedOriginalData),
+        };
+      });
+
+      // Update database with duplicate information
+      await fetch('/api/automatic-imports/queue/update-categorization', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactions: updatedTransactions }),
+      });
+
+      // Update state
+      setTransactions(updatedTransactions);
+      
+      // Update duplicate counts
+      const databaseDups = updatedTransactions.filter(t => t.duplicateType === 'database').length;
+      const withinFileDups = updatedTransactions.filter(t => t.duplicateType === 'within-file').length;
+      setDuplicateCounts({ database: databaseDups, withinFile: withinFileDups });
+
+      toast.success('Duplicate check completed');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to check duplicates');
+    } finally {
+      setIsRerunningDuplicates(false);
+    }
+  };
+
+  const handleRerunCategorization = async () => {
+    if (!batchId || transactions.length === 0) return;
+    
+    setIsRerunningCategorization(true);
+    try {
+      // Get category suggestions
+      const merchants = transactions.map(t => t.merchant);
+      const response = await fetch('/api/categorize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ merchants, batchId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get category suggestions');
+      }
+
+      const { suggestions } = await response.json();
+
+      // Fetch categories to get names
+      const categoriesResponse = await fetch('/api/categories?excludeGoals=true');
+      const categories = categoriesResponse.ok ? await categoriesResponse.json() : [];
+
+      // Update transactions with categorization
+      const updatedTransactions = transactions.map((txn, index) => {
+        const suggestion = suggestions[index];
+        const suggestedCategory = suggestion?.categoryId;
+        const hasCategory = !!suggestedCategory;
+
+        // Preserve duplicate status
+        const isDuplicate = txn.isDuplicate || false;
+        const duplicateType = txn.duplicateType || null;
+        const status = (isDuplicate || !hasCategory ? 'excluded' : 'pending') as 'pending' | 'confirmed' | 'excluded';
+
+        return {
+          ...txn,
+          suggestedCategory,
+          splits: suggestedCategory
+            ? [{
+                categoryId: suggestedCategory,
+                categoryName: categories.find((c: any) => c.id === suggestedCategory)?.name || '',
+                amount: txn.amount,
+              }]
+            : [],
+          status,
+        };
+      });
+
+      // Update database with categorization
+      await fetch('/api/automatic-imports/queue/update-categorization', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactions: updatedTransactions }),
+      });
+
+      // Update state
+      setTransactions(updatedTransactions);
+
+      toast.success('Categorization completed');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to categorize transactions');
+    } finally {
+      setIsRerunningCategorization(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Processing Dialog */}
+      <QueuedImportProcessingDialog
+        open={showProcessingDialog}
+        progress={0}
+        stage=""
+        batchId={batchId}
+        onComplete={handleProcessingComplete}
+        onCancel={() => router.push('/imports/queue')}
+      />
+
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.push('/imports/queue')}>
           <ArrowLeft className="h-4 w-4" />
@@ -683,7 +948,8 @@ export default function BatchReviewPage() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        {/* Desktop: Show individual buttons */}
+        <div className="hidden md:flex items-center gap-2">
           {/* Re-map button - show for manual imports (CSV or PDF) with CSV data */}
           {hasCsvData && (batchInfo?.source_type === 'manual' || batchId.startsWith('manual-')) && (
             <Button 
@@ -702,6 +968,24 @@ export default function BatchReviewPage() {
               Re-map Fields
             </Button>
           )}
+          {/* Re-check Duplicates button */}
+          <Button 
+            variant="outline" 
+            onClick={handleRerunDuplicateCheck}
+            disabled={isRerunningDuplicates || transactions.length === 0}
+          >
+            <Search className="h-4 w-4 mr-2" />
+            {isRerunningDuplicates ? 'Checking...' : 'Re-check Duplicates'}
+          </Button>
+          {/* Re-run Categorization button */}
+          <Button 
+            variant="outline" 
+            onClick={handleRerunCategorization}
+            disabled={isRerunningCategorization || transactions.length === 0}
+          >
+            <Tag className="h-4 w-4 mr-2" />
+            {isRerunningCategorization ? 'Categorizing...' : 'Re-run Categorization'}
+          </Button>
           <Button 
             variant="outline" 
             size="icon"
@@ -710,6 +994,60 @@ export default function BatchReviewPage() {
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
+        {/* Mobile: Show delete button only */}
+        <div className="md:hidden">
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Mobile: Re-run Actions Dropdown - shown above transaction preview */}
+      <div className="md:hidden">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="w-full">
+              <MoreVertical className="h-4 w-4 mr-2" />
+              Re-run Actions
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            {/* Re-map option - show for manual imports (CSV or PDF) with CSV data */}
+            {hasCsvData && (batchInfo?.source_type === 'manual' || batchId.startsWith('manual-')) && (
+              <DropdownMenuItem
+                onClick={async () => {
+                  try {
+                    router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
+                  } catch (err) {
+                    console.error('Error initiating remap:', err);
+                    toast.error('Failed to start re-mapping');
+                  }
+                }}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Re-map Fields
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem
+              onClick={handleRerunDuplicateCheck}
+              disabled={isRerunningDuplicates || transactions.length === 0}
+            >
+              <Search className="h-4 w-4 mr-2" />
+              {isRerunningDuplicates ? 'Checking...' : 'Re-check Duplicates'}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={handleRerunCategorization}
+              disabled={isRerunningCategorization || transactions.length === 0}
+            >
+              <Tag className="h-4 w-4 mr-2" />
+              {isRerunningCategorization ? 'Categorizing...' : 'Re-run Categorization'}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {transactions.length > 0 && (
