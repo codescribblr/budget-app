@@ -38,7 +38,7 @@ export default function QueuedImportProcessingDialog({
 }: QueuedImportProcessingDialogProps) {
   const [status, setStatus] = useState<{
     processingTasks: any;
-    incompleteTasks: ProcessingTask[];
+    incompleteTasks: string[];
     needsProcessing: boolean;
     defaultAccountId: number | null;
     defaultCreditCardId: number | null;
