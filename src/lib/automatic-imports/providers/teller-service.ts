@@ -235,12 +235,13 @@ export async function fetchAndQueueTellerTransactions(options: {
   budgetAccountId?: number; // Optional budget account ID for webhook contexts
   targetAccountId?: number | null; // Optional target account ID from mapping
   targetCreditCardId?: number | null; // Optional target credit card ID from mapping
+  sourceBatchId?: string; // Optional batch ID to use (if provided, will use it; otherwise will find existing or create new)
 }): Promise<{
   fetched: number;
   queued: number;
   errors: string[];
 }> {
-  const { importSetupId, accessToken, accountId, isHistorical, startDate, endDate, supabase: providedSupabase, budgetAccountId, targetAccountId: providedTargetAccountId, targetCreditCardId: providedTargetCreditCardId } = options;
+  const { importSetupId, accessToken, accountId, isHistorical, startDate, endDate, supabase: providedSupabase, budgetAccountId, targetAccountId: providedTargetAccountId, targetCreditCardId: providedTargetCreditCardId, sourceBatchId: providedSourceBatchId } = options;
   const errors: string[] = [];
   
   try {
@@ -340,8 +341,35 @@ export async function fetchAndQueueTellerTransactions(options: {
       convertTellerTransactionToParsed(txn, targetAccountId || undefined, targetCreditCardId || undefined)
     );
 
-    // Generate batch ID
-    const sourceBatchId = `teller-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    // Determine batch ID: use provided, find existing pending batch, or create new
+    let sourceBatchId = providedSourceBatchId;
+    
+    if (!sourceBatchId) {
+      // Try to find an existing pending batch for this account/import setup
+      // This implements the batching window feature - append to existing batch if available
+      try {
+        const { findExistingPendingBatch } = await import('../queue-manager');
+        const existingBatchId = await findExistingPendingBatch({
+          importSetupId,
+          targetAccountId,
+          targetCreditCardId,
+          budgetAccountId: setupAccountId,
+          supabase,
+          sourceType: 'teller',
+        });
+        
+        if (existingBatchId) {
+          sourceBatchId = existingBatchId;
+        } else {
+          // Create new batch ID for this account
+          sourceBatchId = `teller-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+        }
+      } catch (error: any) {
+        // If finding existing batch fails, log and create new batch
+        console.warn(`Error finding existing pending batch, creating new batch:`, error);
+        sourceBatchId = `teller-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      }
+    }
 
     // Queue transactions
     const queued = await queueTransactions({

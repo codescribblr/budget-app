@@ -17,6 +17,7 @@ import { Loader2 } from 'lucide-react';
 import { processTransactions } from '@/lib/csv-parser-helpers';
 import type { ParsedTransaction } from '@/lib/import-types';
 import type { Account, CreditCard } from '@/lib/types';
+import type { ProcessingTask } from '@/lib/processing-tasks';
 import { toast } from 'sonner';
 
 interface QueuedImportProcessingDialogProps {
@@ -38,7 +39,7 @@ export default function QueuedImportProcessingDialog({
 }: QueuedImportProcessingDialogProps) {
   const [status, setStatus] = useState<{
     processingTasks: any;
-    incompleteTasks: string[];
+    incompleteTasks: ProcessingTask[];
     needsProcessing: boolean;
     defaultAccountId: number | null;
     defaultCreditCardId: number | null;

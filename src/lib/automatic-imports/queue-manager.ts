@@ -138,6 +138,78 @@ export interface QueueTransactionOptions {
 }
 
 /**
+ * Find an existing pending batch for the same import setup and target account/credit card
+ * This allows appending transactions to existing batches instead of creating new ones
+ * Used for batching window feature - group transactions from multiple webhooks
+ */
+export async function findExistingPendingBatch(options: {
+  importSetupId: number;
+  targetAccountId?: number | null;
+  targetCreditCardId?: number | null;
+  budgetAccountId: number;
+  supabase?: SupabaseClient;
+  sourceType?: string; // Only match batches from same source type (e.g., 'teller')
+}): Promise<string | null> {
+  const { importSetupId, targetAccountId, targetCreditCardId, budgetAccountId, supabase: providedSupabase, sourceType } = options;
+  
+  const supabase = providedSupabase || (await getAuthenticatedUser()).supabase;
+  
+  // First, verify the import setup's source type if filtering by it
+  if (sourceType) {
+    const { data: setup, error: setupError } = await supabase
+      .from('automatic_import_setups')
+      .select('source_type')
+      .eq('id', importSetupId)
+      .single();
+    
+    if (setupError || !setup || setup.source_type !== sourceType) {
+      return null; // Setup doesn't match source type or doesn't exist
+    }
+  }
+  
+  // Build query to find pending/reviewing batches for this setup and target account
+  let query = supabase
+    .from('queued_imports')
+    .select('source_batch_id')
+    .eq('account_id', budgetAccountId)
+    .eq('import_setup_id', importSetupId)
+    .in('status', ['pending', 'reviewing'])
+    .not('source_batch_id', 'is', null);
+  
+  // Match by target account or credit card
+  // Use explicit null checks (targetAccountId !== null && targetAccountId !== undefined)
+  // to handle the case where one is null and the other is undefined
+  if (targetAccountId !== null && targetAccountId !== undefined) {
+    query = query.eq('target_account_id', targetAccountId);
+    // Also ensure credit_card_id is null when matching by account_id
+    query = query.is('target_credit_card_id', null);
+  } else if (targetCreditCardId !== null && targetCreditCardId !== undefined) {
+    query = query.eq('target_credit_card_id', targetCreditCardId);
+    // Also ensure account_id is null when matching by credit_card_id
+    query = query.is('target_account_id', null);
+  } else {
+    // If neither is set, match batches where both are null
+    query = query.is('target_account_id', null).is('target_credit_card_id', null);
+  }
+  
+  // Order by most recent batch first (in case of multiple batches due to race conditions)
+  query = query.order('source_fetched_at', { ascending: false });
+  
+  const { data, error } = await query.limit(1);
+  
+  if (error) {
+    console.error('Error finding existing pending batch:', error);
+    return null;
+  }
+  
+  if (!data || data.length === 0) {
+    return null;
+  }
+  
+  return data[0].source_batch_id;
+}
+
+/**
  * Queue transactions for review
  * Handles deduplication against both imported_transactions and queued_imports
  */

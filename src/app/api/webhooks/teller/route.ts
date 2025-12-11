@@ -126,7 +126,12 @@ export async function POST(request: Request) {
               })
             : accountIds; // Fallback: if no mappings, process all accounts (backwards compatibility)
 
+          // Track success/failure for this setup
+          let setupSuccess = false;
+          let setupError: any = null;
+
           // Fetch and queue transactions for each enabled account
+          // Each account gets its own batch, but will append to existing pending batch if available
           for (const tellerAccountId of enabledAccountIds) {
             // Get mapping for this account to get target account/credit card and is_historical
             const mapping = accountMappings.find((m: any) => m.teller_account_id === tellerAccountId);
@@ -141,27 +146,34 @@ export async function POST(request: Request) {
                 budgetAccountId: setup.account_id,
                 targetAccountId: mapping?.target_account_id || null,
                 targetCreditCardId: mapping?.target_credit_card_id || null,
+                // Don't provide sourceBatchId - let fetchAndQueueTellerTransactions find existing or create new
               });
 
-              // Update last fetch time
-              await supabase
-                .from('automatic_import_setups')
-                .update({
-                  last_fetch_at: new Date().toISOString(),
-                  last_successful_fetch_at: new Date().toISOString(),
-                })
-                .eq('id', setup.id);
+              setupSuccess = true;
             } catch (error: any) {
               console.error(`Error processing Teller webhook for setup ${setup.id}, account ${tellerAccountId}:`, error);
-              await supabase
-                .from('automatic_import_setups')
-                .update({
-                  last_fetch_at: new Date().toISOString(),
-                  last_error: error.message,
-                  error_count: (setup.error_count || 0) + 1,
-                })
-                .eq('id', setup.id);
+              setupError = error;
             }
+          }
+
+          // Update setup status once after processing all accounts
+          if (setupSuccess) {
+            await supabase
+              .from('automatic_import_setups')
+              .update({
+                last_fetch_at: new Date().toISOString(),
+                last_successful_fetch_at: new Date().toISOString(),
+              })
+              .eq('id', setup.id);
+          } else if (setupError) {
+            await supabase
+              .from('automatic_import_setups')
+              .update({
+                last_fetch_at: new Date().toISOString(),
+                last_error: setupError.message,
+                error_count: (setup.error_count || 0) + 1,
+              })
+              .eq('id', setup.id);
           }
         }
 
@@ -213,6 +225,9 @@ export async function POST(request: Request) {
               isHistorical: mapping?.is_historical !== undefined ? mapping.is_historical : setup.is_historical, // Use per-account is_historical if available
               supabase,
               budgetAccountId: setup.account_id,
+              targetAccountId: mapping?.target_account_id || null,
+              targetCreditCardId: mapping?.target_credit_card_id || null,
+              // Don't provide sourceBatchId - let fetchAndQueueTellerTransactions find existing or create new
             });
 
             // Update last fetch time

@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Trash2 } from 'lucide-react';
+import { Edit, Trash2, ArrowLeft } from 'lucide-react';
 import { listTemplates, deleteTemplate, type CSVImportTemplate } from '@/lib/mapping-templates';
 import { toast } from 'sonner';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
@@ -37,7 +37,6 @@ export default function ImportTemplatesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState<CSVImportTemplate | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [templatesInUse, setTemplatesInUse] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!permissionsLoading) {
@@ -50,40 +49,11 @@ export default function ImportTemplatesPage() {
       setLoading(true);
       const data = await listTemplates();
       setTemplates(data);
-      
-      // Fetch which templates are currently in use by queued imports
-      await fetchTemplatesInUse();
     } catch (error) {
       console.error('Error fetching templates:', error);
       toast.error('Failed to load templates');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchTemplatesInUse = async () => {
-    try {
-      // Fetch all queued imports (no status filter) to check which templates are in use
-      // We'll filter for pending/reviewing status client-side
-      const response = await fetch('/api/automatic-imports/queue');
-      if (response.ok) {
-        const data = await response.json();
-        const allImports = data.imports || [];
-        
-        // Filter for pending or reviewing imports and get unique template IDs
-        const templateIds = new Set<number>();
-        
-        allImports.forEach((qi: any) => {
-          if ((qi.status === 'pending' || qi.status === 'reviewing') && qi.csv_mapping_template_id) {
-            templateIds.add(qi.csv_mapping_template_id);
-          }
-        });
-        
-        setTemplatesInUse(templateIds);
-      }
-    } catch (error) {
-      console.warn('Failed to fetch templates in use:', error);
-      // Non-critical error, continue without this data
     }
   };
 
@@ -105,6 +75,12 @@ export default function ImportTemplatesPage() {
     }
   };
 
+  const handleEdit = (template: CSVImportTemplate) => {
+    // Navigate to mapping page with template data
+    // For now, we'll show a message that editing will be available soon
+    toast.info('Template editing will be available in the mapping interface');
+    // TODO: Implement template editing flow
+  };
 
   if (permissionsLoading || loading) {
     return <LoadingSpinner />;
@@ -125,11 +101,16 @@ export default function ImportTemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Import Templates</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage your CSV import mapping templates for faster imports.
-        </p>
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={() => router.push('/settings')}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex-1">
+          <h1 className="text-3xl font-bold">Import Templates</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage your CSV import mapping templates for faster imports.
+          </p>
+        </div>
       </div>
 
       {templates.length === 0 ? (
@@ -189,24 +170,25 @@ export default function ImportTemplatesPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {template.id && !templatesInUse.has(template.id) && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setTemplateToDelete(template);
-                              setDeleteDialogOpen(true);
-                            }}
-                            title="Delete template"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {template.id && templatesInUse.has(template.id) && (
-                          <span className="text-xs text-muted-foreground" title="Template is in use by queued imports">
-                            In use
-                          </span>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(template)}
+                          title="Edit template"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setTemplateToDelete(template);
+                            setDeleteDialogOpen(true);
+                          }}
+                          title="Delete template"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

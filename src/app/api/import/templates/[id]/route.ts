@@ -3,58 +3,6 @@ import { createClient } from '@/lib/supabase/server';
 import type { CSVImportTemplate, ColumnMapping } from '@/lib/mapping-templates';
 
 /**
- * GET /api/import/templates/[id]
- * Get a CSV import template by ID
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { id } = await params;
-    const templateId = parseInt(id);
-
-    if (isNaN(templateId)) {
-      return NextResponse.json({ error: 'Invalid template ID' }, { status: 400 });
-    }
-
-    // Get template and verify it belongs to user
-    const { data: template, error } = await supabase
-      .from('csv_import_templates')
-      .select('*')
-      .eq('id', templateId)
-      .eq('user_id', user.id)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return NextResponse.json({ error: 'Template not found' }, { status: 404 });
-      }
-      throw error;
-    }
-
-    if (!template) {
-      return NextResponse.json({ error: 'Template not found' }, { status: 404 });
-    }
-
-    return NextResponse.json(template);
-  } catch (error: any) {
-    console.error('Error fetching template:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch template', message: error.message },
-      { status: 500 }
-    );
-  }
-}
-
-/**
  * PUT /api/import/templates/[id]
  * Update a CSV import template
  */
