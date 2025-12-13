@@ -512,7 +512,12 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     item.splits.length > 0
   ).length;
 
-  const uncategorizedCount = items.filter(item => item.splits.length === 0).length;
+  // Exclude duplicates from uncategorized count - duplicates take precedence
+  const uncategorizedCount = items.filter(item => 
+    !item.isDuplicate && 
+    !item.duplicateType && 
+    item.splits.length === 0
+  ).length;
   
   // Check if these are queued imports
   const isQueuedImport = items.some(item => typeof item.id === 'string' && item.id.startsWith('queued-'));
@@ -638,23 +643,26 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
               const isEditingAccount = editingField?.transactionId === transaction.id && editingField?.field === 'account';
 
               // Determine row background color based on transaction status
-              const isUncategorized = transaction.splits.length === 0;
-              const isDuplicate = transaction.duplicateType === 'database' || transaction.duplicateType === 'within-file';
-              const isManuallyExcluded = transaction.status === 'excluded' && transaction.splits.length > 0;
+              // Duplicates take precedence over uncategorized status
+              const isDuplicate = transaction.duplicateType === 'database' || transaction.duplicateType === 'within-file' || transaction.isDuplicate;
+              const isUncategorized = !isDuplicate && transaction.splits.length === 0;
+              const isManuallyExcluded = transaction.status === 'excluded' && transaction.splits.length > 0 && !isDuplicate;
               const isReadyToImport = !isUncategorized && 
+                                      !isDuplicate &&
                                       transaction.status !== 'excluded' && 
-                                      transaction.splits.length > 0 && 
-                                      !transaction.isDuplicate && 
-                                      !transaction.duplicateType;
+                                      transaction.splits.length > 0;
 
-              // Uncategorized transactions always have no background (default table color)
-              // Red background for duplicates or manually excluded (but not uncategorized)
+              // Duplicates get red background (highest priority)
+              // Uncategorized transactions have no background (default table color)
               // Green background for ready to import
-              const rowClassName = isUncategorized
+              // Red background for manually excluded (but not duplicates or uncategorized)
+              const rowClassName = isDuplicate
+                ? 'bg-red-50 dark:bg-red-950/20 border-border'
+                : isUncategorized
                 ? 'border-border'
                 : isReadyToImport
                 ? 'bg-green-50 dark:bg-green-900/30 border-border'
-                : isDuplicate || isManuallyExcluded
+                : isManuallyExcluded
                 ? 'bg-red-50 dark:bg-red-950/20 border-border'
                 : 'border-border';
 
@@ -839,17 +847,24 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
 
                   {/* Status Cell */}
                   <TableCell className="min-w-[120px]">
-                    {transaction.status === 'excluded' && transaction.splits.length === 0 ? (
+                    {/* Duplicates take precedence over uncategorized status */}
+                    {isDuplicate ? (
+                      transaction.duplicateType === 'database' ? (
+                        <span className="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded whitespace-nowrap">
+                          Duplicate
+                        </span>
+                      ) : transaction.duplicateType === 'within-file' ? (
+                        <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded whitespace-nowrap">
+                          Potential Duplicate
+                        </span>
+                      ) : (
+                        <span className="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded whitespace-nowrap">
+                          Duplicate
+                        </span>
+                      )
+                    ) : transaction.status === 'excluded' && transaction.splits.length === 0 ? (
                       <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded whitespace-nowrap">
                         Uncategorized
-                      </span>
-                    ) : transaction.status === 'excluded' && transaction.duplicateType === 'database' ? (
-                      <span className="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded whitespace-nowrap">
-                        Duplicate
-                      </span>
-                    ) : transaction.status === 'excluded' && transaction.duplicateType === 'within-file' ? (
-                      <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded whitespace-nowrap">
-                        Potential Duplicate
                       </span>
                     ) : transaction.status === 'excluded' ? (
                       <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded whitespace-nowrap">

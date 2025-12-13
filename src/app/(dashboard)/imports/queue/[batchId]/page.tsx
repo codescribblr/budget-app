@@ -263,12 +263,16 @@ export default function BatchReviewPage() {
           }
         }
 
-        // Determine status: duplicates and uncategorized transactions should be excluded
+        // Determine status: duplicates take precedence over uncategorized
+        // Duplicates should always be excluded, then uncategorized transactions
         // Otherwise use database status
         const hasCategory = !!qi.suggested_category_id;
         let transactionStatus: 'pending' | 'confirmed' | 'excluded' = 'pending';
-        if (isDuplicate || !hasCategory) {
-          // Duplicates and uncategorized transactions are excluded
+        if (isDuplicate) {
+          // Duplicates are always excluded (regardless of category status)
+          transactionStatus = 'excluded';
+        } else if (!hasCategory) {
+          // Uncategorized transactions are excluded (only if not duplicate)
           transactionStatus = 'excluded';
         } else if (qi.status === 'reviewing' || qi.status === 'pending') {
           transactionStatus = 'pending';
@@ -744,7 +748,9 @@ export default function BatchReviewPage() {
           : null;
 
         const hasCategory = !!txn.suggestedCategory;
-        const status = (isDuplicate || !hasCategory ? 'excluded' : 'pending') as 'pending' | 'confirmed' | 'excluded';
+        // Duplicates take precedence: if duplicate, always excluded
+        // Otherwise, exclude if uncategorized
+        const status = (isDuplicate ? 'excluded' : (!hasCategory ? 'excluded' : 'pending')) as 'pending' | 'confirmed' | 'excluded';
 
         // Update original_data with duplicate info
         let originalData: any = {};
@@ -826,7 +832,9 @@ export default function BatchReviewPage() {
         // Preserve duplicate status
         const isDuplicate = txn.isDuplicate || false;
         const duplicateType = txn.duplicateType || null;
-        const status = (isDuplicate || !hasCategory ? 'excluded' : 'pending') as 'pending' | 'confirmed' | 'excluded';
+        // Duplicates take precedence: if duplicate, always excluded
+        // Otherwise, exclude if uncategorized
+        const status = (isDuplicate ? 'excluded' : (!hasCategory ? 'excluded' : 'pending')) as 'pending' | 'confirmed' | 'excluded';
 
         return {
           ...txn,
