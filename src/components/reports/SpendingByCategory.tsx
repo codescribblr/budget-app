@@ -65,7 +65,7 @@ export default function SpendingByCategory({ transactions, categories, onCategor
   ).length;
 
   const systemTransactions = transactions.filter(t =>
-    t.splits.every(split => {
+    t.splits.length > 0 && t.splits.every(split => {
       const category = categories.find(c => c.id === split.category_id);
       return category?.is_system;
     })

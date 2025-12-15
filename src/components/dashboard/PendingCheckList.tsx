@@ -142,6 +142,9 @@ export default function PendingCheckList({ pendingChecks, onUpdate, onUpdateSumm
       return;
     }
 
+    // Save editCheck.id before clearing state
+    const checkId = editCheck.id;
+
     // Optimistic update
     const updatedCheck: PendingCheck = {
       ...editCheck,
@@ -160,7 +163,7 @@ export default function PendingCheckList({ pendingChecks, onUpdate, onUpdateSumm
     setEditType('expense');
 
     try {
-      const response = await fetch(`/api/pending-checks/${editCheck.id}`, {
+      const response = await fetch(`/api/pending-checks/${checkId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

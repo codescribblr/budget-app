@@ -62,13 +62,19 @@ export async function POST() {
     );
 
     // Get transactions without splits
-    const { data: transactionsWithoutSplits } = await supabase
+    let query = supabase
       .from('transactions')
       .select('id, date, description')
       .eq('budget_account_id', accountId)
       .gte('date', '2025-01-01')
-      .lte('date', '2025-12-31')
-      .not('id', 'in', `(${Array.from(existingTransactionIds).join(',') || '0'})`);
+      .lte('date', '2025-12-31');
+    
+    // Only apply .not() if there are existing transaction IDs
+    if (existingTransactionIds.size > 0) {
+      query = query.not('id', 'in', `(${Array.from(existingTransactionIds).join(',')})`);
+    }
+    
+    const { data: transactionsWithoutSplits } = await query;
 
     return NextResponse.json({
       orphanedSplits: {
