@@ -254,7 +254,7 @@ export default function TransactionList({
         throw new Error('Failed to update transactions');
       }
 
-      // Update local state
+      // Update local state inline without reloading
       setLocalTransactions(prev => prev.map(t => {
         if (!selectedTransactions.has(t.id)) {
           return t;
@@ -301,12 +301,17 @@ export default function TransactionList({
           updated.credit_card_name = null;
         }
 
+        if (updates.isHistorical !== undefined) {
+          updated.is_historical = updates.isHistorical;
+        }
+
         return updated;
       }));
 
       setSelectedTransactions(new Set());
       toast.success(`Updated ${selectedItems.length} transaction${selectedItems.length !== 1 ? 's' : ''}`);
-      onUpdate(); // Refresh data
+      // Note: Removed onUpdate() call to avoid full page reload - updates are inline
+      // Dialog will close via BulkEditDialog's onClose callback
     } catch (error: any) {
       console.error('Error saving bulk edits:', error);
       toast.error(error.message || 'Failed to save bulk edits');
@@ -363,7 +368,7 @@ export default function TransactionList({
     );
   }
 
-  if (transactions.length === 0) {
+  if (localTransactions.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-8">
         No transactions yet. Add your first transaction to get started!
@@ -375,7 +380,7 @@ export default function TransactionList({
     <>
       {/* Mobile Card View */}
       <div className="md:hidden space-y-3">
-        {transactions.map((transaction) => (
+        {localTransactions.map((transaction) => (
           <div key={transaction.id} className="border rounded-lg p-4 space-y-3">
             <div className="flex items-start justify-between">
               <div className="flex-1">
