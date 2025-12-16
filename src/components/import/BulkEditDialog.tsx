@@ -57,13 +57,14 @@ export default function BulkEditDialog({
   };
 
   const getInitialAccount = (): string | 'various' => {
+    if (transactions.length === 0) return 'none';
     const accountValues = transactions.map(t => {
       if (t.account_id !== undefined && t.account_id !== null) return `account-${t.account_id}`;
       if (t.credit_card_id !== undefined && t.credit_card_id !== null) return `card-${t.credit_card_id}`;
       return 'none';
     });
     const allSame = accountValues.every(v => v === accountValues[0]);
-    if (allSame) return accountValues[0];
+    if (allSame && accountValues[0]) return accountValues[0];
     return 'various';
   };
 
@@ -114,7 +115,7 @@ export default function BulkEditDialog({
 
       const initialAccount = getInitialAccount();
       // Only update if value changed and is not "various"
-      if (accountValue !== 'various' && accountValue !== initialAccount) {
+      if (accountValue && accountValue !== 'various' && accountValue !== initialAccount) {
         if (accountValue === 'none') {
           updates.accountId = null;
           updates.creditCardId = null;
@@ -204,7 +205,7 @@ export default function BulkEditDialog({
           <div className="space-y-2">
             <Label htmlFor="bulk-account">Account</Label>
             <Select
-              value={accountValue === 'various' ? 'none' : accountValue}
+              value={accountValue === 'various' ? 'none' : (accountValue || 'none')}
               onValueChange={(value) => {
                 // If current value is "various", allow selecting a new value
                 setAccountValue(value);
@@ -212,10 +213,12 @@ export default function BulkEditDialog({
             >
               <SelectTrigger id="bulk-account">
                 <SelectValue placeholder="Select account">
-                  {accountValue === 'various' ? 'Various' : accountValue === 'none' ? 'None' : 
-                   accountValue.startsWith('account-') 
+                  {accountValue === 'various' ? 'Various' : accountValue === 'none' || !accountValue ? 'None' : 
+                   accountValue && accountValue.startsWith('account-') 
                      ? accounts.find(a => a.id === parseInt(accountValue.replace('account-', '')))?.name || 'Unknown'
-                     : creditCards.find(c => c.id === parseInt(accountValue.replace('card-', '')))?.name || 'Unknown'}
+                     : accountValue && accountValue.startsWith('card-')
+                     ? creditCards.find(c => c.id === parseInt(accountValue.replace('card-', '')))?.name || 'Unknown'
+                     : 'None'}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
