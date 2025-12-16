@@ -66,9 +66,23 @@ export default function TransactionsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const merchantFilter = searchParams.get('merchant');
+  
+  // Parse multi-select filters (comma-separated values)
   const merchantGroupIdParam = searchParams.get('merchantGroupId');
+  const merchantGroupIds = merchantGroupIdParam 
+    ? merchantGroupIdParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
+    : [];
+  
   const categoryIdParam = searchParams.get('categoryId');
+  const categoryIds = categoryIdParam 
+    ? categoryIdParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
+    : [];
+  
   const transactionTypeParam = searchParams.get('transactionType');
+  const transactionTypes = transactionTypeParam 
+    ? transactionTypeParam.split(',').filter(t => t === 'income' || t === 'expense') as ('income' | 'expense')[]
+    : [];
+  
   const startDateParam = searchParams.get('startDate');
   const endDateParam = searchParams.get('endDate');
   const searchQueryParam = searchParams.get('q');
@@ -82,7 +96,6 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [merchantGroupName, setMerchantGroupName] = useState<string | null>(null);
   const [startDateObj, setStartDateObj] = useState<Date | undefined>(undefined);
   const [endDateObj, setEndDateObj] = useState<Date | undefined>(undefined);
   const [editingTransaction, setEditingTransaction] = useState<TransactionWithSplits | null>(null);
@@ -196,26 +209,7 @@ export default function TransactionsPage() {
     }
   }, [pageSizeParam]);
 
-  // Fetch merchant group name if merchantGroupId is provided
-  useEffect(() => {
-    const fetchMerchantGroupName = async () => {
-      if (merchantGroupIdParam) {
-        try {
-          const response = await fetch(`/api/merchant-groups/${merchantGroupIdParam}`);
-          if (response.ok) {
-            const group = await response.json();
-            setMerchantGroupName(group.display_name);
-          }
-        } catch (error) {
-          console.error('Error fetching merchant group:', error);
-        }
-      } else {
-        setMerchantGroupName(null);
-      }
-    };
-
-    fetchMerchantGroupName();
-  }, [merchantGroupIdParam]);
+  // No longer needed - we use merchantGroups array directly
 
   // Filter transactions based on all filters and search query
   const filteredTransactions = useMemo(() => {
@@ -234,26 +228,26 @@ export default function TransactionsPage() {
       });
     }
 
-    // Apply merchant group filter if present
-    if (merchantGroupIdParam) {
-      const merchantGroupId = parseInt(merchantGroupIdParam);
+    // Apply merchant group filter if present (multi-select)
+    if (merchantGroupIds.length > 0) {
       filtered = filtered.filter(transaction => {
-        return transaction.merchant_group_id === merchantGroupId;
+        return transaction.merchant_group_id !== null && 
+               transaction.merchant_group_id !== undefined &&
+               merchantGroupIds.includes(transaction.merchant_group_id);
       });
     }
 
-    // Apply category filter if present
-    if (categoryIdParam) {
-      const categoryId = parseInt(categoryIdParam);
+    // Apply category filter if present (multi-select)
+    if (categoryIds.length > 0) {
       filtered = filtered.filter(transaction => {
-        return transaction.splits.some(split => split.category_id === categoryId);
+        return transaction.splits.some(split => categoryIds.includes(split.category_id));
       });
     }
 
-    // Apply transaction type filter if present
-    if (transactionTypeParam && (transactionTypeParam === 'income' || transactionTypeParam === 'expense')) {
+    // Apply transaction type filter if present (multi-select)
+    if (transactionTypes.length > 0) {
       filtered = filtered.filter(transaction => {
-        return transaction.transaction_type === transactionTypeParam;
+        return transactionTypes.includes(transaction.transaction_type);
       });
     }
 
@@ -308,7 +302,7 @@ export default function TransactionsPage() {
 
       return false;
     });
-  }, [transactions, categories, searchQuery, merchantFilter, merchantGroupIdParam, categoryIdParam, transactionTypeParam, startDateParam, endDateParam]);
+  }, [transactions, categories, searchQuery, merchantFilter, merchantGroupIds, categoryIds, transactionTypes, startDateParam, endDateParam]);
 
   // Sort filtered transactions
   const sortedTransactions = useMemo(() => {
@@ -386,22 +380,50 @@ export default function TransactionsPage() {
   };
 
   const updateFilters = (updates: {
-    categoryId?: string | null;
-    merchantGroupId?: string | null;
-    transactionType?: string | null;
+    categoryId?: number[] | null;
+    merchantGroupId?: number[] | null;
+    transactionType?: ('income' | 'expense')[] | null;
     startDate?: string | null;
     endDate?: string | null;
   }) => {
     const params = new URLSearchParams(searchParams.toString());
 
     // Update or remove each parameter
-    Object.entries(updates).forEach(([key, value]) => {
-      if (value) {
-        params.set(key, value);
+    if (updates.categoryId !== undefined) {
+      if (updates.categoryId && updates.categoryId.length > 0) {
+        params.set('categoryId', updates.categoryId.join(','));
       } else {
-        params.delete(key);
+        params.delete('categoryId');
       }
-    });
+    }
+    if (updates.merchantGroupId !== undefined) {
+      if (updates.merchantGroupId && updates.merchantGroupId.length > 0) {
+        params.set('merchantGroupId', updates.merchantGroupId.join(','));
+      } else {
+        params.delete('merchantGroupId');
+      }
+    }
+    if (updates.transactionType !== undefined) {
+      if (updates.transactionType && updates.transactionType.length > 0) {
+        params.set('transactionType', updates.transactionType.join(','));
+      } else {
+        params.delete('transactionType');
+      }
+    }
+    if (updates.startDate !== undefined) {
+      if (updates.startDate) {
+        params.set('startDate', updates.startDate);
+      } else {
+        params.delete('startDate');
+      }
+    }
+    if (updates.endDate !== undefined) {
+      if (updates.endDate) {
+        params.set('endDate', updates.endDate);
+      } else {
+        params.delete('endDate');
+      }
+    }
 
     // Reset to page 1 when filters change
     params.set('page', '1');
@@ -418,16 +440,25 @@ export default function TransactionsPage() {
     router.push(`/transactions?${params.toString()}`);
   };
 
-  const handleCategoryChange = (categoryId: string | null) => {
-    updateFilters({ categoryId });
+  const handleCategoryToggle = (categoryId: number) => {
+    const newCategoryIds = categoryIds.includes(categoryId)
+      ? categoryIds.filter(id => id !== categoryId)
+      : [...categoryIds, categoryId];
+    updateFilters({ categoryId: newCategoryIds.length > 0 ? newCategoryIds : null });
   };
 
-  const handleMerchantGroupChange = (merchantGroupId: string | null) => {
-    updateFilters({ merchantGroupId });
+  const handleMerchantGroupToggle = (merchantGroupId: number) => {
+    const newMerchantGroupIds = merchantGroupIds.includes(merchantGroupId)
+      ? merchantGroupIds.filter(id => id !== merchantGroupId)
+      : [...merchantGroupIds, merchantGroupId];
+    updateFilters({ merchantGroupId: newMerchantGroupIds.length > 0 ? newMerchantGroupIds : null });
   };
 
-  const handleTransactionTypeChange = (transactionType: string | null) => {
-    updateFilters({ transactionType });
+  const handleTransactionTypeToggle = (transactionType: 'income' | 'expense') => {
+    const newTransactionTypes = transactionTypes.includes(transactionType)
+      ? transactionTypes.filter(t => t !== transactionType)
+      : [...transactionTypes, transactionType];
+    updateFilters({ transactionType: newTransactionTypes.length > 0 ? newTransactionTypes : null });
   };
 
   const handleDateRangeChange = (start: Date | undefined, end: Date | undefined) => {
@@ -439,8 +470,9 @@ export default function TransactionsPage() {
     });
   };
 
-  const hasFilters = merchantFilter || merchantGroupIdParam || categoryIdParam || transactionTypeParam || startDateParam || endDateParam;
-  const selectedCategory = categoryIdParam ? categories.find(c => c.id === parseInt(categoryIdParam)) : null;
+  const hasFilters = merchantFilter || merchantGroupIds.length > 0 || categoryIds.length > 0 || transactionTypes.length > 0 || startDateParam || endDateParam;
+  const selectedCategories = categoryIds.map(id => categories.find(c => c.id === id)).filter(Boolean) as Category[];
+  const selectedMerchantGroups = merchantGroupIds.map(id => merchantGroups.find(g => g.id === id)).filter(Boolean) as MerchantGroup[];
 
   return (
     <div className="space-y-6">
@@ -455,21 +487,21 @@ export default function TransactionsPage() {
                     Merchant: {merchantFilter}
                   </Badge>
                 )}
-                {merchantGroupName && (
-                  <Badge variant="secondary">
-                    Merchant Group: {merchantGroupName}
+                {selectedMerchantGroups.map((group) => (
+                  <Badge key={group.id} variant="secondary">
+                    Merchant: {group.display_name}
                   </Badge>
-                )}
-                {selectedCategory && (
-                  <Badge variant="secondary">
-                    Category: {selectedCategory.name}
+                ))}
+                {selectedCategories.map((category) => (
+                  <Badge key={category.id} variant="secondary">
+                    Category: {category.name}
                   </Badge>
-                )}
-                {transactionTypeParam && (
-                  <Badge variant="secondary">
-                    Type: {transactionTypeParam === 'income' ? 'Income' : 'Expense'}
+                ))}
+                {transactionTypes.map((type) => (
+                  <Badge key={type} variant="secondary">
+                    Type: {type === 'income' ? 'Income' : 'Expense'}
                   </Badge>
-                )}
+                ))}
                 {(startDateParam || endDateParam) && (
                   <Badge variant="secondary">
                     Date: {startDateParam || '...'} to {endDateParam || '...'}
@@ -529,25 +561,27 @@ export default function TransactionsPage() {
                     <Filter className="mr-2 h-4 w-4" />
                     <span className="hidden sm:inline">Category</span>
                     <span className="sm:hidden">Cat.</span>
-                    {categoryIdParam && <Badge variant="secondary" className="ml-2">1</Badge>}
+                    {categoryIds.length > 0 && <Badge variant="secondary" className="ml-2">{categoryIds.length}</Badge>}
                   </Button>
                 </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-[200px]">
                 <DropdownMenuLabel>Filter by category</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuCheckboxItem
-                  checked={!categoryIdParam}
-                  onCheckedChange={() => handleCategoryChange(null)}
+                  checked={categoryIds.length === 0}
+                  onCheckedChange={() => {
+                    if (categoryIds.length > 0) {
+                      updateFilters({ categoryId: null });
+                    }
+                  }}
                 >
                   All Categories
                 </DropdownMenuCheckboxItem>
                 {categories.map((category) => (
                   <DropdownMenuCheckboxItem
                     key={category.id}
-                    checked={categoryIdParam === category.id.toString()}
-                    onCheckedChange={(checked) => {
-                      handleCategoryChange(checked ? category.id.toString() : null);
-                    }}
+                    checked={categoryIds.includes(category.id)}
+                    onCheckedChange={() => handleCategoryToggle(category.id)}
                   >
                     {category.name}
                   </DropdownMenuCheckboxItem>
@@ -562,25 +596,27 @@ export default function TransactionsPage() {
                     <Filter className="mr-2 h-4 w-4" />
                     <span className="hidden sm:inline">Merchant</span>
                     <span className="sm:hidden">Merch.</span>
-                    {merchantGroupIdParam && <Badge variant="secondary" className="ml-2">1</Badge>}
+                    {merchantGroupIds.length > 0 && <Badge variant="secondary" className="ml-2">{merchantGroupIds.length}</Badge>}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-[200px]">
                   <DropdownMenuLabel>Filter by merchant</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuCheckboxItem
-                    checked={!merchantGroupIdParam}
-                    onCheckedChange={() => handleMerchantGroupChange(null)}
+                    checked={merchantGroupIds.length === 0}
+                    onCheckedChange={() => {
+                      if (merchantGroupIds.length > 0) {
+                        updateFilters({ merchantGroupId: null });
+                      }
+                    }}
                   >
                     All Merchants
                   </DropdownMenuCheckboxItem>
                   {merchantGroups.map((group) => (
                     <DropdownMenuCheckboxItem
                       key={group.id}
-                      checked={merchantGroupIdParam === group.id.toString()}
-                      onCheckedChange={(checked) => {
-                        handleMerchantGroupChange(checked ? group.id.toString() : null);
-                      }}
+                      checked={merchantGroupIds.includes(group.id)}
+                      onCheckedChange={() => handleMerchantGroupToggle(group.id)}
                     >
                       {group.display_name}
                     </DropdownMenuCheckboxItem>
@@ -595,31 +631,31 @@ export default function TransactionsPage() {
                     <Filter className="mr-2 h-4 w-4" />
                     <span className="hidden sm:inline">Type</span>
                     <span className="sm:hidden">Type</span>
-                    {transactionTypeParam && <Badge variant="secondary" className="ml-2">1</Badge>}
+                    {transactionTypes.length > 0 && <Badge variant="secondary" className="ml-2">{transactionTypes.length}</Badge>}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-[200px]">
                   <DropdownMenuLabel>Filter by type</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuCheckboxItem
-                    checked={!transactionTypeParam}
-                    onCheckedChange={() => handleTransactionTypeChange(null)}
+                    checked={transactionTypes.length === 0}
+                    onCheckedChange={() => {
+                      if (transactionTypes.length > 0) {
+                        updateFilters({ transactionType: null });
+                      }
+                    }}
                   >
                     All Types
                   </DropdownMenuCheckboxItem>
                   <DropdownMenuCheckboxItem
-                    checked={transactionTypeParam === 'income'}
-                    onCheckedChange={(checked) => {
-                      handleTransactionTypeChange(checked ? 'income' : null);
-                    }}
+                    checked={transactionTypes.includes('income')}
+                    onCheckedChange={() => handleTransactionTypeToggle('income')}
                   >
                     Income
                   </DropdownMenuCheckboxItem>
                   <DropdownMenuCheckboxItem
-                    checked={transactionTypeParam === 'expense'}
-                    onCheckedChange={(checked) => {
-                      handleTransactionTypeChange(checked ? 'expense' : null);
-                    }}
+                    checked={transactionTypes.includes('expense')}
+                    onCheckedChange={() => handleTransactionTypeToggle('expense')}
                   >
                     Expense
                   </DropdownMenuCheckboxItem>
