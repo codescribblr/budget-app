@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -40,6 +40,60 @@ interface TransactionPreviewProps {
 interface EditingField {
   transactionId: string;
   field: 'date' | 'amount' | 'category' | 'account';
+}
+
+// Wrapper component for DatePicker to handle blur events properly
+function DatePickerWrapper({
+  transactionId,
+  date,
+  onDateChange,
+  onClose,
+}: {
+  transactionId: string;
+  date: string;
+  onDateChange: (date: Date | undefined) => void;
+  onClose: () => void;
+}) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        // Check if click is on the DatePicker popover (which is rendered in a portal)
+        const target = event.target as HTMLElement;
+        if (target.closest('[role="dialog"]') || target.closest('.rdp')) {
+          // Click is on the calendar popover, don't close
+          return;
+        }
+        // Click is outside, close after a short delay to allow DatePicker to handle its events
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        timeoutRef.current = setTimeout(() => {
+          onClose();
+        }, 100);
+      }
+    };
+
+    // Use mousedown instead of click to catch events before blur
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [onClose]);
+
+  return (
+    <div ref={wrapperRef} onClick={(e) => e.stopPropagation()}>
+      <DatePicker
+        date={parseLocalDate(date)}
+        onDateChange={onDateChange}
+      />
+    </div>
+  );
 }
 
 export default function TransactionPreview({ transactions, onImportComplete }: TransactionPreviewProps) {
@@ -814,17 +868,17 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                     className="cursor-pointer hover:bg-muted/50 min-w-[120px]"
                   >
                     {isEditingDate ? (
-                      <div onBlur={() => setEditingField(null)}>
-                        <DatePicker
-                          date={parseLocalDate(transaction.date)}
-                          onDateChange={(date) => {
-                            if (date) {
-                              handleInlineDateChange(transaction.id, formatLocalDate(date));
-                            }
-                            setEditingField(null);
-                          }}
-                        />
-                      </div>
+                      <DatePickerWrapper
+                        transactionId={transaction.id}
+                        date={transaction.date}
+                        onDateChange={(date) => {
+                          if (date) {
+                            handleInlineDateChange(transaction.id, formatLocalDate(date));
+                          }
+                          setEditingField(null);
+                        }}
+                        onClose={() => setEditingField(null)}
+                      />
                     ) : (
                       transaction.date
                     )}
