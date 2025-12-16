@@ -90,10 +90,13 @@ export async function POST(request: Request) {
             
             // Strategy 2: Substring match - check if one contains the other
             // This catches cases like "UNITED 0162353356601 UNITED.COM" vs "UNITED 0162353356601"
-            if (existingLower.includes(normalizedLower) || normalizedLower.includes(existingLower)) {
+            // Check both directions: longer contains shorter, or shorter contains longer
+            const longerDesc = existingLower.length >= normalizedLower.length ? existingLower : normalizedLower;
+            const shorterDesc = existingLower.length < normalizedLower.length ? existingLower : normalizedLower;
+            
+            if (longerDesc.includes(shorterDesc)) {
               // But only if the shorter string is at least 10 characters (to avoid false positives)
-              const shorterLength = Math.min(existingLower.length, normalizedLower.length);
-              if (shorterLength >= 10) {
+              if (shorterDesc.length >= 10) {
                 return true;
               }
             }
@@ -183,13 +186,31 @@ function normalizeDescriptionForComparison(description: string): string {
 /**
  * Extract core description for comparison
  * Removes common suffixes like domain names (.COM, .NET, etc.) and extracts merchant + transaction ID
- * Example: "UNITED 0162353356601 UNITED.COM" -> "UNITED 0162353356601"
+ * Example: "UNITED 0162353356601 UNITED.COM" -> "united 0162353356601"
  */
 function extractCoreDescription(description: string): string | null {
   let normalized = description.trim();
   
-  // Remove common domain suffixes (.COM, .NET, .ORG, etc.) and common suffixes
+  // Remove domain suffixes - handle both " WORD.COM" and "WORD.COM" patterns
+  // This catches cases like "UNITED 0162353356601 UNITED.COM"
+  normalized = normalized.replace(/\s+[A-Z0-9]+\.(COM|NET|ORG|EDU|GOV|IO|CO|US|UK|CA|AU)\b/gi, '');
+  
+  // Also remove standalone domain suffixes (in case they appear separately)
   normalized = normalized.replace(/\s+\.(COM|NET|ORG|EDU|GOV|IO|CO|US|UK|CA|AU)\b/gi, '');
+  
+  // Remove duplicate words/phrases that might result from domain removal
+  // Split into words and remove duplicates while preserving order
+  const words = normalized.split(/\s+/);
+  const seen = new Set<string>();
+  const uniqueWords = words.filter(word => {
+    const lowerWord = word.toLowerCase();
+    if (seen.has(lowerWord)) {
+      return false;
+    }
+    seen.add(lowerWord);
+    return true;
+  });
+  normalized = uniqueWords.join(' ');
   
   // Remove common merchant suffixes that might appear at the end
   const suffixes = [
