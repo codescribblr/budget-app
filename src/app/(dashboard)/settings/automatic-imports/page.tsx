@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Mail, CreditCard, AlertCircle } from 'lucide-react';
+import { Plus, Mail, CreditCard, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import ImportSetupCard from '@/components/automatic-imports/ImportSetupCard';
 import IntegrationSelector from '@/components/automatic-imports/IntegrationSelector';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { PremiumFeatureGate } from '@/components/subscription/PremiumFeatureGate';
+import { toast } from 'sonner';
 
 interface AutomaticImportSetup {
   id: number;
@@ -27,6 +28,7 @@ export default function AutomaticImportsPage() {
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [setups, setSetups] = useState<AutomaticImportSetup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   useEffect(() => {
@@ -55,6 +57,45 @@ export default function AutomaticImportsPage() {
 
   const handleSetupDeleted = () => {
     fetchSetups();
+  };
+
+  const handleRefreshTellerConnections = async () => {
+    setRefreshing(true);
+    try {
+      const response = await fetch('/api/automatic-imports/teller/refresh');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to refresh Teller connections');
+      }
+      const data = await response.json();
+      
+      // Refresh the setups list
+      await fetchSetups();
+      
+      const tellerSetups = data.setups || [];
+      const needsSetup = tellerSetups.filter((s: any) => 
+        !s.is_active || (s.source_config?.account_mappings || []).filter((m: any) => m.enabled).length === 0
+      );
+      
+      if (tellerSetups.length === 0) {
+        toast.info('No Teller connections found', {
+          description: 'Connect a bank account via Teller to get started. Note: Connections made before the recent update may need to be reconnected.',
+        });
+      } else if (needsSetup.length > 0) {
+        toast.info(`Found ${tellerSetups.length} Teller connection(s)`, {
+          description: `${needsSetup.length} connection(s) need account mapping configuration. Use the settings icon to finish setup.`,
+        });
+      } else {
+        toast.success(`Refreshed ${tellerSetups.length} Teller connection(s)`, {
+          description: 'All connections are properly configured.',
+        });
+      }
+    } catch (error: any) {
+      console.error('Error refreshing Teller connections:', error);
+      toast.error(error.message || 'Failed to refresh Teller connections');
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   if (permissionsLoading || loading) {
@@ -87,10 +128,22 @@ export default function AutomaticImportsPage() {
               Set up automatic transaction imports from your bank accounts. Transactions will be queued for review before import.
             </p>
           </div>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Import Setup
-          </Button>
+          <div className="flex gap-2">
+            {setups.some(s => s.source_type === 'teller') && (
+              <Button 
+                variant="outline" 
+                onClick={handleRefreshTellerConnections}
+                disabled={refreshing}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh Teller Connections
+              </Button>
+            )}
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Import Setup
+            </Button>
+          </div>
         </div>
 
         {setups.length === 0 ? (

@@ -155,6 +155,62 @@ export async function fetchTellerAccount(
 }
 
 /**
+ * Fetch enrollment details for an access token
+ */
+export interface TellerEnrollment {
+  id: string;
+  status: string;
+  institution: {
+    id: string;
+    name: string;
+  };
+  links: {
+    accounts: string;
+  };
+}
+
+export async function fetchTellerEnrollment(accessToken: string): Promise<TellerEnrollment | null> {
+  const baseUrl = process.env.TELLER_ENV === 'production'
+    ? 'https://api.teller.io'
+    : 'https://api.teller.io';
+
+  // Create HTTPS agent with client certificate for mTLS
+  const agent = createTellerHttpsAgent();
+
+  // Try to get enrollment info from accounts endpoint (first account contains enrollment info)
+  try {
+    const accountsResponse = await fetch(`${baseUrl}/accounts`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Basic ${Buffer.from(`${accessToken}:`).toString('base64')}`,
+      },
+      // @ts-ignore - dispatcher is the correct option for undici Agent
+      dispatcher: agent,
+    });
+
+    if (accountsResponse.ok) {
+      const accounts = await accountsResponse.json() as TellerAccount[];
+      if (accounts.length > 0 && accounts[0].institution) {
+        // Extract enrollment ID from account links or use institution info
+        // Note: Teller API doesn't directly expose enrollment ID in accounts, but we can infer it
+        return {
+          id: '', // Enrollment ID not directly available from accounts endpoint
+          status: 'active',
+          institution: accounts[0].institution,
+          links: {
+            accounts: `${baseUrl}/accounts`,
+          },
+        };
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching enrollment info:', error);
+  }
+
+  return null;
+}
+
+/**
  * Fetch all accounts for an access token
  */
 export async function fetchTellerAccounts(accessToken: string): Promise<TellerAccount[]> {
