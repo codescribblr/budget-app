@@ -63,6 +63,11 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   const { isPremium } = useSubscription();
   const aiChatEnabled = useFeature('ai_chat');
 
+  // Sync items state with transactions prop when it changes
+  useEffect(() => {
+    setItems(transactions);
+  }, [transactions]);
+
   useEffect(() => {
     fetchCategories();
     fetchAccounts();
