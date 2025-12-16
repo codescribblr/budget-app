@@ -20,6 +20,7 @@ import type { Category, Account, CreditCard } from '@/lib/types';
 import TransactionEditDialog from './TransactionEditDialog';
 import ImportConfirmationDialog from './ImportConfirmationDialog';
 import ImportProgressDialog from './ImportProgressDialog';
+import BulkEditDialog, { BulkEditUpdates } from './BulkEditDialog';
 import { generateTransactionHash } from '@/lib/csv-parser';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import { MoreVertical, Edit, X, Check, Sparkles, Loader2 } from 'lucide-react';
@@ -59,6 +60,8 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   const [templateId, setTemplateId] = useState<number | null>(null);
   const [dateFormat, setDateFormat] = useState<string | null>(null);
   const [isAICategorizing, setIsAICategorizing] = useState(false);
+  const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
+  const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
   const { stats, refreshStats } = useAIUsage();
   const { isPremium } = useSubscription();
   const aiChatEnabled = useFeature('ai_chat');
@@ -221,6 +224,97 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
           // Don't show error to user - just log it
         }
       }
+    }
+  };
+
+  // Handle bulk edit save
+  const handleBulkEditSave = async (updates: BulkEditUpdates) => {
+    const selectedItems = items.filter(item => selectedTransactions.has(item.id));
+    const isQueuedImport = selectedItems.some(item => typeof item.id === 'string' && item.id.startsWith('queued-'));
+
+    if (!isQueuedImport) {
+      toast.error('Bulk edit is only available for queued imports');
+      return;
+    }
+
+    try {
+      // Update database
+      const response = await fetch('/api/automatic-imports/queue/bulk-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionIds: selectedItems.map(item => {
+            if (typeof item.id === 'string' && item.id.startsWith('queued-')) {
+              return parseInt(item.id.replace('queued-', ''));
+            }
+            return null;
+          }).filter(id => id !== null),
+          updates,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update transactions');
+      }
+
+      // Update local state
+      const updatedItems = items.map(item => {
+        if (!selectedTransactions.has(item.id)) {
+          return item;
+        }
+
+        const updated = { ...item };
+
+        if (updates.date !== undefined) {
+          const newHash = generateTransactionHash(updates.date, item.description, item.amount, item.originalData);
+          updated.date = updates.date;
+          updated.hash = newHash;
+        }
+
+        if (updates.categoryId !== undefined) {
+          if (updates.categoryId === null) {
+            updated.splits = [];
+            updated.suggestedCategory = undefined;
+          } else {
+            const category = categories.find(c => c.id === updates.categoryId);
+            updated.splits = [{
+              categoryId: updates.categoryId!,
+              categoryName: category?.name || '',
+              amount: item.amount,
+            }];
+            updated.suggestedCategory = updates.categoryId;
+          }
+        }
+
+        if (updates.accountId !== undefined) {
+          updated.account_id = updates.accountId;
+        }
+        if (updates.creditCardId !== undefined) {
+          updated.credit_card_id = updates.creditCardId;
+        }
+        if (updates.accountId === null && updates.creditCardId === null) {
+          updated.account_id = null;
+          updated.credit_card_id = null;
+        }
+
+        if (updates.isHistorical !== undefined) {
+          updated.is_historical = updates.isHistorical;
+        }
+
+        // Update status based on changes
+        const hasCategory = updated.splits.length > 0;
+        const isDuplicate = updated.isDuplicate || false;
+        updated.status = (isDuplicate ? 'excluded' : (!hasCategory ? 'excluded' : 'pending')) as 'pending' | 'confirmed' | 'excluded';
+
+        return updated;
+      });
+
+      setItems(updatedItems);
+      setSelectedTransactions(new Set());
+      toast.success(`Updated ${selectedItems.length} transaction${selectedItems.length !== 1 ? 's' : ''}`);
+    } catch (error: any) {
+      console.error('Error saving bulk edits:', error);
+      toast.error(error.message || 'Failed to save bulk edits');
     }
   };
 
@@ -581,6 +675,15 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
+            {selectedTransactions.size > 0 && (
+              <Button
+                onClick={() => setShowBulkEditDialog(true)}
+                variant="outline"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Bulk Edit ({selectedTransactions.size})
+              </Button>
+            )}
             {uncategorizedTransactions.length > 0 && (
               <>
                 {/* Show AI Categorize button only if premium AND AI enabled */}
@@ -629,6 +732,18 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         <Table>
           <TableHeader>
             <TableRow className="border-border">
+              <TableHead className="w-12">
+                <Checkbox
+                  checked={selectedTransactions.size === items.length && items.length > 0}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedTransactions(new Set(items.map(t => t.id)));
+                    } else {
+                      setSelectedTransactions(new Set());
+                    }
+                  }}
+                />
+              </TableHead>
               <TableHead className="whitespace-nowrap">Date</TableHead>
               <TableHead className="whitespace-nowrap">Merchant</TableHead>
               <TableHead className="whitespace-nowrap">Description</TableHead>
@@ -671,11 +786,28 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                 ? 'bg-red-50 dark:bg-red-950/20 border-border'
                 : 'border-border';
 
+              const isSelected = selectedTransactions.has(transaction.id);
+
               return (
                 <TableRow
                   key={transaction.id}
                   className={rowClassName}
                 >
+                  {/* Selection Checkbox */}
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={(checked) => {
+                        const newSelected = new Set(selectedTransactions);
+                        if (checked) {
+                          newSelected.add(transaction.id);
+                        } else {
+                          newSelected.delete(transaction.id);
+                        }
+                        setSelectedTransactions(newSelected);
+                      }}
+                    />
+                  </TableCell>
                   {/* Date Cell - Inline Editable */}
                   <TableCell
                     onClick={() => !isEditingDate && setEditingField({ transactionId: transaction.id, field: 'date' })}
@@ -945,6 +1077,17 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
         onContinue={handleProgressContinue}
         importedCount={importedCount}
         isHistorical={isHistorical}
+      />
+
+      {/* Bulk Edit Dialog */}
+      <BulkEditDialog
+        transactions={items.filter(item => selectedTransactions.has(item.id))}
+        categories={categories}
+        accounts={accounts}
+        creditCards={creditCards}
+        open={showBulkEditDialog}
+        onClose={() => setShowBulkEditDialog(false)}
+        onSave={handleBulkEditSave}
       />
     </div>
   );
