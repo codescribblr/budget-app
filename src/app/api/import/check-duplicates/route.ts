@@ -75,21 +75,42 @@ export async function POST(request: Request) {
           .eq('amount', amount);
 
         if (!error && existing && existing.length > 0) {
-          // Check if description matches (case-insensitive or fuzzy)
+          // Check if description matches using multiple strategies
           const matching = existing.filter(existingTxn => {
             const existingDesc = normalizeDescriptionForComparison(existingTxn.description);
             const normalizedDesc = normalizeDescriptionForComparison(description);
             
-            // Exact match (case-insensitive)
-            if (existingDesc.toLowerCase() === normalizedDesc.toLowerCase()) {
+            const existingLower = existingDesc.toLowerCase();
+            const normalizedLower = normalizedDesc.toLowerCase();
+            
+            // Strategy 1: Exact match (case-insensitive)
+            if (existingLower === normalizedLower) {
               return true;
             }
             
-            // Fuzzy match for descriptions that are very similar (e.g., minor whitespace differences)
-            const descDistance = distance(existingDesc.toLowerCase(), normalizedDesc.toLowerCase());
+            // Strategy 2: Substring match - check if one contains the other
+            // This catches cases like "UNITED 0162353356601 UNITED.COM" vs "UNITED 0162353356601"
+            if (existingLower.includes(normalizedLower) || normalizedLower.includes(existingLower)) {
+              // But only if the shorter string is at least 10 characters (to avoid false positives)
+              const shorterLength = Math.min(existingLower.length, normalizedLower.length);
+              if (shorterLength >= 10) {
+                return true;
+              }
+            }
+            
+            // Strategy 3: Core merchant/transaction ID match
+            // Extract core parts (merchant name + transaction ID) and compare
+            const existingCore = extractCoreDescription(existingDesc);
+            const normalizedCore = extractCoreDescription(normalizedDesc);
+            if (existingCore && normalizedCore && existingCore === normalizedCore) {
+              return true;
+            }
+            
+            // Strategy 4: Fuzzy match for descriptions that are very similar
+            // Lower threshold to catch more cases (75% instead of 90%)
+            const descDistance = distance(existingLower, normalizedLower);
             const maxLength = Math.max(existingDesc.length, normalizedDesc.length);
-            // If descriptions are > 90% similar, consider it a match
-            if (maxLength > 0 && (1 - descDistance / maxLength) > 0.9) {
+            if (maxLength > 0 && (1 - descDistance / maxLength) > 0.75) {
               return true;
             }
             
@@ -157,4 +178,40 @@ function normalizeDateForComparison(date: string): string {
  */
 function normalizeDescriptionForComparison(description: string): string {
   return description.trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * Extract core description for comparison
+ * Removes common suffixes like domain names (.COM, .NET, etc.) and extracts merchant + transaction ID
+ * Example: "UNITED 0162353356601 UNITED.COM" -> "UNITED 0162353356601"
+ */
+function extractCoreDescription(description: string): string | null {
+  let normalized = description.trim();
+  
+  // Remove common domain suffixes (.COM, .NET, .ORG, etc.) and common suffixes
+  normalized = normalized.replace(/\s+\.(COM|NET|ORG|EDU|GOV|IO|CO|US|UK|CA|AU)\b/gi, '');
+  
+  // Remove common merchant suffixes that might appear at the end
+  const suffixes = [
+    /\s+INC\.?$/i,
+    /\s+LLC\.?$/i,
+    /\s+LTD\.?$/i,
+    /\s+CORP\.?$/i,
+    /\s+CO\.?$/i,
+    /\s+COMPANY$/i,
+  ];
+  
+  suffixes.forEach(suffix => {
+    normalized = normalized.replace(suffix, '');
+  });
+  
+  // Normalize whitespace
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+  
+  // Return null if empty after normalization
+  if (!normalized || normalized.length < 5) {
+    return null;
+  }
+  
+  return normalized.toLowerCase();
 }
