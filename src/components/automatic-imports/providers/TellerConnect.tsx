@@ -33,6 +33,7 @@ export default function TellerConnect({
   const applicationId = process.env.NEXT_PUBLIC_TELLER_APPLICATION_ID;
   // Get environment from public env var (defaults to sandbox for safety)
   // Client component needs NEXT_PUBLIC_ prefix to access env vars
+  // Teller supports: 'sandbox' (fake credentials), 'development' (real credentials, not billed), 'production' (live)
   const tellerEnv = process.env.NEXT_PUBLIC_TELLER_ENV || 'sandbox';
   
   if (!applicationId) {
@@ -45,9 +46,15 @@ export default function TellerConnect({
     );
   }
 
+  // Map environment: support 'sandbox', 'development', and 'production'
+  // 'development' allows testing real credentials on live site without production billing
+  const environment = tellerEnv === 'production' || tellerEnv === 'development' 
+    ? tellerEnv 
+    : 'sandbox';
+
   const { open, ready } = useTellerConnect({
     applicationId,
-    environment: tellerEnv === 'production' ? 'production' : 'sandbox',
+    environment,
     onSuccess: async (authorization) => {
       setConnecting(true);
       setError(null);

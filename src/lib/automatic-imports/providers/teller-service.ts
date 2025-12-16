@@ -46,6 +46,11 @@ export interface TellerAccount {
  * Create HTTPS agent with Teller client certificate for mTLS authentication
  * Teller requires mutual TLS (mTLS) for API requests in development/production
  * Uses undici Agent which supports mTLS and works with Node.js fetch
+ * 
+ * Environments:
+ * - sandbox: Certificates optional (for testing with fake credentials)
+ * - development: Certificates required (for testing real credentials on live site)
+ * - production: Certificates required (for live production use)
  */
 function createTellerHttpsAgent(): Agent | undefined {
   const cert = process.env.TELLER_CLIENT_CERT;
