@@ -505,9 +505,6 @@ export default function TransactionsPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Transaction History</CardTitle>
-        </CardHeader>
         <CardContent>
           {/* Search and Filter Toolbar */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4">

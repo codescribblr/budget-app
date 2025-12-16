@@ -435,15 +435,16 @@ export default function TransactionList({
 
       {/* Desktop Table View */}
       <div className="hidden md:block overflow-x-auto">
-        {selectedTransactions.size > 0 && (
-          <div className="mb-4 flex items-center gap-2">
-            <Button
-              onClick={() => setShowBulkEditDialog(true)}
-              variant="outline"
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Bulk Edit ({selectedTransactions.size})
-            </Button>
+        <div className="mb-4 flex items-center gap-2">
+          <Button
+            onClick={() => setShowBulkEditDialog(true)}
+            variant="outline"
+            disabled={selectedTransactions.size < 2}
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            Bulk Edit {selectedTransactions.size > 0 ? `(${selectedTransactions.size})` : ''}
+          </Button>
+          {selectedTransactions.size > 0 && (
             <Button
               onClick={() => setSelectedTransactions(new Set())}
               variant="ghost"
@@ -451,8 +452,8 @@ export default function TransactionList({
             >
               Clear Selection
             </Button>
-          </div>
-        )}
+          )}
+        </div>
         <Table>
           <TableHeader>
             <TableRow>
