@@ -33,10 +33,12 @@ export default function CreateTellerImportDialog({
   const [tellerConnecting, setTellerConnecting] = useState(false);
   const [showMappingDialog, setShowMappingDialog] = useState(false);
   const [mappingData, setMappingData] = useState<{
+    setupId?: number;
     enrollmentId: string;
     institutionName: string;
     accessToken: string;
     accounts: any[];
+    existingMappings?: any[];
   } | null>(null);
 
   const [mounted, setMounted] = useState(false);
@@ -77,14 +79,17 @@ export default function CreateTellerImportDialog({
 
       const data = await response.json();
       
+      // Setup is now created immediately with all accounts disabled
       // Close the connect dialog and show mapping dialog
       setTellerConnecting(false);
       onOpenChange(false); // Close the "Connect Bank Account" dialog
       setMappingData({
+        setupId: data.setupId,
         enrollmentId: data.enrollmentId,
         institutionName: data.institutionName,
         accessToken: data.accessToken,
         accounts: data.accounts,
+        existingMappings: data.existingMappings || [],
       });
       setShowMappingDialog(true);
     } catch (error: any) {
@@ -101,8 +106,14 @@ export default function CreateTellerImportDialog({
   const handleMappingSuccess = () => {
     setShowMappingDialog(false);
     setMappingData(null);
-    onCreated();
+    onCreated(); // Refresh the imports list to show the new setup
     onOpenChange(false);
+  };
+
+  const handleMappingDialogChange = (open: boolean) => {
+    setShowMappingDialog(open);
+    // If dialog is closed and setup exists, user can reopen via settings icon on the import card
+    // Don't clear mappingData immediately - let it persist until success
   };
 
   const handleTellerError = (error: Error) => {
@@ -149,7 +160,6 @@ export default function CreateTellerImportDialog({
             <p className="text-sm text-muted-foreground">
               After connecting, you'll be able to map each account individually, choose which accounts to sync, and set whether transactions are historical on a per-account basis.
             </p>
-
             <Button
               onClick={handleStartTellerConnection}
               disabled={loading}
@@ -172,12 +182,14 @@ export default function CreateTellerImportDialog({
       {mappingData && (
         <TellerAccountMappingDialog
           open={showMappingDialog}
-          onOpenChange={setShowMappingDialog}
+          onOpenChange={handleMappingDialogChange}
           enrollmentId={mappingData.enrollmentId}
           institutionName={mappingData.institutionName}
           accessToken={mappingData.accessToken}
           accounts={mappingData.accounts}
           onSuccess={handleMappingSuccess}
+          existingMappings={mappingData.existingMappings}
+          setupId={mappingData.setupId}
         />
       )}
     </>

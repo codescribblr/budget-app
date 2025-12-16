@@ -208,6 +208,8 @@ export async function PUT(
     }
 
     // Update setup with new mappings
+    // Set is_active to true if at least one account is enabled
+    const finalEnabledCount = processedMappings.filter((m: any) => m.enabled).length;
     const { data: updatedSetup, error: updateError } = await supabase
       .from('automatic_import_setups')
       .update({
@@ -215,6 +217,7 @@ export async function PUT(
           ...setup.source_config,
           account_mappings: processedMappings,
         },
+        is_active: finalEnabledCount > 0, // Activate setup if any accounts are enabled
         updated_at: new Date().toISOString(),
       })
       .eq('id', setupId)
@@ -227,6 +230,54 @@ export async function PUT(
         { error: 'Failed to update account mappings' },
         { status: 500 }
       );
+    }
+
+    // If accounts were enabled, fetch initial transactions for newly enabled accounts
+    if (finalEnabledCount > 0) {
+      const { fetchAndQueueTellerTransactions } = await import('@/lib/automatic-imports/providers/teller-service');
+      const { getDecryptedAccessToken } = await import('@/lib/automatic-imports/helpers');
+      
+      const accessToken = getDecryptedAccessToken(setup);
+      if (accessToken) {
+        const enabledMappings = processedMappings.filter((m: any) => m.enabled);
+        
+        // Fetch transactions for enabled accounts (don't await - do in background)
+        Promise.all(
+          enabledMappings.map(mapping =>
+            fetchAndQueueTellerTransactions({
+              importSetupId: setupId,
+              accessToken,
+              accountId: mapping.teller_account_id,
+              isHistorical: mapping.is_historical || false,
+              budgetAccountId: accountId,
+              supabase,
+              targetAccountId: mapping.target_account_id || null,
+              targetCreditCardId: mapping.target_credit_card_id || null,
+            }).catch(err => {
+              console.error(`Error fetching transactions for account ${mapping.teller_account_id}:`, err);
+              return { fetched: 0, queued: 0, errors: [err.message] };
+            })
+          )
+        ).then(results => {
+          // Update setup with fetch results in background
+          const totalFetched = results.reduce((sum, r) => sum + r.fetched, 0);
+          const totalQueued = results.reduce((sum, r) => sum + r.queued, 0);
+          const allErrors = results.flatMap(r => r.errors);
+          
+          supabase
+            .from('automatic_import_setups')
+            .update({
+              last_fetch_at: new Date().toISOString(),
+              last_successful_fetch_at: allErrors.length === 0 ? new Date().toISOString() : undefined,
+              last_error: allErrors.length > 0 ? allErrors.join('; ') : null,
+              error_count: allErrors.length > 0 ? allErrors.length : 0,
+              last_month_transaction_count: totalFetched,
+            })
+            .eq('id', setupId);
+        }).catch(err => {
+          console.error('Error updating setup after fetching transactions:', err);
+        });
+      }
     }
 
     return NextResponse.json({ setup: updatedSetup });
