@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { distance } from 'fastest-levenshtein';
 
 interface TransactionData {
   hash: string;
@@ -24,9 +25,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+
     const duplicateHashes = new Set<string>();
 
     // Method 1: Check by hash (primary method)
+    // Only check imported_transactions - don't check queued_imports since those haven't been imported yet
     if (hashes && Array.isArray(hashes) && hashes.length > 0) {
       const { data: existingHashes, error } = await supabase
         .from('imported_transactions')
@@ -40,7 +43,7 @@ export async function POST(request: Request) {
     }
 
     // Method 2: Fallback - Check by date + description + amount
-    // This catches duplicates even if hash generation changed
+    // This catches duplicates even if hash generation changed (e.g., different originalData)
     if (transactions && Array.isArray(transactions) && transactions.length > 0) {
       // Get all unique date+description+amount combinations to check
       const checkKeys = new Map<string, TransactionData[]>();
@@ -62,18 +65,41 @@ export async function POST(request: Request) {
         const [date, description, amountStr] = key.split('|');
         const amount = parseFloat(amountStr);
 
+        // Check imported_transactions only (don't check queued_imports since those haven't been imported yet)
+        // Use case-insensitive description matching and fuzzy matching for similar descriptions
         const { data: existing, error } = await supabase
           .from('imported_transactions')
           .select('hash, transaction_date, description, amount')
           .eq('user_id', user.id)
           .eq('transaction_date', date)
-          .eq('description', description)
           .eq('amount', amount);
 
         if (!error && existing && existing.length > 0) {
-          // Found duplicate(s) by date + description + amount
-          // Mark all current transactions with this combination as duplicates
-          txns.forEach(txn => duplicateHashes.add(txn.hash));
+          // Check if description matches (case-insensitive or fuzzy)
+          const matching = existing.filter(existingTxn => {
+            const existingDesc = normalizeDescriptionForComparison(existingTxn.description);
+            const normalizedDesc = normalizeDescriptionForComparison(description);
+            
+            // Exact match (case-insensitive)
+            if (existingDesc.toLowerCase() === normalizedDesc.toLowerCase()) {
+              return true;
+            }
+            
+            // Fuzzy match for descriptions that are very similar (e.g., minor whitespace differences)
+            const descDistance = distance(existingDesc.toLowerCase(), normalizedDesc.toLowerCase());
+            const maxLength = Math.max(existingDesc.length, normalizedDesc.length);
+            // If descriptions are > 90% similar, consider it a match
+            if (maxLength > 0 && (1 - descDistance / maxLength) > 0.9) {
+              return true;
+            }
+            
+            return false;
+          });
+
+          if (matching.length > 0) {
+            // Found duplicate(s) by date + description + amount
+            txns.forEach(txn => duplicateHashes.add(txn.hash));
+          }
         }
       }
     }

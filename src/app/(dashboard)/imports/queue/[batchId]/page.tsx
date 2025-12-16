@@ -725,13 +725,20 @@ export default function BatchReviewPage() {
       const databaseDuplicateSet = new Set(duplicates);
 
       // Check for within-file duplicates
-      const seenHashes = new Map<string, number>();
+      // Use date+description+amount as key (not hash, since hash includes originalData)
+      const seenKeys = new Map<string, number>();
       const withinFileDuplicates = new Set<number>();
       transactions.forEach((txn, index) => {
-        if (seenHashes.has(txn.hash)) {
+        // Normalize for comparison
+        const normalizedDate = txn.date.trim();
+        const normalizedDesc = txn.description.trim().replace(/\s+/g, ' ');
+        const normalizedAmount = Math.abs(txn.amount);
+        const key = `${normalizedDate}|${normalizedDesc.toLowerCase()}|${normalizedAmount}`;
+        
+        if (seenKeys.has(key)) {
           withinFileDuplicates.add(index);
         } else {
-          seenHashes.set(txn.hash, index);
+          seenKeys.set(key, index);
         }
       });
 
