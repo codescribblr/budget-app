@@ -109,12 +109,12 @@ This implementation plan introduces a **standalone Categories Management Page** 
   - Average monthly spending
   - Progress toward annual target (if applicable)
 
-#### Spending Insights
-- Monthly spending trend (mini chart)
-- Top merchants this month
-- Average transaction size
-- Number of transactions this month
-- Last transaction date
+#### Activity Summary (Keep lightweight; avoid duplicating Reports)
+- Spent this month + YTD spent (numbers only)
+- Transaction count this month (optional)
+- Last activity (last transaction date)
+- Quick status callouts (Over budget / Under target / On track)
+- **Primary CTA**: “View full report” deep-links to the existing Category Reports experience
 
 #### Quick Actions
 - Edit category
@@ -166,24 +166,60 @@ This implementation plan introduces a **standalone Categories Management Page** 
 
 **Purpose**: Allow users to hide categories without deleting them
 
+#### Key UX Principle
+Archiving is for **stopping future use** while **preserving history**. The default experience should keep archived categories out of “active workflow” surfaces (dashboard, dropdowns), while still making them easy to find for historical review (reports) and reversible if needed.
+
 **Features**:
 - **Archive Action**: Move category to archived state
 - **Unarchive Action**: Restore archived category
 - **Archive Filter**: Toggle view between Active, Archived, or All
 - **Archive Indicators**: Visual badge showing archived status
-- **Archive Behavior**:
-  - Archived categories don't appear in transaction dropdowns
-  - Archived categories don't appear in dashboard category list
-  - Archived categories don't count toward totals
-  - Archived categories still appear in historical transactions
-  - Archived categories can be restored at any time
-  - Archived categories can be permanently deleted (with confirmation)
+
+#### Where archived categories appear (visibility matrix)
+- **Standalone Categories page (`/categories`)**: **Yes** (default shows Active; filter for Archived/All)
+- **Dashboard category/envelope list**: **No** (archived excluded by default)
+- **Totals / funding / allocation logic**: **No** (archived excluded; they should not affect “current budget posture”)
+- **Transaction create category dropdown**: **No** (default)
+- **Transaction edit category dropdown**:
+  - **If the transaction is already categorized with an archived category**: **Yes**, show it as the selected value (so the user can understand/edit the transaction) and label it clearly as “Archived”.
+  - **Selecting an archived category for a different transaction**: **Hidden by default**, but allow an explicit “Show archived categories” toggle inside the selector for edge cases (refunds/late charges).
+- **Import / import-queue categorization UIs**: Same behavior as transaction create/edit (active by default; allow explicit “Show archived” toggle)
+- **Category Rules**: **No** by default (rules exist for future categorization). If a rule points to an archived category, surface a warning and require the user to update or unarchive.
+- **Reports**:
+  - **Category Reports list / category report pages**: **Yes**. Users commonly need historical reporting on archived categories.
+  - Add an “Include archived” filter or an “Archived” section in the report category list UI to keep it tidy.
+
+#### Should users ever categorize with an archived category?
+Usually **no** (archiving means “stop using this going forward”), but there are legitimate exceptions:
+- Refunds/chargebacks/late adjustments for a category that is no longer active
+- Cleanup of imported transactions that belong historically to the archived category
+
+**Recommended UX**:
+- Keep archived categories **hidden by default** in all category pickers.
+- Provide an explicit “Show archived categories” toggle for power/edge-case usage.
+- If a user chooses an archived category, show a confirmation:
+  - “This category is archived. Categorize anyway” (one-off) OR “Unarchive and use” (recommended if it’s becoming active again).
+
+#### Archive Behavior (data integrity)
+- Archived categories **remain referenced** by historical transactions and transaction_splits (no data loss)
+- Archived categories are **excluded from active budgeting surfaces** (dashboard, allocation, default dropdowns)
+- Archived categories are **reportable** (category report pages continue to work)
+- Archived categories can be restored at any time
+- Archived categories can be permanently deleted **only if** that is safe in your model:
+  - **Preferred**: block deletion if referenced by any transaction_splits; instead encourage archiving
+  - If deletion is allowed today, consider changing behavior to protect historical integrity (or implement “merge category” as a safer alternative in the future)
+
+#### Guardrails
+- Disallow archiving **system categories** (e.g., Transfer) and **buffer categories** by default to avoid breaking core flows
+- If goal categories are categories under the hood, decide explicitly:
+  - Either disallow archiving here and manage via the Goals feature
+  - Or allow archiving only when goal is completed/paused (likely future work)
 
 **Database Changes**:
 - Add `is_archived` boolean column to `categories` table (default: false)
 - Add index on `is_archived` for filtering performance
-- Update all queries to filter by `is_archived = false` by default
-- Add explicit queries for archived categories when needed
+- Update all “active workflow” queries to filter by `is_archived = false` by default
+- Add explicit queries (or query params) to include archived categories where appropriate (categories management + reports)
 
 **Migration Considerations**:
 - Existing categories default to `is_archived = false`
@@ -214,7 +250,7 @@ This implementation plan introduces a **standalone Categories Management Page** 
 
 ### 6. Enhanced Category Information Display
 
-**Purpose**: Show more details about each category to help users understand their budget
+**Purpose**: Show more details about each category to help users understand their budget, while avoiding heavy overlap with the existing Category Reports experience.
 
 **Information Displayed**:
 
@@ -239,11 +275,12 @@ This implementation plan introduces a **standalone Categories Management Page** 
   - Progress toward target
   - Percentage of target achieved
 
-#### Spending Insights
-- **This Month**: Spending breakdown, top merchants, transaction count
-- **YTD**: Year-to-date totals, average monthly spending
-- **Trend**: Visual indicator (up/down/stable) compared to previous month
-- **Last Transaction**: Date and amount of most recent transaction
+#### Lightweight Insights (avoid duplicating reports)
+- **This Month**: spent, funded (if applicable), remaining, transaction count (optional)
+- **YTD**: total spent, average per month (optional)
+- **Last Activity**: last transaction date (and optionally amount)
+- **Trend**: simple indicator vs previous month (optional)
+- **Deep link**: “View full report” (primary path for charts/merchant breakdowns/recurring analysis)
 
 #### Visual Indicators
 - **Status Badges**: 
@@ -329,8 +366,15 @@ COMMENT ON COLUMN categories.is_archived IS 'Whether the category is archived. A
 #### New Endpoints
 
 **1. GET `/api/categories`**
-- **Enhancement**: Add query parameter `includeArchived` (default: false)
-- **Response**: Returns categories filtered by `is_archived` unless `includeArchived=true`
+- **Enhancement**: Add query parameter `includeArchived` with explicit modes
+  - `includeArchived=none` (default): active categories only
+  - `includeArchived=all`: active + archived
+  - `includeArchived=only`: archived only
+- **Response**: Returns categories filtered by `is_archived` based on mode
+- **Usage guidance**:
+  - Default app flows (dashboard, dropdowns): `includeArchived=none`
+  - Categories management page: `includeArchived=all` (then filter client-side) or use `only` for archived tab
+  - Reports: `includeArchived=all` (so users can report on archived categories)
 
 **2. GET `/api/categories/[id]`**
 - **Enhancement**: Return single category (including archived ones)
@@ -385,7 +429,7 @@ COMMENT ON COLUMN categories.is_archived IS 'Whether the category is archived. A
 **3. GET `/api/categories` (existing)**
 - **Enhancement**: Add filtering by `is_archived` (default: exclude archived)
 - **Query Parameters**:
-  - `includeArchived`: boolean (default: false)
+  - `includeArchived`: `none` | `all` | `only` (default: `none`)
   - `categoryType`: 'monthly_expense' | 'accumulation' | 'target_balance'
   - `isSystem`: boolean
   - `isBuffer`: boolean
