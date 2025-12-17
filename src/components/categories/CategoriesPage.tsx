@@ -3,6 +3,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -11,7 +12,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -79,11 +82,12 @@ import {
   Trash2,
   Grid3X3,
   X,
+  Filter,
 } from 'lucide-react';
 
-type StatusFilter = 'active' | 'archived' | 'all';
 type ViewMode = 'grid' | 'list';
-type TypeFilter = 'all' | 'monthly_expense' | 'accumulation' | 'target_balance';
+type StatusOption = 'active' | 'archived';
+type TypeOption = 'monthly_expense' | 'accumulation' | 'target_balance';
 
 function canArchiveCategory(category: Category) {
   // Guardrails: don't let users archive system/buffer categories (these are foundational)
@@ -220,6 +224,9 @@ function SortableTableRow({
 }
 
 export default function CategoriesPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const canEdit = isEditor && !permissionsLoading;
 
@@ -231,13 +238,68 @@ export default function CategoriesPage() {
   const [monthlySpending, setMonthlySpending] = useState<Record<number, number>>({});
   const [ytdSpending, setYtdSpending] = useState<Record<number, number>>({});
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [search, setSearch] = useState('');
-  const [showSystem, setShowSystem] = useState(false);
-  const [showBuffer, setShowBuffer] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  // Filters (URL-driven, like Transactions page)
+  const qParam = searchParams.get('q') || '';
+  const viewParam = searchParams.get('view');
+  const viewMode: ViewMode = viewParam === 'grid' ? 'grid' : 'list'; // default list
+
+  const statusParam = searchParams.get('status');
+  const statusSelections: StatusOption[] = statusParam
+    ? statusParam
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s): s is StatusOption => s === 'active' || s === 'archived')
+    : ['active'];
+
+  const typeParam = searchParams.get('type');
+  const typeSelections: TypeOption[] = typeParam
+    ? typeParam
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s): s is TypeOption => s === 'monthly_expense' || s === 'accumulation' || s === 'target_balance')
+    : [];
+
+  const showSystem = searchParams.get('showSystem') === 'true';
+  const showBuffer = searchParams.get('showBuffer') === 'true';
+
+  const updateFilters = (updates: {
+    q?: string | null;
+    view?: ViewMode | null;
+    status?: StatusOption[] | null;
+    type?: TypeOption[] | null;
+    showSystem?: boolean | null;
+    showBuffer?: boolean | null;
+  }) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (updates.q !== undefined) {
+      if (updates.q && updates.q.trim()) params.set('q', updates.q.trim());
+      else params.delete('q');
+    }
+    if (updates.view !== undefined) {
+      if (updates.view) params.set('view', updates.view);
+      else params.delete('view');
+    }
+    if (updates.status !== undefined) {
+      if (updates.status && updates.status.length > 0) params.set('status', updates.status.join(','));
+      else params.delete('status');
+    }
+    if (updates.type !== undefined) {
+      if (updates.type && updates.type.length > 0) params.set('type', updates.type.join(','));
+      else params.delete('type');
+    }
+    if (updates.showSystem !== undefined) {
+      if (updates.showSystem) params.set('showSystem', 'true');
+      else params.delete('showSystem');
+    }
+    if (updates.showBuffer !== undefined) {
+      if (updates.showBuffer) params.set('showBuffer', 'true');
+      else params.delete('showBuffer');
+    }
+
+    const qs = params.toString();
+    router.push(qs ? `/categories?${qs}` : '/categories');
+  };
 
   // Bulk selection
   const [bulkMode, setBulkMode] = useState(false);
@@ -328,28 +390,32 @@ export default function CategoriesPage() {
   const filteredCategories = useMemo(() => {
     let list = [...categories];
 
-    // Status filter
-    if (statusFilter === 'active') list = list.filter((c) => !c.is_archived);
-    if (statusFilter === 'archived') list = list.filter((c) => !!c.is_archived);
+    // Status multi-filter (default: active)
+    const statuses = statusSelections.length > 0 ? statusSelections : (['active'] as StatusOption[]);
+    const hasActive = statuses.includes('active');
+    const hasArchived = statuses.includes('archived');
+    if (hasActive && !hasArchived) list = list.filter((c) => !c.is_archived);
+    if (!hasActive && hasArchived) list = list.filter((c) => !!c.is_archived);
+    // If both selected, treat as all
 
     // System/buffer visibility
     if (!showSystem) list = list.filter((c) => !c.is_system);
     if (!showBuffer) list = list.filter((c) => !c.is_buffer);
 
-    // Type filter
-    if (typeFilter !== 'all') {
-      list = list.filter((c) => (c.category_type || 'monthly_expense') === typeFilter);
+    // Type multi-filter
+    if (typeSelections.length > 0) {
+      list = list.filter((c) => typeSelections.includes((c.category_type || 'monthly_expense') as TypeOption));
     }
 
     // Search
-    const q = search.trim().toLowerCase();
+    const q = qParam.trim().toLowerCase();
     if (q) list = list.filter((c) => c.name.toLowerCase().includes(q));
 
     // Sort by sort_order for consistent display
     list.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
     return list;
-  }, [categories, statusFilter, showSystem, showBuffer, typeFilter, search]);
+  }, [categories, statusSelections, showSystem, showBuffer, typeSelections, qParam]);
 
   useEffect(() => {
     // Keep selection aligned with current filtered set
@@ -673,6 +739,7 @@ export default function CategoriesPage() {
   };
 
   const categoriesToRender = isReorderMode ? reorderedCategories : filteredCategories;
+  const isArchivedOnlyView = statusSelections.includes('archived') && !statusSelections.includes('active');
 
   if (loading) {
     return (
@@ -707,65 +774,153 @@ export default function CategoriesPage() {
 
       {/* Filters */}
       <Card className="p-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2">
-              <Search className="h-4 w-4 text-muted-foreground" />
+        <div className="flex flex-col gap-3">
+          {/* Search row */}
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <div className="flex items-center gap-2 w-full">
+              <Search className="h-4 w-4 text-muted-foreground shrink-0" />
               <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={qParam}
+                onChange={(e) => updateFilters({ q: e.target.value })}
                 placeholder="Search categories…"
-                className="w-full sm:w-[260px]"
+                className="w-full"
               />
-              {search && (
-                <Button variant="ghost" size="sm" onClick={() => setSearch('')}>
+              {qParam && (
+                <Button variant="ghost" size="sm" onClick={() => updateFilters({ q: null })}>
                   <X className="h-4 w-4" />
                 </Button>
               )}
             </div>
-
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-              <SelectTrigger className="w-full sm:w-[170px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="archived">Archived</SelectItem>
-                <SelectItem value="all">All</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {categoryTypesEnabled && (
-              <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
-                <SelectTrigger className="w-full sm:w-[220px]">
-                  <SelectValue placeholder="Category type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All types</SelectItem>
-                  <SelectItem value="monthly_expense">Monthly expense</SelectItem>
-                  <SelectItem value="accumulation">Accumulation</SelectItem>
-                  <SelectItem value="target_balance">Target balance</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2">
-                <Checkbox checked={showSystem} onCheckedChange={(v) => setShowSystem(!!v)} id="show-system" />
-                <label htmlFor="show-system" className="text-sm text-muted-foreground">
-                  Show system
-                </label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox checked={showBuffer} onCheckedChange={(v) => setShowBuffer(!!v)} id="show-buffer" />
-                <label htmlFor="show-buffer" className="text-sm text-muted-foreground">
-                  Show buffer
-                </label>
-              </div>
-            </div>
           </div>
 
-          <div className="flex items-center gap-2 justify-end">
+          {/* Filters row (wraps on mobile, like Transactions) */}
+          <div className="flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {/* Status multi-select */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="w-full sm:w-auto">
+                    <Filter className="mr-2 h-4 w-4" />
+                    Status
+                    {statusSelections.length > 0 && (
+                      <Badge variant="secondary" className="ml-2">
+                        {statusSelections.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel>Filter by status</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    checked={statusSelections.length === 0 || (statusSelections.includes('active') && !statusSelections.includes('archived'))}
+                    onCheckedChange={() => updateFilters({ status: ['active'] })}
+                  >
+                    Active only
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={statusSelections.length > 0 && statusSelections.includes('archived') && !statusSelections.includes('active')}
+                    onCheckedChange={() => updateFilters({ status: ['archived'] })}
+                  >
+                    Archived only
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={statusSelections.includes('active') && statusSelections.includes('archived')}
+                    onCheckedChange={() => updateFilters({ status: ['active', 'archived'] })}
+                  >
+                    Active + Archived
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Type multi-select */}
+              {categoryTypesEnabled && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full sm:w-auto">
+                      <Filter className="mr-2 h-4 w-4" />
+                      Type
+                      {typeSelections.length > 0 && (
+                        <Badge variant="secondary" className="ml-2">
+                          {typeSelections.length}
+                        </Badge>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-64 max-h-[320px] overflow-y-auto">
+                    <DropdownMenuLabel>Filter by category type</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuCheckboxItem
+                      checked={typeSelections.length === 0}
+                      onCheckedChange={() => {
+                        if (typeSelections.length > 0) updateFilters({ type: null });
+                      }}
+                    >
+                      All types
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={typeSelections.includes('monthly_expense')}
+                      onCheckedChange={() => {
+                        const next: TypeOption[] = typeSelections.includes('monthly_expense')
+                          ? (typeSelections.filter((t) => t !== 'monthly_expense') as TypeOption[])
+                          : [...typeSelections, 'monthly_expense'];
+                        updateFilters({ type: next.length > 0 ? next : null });
+                      }}
+                    >
+                      Monthly expense
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={typeSelections.includes('accumulation')}
+                      onCheckedChange={() => {
+                        const next: TypeOption[] = typeSelections.includes('accumulation')
+                          ? (typeSelections.filter((t) => t !== 'accumulation') as TypeOption[])
+                          : [...typeSelections, 'accumulation'];
+                        updateFilters({ type: next.length > 0 ? next : null });
+                      }}
+                    >
+                      Accumulation
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={typeSelections.includes('target_balance')}
+                      onCheckedChange={() => {
+                        const next: TypeOption[] = typeSelections.includes('target_balance')
+                          ? (typeSelections.filter((t) => t !== 'target_balance') as TypeOption[])
+                          : [...typeSelections, 'target_balance'];
+                        updateFilters({ type: next.length > 0 ? next : null });
+                      }}
+                    >
+                      Target balance
+                    </DropdownMenuCheckboxItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              {/* System/Buffer toggles */}
+              <Button
+                variant={showSystem ? 'default' : 'outline'}
+                className="w-full sm:w-auto"
+                onClick={() => updateFilters({ showSystem: !showSystem })}
+              >
+                Show system
+              </Button>
+              <Button
+                variant={showBuffer ? 'default' : 'outline'}
+                className="w-full sm:w-auto"
+                onClick={() => updateFilters({ showBuffer: !showBuffer })}
+              >
+                Show buffer
+              </Button>
+
+              {/* Clear */}
+              {(qParam || typeSelections.length > 0 || statusSelections.join(',') !== 'active' || showSystem || showBuffer || viewParam) && (
+                <Button variant="outline" className="w-full sm:w-auto" onClick={() => router.push('/categories')}>
+                  <X className="mr-2 h-4 w-4" />
+                  Clear
+                </Button>
+              )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 justify-end">
             <Button
               variant={bulkMode ? 'default' : 'outline'}
               size="sm"
@@ -775,13 +930,15 @@ export default function CategoriesPage() {
                 clearSelection();
               }}
               disabled={!canEdit}
+              className="w-full sm:w-auto"
             >
               Bulk
             </Button>
             <Button
               variant={viewMode === 'grid' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setViewMode('grid')}
+              onClick={() => updateFilters({ view: 'grid' })}
+              className="w-full sm:w-auto"
             >
               <Grid3X3 className="h-4 w-4 mr-2" />
               Grid
@@ -789,7 +946,8 @@ export default function CategoriesPage() {
             <Button
               variant={viewMode === 'list' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setViewMode('list')}
+              onClick={() => updateFilters({ view: 'list' })}
+              className="w-full sm:w-auto"
             >
               <List className="h-4 w-4 mr-2" />
               List
@@ -800,22 +958,24 @@ export default function CategoriesPage() {
                 variant="outline"
                 size="sm"
                 onClick={beginReorder}
-                disabled={!canEdit || statusFilter === 'archived' || bulkMode}
+                disabled={!canEdit || isArchivedOnlyView || bulkMode}
+                className="w-full sm:w-auto"
               >
                 <GripVertical className="h-4 w-4 mr-2" />
                 Reorder
               </Button>
             ) : (
               <>
-                <Button variant="outline" size="sm" onClick={cancelReorder} disabled={isSavingOrder}>
+                <Button variant="outline" size="sm" onClick={cancelReorder} disabled={isSavingOrder} className="w-full sm:w-auto">
                   Cancel
                 </Button>
-                <Button size="sm" onClick={saveReorder} disabled={isSavingOrder}>
+                <Button size="sm" onClick={saveReorder} disabled={isSavingOrder} className="w-full sm:w-auto">
                   <Save className="h-4 w-4 mr-2" />
                   {isSavingOrder ? 'Saving…' : 'Save order'}
                 </Button>
               </>
             )}
+          </div>
           </div>
         </div>
       </Card>
