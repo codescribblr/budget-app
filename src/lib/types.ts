@@ -8,6 +8,7 @@ export interface Category {
   is_system: boolean;
   is_buffer?: boolean; // Income Buffer category - doesn't show in dropdowns but counts in totals
   is_goal?: boolean;
+  is_archived?: boolean;
   notes?: string | null;
   // Variable income enhancement fields
   category_type?: 'monthly_expense' | 'accumulation' | 'target_balance';
@@ -155,6 +156,7 @@ export interface CreateCategoryRequest {
   sort_order?: number;
   notes?: string;
   is_system?: boolean;
+  is_archived?: boolean;
   category_type?: 'monthly_expense' | 'accumulation' | 'target_balance';
   priority?: number;
   monthly_target?: number;
@@ -169,6 +171,7 @@ export interface UpdateCategoryRequest {
   sort_order?: number;
   notes?: string;
   is_system?: boolean;
+  is_archived?: boolean;
   category_type?: 'monthly_expense' | 'accumulation' | 'target_balance';
   priority?: number;
   monthly_target?: number;

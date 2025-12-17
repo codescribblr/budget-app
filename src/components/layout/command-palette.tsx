@@ -69,6 +69,7 @@ function useDebounce<T extends (...args: any[]) => any>(
 
 const navigationItems = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+  { label: "Budgets", path: "/categories", icon: Mail },
   { label: "Transactions", path: "/transactions", icon: Receipt },
   { label: "Import", path: "/import", icon: Upload },
   { label: "Import Queue", path: "/imports/queue", icon: Inbox },
@@ -125,7 +126,7 @@ export function CommandPalette() {
 
       // Fetch all static data in parallel
       Promise.all([
-        fetch('/api/categories').then(res => {
+        fetch('/api/categories?includeArchived=all').then(res => {
           if (!res.ok) throw new Error(`Failed to fetch categories: ${res.status}`)
           return res.json()
         }),

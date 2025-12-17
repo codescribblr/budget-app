@@ -258,10 +258,17 @@ export default function TransactionEditDialog({
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        {categories.filter(cat => !cat.is_goal && !cat.is_buffer).map((category) => (
+                        {categories
+                          .filter(cat => !cat.is_goal && !cat.is_buffer)
+                          // Hide archived by default, but keep currently selected available
+                          .filter(cat => !cat.is_archived || cat.id === split.categoryId)
+                          .map((category) => (
                           <SelectItem key={category.id} value={category.id.toString()}>
                             <div className="flex items-center gap-2">
                               {category.name}
+                              {category.is_archived && (
+                                <span className="text-muted-foreground" title="Archived category">Archived</span>
+                              )}
                               {category.is_system && (
                                 <span className="text-muted-foreground" title="System category">⚙️</span>
                               )}

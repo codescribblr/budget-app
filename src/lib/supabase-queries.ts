@@ -35,7 +35,12 @@ export async function getAuthenticatedUser() {
 // CATEGORIES
 // =====================================================
 
-export async function getAllCategories(excludeGoals: boolean = false): Promise<Category[]> {
+export type IncludeArchivedMode = 'none' | 'all' | 'only';
+
+export async function getAllCategories(
+  excludeGoals: boolean = false,
+  includeArchived: IncludeArchivedMode = 'none'
+): Promise<Category[]> {
   const { supabase } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
   if (!accountId) {
@@ -53,10 +58,37 @@ export async function getAllCategories(excludeGoals: boolean = false): Promise<C
   if (excludeGoals) {
     query = query.eq('is_goal', false);
   }
+
+  // Archived filtering
+  if (includeArchived === 'none') {
+    // Include categories where is_archived is false or null (for backwards compatibility)
+    query = query.or('is_archived.is.null,is_archived.eq.false');
+  } else if (includeArchived === 'only') {
+    query = query.eq('is_archived', true);
+  }
+  // If includeArchived === 'all', don't filter by archived status
   
   const { data, error } = await query.order('sort_order');
   
-  if (error) throw error;
+  if (error) {
+    // If error is about column not existing, try without archived filter
+    const errorMessage = error.message || '';
+    const errorCode = (error as any).code || '';
+    if (errorMessage.includes('is_archived') || errorCode === '42703' || errorCode === 'PGRST116' || errorMessage.includes('column') && errorMessage.includes('is_archived')) {
+      console.warn('is_archived column not found, fetching all categories without archived filter');
+      let fallbackQuery = supabase
+        .from('categories')
+        .select('*')
+        .eq('account_id', accountId);
+      if (excludeGoals) {
+        fallbackQuery = fallbackQuery.eq('is_goal', false);
+      }
+      const { data: fallbackData, error: fallbackError } = await fallbackQuery.order('sort_order');
+      if (fallbackError) throw fallbackError;
+      return fallbackData as Category[];
+    }
+    throw error;
+  }
   return data as Category[];
 }
 
@@ -87,6 +119,7 @@ export async function createCategory(data: {
   sort_order?: number;
   notes?: string;
   is_system?: boolean;
+  is_archived?: boolean;
   category_type?: 'monthly_expense' | 'accumulation' | 'target_balance';
   priority?: number;
   monthly_target?: number;
@@ -137,6 +170,7 @@ export async function createCategory(data: {
       sort_order: data.sort_order ?? 0,
       notes: data.notes ?? null,
       is_system: data.is_system ?? false,
+      is_archived: data.is_archived ?? false,
       category_type: categoryType,
       priority: data.priority ?? 5,
       monthly_target: monthlyTarget,
@@ -159,6 +193,7 @@ export async function updateCategory(
     sort_order: number;
     notes: string;
     is_system: boolean;
+    is_archived: boolean;
     category_type: 'monthly_expense' | 'accumulation' | 'target_balance';
     priority: number;
     monthly_target: number;
@@ -215,6 +250,7 @@ export async function updateCategory(
   if (data.sort_order !== undefined) updateData.sort_order = data.sort_order;
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.is_system !== undefined) updateData.is_system = data.is_system;
+  if (data.is_archived !== undefined) updateData.is_archived = data.is_archived;
   if (data.category_type !== undefined) updateData.category_type = data.category_type;
   if (data.priority !== undefined) updateData.priority = data.priority;
 
@@ -246,6 +282,27 @@ export async function deleteCategory(id: number): Promise<void> {
     .eq('account_id', accountId);
 
   if (error) throw error;
+}
+
+export async function setCategoriesArchived(
+  categoryIds: number[],
+  is_archived: boolean
+): Promise<Category[]> {
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  if (!Array.isArray(categoryIds) || categoryIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('categories')
+    .update({ is_archived, updated_at: new Date().toISOString() })
+    .in('id', categoryIds)
+    .eq('account_id', accountId)
+    .select('*');
+
+  if (error) throw error;
+  return (data ?? []) as Category[];
 }
 
 export async function updateCategoriesOrder(

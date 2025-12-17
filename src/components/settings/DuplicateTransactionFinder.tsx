@@ -43,7 +43,7 @@ export default function DuplicateTransactionFinder() {
     // Fetch categories when component mounts
     const fetchCategories = async () => {
       try {
-        const response = await fetch('/api/categories');
+        const response = await fetch('/api/categories?includeArchived=all');
         if (response.ok) {
           const data = await response.json();
           setCategories(data);

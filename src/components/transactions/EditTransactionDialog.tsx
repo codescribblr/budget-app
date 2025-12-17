@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
@@ -41,6 +42,8 @@ export default function EditTransactionDialog({
   const [selectedCreditCardId, setSelectedCreditCardId] = useState<number | null>(null);
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showArchivedCategories, setShowArchivedCategories] = useState(false);
+  const [availableCategories, setAvailableCategories] = useState<Category[]>(categories);
 
   useEffect(() => {
     if (transaction) {
@@ -59,6 +62,65 @@ export default function EditTransactionDialog({
       setIsSubmitting(false);
     }
   }, [transaction]);
+
+  useEffect(() => {
+    // Keep availableCategories in sync if parent categories change (when not explicitly showing archived)
+    if (!showArchivedCategories) {
+      setAvailableCategories(categories);
+    }
+  }, [categories, showArchivedCategories]);
+
+  useEffect(() => {
+    const ensureSelectedCategoriesPresent = async () => {
+      if (!isOpen) return;
+      if (!transaction) return;
+
+      const base = showArchivedCategories ? availableCategories : categories;
+      const existingIds = new Set(base.map((c) => c.id));
+      const neededIds = Array.from(new Set(transaction.splits.map((s) => s.category_id))).filter(
+        (id) => id && !existingIds.has(id)
+      );
+
+      if (neededIds.length === 0) {
+        if (!showArchivedCategories) setAvailableCategories(categories);
+        return;
+      }
+
+      try {
+        const fetched = await Promise.all(
+          neededIds.map(async (id) => {
+            const res = await fetch(`/api/categories/${id}`);
+            if (!res.ok) return null;
+            return (await res.json()) as Category;
+          })
+        );
+        const merged = [...base, ...fetched.filter(Boolean) as Category[]];
+        setAvailableCategories(merged);
+      } catch (e) {
+        console.error('Failed to load archived categories for edit:', e);
+        setAvailableCategories(base);
+      }
+    };
+
+    ensureSelectedCategoriesPresent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, transaction?.id, showArchivedCategories]);
+
+  useEffect(() => {
+    const fetchAllIfNeeded = async () => {
+      if (!isOpen) return;
+      if (!showArchivedCategories) return;
+      try {
+        const res = await fetch('/api/categories?excludeGoals=true&includeArchived=all');
+        if (!res.ok) return;
+        const data = await res.json();
+        setAvailableCategories(Array.isArray(data) ? data : categories);
+      } catch (e) {
+        console.error('Failed to load archived categories:', e);
+      }
+    };
+    fetchAllIfNeeded();
+  }, [isOpen, showArchivedCategories]);
 
   useEffect(() => {
     // Fetch merchant groups
@@ -281,7 +343,19 @@ export default function EditTransactionDialog({
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label>Category Splits</Label>
+              <div className="space-y-1">
+                <Label>Category Splits</Label>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="show-archived-categories"
+                    checked={showArchivedCategories}
+                    onCheckedChange={(v) => setShowArchivedCategories(!!v)}
+                  />
+                  <Label htmlFor="show-archived-categories" className="text-xs text-muted-foreground font-normal">
+                    Show archived categories
+                  </Label>
+                </div>
+              </div>
               <Button type="button" variant="outline" size="sm" onClick={handleAddSplit}>
                 Add Split
               </Button>
@@ -299,10 +373,16 @@ export default function EditTransactionDialog({
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.filter(cat => !cat.is_goal && !cat.is_buffer).map((category) => (
+                      {availableCategories
+                        .filter(cat => !cat.is_goal && !cat.is_buffer)
+                        .filter(cat => (showArchivedCategories ? true : !cat.is_archived))
+                        .map((category) => (
                         <SelectItem key={category.id} value={category.id.toString()}>
                           <div className="flex items-center gap-2">
                             {category.name}
+                            {category.is_archived && (
+                              <span className="text-muted-foreground" title="Archived category">Archived</span>
+                            )}
                             {category.is_system && (
                               <span className="text-muted-foreground" title="System category">⚙️</span>
                             )}

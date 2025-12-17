@@ -76,7 +76,7 @@ export default function CategoryReportDetail() {
         setLoading(true);
         const [categoryRes, categoriesRes, transactionsRes] = await Promise.all([
           fetch(`/api/categories/${categoryId}`),
-          fetch('/api/categories'),
+          fetch('/api/categories?includeArchived=all'),
           fetch('/api/transactions'),
         ]);
 

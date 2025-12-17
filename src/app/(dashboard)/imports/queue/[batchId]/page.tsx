@@ -233,7 +233,7 @@ export default function BatchReviewPage() {
       // Fetch categories to populate category names in splits
       let categories: any[] = [];
       try {
-        const categoriesResponse = await fetch('/api/categories?excludeGoals=true');
+        const categoriesResponse = await fetch('/api/categories?excludeGoals=true&includeArchived=all');
         if (categoriesResponse.ok) {
           categories = await categoriesResponse.json();
         }
@@ -827,7 +827,7 @@ export default function BatchReviewPage() {
       const { suggestions } = await response.json();
 
       // Fetch categories to get names
-      const categoriesResponse = await fetch('/api/categories?excludeGoals=true');
+      const categoriesResponse = await fetch('/api/categories?excludeGoals=true&includeArchived=all');
       const categories = categoriesResponse.ok ? await categoriesResponse.json() : [];
 
       // Update transactions with categorization

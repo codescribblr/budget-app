@@ -13,7 +13,7 @@ import type {
 
 // Categories
 export function getAllCategories(): Category[] {
-  return db.prepare('SELECT * FROM categories ORDER BY sort_order').all() as Category[];
+  return db.prepare('SELECT * FROM categories WHERE is_archived = 0 ORDER BY sort_order').all() as Category[];
 }
 
 export function getCategoryById(id: number): Category | undefined {

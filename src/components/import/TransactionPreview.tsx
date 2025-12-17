@@ -100,6 +100,7 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   const router = useRouter();
   const [items, setItems] = useState<ParsedTransaction[]>(transactions);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [showArchivedCategories, setShowArchivedCategories] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [editingTransaction, setEditingTransaction] = useState<ParsedTransaction | null>(null);
@@ -155,11 +156,48 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
     })));
   }, []);
 
+  useEffect(() => {
+    // Re-fetch categories when archived toggle changes
+    fetchCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchivedCategories]);
+
+  const ensureReferencedCategoriesPresent = async (baseCategories: Category[]) => {
+    try {
+      const existingIds = new Set(baseCategories.map((c) => c.id));
+      const referencedIds = new Set<number>();
+      items.forEach((txn) => {
+        txn.splits?.forEach((s) => {
+          if (s.categoryId) referencedIds.add(s.categoryId);
+        });
+      });
+
+      const missingIds = Array.from(referencedIds).filter((id) => !existingIds.has(id));
+      if (missingIds.length === 0) return baseCategories;
+
+      const fetched = await Promise.all(
+        missingIds.map(async (id) => {
+          const res = await fetch(`/api/categories/${id}`);
+          if (!res.ok) return null;
+          return (await res.json()) as Category;
+        })
+      );
+
+      return [...baseCategories, ...(fetched.filter(Boolean) as Category[])];
+    } catch (e) {
+      console.error('Error ensuring referenced categories:', e);
+      return baseCategories;
+    }
+  };
+
 
   const fetchCategories = async () => {
-    const response = await fetch('/api/categories?excludeGoals=true');
+    const includeArchived = showArchivedCategories ? 'all' : 'none';
+    const response = await fetch(`/api/categories?excludeGoals=true&includeArchived=${includeArchived}`);
     const data = await response.json();
-    setCategories(data);
+    const base = Array.isArray(data) ? data : [];
+    const merged = await ensureReferencedCategoriesPresent(base);
+    setCategories(merged);
   };
 
   const fetchAccounts = async () => {
@@ -524,15 +562,15 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
       }
 
       // Fetch categories to get names
-      const categoriesResponse = await fetch('/api/categories?excludeGoals=true');
-      const categories = await categoriesResponse.ok ? await categoriesResponse.json() : [];
+      const categoriesResponse = await fetch('/api/categories?excludeGoals=true&includeArchived=all');
+      const categoriesForNames = await (categoriesResponse.ok ? categoriesResponse.json() : []);
 
       // Update transactions with AI suggestions
       setItems(items.map(transaction => {
         const suggestion = suggestions.find((s: any) => s.transactionId === transaction.id);
         
         if (suggestion && suggestion.categoryId && !transaction.isDuplicate) {
-          const category = categories.find((c: any) => c.id === suggestion.categoryId);
+          const category = (categoriesForNames || []).find((c: any) => c.id === suggestion.categoryId);
           return {
             ...transaction,
             suggestedCategory: suggestion.categoryId,
@@ -727,6 +765,16 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
             <div>
               <span className="font-medium">Excluded:</span> {totalExcludedCount}
             </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Checkbox
+              id="show-archived-categories"
+              checked={showArchivedCategories}
+              onCheckedChange={(v) => setShowArchivedCategories(!!v)}
+            />
+            <Label htmlFor="show-archived-categories" className="font-normal">
+              Show archived categories
+            </Label>
           </div>
           <div className="flex gap-2 shrink-0">
             {selectedTransactions.size > 0 && (
@@ -930,9 +978,21 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent>
-                          {categories.map((category) => (
+                          {categories
+                            .filter((c) => {
+                              if (showArchivedCategories) return true;
+                              const selectedId = transaction.splits[0]?.categoryId;
+                              if (c.is_archived && c.id !== selectedId) return false;
+                              return true;
+                            })
+                            .map((category) => (
                             <SelectItem key={category.id} value={category.id.toString()}>
-                              {category.name}
+                              <div className="flex items-center gap-2">
+                                {category.name}
+                                {category.is_archived && (
+                                  <span className="text-muted-foreground" title="Archived category">Archived</span>
+                                )}
+                              </div>
                             </SelectItem>
                           ))}
                         </SelectContent>

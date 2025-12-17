@@ -53,14 +53,20 @@ const navigationSections = [
     label: "General",
     items: [
       { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+      { label: "Budgets", path: "/categories", icon: Mail },
       { label: "Transactions", path: "/transactions", icon: Receipt },
       { label: "Import", path: "/import", icon: Upload },
       { label: "Import Queue", path: "/imports/queue", icon: Inbox },
       { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
-      { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureKey: "income_buffer" },
-      { label: "Income", path: "/income", icon: DollarSign },
       { label: "Goals", path: "/goals", icon: Target, featureKey: "goals" },
       { label: "AI Assistant", path: "/dashboard/ai-assistant", icon: Sparkles, featureKey: "ai_chat" },
+    ],
+  },
+  {
+    label: "Income",
+    items: [
+      { label: "Income", path: "/income", icon: DollarSign },
+      { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureKey: "income_buffer" },
     ],
   },
   {

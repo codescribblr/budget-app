@@ -46,7 +46,7 @@ export default function CategoryRulesPage() {
       setLoading(true);
 
       // Fetch categories
-      const categoriesResponse = await fetch('/api/categories');
+      const categoriesResponse = await fetch('/api/categories?includeArchived=all');
       if (!categoriesResponse.ok) {
         const errorData = await categoriesResponse.json();
         throw new Error(errorData.error || 'Failed to fetch categories');
@@ -282,9 +282,17 @@ export default function CategoryRulesPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {categories.map(cat => (
+                              {categories
+                                // Hide archived by default, but keep current selection available
+                                .filter(cat => !cat.is_archived || cat.id === rule.category_id)
+                                .map(cat => (
                                 <SelectItem key={cat.id} value={cat.id.toString()}>
-                                  {cat.name}
+                                  <div className="flex items-center gap-2">
+                                    {cat.name}
+                                    {cat.is_archived && (
+                                      <span className="text-muted-foreground" title="Archived category">Archived</span>
+                                    )}
+                                  </div>
                                 </SelectItem>
                               ))}
                             </SelectContent>

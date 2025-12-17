@@ -13,7 +13,9 @@ import {
   ArrowUpDown,
   Edit3,
   Shield,
-  Lightbulb
+  Lightbulb,
+  Layers,
+  Archive
 } from 'lucide-react';
 
 export default function CategoriesFeaturePage() {
@@ -75,6 +77,51 @@ export default function CategoriesFeaturePage() {
             Begin with 10-15 broad categories. You can always add more specific categories later as
             you refine your budget.
           </Callout>
+        </CardContent>
+      </Card>
+
+      {/* Standalone Categories Page */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Layers className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Standalone Categories Page</CardTitle>
+              <CardDescription className="text-base">
+                A dedicated place to manage categories in detail
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            You can manage categories from the dashboard, but the <Link href="/categories" className="text-primary hover:underline">Categories</Link> page provides a full management experience:
+          </p>
+          <div className="grid gap-3">
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <Edit3 className="h-4 w-4 mt-0.5 text-muted-foreground" />
+              <div className="text-sm">
+                <div className="font-medium">Edit details</div>
+                <div className="text-muted-foreground">Update type, targets, notes, and balances in one place</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <ArrowUpDown className="h-4 w-4 mt-0.5 text-muted-foreground" />
+              <div className="text-sm">
+                <div className="font-medium">Reorder and bulk actions</div>
+                <div className="text-muted-foreground">Drag to reorder and optionally archive/delete multiple categories</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <Archive className="h-4 w-4 mt-0.5 text-muted-foreground" />
+              <div className="text-sm">
+                <div className="font-medium">Archive instead of delete</div>
+                <div className="text-muted-foreground">Hide old categories while keeping transaction history intact</div>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -210,6 +257,40 @@ export default function CategoriesFeaturePage() {
       {/* Advanced Features */}
       <div className="space-y-6">
         <h2 className="text-2xl font-bold">Advanced Features</h2>
+
+        {/* Archiving */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Archiving Categories</CardTitle>
+            <CardDescription className="text-base">
+              Keep history, remove clutter
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Archiving is the recommended way to stop using a category going forward without losing historical data.
+            </p>
+            <div className="grid gap-2 text-sm">
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <div className="font-medium">Where archived categories are hidden by default</div>
+                <div className="text-muted-foreground mt-1">Dashboard category list and most category pickers</div>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <div className="font-medium">Where archived categories still appear</div>
+                <div className="text-muted-foreground mt-1">Category reports and historical transactions</div>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <div className="font-medium">Need to use an archived category?</div>
+                <div className="text-muted-foreground mt-1">
+                  Some screens (like transaction edits and imports) have a “Show archived categories” toggle for edge cases (refunds, late adjustments).
+                </div>
+              </div>
+            </div>
+            <Callout type="tip" title="Best practice">
+              If you find yourself repeatedly using an archived category again, restore it instead of selecting it as archived.
+            </Callout>
+          </CardContent>
+        </Card>
 
         {/* Category Types */}
         <Card>

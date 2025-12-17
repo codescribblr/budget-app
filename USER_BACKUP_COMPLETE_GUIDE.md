@@ -11,7 +11,7 @@ The user backup system (accessed from Settings page) allows users to create, man
 ### ✅ **Complete Data Backup (17 Tables)**
 
 1. **`accounts`** - All bank accounts (checking, savings, cash)
-2. **`categories`** - All budget envelopes with balances
+2. **`categories`** - All budget categories (including archived status) with balances
 3. **`credit_cards`** - All credit cards with limits and balances
 4. **`transactions`** - All transactions (income, expenses, transfers)
 5. **`transaction_splits`** - How transactions are split across categories
