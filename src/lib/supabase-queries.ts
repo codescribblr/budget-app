@@ -35,7 +35,12 @@ export async function getAuthenticatedUser() {
 // CATEGORIES
 // =====================================================
 
-export async function getAllCategories(excludeGoals: boolean = false): Promise<Category[]> {
+export type IncludeArchivedMode = 'none' | 'all' | 'only';
+
+export async function getAllCategories(
+  excludeGoals: boolean = false,
+  includeArchived: IncludeArchivedMode = 'none'
+): Promise<Category[]> {
   const { supabase } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
   if (!accountId) {
@@ -52,6 +57,13 @@ export async function getAllCategories(excludeGoals: boolean = false): Promise<C
   // Exclude goal categories when fetching for transactions
   if (excludeGoals) {
     query = query.eq('is_goal', false);
+  }
+
+  // Archived filtering
+  if (includeArchived === 'none') {
+    query = query.eq('is_archived', false);
+  } else if (includeArchived === 'only') {
+    query = query.eq('is_archived', true);
   }
   
   const { data, error } = await query.order('sort_order');
@@ -87,6 +99,7 @@ export async function createCategory(data: {
   sort_order?: number;
   notes?: string;
   is_system?: boolean;
+  is_archived?: boolean;
   category_type?: 'monthly_expense' | 'accumulation' | 'target_balance';
   priority?: number;
   monthly_target?: number;
@@ -137,6 +150,7 @@ export async function createCategory(data: {
       sort_order: data.sort_order ?? 0,
       notes: data.notes ?? null,
       is_system: data.is_system ?? false,
+      is_archived: data.is_archived ?? false,
       category_type: categoryType,
       priority: data.priority ?? 5,
       monthly_target: monthlyTarget,
@@ -159,6 +173,7 @@ export async function updateCategory(
     sort_order: number;
     notes: string;
     is_system: boolean;
+    is_archived: boolean;
     category_type: 'monthly_expense' | 'accumulation' | 'target_balance';
     priority: number;
     monthly_target: number;
@@ -215,6 +230,7 @@ export async function updateCategory(
   if (data.sort_order !== undefined) updateData.sort_order = data.sort_order;
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.is_system !== undefined) updateData.is_system = data.is_system;
+  if (data.is_archived !== undefined) updateData.is_archived = data.is_archived;
   if (data.category_type !== undefined) updateData.category_type = data.category_type;
   if (data.priority !== undefined) updateData.priority = data.priority;
 

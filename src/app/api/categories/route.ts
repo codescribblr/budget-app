@@ -7,7 +7,13 @@ export async function GET(request: NextRequest) {
   try {
     // Exclude goal categories from transaction dropdowns
     const excludeGoals = request.nextUrl.searchParams.get('excludeGoals') === 'true';
-    const categories = await getAllCategories(excludeGoals);
+    const includeArchivedParam = request.nextUrl.searchParams.get('includeArchived');
+    const includeArchived =
+      includeArchivedParam === 'all' || includeArchivedParam === 'only' || includeArchivedParam === 'none'
+        ? includeArchivedParam
+        : 'none';
+
+    const categories = await getAllCategories(excludeGoals, includeArchived);
     return NextResponse.json(categories);
   } catch (error: any) {
     console.error('Error fetching categories:', error);
