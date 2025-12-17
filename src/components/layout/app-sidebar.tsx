@@ -17,6 +17,7 @@ import {
   Wallet,
   HelpCircle,
   Mail,
+  Layers,
   Sparkles,
   ChevronDown,
   Inbox,
@@ -53,6 +54,7 @@ const navigationSections = [
     label: "General",
     items: [
       { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+      { label: "Categories", path: "/categories", icon: Layers },
       { label: "Transactions", path: "/transactions", icon: Receipt },
       { label: "Import", path: "/import", icon: Upload },
       { label: "Import Queue", path: "/imports/queue", icon: Inbox },

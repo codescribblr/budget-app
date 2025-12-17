@@ -4,6 +4,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
   LayoutDashboard,
+  Layers,
   Receipt,
   Upload,
   ArrowLeftRight,
@@ -69,6 +70,7 @@ function useDebounce<T extends (...args: any[]) => any>(
 
 const navigationItems = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+  { label: "Categories", path: "/categories", icon: Layers },
   { label: "Transactions", path: "/transactions", icon: Receipt },
   { label: "Import", path: "/import", icon: Upload },
   { label: "Import Queue", path: "/imports/queue", icon: Inbox },
