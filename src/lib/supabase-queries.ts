@@ -61,14 +61,34 @@ export async function getAllCategories(
 
   // Archived filtering
   if (includeArchived === 'none') {
-    query = query.eq('is_archived', false);
+    // Include categories where is_archived is false or null (for backwards compatibility)
+    query = query.or('is_archived.is.null,is_archived.eq.false');
   } else if (includeArchived === 'only') {
     query = query.eq('is_archived', true);
   }
+  // If includeArchived === 'all', don't filter by archived status
   
   const { data, error } = await query.order('sort_order');
   
-  if (error) throw error;
+  if (error) {
+    // If error is about column not existing, try without archived filter
+    const errorMessage = error.message || '';
+    const errorCode = (error as any).code || '';
+    if (errorMessage.includes('is_archived') || errorCode === '42703' || errorCode === 'PGRST116' || errorMessage.includes('column') && errorMessage.includes('is_archived')) {
+      console.warn('is_archived column not found, fetching all categories without archived filter');
+      let fallbackQuery = supabase
+        .from('categories')
+        .select('*')
+        .eq('account_id', accountId);
+      if (excludeGoals) {
+        fallbackQuery = fallbackQuery.eq('is_goal', false);
+      }
+      const { data: fallbackData, error: fallbackError } = await fallbackQuery.order('sort_order');
+      if (fallbackError) throw fallbackError;
+      return fallbackData as Category[];
+    }
+    throw error;
+  }
   return data as Category[];
 }
 

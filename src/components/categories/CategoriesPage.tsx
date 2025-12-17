@@ -182,7 +182,18 @@ function SortableTableRow({
           <span className="text-sm text-muted-foreground">—</span>
         )}
       </TableCell>
-      <TableCell className="text-right">{formatCurrency(category.monthly_amount ?? 0)}</TableCell>
+      <TableCell className="text-right">
+        {(() => {
+          if (type === 'monthly_expense') {
+            return formatCurrency(category.monthly_amount ?? 0);
+          } else if (type === 'accumulation') {
+            return formatCurrency(category.annual_target ?? 0);
+          } else if (type === 'target_balance') {
+            return formatCurrency(category.target_balance ?? 0);
+          }
+          return formatCurrency(category.monthly_amount ?? 0);
+        })()}
+      </TableCell>
       <TableCell className="text-right">{formatCurrency(category.current_balance ?? 0)}</TableCell>
       <TableCell className="text-right">{formatCurrency(spent)}</TableCell>
       <TableCell className="text-right">{formatCurrency(ytd)}</TableCell>
@@ -1098,8 +1109,21 @@ export default function CategoriesPage() {
 
                     <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                       <div>
-                        <div className="text-xs text-muted-foreground">Monthly</div>
-                        <div className="font-medium">{formatCurrency(category.monthly_amount ?? 0)}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {type === 'monthly_expense' ? 'Monthly' : type === 'accumulation' ? 'Yearly Budget' : 'Target'}
+                        </div>
+                        <div className="font-medium">
+                          {(() => {
+                            if (type === 'monthly_expense') {
+                              return formatCurrency(category.monthly_amount ?? 0);
+                            } else if (type === 'accumulation') {
+                              return formatCurrency(category.annual_target ?? 0);
+                            } else if (type === 'target_balance') {
+                              return formatCurrency(category.target_balance ?? 0);
+                            }
+                            return formatCurrency(category.monthly_amount ?? 0);
+                          })()}
+                        </div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Balance</div>
@@ -1158,7 +1182,7 @@ export default function CategoriesPage() {
                     </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Monthly</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
                     <TableHead className="text-right">Balance</TableHead>
                     <TableHead className="text-right">Spent (mo)</TableHead>
                     <TableHead className="text-right">Spent (YTD)</TableHead>
@@ -1204,7 +1228,18 @@ export default function CategoriesPage() {
                               <span className="text-sm text-muted-foreground">—</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right">{formatCurrency(category.monthly_amount ?? 0)}</TableCell>
+                          <TableCell className="text-right">
+                            {(() => {
+                              if (type === 'monthly_expense') {
+                                return formatCurrency(category.monthly_amount ?? 0);
+                              } else if (type === 'accumulation') {
+                                return formatCurrency(category.annual_target ?? 0);
+                              } else if (type === 'target_balance') {
+                                return formatCurrency(category.target_balance ?? 0);
+                              }
+                              return formatCurrency(category.monthly_amount ?? 0);
+                            })()}
+                          </TableCell>
                           <TableCell className="text-right">{formatCurrency(category.current_balance ?? 0)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(spent)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(ytd)}</TableCell>

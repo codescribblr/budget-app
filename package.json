@@ -7,7 +7,7 @@
     "build": "next build --turbopack",
     "start": "next start",
     "seed": "tsx scripts/seed.ts",
-    "migrate": "set -a && source .env.local && set +a && ./scripts/run-migrations.sh",
+    "migrate": "export PATH=\"/opt/homebrew/opt/postgresql@17/bin:$PATH\" && set -a && source .env.local && set +a && ./scripts/run-migrations.sh",
     "backup-db": "tsx scripts/backup-db.ts",
     "restore-db": "tsx scripts/restore-db.ts",
     "reset-db": "tsx scripts/reset-to-seed.ts"
