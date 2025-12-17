@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
@@ -37,6 +38,8 @@ export default function AddTransactionDialog({
   const [selectedCreditCardId, setSelectedCreditCardId] = useState<number | null>(null);
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showArchivedCategories, setShowArchivedCategories] = useState(false);
+  const [availableCategories, setAvailableCategories] = useState<Category[]>(categories);
 
   useEffect(() => {
     if (isOpen) {
@@ -50,8 +53,33 @@ export default function AddTransactionDialog({
       setSelectedCreditCardId(null);
       setTransactionType('expense');
       setIsSubmitting(false);
+      setShowArchivedCategories(false);
+      setAvailableCategories(categories);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    // Keep availableCategories in sync if parent categories change
+    if (!showArchivedCategories) {
+      setAvailableCategories(categories);
+    }
+  }, [categories, showArchivedCategories]);
+
+  useEffect(() => {
+    const fetchArchivedIfNeeded = async () => {
+      if (!isOpen) return;
+      if (!showArchivedCategories) return;
+      try {
+        const res = await fetch('/api/categories?excludeGoals=true&includeArchived=all');
+        if (!res.ok) return;
+        const data = await res.json();
+        setAvailableCategories(Array.isArray(data) ? data : categories);
+      } catch (e) {
+        console.error('Failed to load archived categories:', e);
+      }
+    };
+    fetchArchivedIfNeeded();
+  }, [isOpen, showArchivedCategories]);
 
   const fetchAccounts = async () => {
     const response = await fetch('/api/accounts');
@@ -240,7 +268,19 @@ export default function AddTransactionDialog({
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label>Category Splits</Label>
+              <div className="space-y-1">
+                <Label>Category Splits</Label>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="show-archived-categories"
+                    checked={showArchivedCategories}
+                    onCheckedChange={(v) => setShowArchivedCategories(!!v)}
+                  />
+                  <Label htmlFor="show-archived-categories" className="text-xs text-muted-foreground font-normal">
+                    Show archived categories
+                  </Label>
+                </div>
+              </div>
               <Button type="button" variant="outline" size="sm" onClick={handleAddSplit}>
                 Add Split
               </Button>
@@ -258,10 +298,16 @@ export default function AddTransactionDialog({
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.filter(cat => !cat.is_goal && !cat.is_buffer).map((category) => (
+                      {availableCategories
+                        .filter(cat => !cat.is_goal && !cat.is_buffer)
+                        .filter(cat => (showArchivedCategories ? true : !cat.is_archived))
+                        .map((category) => (
                         <SelectItem key={category.id} value={category.id.toString()}>
                           <div className="flex items-center gap-2">
                             {category.name}
+                            {category.is_archived && (
+                              <span className="text-muted-foreground" title="Archived category">Archived</span>
+                            )}
                             {category.is_system && (
                               <span className="text-muted-foreground" title="System category">⚙️</span>
                             )}

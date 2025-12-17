@@ -41,7 +41,7 @@ export default function TrendsPage() {
     const fetchCategories = async () => {
       try {
         setLoadingCategories(true);
-        const response = await fetch('/api/categories');
+        const response = await fetch('/api/categories?includeArchived=all');
         const data = await response.json();
         setCategories(data);
       } catch (error) {

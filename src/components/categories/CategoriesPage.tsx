@@ -239,6 +239,10 @@ export default function CategoriesPage() {
   const [showBuffer, setShowBuffer] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
+  // Bulk selection
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
   // Reorder mode
   const [isReorderMode, setIsReorderMode] = useState(false);
   const [reorderedCategories, setReorderedCategories] = useState<Category[]>([]);
@@ -267,6 +271,9 @@ export default function CategoriesPage() {
   // Archive confirmation
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [categoryToArchive, setCategoryToArchive] = useState<Category | null>(null);
+
+  // Bulk delete confirmation
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -343,6 +350,103 @@ export default function CategoriesPage() {
 
     return list;
   }, [categories, statusFilter, showSystem, showBuffer, typeFilter, search]);
+
+  useEffect(() => {
+    // Keep selection aligned with current filtered set
+    if (!bulkMode) return;
+    const visibleIds = new Set(filteredCategories.map((c) => c.id));
+    setSelectedIds((cur) => new Set(Array.from(cur).filter((id) => visibleIds.has(id))));
+  }, [bulkMode, filteredCategories]);
+
+  const toggleSelected = (id: number, checked: boolean) => {
+    setSelectedIds((cur) => {
+      const next = new Set(cur);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const selectAllVisible = (checked: boolean) => {
+    if (!checked) {
+      clearSelection();
+      return;
+    }
+    setSelectedIds(new Set(filteredCategories.map((c) => c.id)));
+  };
+
+  const bulkArchiveOrRestore = async (is_archived: boolean) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    // Apply guardrails for archive
+    const allowedIds = is_archived
+      ? ids.filter((id) => {
+          const c = categories.find((x) => x.id === id);
+          return c ? canArchiveCategory(c) : false;
+        })
+      : ids;
+
+    const skipped = ids.length - allowedIds.length;
+    if (allowedIds.length === 0) {
+      toast.error('No selected categories can be archived');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/categories/bulk-archive', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryIds: allowedIds, is_archived }),
+      });
+      if (!res.ok) {
+        const msg = await handleApiError(res, 'Failed to update categories');
+        throw new Error(msg || 'Failed to update categories');
+      }
+      const updated = (await res.json()) as Category[];
+      setCategories((cur) =>
+        cur.map((c) => {
+          const u = updated.find((x) => x.id === c.id);
+          return u ? u : c;
+        })
+      );
+      toast.success(is_archived ? 'Categories archived' : 'Categories restored');
+      if (skipped > 0) toast.message(`${skipped} system/buffer categories were skipped`);
+      clearSelection();
+      setBulkMode(false);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to update categories');
+    }
+  };
+
+  const bulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkDeleteDialogOpen(false);
+    const prev = categories;
+    setCategories((cur) => cur.filter((c) => !selectedIds.has(c.id)));
+
+    try {
+      // Delete sequentially to keep server load reasonable
+      for (const id of ids) {
+        const res = await fetch(`/api/categories/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const msg = await handleApiError(res, 'Failed to delete category');
+          throw new Error(msg || 'Failed to delete category');
+        }
+      }
+      toast.success('Categories deleted');
+      clearSelection();
+      setBulkMode(false);
+    } catch (e) {
+      console.error(e);
+      setCategories(prev);
+      toast.error('Failed to delete one or more categories');
+    }
+  };
 
   const startEdit = (category: Category) => {
     setEditingCategory(category);
@@ -663,6 +767,18 @@ export default function CategoriesPage() {
 
           <div className="flex items-center gap-2 justify-end">
             <Button
+              variant={bulkMode ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                if (isReorderMode) cancelReorder();
+                setBulkMode((v) => !v);
+                clearSelection();
+              }}
+              disabled={!canEdit}
+            >
+              Bulk
+            </Button>
+            <Button
               variant={viewMode === 'grid' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setViewMode('grid')}
@@ -684,7 +800,7 @@ export default function CategoriesPage() {
                 variant="outline"
                 size="sm"
                 onClick={beginReorder}
-                disabled={!canEdit || statusFilter === 'archived'}
+                disabled={!canEdit || statusFilter === 'archived' || bulkMode}
               >
                 <GripVertical className="h-4 w-4 mr-2" />
                 Reorder
@@ -703,6 +819,34 @@ export default function CategoriesPage() {
           </div>
         </div>
       </Card>
+
+      {/* Bulk action bar */}
+      {bulkMode && (
+        <Card className="p-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm text-muted-foreground">
+              Selected: <span className="font-medium text-foreground">{selectedIds.size}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => bulkArchiveOrRestore(true)} disabled={selectedIds.size === 0}>
+                <Archive className="h-4 w-4 mr-2" />
+                Archive
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => bulkArchiveOrRestore(false)} disabled={selectedIds.size === 0}>
+                <ArchiveRestore className="h-4 w-4 mr-2" />
+                Restore
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => setBulkDeleteDialogOpen(true)} disabled={selectedIds.size === 0}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => { clearSelection(); setBulkMode(false); }}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Content */}
       {categoriesToRender.length === 0 ? (
@@ -723,6 +867,16 @@ export default function CategoriesPage() {
                 const card = (
                   <Card className="p-3">
                     <div className="flex items-start justify-between gap-2">
+                      {bulkMode && (
+                        <div className="pt-1">
+                          <Checkbox
+                            checked={selectedIds.has(category.id)}
+                            onCheckedChange={(v) => toggleSelected(category.id, !!v)}
+                            aria-label="Select category"
+                            disabled={!canEdit}
+                          />
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <Link
@@ -832,7 +986,16 @@ export default function CategoriesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[44px]" />
+                    <TableHead className="w-[44px]">
+                      {bulkMode ? (
+                        <Checkbox
+                          checked={filteredCategories.length > 0 && selectedIds.size === filteredCategories.length}
+                          onCheckedChange={(v) => selectAllVisible(!!v)}
+                          aria-label="Select all"
+                          disabled={!canEdit}
+                        />
+                      ) : null}
+                    </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead className="text-right">Monthly</TableHead>
@@ -854,7 +1017,16 @@ export default function CategoriesPage() {
 
                       return (
                         <TableRow key={category.id} className={isArchived ? 'opacity-70' : ''}>
-                          <TableCell className="w-[44px]" />
+                          <TableCell className="w-[44px]">
+                            {bulkMode ? (
+                              <Checkbox
+                                checked={selectedIds.has(category.id)}
+                                onCheckedChange={(v) => toggleSelected(category.id, !!v)}
+                                aria-label="Select category"
+                                disabled={!canEdit}
+                              />
+                            ) : null}
+                          </TableCell>
                           <TableCell className="max-w-[260px]">
                             <div className="flex items-center gap-2 min-w-0">
                               <Link href={`/categories/${category.id}`} className="hover:underline truncate font-medium">
@@ -924,7 +1096,7 @@ export default function CategoriesPage() {
                       <SortableTableRow
                         key={category.id}
                         category={category}
-                        disabled={!canEdit}
+                        disabled={!canEdit || bulkMode}
                         categoryTypesEnabled={categoryTypesEnabled}
                         monthlySpending={monthlySpending}
                         ytdSpending={ytdSpending}
@@ -1110,6 +1282,24 @@ export default function CategoriesPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleArchiveToggle}>
               {categoryToArchive?.is_archived ? 'Restore' : 'Archive'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk delete confirmation */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete selected categories?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {selectedIds.size} category{selectedIds.size === 1 ? '' : 'ies'}. If any are used by existing transactions, consider archiving instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={bulkDelete} className="bg-red-600 hover:bg-red-700">
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

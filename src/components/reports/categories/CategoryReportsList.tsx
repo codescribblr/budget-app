@@ -38,7 +38,7 @@ export default function CategoryReportsList() {
       try {
         setLoading(true);
         const [categoriesRes, transactionsRes] = await Promise.all([
-          fetch('/api/categories'),
+          fetch('/api/categories?includeArchived=all'),
           fetch('/api/transactions'),
         ]);
 

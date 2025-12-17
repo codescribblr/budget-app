@@ -127,7 +127,7 @@ export function CommandPalette() {
 
       // Fetch all static data in parallel
       Promise.all([
-        fetch('/api/categories').then(res => {
+        fetch('/api/categories?includeArchived=all').then(res => {
           if (!res.ok) throw new Error(`Failed to fetch categories: ${res.status}`)
           return res.json()
         }),

@@ -264,6 +264,27 @@ export async function deleteCategory(id: number): Promise<void> {
   if (error) throw error;
 }
 
+export async function setCategoriesArchived(
+  categoryIds: number[],
+  is_archived: boolean
+): Promise<Category[]> {
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  if (!Array.isArray(categoryIds) || categoryIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('categories')
+    .update({ is_archived, updated_at: new Date().toISOString() })
+    .in('id', categoryIds)
+    .eq('account_id', accountId)
+    .select('*');
+
+  if (error) throw error;
+  return (data ?? []) as Category[];
+}
+
 export async function updateCategoriesOrder(
   categoryOrders: Array<{ id: number; sort_order: number }>
 ): Promise<void> {
