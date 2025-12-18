@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -125,9 +125,19 @@ export default function TransactionsPage() {
     return 50;
   });
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+
   const fetchData = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
     try {
       setLoading(true);
+      // Use regular fetch - the cache will be handled at a higher level
+      // We'll prevent duplicate calls by using a ref to track if fetch is in progress
       const [transactionsRes, categoriesRes, merchantGroupsRes, tagsRes] = await Promise.all([
         fetch('/api/transactions'),
         fetch('/api/categories?excludeGoals=true'),
@@ -153,11 +163,19 @@ export default function TransactionsPage() {
       setMerchantGroups([]);
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 
+  // Track if component has mounted to prevent duplicate calls
+  const hasMountedRef = useRef(false);
+
   useEffect(() => {
-    fetchData();
+    // Only fetch once on mount
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      fetchData();
+    }
   }, []);
 
   // Initialize search query from URL parameter
@@ -951,6 +969,7 @@ export default function TransactionsPage() {
           }}
           transaction={editingTransaction}
           categories={categories}
+          merchantGroups={merchantGroups}
           onSuccess={fetchData}
         />
       )}

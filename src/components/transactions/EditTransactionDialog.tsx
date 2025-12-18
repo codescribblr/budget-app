@@ -17,6 +17,7 @@ interface EditTransactionDialogProps {
   onClose: () => void;
   transaction: TransactionWithSplits;
   categories: Category[];
+  merchantGroups?: MerchantGroup[];
   onSuccess: () => void;
 }
 
@@ -30,6 +31,7 @@ export default function EditTransactionDialog({
   onClose,
   transaction,
   categories,
+  merchantGroups: parentMerchantGroups,
   onSuccess,
 }: EditTransactionDialogProps) {
   const [date, setDate] = useState<Date>(getTodayLocal());
@@ -126,23 +128,27 @@ export default function EditTransactionDialog({
   }, [isOpen, showArchivedCategories]);
 
   useEffect(() => {
-    // Fetch merchant groups
-    const fetchMerchantGroups = async () => {
-      try {
-        const response = await fetch('/api/merchant-groups');
-        const data = await response.json();
-        setMerchantGroups(data);
-      } catch (error) {
-        console.error('Error fetching merchant groups:', error);
-      }
-    };
-
+    // Use parent merchant groups if provided, otherwise fetch
     if (isOpen) {
-      fetchMerchantGroups();
+      if (parentMerchantGroups && parentMerchantGroups.length > 0) {
+        setMerchantGroups(parentMerchantGroups);
+      } else {
+        // Only fetch if not provided by parent
+        const fetchMerchantGroups = async () => {
+          try {
+            const response = await fetch('/api/merchant-groups');
+            const data = await response.json();
+            setMerchantGroups(data);
+          } catch (error) {
+            console.error('Error fetching merchant groups:', error);
+          }
+        };
+        fetchMerchantGroups();
+      }
       fetchAccounts();
       fetchCreditCards();
     }
-  }, [isOpen]);
+  }, [isOpen, parentMerchantGroups]);
 
   const fetchAccounts = async () => {
     const response = await fetch('/api/accounts');

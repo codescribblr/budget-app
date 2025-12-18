@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -13,7 +13,17 @@ export default function MoneyMovementPage() {
   const [currentSavings, setCurrentSavings] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
+
   const fetchData = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       setLoading(true);
       const [categoriesRes, dashboardRes] = await Promise.all([
@@ -32,11 +42,16 @@ export default function MoneyMovementPage() {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 
   useEffect(() => {
-    fetchData();
+    // Only fetch once on mount
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      fetchData();
+    }
   }, []);
 
   if (loading) {

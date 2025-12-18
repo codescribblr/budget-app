@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 
 /**
@@ -11,13 +11,7 @@ export async function GET(
   { params }: { params: Promise<{ batchId: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    const { supabase, user } = await getAuthenticatedUser();
     const accountId = await getActiveAccountId();
     if (!accountId) {
       return NextResponse.json({ error: 'No active account' }, { status: 400 });

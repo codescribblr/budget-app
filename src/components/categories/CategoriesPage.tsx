@@ -1,7 +1,7 @@
 'use client';
 
 import type { CSSProperties, ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -365,7 +365,17 @@ export default function CategoriesPage() {
     setNewTargetBalance('');
   };
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
+
   const fetchData = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       setLoading(true);
       const [categoriesRes, monthlyRes, ytdRes] = await Promise.all([
@@ -391,11 +401,16 @@ export default function CategoriesPage() {
       setCategories([]);
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 
   useEffect(() => {
-    fetchData();
+    // Only fetch once on mount
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      fetchData();
+    }
   }, []);
 
   const filteredCategories = useMemo(() => {

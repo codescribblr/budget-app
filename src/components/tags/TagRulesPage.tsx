@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -45,11 +45,17 @@ export default function TagRulesPage() {
   const [formIsActive, setFormIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
 
   const fetchData = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       setLoading(true);
       const [rulesRes, tagsRes, categoriesRes] = await Promise.all([
@@ -66,8 +72,17 @@ export default function TagRulesPage() {
       toast.error('Failed to load tag rules');
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
+
+  useEffect(() => {
+    // Only fetch once on mount
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      fetchData();
+    }
+  }, []);
 
   const handleCreateRule = async () => {
     if (!formTagId || !formRuleValue.trim()) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { getOrCreateManualImportSetup, queueTransactions } from '@/lib/automatic-imports/queue-manager';
 import { parseCSVWithMapping } from '@/lib/csv-parser-helpers';
@@ -17,13 +17,8 @@ export async function POST(
   { params }: { params: Promise<{ batchId: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    const { supabase, user } = await getAuthenticatedUser();
+    
     const { checkWriteAccess } = await import('@/lib/api-helpers');
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,7 +61,11 @@ export default function IncomePage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadData();
+    // Only fetch once on mount
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      loadData();
+    }
   }, []);
 
   // Calculate paychecks per month based on pay frequency
@@ -125,13 +129,28 @@ export default function IncomePage() {
     }, 0);
   };
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
+
   const loadData = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       setIsLoading(true);
 
-      // Fetch settings
-      const settingsRes = await fetch('/api/settings');
+      // Fetch settings and categories in parallel
+      const [settingsRes, categoriesRes] = await Promise.all([
+        fetch('/api/settings'),
+        fetch('/api/categories'),
+      ]);
+
       const settingsData = await settingsRes.json();
+      const categoriesData = await categoriesRes.json();
 
       const settings: IncomeSettings = {
         annual_income: parseFloat(settingsData.annual_salary || settingsData.annual_income || '0'),
@@ -154,11 +173,8 @@ export default function IncomePage() {
       setScenarioSettings(settings);
       setPreTaxDeductionItems(deductionItems);
 
-      // Fetch categories to calculate monthly budget
-      const categoriesRes = await fetch('/api/categories');
-      const categoriesData = await categoriesRes.json();
+      // Calculate monthly budget from categories
       const categories = Array.isArray(categoriesData) ? categoriesData : [];
-
       const totalBudget = categories
         .filter((cat: any) => !cat.is_system)
         .reduce((sum: number, cat: any) => sum + parseFloat(cat.monthly_amount || '0'), 0);
@@ -169,6 +185,7 @@ export default function IncomePage() {
       toast.error('Failed to load income settings');
     } finally {
       setIsLoading(false);
+      fetchingRef.current = false;
     }
   };
 

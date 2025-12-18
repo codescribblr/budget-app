@@ -88,7 +88,7 @@ const navigationItems = [
   { label: "Settings", path: "/settings", icon: Settings },
   { label: "Help Center", path: "/help", icon: HelpCircle },
   { label: "Budget Setup Wizard", path: "/help/wizards/budget-setup", icon: Sparkles },
-  { label: "Income Buffer Wizard", path: "/help/wizards/income-buffer", icon: Sparkles },
+  { label: "Income Buffer Wizard", path: "/help/wizards/income-buffer", icon: Sparkles, featureKey: "income_buffer" },
 ]
 
 export function CommandPalette() {

@@ -39,6 +39,7 @@ export default function AppHeader({
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const advancedReportingEnabled = useFeature('advanced_reporting');
+  const incomeBufferEnabled = useFeature('income_buffer');
 
   const isActive = (path: string) => {
     if (path === '/dashboard') {
@@ -231,19 +232,21 @@ export default function AppHeader({
                         Budget Setup Wizard
                       </span>
                     </button>
-                    <button
-                      onClick={() => handleNavigation('/help/wizards/income-buffer')}
-                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
-                        isActive('/help/wizards/income-buffer')
-                          ? 'bg-gray-800 text-white hover:bg-gray-700'
-                          : 'hover:bg-accent'
-                      }`}
-                    >
-                      <span className="flex items-center">
-                        <span className="mr-2 text-muted-foreground">└</span>
-                        Income Buffer Wizard
-                      </span>
-                    </button>
+                    {incomeBufferEnabled && (
+                      <button
+                        onClick={() => handleNavigation('/help/wizards/income-buffer')}
+                        className={`w-full text-left px-4 py-3 transition-colors border-b ${
+                          isActive('/help/wizards/income-buffer')
+                            ? 'bg-gray-800 text-white hover:bg-gray-700'
+                            : 'hover:bg-accent'
+                        }`}
+                      >
+                        <span className="flex items-center">
+                          <span className="mr-2 text-muted-foreground">└</span>
+                          Income Buffer Wizard
+                        </span>
+                      </button>
+                    )}
 
                     <div className="mt-4 px-4">
                       <SignOutButton />
@@ -364,9 +367,11 @@ export default function AppHeader({
                   <DropdownMenuItem onClick={() => window.location.href = '/help/wizards/budget-setup'}>
                     Budget Setup Wizard
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => window.location.href = '/help/wizards/income-buffer'}>
-                    Income Buffer Wizard
-                  </DropdownMenuItem>
+                  {incomeBufferEnabled && (
+                    <DropdownMenuItem onClick={() => window.location.href = '/help/wizards/income-buffer'}>
+                      Income Buffer Wizard
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
               <AIUsageIndicator />

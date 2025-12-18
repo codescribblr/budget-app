@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,17 @@ export default function TagsPage() {
   const [totalUniqueTransactions, setTotalUniqueTransactions] = useState<number>(0);
   const [totalUniqueAmount, setTotalUniqueAmount] = useState<number>(0);
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
+
   const fetchTags = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       setLoading(true);
       const response = await fetch('/api/tags?includeStats=true');
@@ -63,11 +73,16 @@ export default function TagsPage() {
       toast.error('Failed to fetch tags');
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 
   useEffect(() => {
-    fetchTags();
+    // Only fetch once on mount
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      fetchTags();
+    }
   }, []);
 
   const handleEdit = (tag: TagWithStats) => {

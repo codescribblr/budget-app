@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     // Check cache first (unless regenerate requested)
     if (!regenerate) {
-      const supabase = await createClient();
+      const { supabase } = await getAuthenticatedUser();
       const { data: cached } = await supabase
         .from('ai_insights_cache')
         .select('id, insights, generated_at, feedback, feedback_at')
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     // Gather user data
     // SECURITY: All queries below MUST filter by accountId to ensure we only access data
     // from the currently active account that the user has access to.
-    const supabase = await createClient();
+    const { supabase } = await getAuthenticatedUser();
 
     const monthStart = startOfMonth.toISOString().split('T')[0];
     const monthEnd = endOfMonth.toISOString().split('T')[0];

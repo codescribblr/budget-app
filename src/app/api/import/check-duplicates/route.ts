@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { distance } from 'fastest-levenshtein';
 
 interface TransactionData {
@@ -17,13 +17,7 @@ export async function POST(request: Request) {
       batchId?: string;
     };
 
-    const supabase = await createClient();
-
-    // Check authentication
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { supabase, user } = await getAuthenticatedUser();
 
 
     const duplicateHashes = new Set<string>();

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase-queries';
+import { getActiveAccountId } from '@/lib/account-context';
 import { recordMonthlyFunding, isFeatureEnabled } from '@/lib/supabase-queries';
+import { checkWriteAccess } from '@/lib/api-helpers';
 
 /**
  * POST /api/allocations/batch
@@ -12,16 +14,16 @@ import { recordMonthlyFunding, isFeatureEnabled } from '@/lib/supabase-queries';
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const { supabase, user } = await getAuthenticatedUser();
+    
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
+
+    const accountId = await getActiveAccountId();
+    
+    if (!accountId) {
+      return NextResponse.json({ error: 'No active account' }, { status: 400 });
+    }
 
     const body = await request.json();
     const { allocations, month } = body;
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
       .from('categories')
       .select('id, name, current_balance, monthly_amount')
       .in('id', categoryIds)
-      .eq('user_id', user.id);
+      .eq('account_id', accountId);
 
     if (categoryError) {
       console.error('Error fetching categories:', categoryError);
@@ -96,7 +98,7 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq('id', allocation.categoryId)
-        .eq('user_id', user.id);
+        .eq('account_id', accountId);
     });
 
     // Execute all updates in parallel

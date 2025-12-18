@@ -98,7 +98,7 @@ const navigationSections = [
         icon: Sparkles,
         subItems: [
           { label: "Budget Setup", path: "/help/wizards/budget-setup" },
-          { label: "Income Buffer", path: "/help/wizards/income-buffer" },
+          { label: "Income Buffer", path: "/help/wizards/income-buffer", featureKey: "income_buffer" },
         ],
       },
     ],
@@ -210,19 +210,40 @@ export function AppSidebar() {
                             </CollapsibleTrigger>
                             <CollapsibleContent>
                               <SidebarMenuSub>
-                                {('subItems' in item && item.subItems ? item.subItems : []).map((subItem) => {
-                                  const subActive = isActive(subItem.path)
-                                  return (
-                                    <SidebarMenuSubItem key={subItem.path}>
-                                      <SidebarMenuSubButton
-                                        isActive={subActive}
-                                        onClick={() => handleNavigation(subItem.path)}
-                                      >
-                                        {subItem.label}
-                                      </SidebarMenuSubButton>
-                                    </SidebarMenuSubItem>
-                                  )
-                                })}
+                                {('subItems' in item && item.subItems ? item.subItems : [])
+                                  .filter((subItem) => {
+                                    // If subItem has a featureKey, check if feature is enabled
+                                    if ('featureKey' in subItem && subItem.featureKey) {
+                                      const featureKey = subItem.featureKey as string;
+                                      switch (featureKey) {
+                                        case 'income_buffer':
+                                          return incomeBufferEnabled;
+                                        case 'goals':
+                                          return goalsEnabled;
+                                        case 'ai_chat':
+                                          return aiChatEnabled;
+                                        case 'advanced_reporting':
+                                          return advancedReportingEnabled;
+                                        default:
+                                          return true;
+                                      }
+                                    }
+                                    // No feature requirement, show item
+                                    return true;
+                                  })
+                                  .map((subItem) => {
+                                    const subActive = isActive(subItem.path);
+                                    return (
+                                      <SidebarMenuSubItem key={subItem.path}>
+                                        <SidebarMenuSubButton
+                                          isActive={subActive}
+                                          onClick={() => handleNavigation(subItem.path)}
+                                        >
+                                          {subItem.label}
+                                        </SidebarMenuSubButton>
+                                      </SidebarMenuSubItem>
+                                    );
+                                  })}
                               </SidebarMenuSub>
                             </CollapsibleContent>
                           </SidebarMenuItem>

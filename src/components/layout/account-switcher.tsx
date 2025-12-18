@@ -27,6 +27,8 @@ interface Account {
   isOwner: boolean
 }
 
+import { fetchBudgetAccounts, clearBudgetAccountsCache } from '@/lib/budget-accounts-cache';
+
 export function AccountSwitcher() {
   const router = useRouter()
   const { resolvedTheme } = useTheme()
@@ -51,23 +53,19 @@ export function AccountSwitcher() {
 
   const loadAccounts = async () => {
     try {
-      const response = await fetch('/api/budget-accounts')
-      if (response.ok) {
-        const data = await response.json()
-        const accountsList = data.accounts || []
-        setAccounts(accountsList)
-        setActiveAccountId(data.activeAccountId)
-        setHasOwnAccount(data.hasOwnAccount || false)
+      const data = await fetchBudgetAccounts();
+      setAccounts(data.accounts);
+      setActiveAccountId(data.activeAccountId);
+      setHasOwnAccount(data.hasOwnAccount);
 
-        // Auto-select if only one account and none is currently selected
-        if (accountsList.length === 1 && !data.activeAccountId) {
-          await handleSwitchAccount(accountsList[0].accountId)
-        }
+      // Auto-select if only one account and none is currently selected
+      if (data.accounts.length === 1 && !data.activeAccountId) {
+        await handleSwitchAccount(data.accounts[0].accountId);
       }
     } catch (error) {
-      console.error('Error loading budget accounts:', error)
+      console.error('Error loading budget accounts:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -112,6 +110,8 @@ export function AccountSwitcher() {
         setShowCreateDialog(false)
         setNewAccountName("")
         setCreateError(null)
+        // Clear cache and reload
+        clearBudgetAccountsCache();
         await loadAccounts()
         // Switch to new account - this will trigger a full page reload
         // via handleSwitchAccount to ensure all data, features, permissions,

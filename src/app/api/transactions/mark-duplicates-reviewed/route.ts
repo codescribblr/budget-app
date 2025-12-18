@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import { getActiveAccountId } from '@/lib/account-context';
 import { createHash } from 'crypto';
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = await createClient();
+    const { supabase, user } = await getAuthenticatedUser();
     const accountId = await getActiveAccountId();
     
     if (!accountId) {
@@ -46,12 +46,6 @@ export async function POST(request: Request) {
         { error: 'No active account. Please select an account first.' },
         { status: 400 }
       );
-    }
-
-    // Check authentication
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Validate all transactions belong to user's account

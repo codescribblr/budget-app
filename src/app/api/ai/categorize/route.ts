@@ -3,7 +3,6 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { aiRateLimiter } from '@/lib/ai/rate-limiter';
 import { geminiService } from '@/lib/ai/gemini-service';
-import { createClient } from '@/lib/supabase/server';
 import { getAllCategories } from '@/lib/supabase-queries';
 
 /**
@@ -45,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get transactions
-    const supabase = await createClient();
+    const { supabase } = await getAuthenticatedUser();
     const { data: transactions, error: txError } = await supabase
       .from('transactions')
       .select('id, merchant, total_amount, date, categories(name)')

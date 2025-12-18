@@ -4,9 +4,10 @@
 
 BEGIN;
 
--- Add tag_ids column to queued_imports (stored as JSONB array of tag IDs)
+-- Add tag_ids column to queued_imports (stored as array of tag IDs)
+-- Note: tags.id is BIGINT (BIGSERIAL), so we use BIGINT[] to match
 ALTER TABLE queued_imports
-  ADD COLUMN IF NOT EXISTS tag_ids INTEGER[] DEFAULT '{}';
+  ADD COLUMN IF NOT EXISTS tag_ids BIGINT[] DEFAULT '{}';
 
 -- Add index for tag lookups
 CREATE INDEX IF NOT EXISTS idx_queued_imports_tag_ids ON queued_imports USING GIN(tag_ids);

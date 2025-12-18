@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,16 +37,28 @@ export default function CategoryRulesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [ruleToDelete, setRuleToDelete] = useState<MerchantCategoryRule | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
 
   const fetchData = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       setLoading(true);
 
-      // Fetch categories
-      const categoriesResponse = await fetch('/api/categories?includeArchived=all');
+      // Fetch all data in parallel instead of sequentially
+      const [categoriesResponse, rulesResponse, groupsResponse] = await Promise.all([
+        fetch('/api/categories?includeArchived=all'),
+        fetch('/api/category-rules'),
+        fetch('/api/merchant-groups'),
+      ]);
+
+      // Process responses
       if (!categoriesResponse.ok) {
         const errorData = await categoriesResponse.json();
         throw new Error(errorData.error || 'Failed to fetch categories');
@@ -56,21 +68,21 @@ export default function CategoryRulesPage() {
         throw new Error('Invalid response: categories is not an array');
       }
 
-      // Fetch category rules
-      const rulesResponse = await fetch('/api/category-rules');
-      if (!rulesResponse.ok) {
+      let rulesData = { rules: [] };
+      if (rulesResponse.ok) {
+        rulesData = await rulesResponse.json();
+      } else {
         const errorData = await rulesResponse.json();
-        throw new Error(errorData.error || 'Failed to fetch category rules');
+        console.error('Failed to fetch category rules:', errorData.error);
       }
-      const rulesData = await rulesResponse.json();
 
-      // Fetch merchant groups
-      const groupsResponse = await fetch('/api/merchant-groups');
-      if (!groupsResponse.ok) {
+      let groupsData: any[] = [];
+      if (groupsResponse.ok) {
+        groupsData = await groupsResponse.json();
+      } else {
         const errorData = await groupsResponse.json();
-        throw new Error(errorData.error || 'Failed to fetch merchant groups');
+        console.error('Failed to fetch merchant groups:', errorData.error);
       }
-      const groupsData = await groupsResponse.json();
 
       // Create a map of merchant group IDs to display names
       const groupMap = new Map<number, string>();
@@ -90,8 +102,17 @@ export default function CategoryRulesPage() {
       setMerchantGroups(new Map());
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
+
+  useEffect(() => {
+    // Only fetch once on mount
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      fetchData();
+    }
+  }, []);
 
   const handleUpdateRuleCategory = async (ruleId: number, newCategoryId: number) => {
     const rule = rules.find(r => r.id === ruleId);
