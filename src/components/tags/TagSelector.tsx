@@ -20,6 +20,9 @@ interface TagSelectorProps {
   onChange: (tagIds: number[]) => void;
   placeholder?: string;
   maxDisplay?: number;
+  transactionDescription?: string;
+  categoryIds?: number[];
+  merchantGroupId?: number | null;
 }
 
 export default function TagSelector({
@@ -27,8 +30,12 @@ export default function TagSelector({
   onChange,
   placeholder = 'Select tags...',
   maxDisplay = 3,
+  transactionDescription,
+  categoryIds = [],
+  merchantGroupId,
 }: TagSelectorProps) {
   const [tags, setTags] = useState<TagType[]>([]);
+  const [suggestedTags, setSuggestedTags] = useState<TagType[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,6 +46,29 @@ export default function TagSelector({
   useEffect(() => {
     fetchTags();
   }, []);
+
+  useEffect(() => {
+    if (transactionDescription && (categoryIds.length > 0 || merchantGroupId)) {
+      fetchSuggestions();
+    }
+  }, [transactionDescription, categoryIds, merchantGroupId]);
+
+  const fetchSuggestions = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (transactionDescription) params.set('description', transactionDescription);
+      if (categoryIds.length > 0) params.set('categoryIds', categoryIds.join(','));
+      if (merchantGroupId) params.set('merchantGroupId', merchantGroupId.toString());
+
+      const response = await fetch(`/api/tags/suggestions?${params.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSuggestedTags(data);
+      }
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+    }
+  };
 
   useEffect(() => {
     if (open && searchInputRef.current) {
@@ -180,32 +210,68 @@ export default function TagSelector({
           <div className="max-h-[300px] overflow-y-auto p-2">
             {loading ? (
               <div className="text-center py-4 text-muted-foreground">Loading tags...</div>
-            ) : filteredTags.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground">
-                {searchQuery ? 'No tags found' : 'No tags available'}
-              </div>
             ) : (
-              <div className="space-y-1">
-                {filteredTags.map((tag) => (
-                  <div
-                    key={tag.id}
-                    className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded cursor-pointer"
-                    onClick={() => handleTagToggle(tag.id)}
-                  >
-                    <Checkbox
-                      checked={selectedTagIds.includes(tag.id)}
-                      onCheckedChange={() => handleTagToggle(tag.id)}
-                    />
-                    {tag.color && (
-                      <div
-                        className="w-4 h-4 rounded-full border border-gray-300"
-                        style={{ backgroundColor: tag.color }}
-                      />
-                    )}
-                    <Label className="flex-1 cursor-pointer">{tag.name}</Label>
+              <>
+                {suggestedTags.length > 0 && !searchQuery && (
+                  <div className="mb-2">
+                    <div className="text-xs font-semibold text-muted-foreground px-2 py-1">Suggestions</div>
+                    <div className="space-y-1">
+                      {suggestedTags.map((tag) => (
+                        <div
+                          key={tag.id}
+                          className="flex items-center space-x-2 p-2 hover:bg-blue-50 rounded cursor-pointer bg-blue-50/50"
+                          onClick={() => handleTagToggle(tag.id)}
+                        >
+                          <Checkbox
+                            checked={selectedTagIds.includes(tag.id)}
+                            onCheckedChange={() => handleTagToggle(tag.id)}
+                          />
+                          {tag.color && (
+                            <div
+                              className="w-4 h-4 rounded-full border border-gray-300"
+                              style={{ backgroundColor: tag.color }}
+                            />
+                          )}
+                          <Label className="flex-1 cursor-pointer">{tag.name}</Label>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="border-t my-2"></div>
                   </div>
-                ))}
-              </div>
+                )}
+                {filteredTags.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground">
+                    {searchQuery ? 'No tags found' : 'No tags available'}
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {filteredTags.map((tag) => {
+                      const isSuggested = suggestedTags.some(st => st.id === tag.id);
+                      return (
+                        <div
+                          key={tag.id}
+                          className={`flex items-center space-x-2 p-2 hover:bg-gray-100 rounded cursor-pointer ${
+                            isSuggested && !searchQuery ? 'bg-blue-50/50' : ''
+                          }`}
+                          onClick={() => handleTagToggle(tag.id)}
+                        >
+                          <Checkbox
+                            checked={selectedTagIds.includes(tag.id)}
+                            onCheckedChange={() => handleTagToggle(tag.id)}
+                          />
+                          {tag.color && (
+                            <div
+                              className="w-4 h-4 rounded-full border border-gray-300"
+                              style={{ backgroundColor: tag.color }}
+                            />
+                          )}
+                          <Label className="flex-1 cursor-pointer">{tag.name}</Label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
           <div className="p-2 border-t">

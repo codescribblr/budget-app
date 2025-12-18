@@ -25,6 +25,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { TransactionWithSplits, Category, Account, CreditCard } from '@/lib/types';
 import EditTransactionDialog from './EditTransactionDialog';
 import BulkEditDialog, { BulkEditUpdates } from '@/components/import/BulkEditDialog';
+import BulkTagDialog from '@/components/tags/BulkTagDialog';
 import { Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
@@ -60,6 +61,7 @@ export default function TransactionList({
   const [editingField, setEditingField] = useState<EditingField | null>(null);
   const [selectedTransactions, setSelectedTransactions] = useState<Set<number>>(new Set());
   const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
+  const [showBulkTagDialog, setShowBulkTagDialog] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [localTransactions, setLocalTransactions] = useState<TransactionWithSplits[]>(transactions);
@@ -476,6 +478,14 @@ export default function TransactionList({
             <Edit className="h-4 w-4 mr-2" />
             Bulk Edit {selectedTransactions.size > 0 ? `(${selectedTransactions.size})` : ''}
           </Button>
+          <Button
+            onClick={() => setShowBulkTagDialog(true)}
+            variant="outline"
+            disabled={selectedTransactions.size < 1}
+          >
+            <Tag className="h-4 w-4 mr-2" />
+            Bulk Tag {selectedTransactions.size > 0 ? `(${selectedTransactions.size})` : ''}
+          </Button>
           {selectedTransactions.size > 0 && (
             <Button
               onClick={() => setSelectedTransactions(new Set())}
@@ -844,6 +854,19 @@ export default function TransactionList({
           open={showBulkEditDialog}
           onClose={() => setShowBulkEditDialog(false)}
           onSave={handleBulkEditSave}
+        />
+      )}
+
+      {/* Bulk Tag Dialog */}
+      {showBulkTagDialog && (
+        <BulkTagDialog
+          isOpen={showBulkTagDialog}
+          onClose={() => setShowBulkTagDialog(false)}
+          transactionIds={Array.from(selectedTransactions)}
+          onSuccess={() => {
+            setSelectedTransactions(new Set());
+            onUpdate();
+          }}
         />
       )}
 

@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, Plus, Edit, Trash2, Merge, MoreVertical, Tag } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Merge, MoreVertical, Tag, Settings, Download, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
 import type { TagWithStats } from '@/lib/types';
@@ -110,6 +110,57 @@ export default function TagsPage() {
     await fetchTags();
   };
 
+  const handleExportTags = async () => {
+    try {
+      const response = await fetch('/api/tags/export');
+      if (!response.ok) throw new Error('Failed to export tags');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tags-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Tags exported successfully');
+    } catch (error) {
+      console.error('Error exporting tags:', error);
+      toast.error('Failed to export tags');
+    }
+  };
+
+  const handleImportTags = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/tags/import', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to import tags');
+      }
+
+      const result = await response.json();
+      toast.success(`Imported ${result.created} tag${result.created !== 1 ? 's' : ''}${result.skipped > 0 ? `, skipped ${result.skipped}` : ''}`);
+      await fetchTags();
+    } catch (error: any) {
+      console.error('Error importing tags:', error);
+      toast.error(error.message || 'Failed to import tags');
+    } finally {
+      // Reset input
+      e.target.value = '';
+    }
+  };
+
   const filteredTags = tags.filter(tag =>
     tag.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -189,13 +240,46 @@ export default function TagsPage() {
                   </Button>
                 </>
               ) : (
-                <Button
-                  onClick={() => setShowCreateDialog(true)}
-                  size="sm"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Tag
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => router.push('/tags/rules')}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Settings className="mr-2 h-4 w-4" />
+                    Rules
+                  </Button>
+                  <Button
+                    onClick={handleExportTags}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                  </Button>
+                  <Button
+                    onClick={() => document.getElementById('tag-import-input')?.click()}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Import
+                  </Button>
+                  <input
+                    id="tag-import-input"
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={handleImportTags}
+                  />
+                  <Button
+                    onClick={() => setShowCreateDialog(true)}
+                    size="sm"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Tag
+                  </Button>
+                </div>
               )}
             </div>
           </div>

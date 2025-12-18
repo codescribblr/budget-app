@@ -1360,6 +1360,20 @@ export async function createTransaction(data: {
     }
   }
 
+  // Add tags if provided
+  if (data.tag_ids && data.tag_ids.length > 0) {
+    const { addTagsToTransaction } = await import('@/lib/db/tags');
+    await addTagsToTransaction(transaction.id, data.tag_ids);
+  } else {
+    // Apply tag rules if no tags were explicitly provided
+    const { applyTagRulesToTransaction } = await import('@/lib/db/tag-rules');
+    const ruleTagIds = await applyTagRulesToTransaction(transaction.id);
+    if (ruleTagIds.length > 0) {
+      const { addTagsToTransaction } = await import('@/lib/db/tags');
+      await addTagsToTransaction(transaction.id, ruleTagIds);
+    }
+  }
+
   // Return the created transaction with splits
   const result = await getTransactionById(transaction.id);
   if (!result) throw new Error('Failed to retrieve created transaction');
@@ -1494,6 +1508,9 @@ export async function updateTransaction(
   if (data.tag_ids !== undefined) {
     const { setTransactionTags } = await import('@/lib/db/tags');
     await setTransactionTags(id, data.tag_ids);
+  } else {
+    // Apply tag rules if tags weren't explicitly set (only for new transactions)
+    // Note: We don't auto-apply rules on update to avoid overwriting user choices
   }
 
   // Return updated transaction

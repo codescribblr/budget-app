@@ -349,6 +349,9 @@ export default function EditTransactionDialog({
             <TagSelector
               selectedTagIds={selectedTagIds}
               onChange={setSelectedTagIds}
+              transactionDescription={description}
+              categoryIds={splits.map(s => s.category_id).filter(id => id > 0)}
+              merchantGroupId={merchantGroupId}
             />
           </div>
 
