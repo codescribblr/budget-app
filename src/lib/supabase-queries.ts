@@ -1017,7 +1017,7 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
     return [];
   }
 
-  // Get all transactions with merchant group, account, and credit card info
+  // Get all transactions with merchant group, account, credit card, and tags info
   const { data: transactions, error: txError } = await supabase
     .from('transactions')
     .select(`
@@ -1030,6 +1030,9 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
       ),
       credit_cards (
         name
+      ),
+      transaction_tags (
+        tags (*)
       )
     `)
     .eq('budget_account_id', accountId)
@@ -1086,6 +1089,7 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
     merchant_name: transaction.merchant_groups?.display_name || null,
     account_name: transaction.accounts?.name || null,
     credit_card_name: transaction.credit_cards?.name || null,
+    tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
     splits: splitsByTransaction.get(transaction.id) || [],
   }));
 
@@ -1115,6 +1119,9 @@ export async function searchTransactions(
       ),
       credit_cards (
         name
+      ),
+      transaction_tags (
+        tags (*)
       )
     `)
     .eq('budget_account_id', accountId)
@@ -1173,6 +1180,7 @@ export async function searchTransactions(
     merchant_name: transaction.merchant_groups?.display_name || null,
     account_name: transaction.accounts?.name || null,
     credit_card_name: transaction.credit_cards?.name || null,
+    tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
     splits: splitsByTransaction.get(transaction.id) || [],
   }));
 
@@ -1184,7 +1192,7 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
-  // Get transaction with merchant group, account, and credit card info
+  // Get transaction with merchant group, account, credit card, and tags info
   const { data: transaction, error: txError } = await supabase
     .from('transactions')
     .select(`
@@ -1197,6 +1205,9 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
       ),
       credit_cards (
         name
+      ),
+      transaction_tags (
+        tags (*)
       )
     `)
     .eq('id', id)
@@ -1242,6 +1253,7 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
     merchant_name: (transaction as any).merchant_groups?.display_name || null,
     account_name: (transaction as any).accounts?.name || null,
     credit_card_name: (transaction as any).credit_cards?.name || null,
+    tags: ((transaction as any).transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
     splits: formattedSplits,
   } as TransactionWithSplits;
 }
@@ -1253,6 +1265,7 @@ export async function createTransaction(data: {
   is_historical?: boolean;
   account_id?: number | null;
   credit_card_id?: number | null;
+  tag_ids?: number[];
   splits: { category_id: number; amount: number }[];
 }): Promise<TransactionWithSplits> {
   const { supabase, user } = await getAuthenticatedUser();
@@ -1362,6 +1375,7 @@ export async function updateTransaction(
     merchant_group_id?: number | null;
     account_id?: number | null;
     credit_card_id?: number | null;
+    tag_ids?: number[];
     splits?: { category_id: number; amount: number }[];
   }
 ): Promise<TransactionWithSplits | null> {
@@ -1474,6 +1488,12 @@ export async function updateTransaction(
 
       if (balanceError) throw balanceError;
     }
+  }
+
+  // Update tags if provided
+  if (data.tag_ids !== undefined) {
+    const { setTransactionTags } = await import('@/lib/db/tags');
+    await setTransactionTags(id, data.tag_ids);
   }
 
   // Return updated transaction
