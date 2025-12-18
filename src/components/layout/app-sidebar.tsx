@@ -76,6 +76,7 @@ const navigationSections = [
       { label: "Overview", path: "/reports", icon: FileText },
       { label: "Trends", path: "/reports/trends", icon: TrendingUp, featureKey: "advanced_reporting" },
       { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
+      { label: "Tag Reports", path: "/reports/tags", icon: Tag },
     ],
   },
   {
