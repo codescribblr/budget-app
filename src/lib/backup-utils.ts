@@ -58,6 +58,8 @@ export interface AccountBackupData {
   duplicate_group_reviews?: any[];
   automatic_import_setups?: any[];
   queued_imports?: any[];
+  tags?: any[];
+  transaction_tags?: any[];
 }
 
 // Legacy interface for backward compatibility
@@ -87,6 +89,8 @@ export interface UserBackupData {
   duplicate_group_reviews?: any[];
   automatic_import_setups?: any[];
   queued_imports?: any[];
+  tags?: any[];
+  transaction_tags?: any[];
 }
 
 /**
@@ -157,6 +161,8 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     { data: duplicate_group_reviews },
     { data: automatic_import_setups },
     { data: queued_imports },
+    { data: tags },
+    { data: transaction_tags },
   ] = await Promise.all([
     supabase.from('accounts').select('*').eq('account_id', accountId),
     supabase.from('categories').select('*').eq('account_id', accountId),
@@ -187,6 +193,11 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     supabase.from('duplicate_group_reviews').select('*').eq('budget_account_id', accountId),
     supabase.from('automatic_import_setups').select('*').eq('account_id', accountId),
     supabase.from('queued_imports').select('*').eq('account_id', accountId),
+    supabase.from('tags').select('*').eq('account_id', accountId),
+    supabase
+      .from('transaction_tags')
+      .select('*, transactions!inner(budget_account_id)')
+      .eq('transactions.budget_account_id', accountId),
   ]);
 
   return {
@@ -238,6 +249,8 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     duplicate_group_reviews: duplicate_group_reviews || [],
     automatic_import_setups: automatic_import_setups || [],
     queued_imports: queued_imports || [],
+    tags: tags || [],
+    transaction_tags: transaction_tags || [],
   };
 }
 
@@ -275,6 +288,8 @@ export async function exportUserData(): Promise<UserBackupData> {
     duplicate_group_reviews: accountData.duplicate_group_reviews,
     automatic_import_setups: accountData.automatic_import_setups,
     queued_imports: accountData.queued_imports,
+    tags: accountData.tags,
+    transaction_tags: accountData.transaction_tags,
   };
 }
 
@@ -320,6 +335,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   const importedTransactionIds = accountImportedTransactions?.map(t => t.id) || [];
 
   if (transactionIds.length > 0) {
+    await supabase.from('transaction_tags').delete().in('transaction_id', transactionIds);
     await supabase.from('transaction_splits').delete().in('transaction_id', transactionIds);
   }
 
@@ -327,6 +343,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     await supabase.from('imported_transaction_links').delete().in('imported_transaction_id', importedTransactionIds);
   }
 
+  await supabase.from('tags').delete().eq('account_id', accountId);
   await supabase.from('transactions').delete().eq('budget_account_id', accountId);
   await supabase.from('imported_transactions').delete().eq('account_id', accountId);
   await supabase.from('merchant_category_rules').delete().eq('account_id', accountId);
@@ -359,6 +376,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   const transactionIdMap = new Map<number, number>();
   const merchantGroupIdMap = new Map<number, number>();
   const importedTransactionIdMap = new Map<number, number>();
+  const tagIdMap = new Map<number, number>();
 
   // Insert accounts (batch)
   if (backupData.accounts && backupData.accounts.length > 0) {
@@ -545,6 +563,30 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     console.log('[Import] Inserted', merchantCategoryRulesToInsert.length, 'merchant category rules');
   }
 
+  // Insert tags (after merchant groups, before transactions)
+  if (backupData.tags && backupData.tags.length > 0) {
+    const tagsToInsert = backupData.tags.map(({ id, account_id, user_id, ...tag }) => ({
+      ...tag,
+      user_id: user.id,
+      account_id: accountId,
+    }));
+
+    const { data, error } = await supabase
+      .from('tags')
+      .insert(tagsToInsert)
+      .select('id');
+
+    if (error) {
+      console.error('[Import] Error inserting tags:', error);
+      throw error;
+    }
+
+    backupData.tags.forEach((oldTag, index) => {
+      tagIdMap.set(oldTag.id, data[index].id);
+    });
+    console.log('[Import] Inserted', data.length, 'tags');
+  }
+
   // Insert transactions (batch with remapped foreign keys)
   if (backupData.transactions && backupData.transactions.length > 0) {
     const transactionsToInsert = backupData.transactions.map(({ id, budget_account_id, user_id, merchant_group_id, account_id, credit_card_id, ...transaction }) => ({
@@ -648,7 +690,30 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       console.error('[Import] Error inserting imported transaction links:', error);
       throw error;
     }
-    console.log('[Import] Inserted', importedTransactionLinksToInsert.length, 'imported transaction links');
+      console.log('[Import] Inserted', importedTransactionLinksToInsert.length, 'imported transaction links');
+    }
+
+  // Insert transaction_tags (after transactions are inserted)
+  if (backupData.transaction_tags && backupData.transaction_tags.length > 0) {
+    const transactionTagsToInsert = backupData.transaction_tags
+      .map(({ id, transaction_id, tag_id, transactions, ...tt }) => ({
+        ...tt,
+        transaction_id: transaction_id ? (transactionIdMap.get(transaction_id) || null) : null,
+        tag_id: tag_id ? (tagIdMap.get(tag_id) || null) : null,
+      }))
+      .filter(tt => tt.transaction_id && tt.tag_id); // Only include valid mappings
+
+    if (transactionTagsToInsert.length > 0) {
+      const { error } = await supabase
+        .from('transaction_tags')
+        .insert(transactionTagsToInsert);
+
+      if (error) {
+        console.error('[Import] Error inserting transaction tags:', error);
+        throw error;
+      }
+      console.log('[Import] Inserted', transactionTagsToInsert.length, 'transaction tags');
+    }
   }
 
   // Insert pending checks (batch)
