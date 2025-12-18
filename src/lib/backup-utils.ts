@@ -177,6 +177,8 @@ export async function exportAccountData(): Promise<AccountBackupData> {
       .select('*, transactions!inner(budget_account_id)')
       .eq('transactions.budget_account_id', accountId),
     supabase.from('imported_transactions').select('*').eq('account_id', accountId),
+    // Imported transaction links: ensure both imported_transaction and transaction belong to this account
+    // When importing to a new account, account_id fields are remapped, but the link IDs are remapped via maps
     supabase
       .from('imported_transaction_links')
       .select('*, imported_transactions!inner(account_id), transactions!inner(budget_account_id)')
@@ -707,9 +709,13 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   }
 
   // Insert imported transaction links (batch with remapped IDs)
+  // Note: imported_transaction_links doesn't have account_id - it links imported_transactions (which have account_id)
+  // to transactions (which have budget_account_id). Both are remapped above, and we remap the IDs here.
   if (backupData.imported_transaction_links && backupData.imported_transaction_links.length > 0) {
     const importedTransactionLinksToInsert = backupData.imported_transaction_links
       .map(({ id, imported_transaction_id, transaction_id, imported_transactions, ...link }) => {
+        // Remap IDs: imported_transaction_id was remapped when imported_transactions were inserted (line 704)
+        // and transaction_id was remapped when transactions were inserted (line 644)
         const newImportedTransactionId = imported_transaction_id ? (importedTransactionIdMap.get(imported_transaction_id) || null) : null;
         const newTransactionId = transaction_id ? (transactionIdMap.get(transaction_id) || null) : null;
         return {
