@@ -126,6 +126,19 @@ export interface TransactionTag {
   created_at: string;
 }
 
+export interface TagRule {
+  id: number;
+  user_id: string;
+  account_id: number;
+  tag_id: number;
+  rule_type: 'category' | 'merchant' | 'description' | 'amount';
+  rule_value: string;
+  priority: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface MerchantCategoryRule {
   id: number;
   user_id: string;
