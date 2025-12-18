@@ -707,22 +707,39 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert imported transaction links (batch with remapped IDs)
   if (backupData.imported_transaction_links && backupData.imported_transaction_links.length > 0) {
-    const importedTransactionLinksToInsert = backupData.imported_transaction_links.map(({ id, imported_transaction_id, transaction_id, imported_transactions, ...link }) => ({
-      ...link,
-      imported_transaction_id: imported_transaction_id ? (importedTransactionIdMap.get(imported_transaction_id) || null) : null,
-      transaction_id: transaction_id ? (transactionIdMap.get(transaction_id) || null) : null,
-    }));
+    const importedTransactionLinksToInsert = backupData.imported_transaction_links
+      .map(({ id, imported_transaction_id, transaction_id, imported_transactions, ...link }) => {
+        const newImportedTransactionId = imported_transaction_id ? (importedTransactionIdMap.get(imported_transaction_id) || null) : null;
+        const newTransactionId = transaction_id ? (transactionIdMap.get(transaction_id) || null) : null;
+        return {
+          ...link,
+          imported_transaction_id: newImportedTransactionId,
+          transaction_id: newTransactionId,
+        };
+      })
+      .filter(link => {
+        // Only include links that have both imported_transaction_id and transaction_id mapped successfully
+        if (!link.imported_transaction_id || !link.transaction_id) {
+          console.warn(`[Import] Skipping imported transaction link with missing mapping: imported_transaction_id=${link.imported_transaction_id}, transaction_id=${link.transaction_id}`);
+          return false;
+        }
+        return true;
+      });
 
-    const { error } = await supabase
-      .from('imported_transaction_links')
-      .insert(importedTransactionLinksToInsert);
+    if (importedTransactionLinksToInsert.length === 0) {
+      console.warn('[Import] No valid imported transaction links to insert after filtering');
+    } else {
+      const { error } = await supabase
+        .from('imported_transaction_links')
+        .insert(importedTransactionLinksToInsert);
 
-    if (error) {
-      console.error('[Import] Error inserting imported transaction links:', error);
-      throw error;
+      if (error) {
+        console.error('[Import] Error inserting imported transaction links:', error);
+        throw error;
+      }
+      console.log('[Import] Inserted', importedTransactionLinksToInsert.length, 'imported transaction links (filtered from', backupData.imported_transaction_links.length, 'total)');
     }
-      console.log('[Import] Inserted', importedTransactionLinksToInsert.length, 'imported transaction links');
-    }
+  }
 
   // Insert transaction_tags (after transactions are inserted)
   if (backupData.transaction_tags && backupData.transaction_tags.length > 0) {
