@@ -20,6 +20,7 @@ import {
   Sparkles,
   ChevronDown,
   Inbox,
+  Tag,
 } from "lucide-react"
 
 import {
@@ -81,6 +82,7 @@ const navigationSections = [
     label: "Other",
     items: [
       { label: "Merchants", path: "/merchants", icon: Store },
+      { label: "Tags", path: "/tags", icon: Tag },
       { label: "Category Rules", path: "/category-rules", icon: FolderTree },
       { label: "Settings", path: "/settings", icon: Settings },
     ],
