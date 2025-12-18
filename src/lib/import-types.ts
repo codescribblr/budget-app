@@ -17,6 +17,7 @@ export interface ParsedTransaction {
   splits: TransactionSplit[];
   forceImport?: boolean; // User explicitly clicked "Include" on a duplicate
   is_historical?: boolean; // Per-transaction historical flag
+  tag_ids?: number[]; // Tag IDs to assign to transaction
 }
 
 export interface TransactionSplit {

@@ -25,6 +25,8 @@ import { formatCurrency } from '@/lib/utils';
 import type { TransactionWithSplits, Category, Account, CreditCard } from '@/lib/types';
 import EditTransactionDialog from './EditTransactionDialog';
 import BulkEditDialog, { BulkEditUpdates } from '@/components/import/BulkEditDialog';
+import BulkTagDialog from '@/components/tags/BulkTagDialog';
+import { Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import { MoreVertical, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
@@ -59,6 +61,7 @@ export default function TransactionList({
   const [editingField, setEditingField] = useState<EditingField | null>(null);
   const [selectedTransactions, setSelectedTransactions] = useState<Set<number>>(new Set());
   const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
+  const [showBulkTagDialog, setShowBulkTagDialog] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [localTransactions, setLocalTransactions] = useState<TransactionWithSplits[]>(transactions);
@@ -426,6 +429,32 @@ export default function TransactionList({
               ))}
             </div>
 
+            {transaction.tags && transaction.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {transaction.tags.slice(0, 3).map((tag) => (
+                  <Badge
+                    key={tag.id}
+                    variant="outline"
+                    className="text-xs cursor-pointer hover:bg-gray-100"
+                    onClick={() => window.location.href = `/transactions?tags=${tag.id}`}
+                  >
+                    {tag.color && (
+                      <div
+                        className="w-2 h-2 rounded-full mr-1"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                    )}
+                    {tag.name}
+                  </Badge>
+                ))}
+                {transaction.tags.length > 3 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{transaction.tags.length - 3} more
+                  </Badge>
+                )}
+              </div>
+            )}
+
             {(transaction.account_name || transaction.credit_card_name) && (
               <div className="text-xs">
                 <span className="text-muted-foreground">Account: </span>
@@ -448,6 +477,14 @@ export default function TransactionList({
           >
             <Edit className="h-4 w-4 mr-2" />
             Bulk Edit {selectedTransactions.size > 0 ? `(${selectedTransactions.size})` : ''}
+          </Button>
+          <Button
+            onClick={() => setShowBulkTagDialog(true)}
+            variant="outline"
+            disabled={selectedTransactions.size < 1}
+          >
+            <Tag className="h-4 w-4 mr-2" />
+            Bulk Tag {selectedTransactions.size > 0 ? `(${selectedTransactions.size})` : ''}
           </Button>
           {selectedTransactions.size > 0 && (
             <Button
@@ -592,8 +629,39 @@ export default function TransactionList({
                     formatDate(transaction.date)
                   )}
                 </TableCell>
-                <TableCell className="font-medium text-sm max-w-[250px] truncate" title={transaction.description}>
-                  {transaction.description}
+                <TableCell className="font-medium text-sm max-w-[250px]">
+                  <div className="truncate" title={transaction.description}>
+                    {transaction.description}
+                  </div>
+                  {transaction.tags && transaction.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {transaction.tags.slice(0, 3).map((tag) => (
+                        <Badge
+                          key={tag.id}
+                          variant="secondary"
+                          className="text-xs cursor-pointer hover:bg-gray-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Navigate to filtered transactions
+                            window.location.href = `/transactions?tags=${tag.id}`;
+                          }}
+                        >
+                          {tag.color && (
+                            <div
+                              className="w-2 h-2 rounded-full mr-1"
+                              style={{ backgroundColor: tag.color }}
+                            />
+                          )}
+                          {tag.name}
+                        </Badge>
+                      ))}
+                      {transaction.tags.length > 3 && (
+                        <Badge variant="secondary" className="text-xs">
+                          +{transaction.tags.length - 3} more
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
                   {transaction.merchant_name ? (
@@ -786,6 +854,19 @@ export default function TransactionList({
           open={showBulkEditDialog}
           onClose={() => setShowBulkEditDialog(false)}
           onSave={handleBulkEditSave}
+        />
+      )}
+
+      {/* Bulk Tag Dialog */}
+      {showBulkTagDialog && (
+        <BulkTagDialog
+          isOpen={showBulkTagDialog}
+          onClose={() => setShowBulkTagDialog(false)}
+          transactionIds={Array.from(selectedTransactions)}
+          onSuccess={() => {
+            setSelectedTransactions(new Set());
+            onUpdate();
+          }}
         />
       )}
 

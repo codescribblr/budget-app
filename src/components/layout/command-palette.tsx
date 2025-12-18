@@ -22,6 +22,7 @@ import {
   HelpCircle,
   Sparkles,
   Inbox,
+  Tag,
 } from "lucide-react"
 import { useFeature } from "@/contexts/FeatureContext"
 
@@ -34,7 +35,7 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command"
-import type { Category, Account, CreditCard, Loan, TransactionWithSplits, GoalWithDetails } from "@/lib/types"
+import type { Category, Account, CreditCard, Loan, TransactionWithSplits, GoalWithDetails, Tag as TagType } from "@/lib/types"
 
 // Settings items for search
 const settingsItems = [
@@ -82,6 +83,7 @@ const navigationItems = [
   { label: "Goals", path: "/goals", icon: Target, featureKey: "goals" },
   { label: "AI Assistant", path: "/dashboard/ai-assistant", icon: Sparkles, featureKey: "ai_chat" },
   { label: "Merchants", path: "/merchants", icon: Store },
+  { label: "Tags", path: "/tags", icon: Tag },
   { label: "Category Rules", path: "/category-rules", icon: FolderTree },
   { label: "Settings", path: "/settings", icon: Settings },
   { label: "Help Center", path: "/help", icon: HelpCircle },
@@ -97,6 +99,7 @@ export function CommandPalette() {
   const [creditCards, setCreditCards] = React.useState<CreditCard[]>([])
   const [loans, setLoans] = React.useState<Loan[]>([])
   const [goals, setGoals] = React.useState<GoalWithDetails[]>([])
+  const [tags, setTags] = React.useState<TagType[]>([])
   const [transactions, setTransactions] = React.useState<TransactionWithSplits[]>([])
   const [isLoading, setIsLoading] = React.useState(false)
   const [transactionsLoading, setTransactionsLoading] = React.useState(false)
@@ -146,8 +149,12 @@ export function CommandPalette() {
           if (!res.ok) throw new Error(`Failed to fetch goals: ${res.status}`)
           return res.json()
         }),
+        fetch('/api/tags').then(res => {
+          if (!res.ok) throw new Error(`Failed to fetch tags: ${res.status}`)
+          return res.json()
+        }),
       ])
-        .then(([categoriesData, accountsData, creditCardsData, loansData, goalsData]) => {
+        .then(([categoriesData, accountsData, creditCardsData, loansData, goalsData, tagsData]) => {
           // Filter out system categories
           const nonSystemCategories = categoriesData.filter((cat: Category) => !cat.is_system)
           setCategories(nonSystemCategories)
@@ -155,6 +162,7 @@ export function CommandPalette() {
           setCreditCards(creditCardsData)
           setLoans(loansData)
           setGoals(goalsData)
+          setTags(tagsData)
         })
         .catch(err => console.error('Error loading search data:', err))
         .finally(() => setIsLoading(false))
@@ -282,6 +290,22 @@ export function CommandPalette() {
                   <span className="ml-auto text-xs text-muted-foreground">
                     ${category.monthly_amount.toFixed(0)}/mo
                   </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+          {tags.length > 0 && (
+            <CommandGroup heading="Tags">
+              {tags.map((tag) => (
+                <CommandItem
+                  key={tag.id}
+                  value={tag.name}
+                  onSelect={() => {
+                    runCommand(() => router.push(`/transactions?tags=${tag.id}`))
+                  }}
+                >
+                  <Tag className="mr-2 h-4 w-4" />
+                  <span>{tag.name}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

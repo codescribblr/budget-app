@@ -10,6 +10,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { Category, Account, CreditCard } from '@/lib/types';
 import { formatLocalDate, getTodayLocal } from '@/lib/date-utils';
 import { handleApiError } from '@/lib/api-error-handler';
+import TagSelector from '@/components/tags/TagSelector';
 
 interface AddTransactionDialogProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ export default function AddTransactionDialog({
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [selectedCreditCardId, setSelectedCreditCardId] = useState<number | null>(null);
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchivedCategories, setShowArchivedCategories] = useState(false);
   const [availableCategories, setAvailableCategories] = useState<Category[]>(categories);
@@ -52,6 +54,7 @@ export default function AddTransactionDialog({
       setSelectedAccountId(null);
       setSelectedCreditCardId(null);
       setTransactionType('expense');
+      setSelectedTagIds([]);
       setIsSubmitting(false);
       setShowArchivedCategories(false);
       setAvailableCategories(categories);
@@ -161,6 +164,7 @@ export default function AddTransactionDialog({
           transaction_type: transactionType,
           account_id: selectedAccountId || null,
           credit_card_id: selectedCreditCardId || null,
+          tag_ids: selectedTagIds,
           splits: validSplits.map(s => ({
             category_id: s.category_id,
             amount: parseFloat(s.amount),
@@ -179,6 +183,7 @@ export default function AddTransactionDialog({
       setSplits([{ category_id: 0, amount: '' }]);
       setSelectedAccountId(null);
       setSelectedCreditCardId(null);
+      setSelectedTagIds([]);
       setIsSubmitting(false);
       onSuccess();
       onClose();
@@ -264,6 +269,15 @@ export default function AddTransactionDialog({
                 )}
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <TagSelector
+              selectedTagIds={selectedTagIds}
+              onChange={setSelectedTagIds}
+              transactionDescription={description}
+              categoryIds={splits.map(s => s.category_id).filter(id => id > 0)}
+            />
           </div>
 
           <div className="space-y-3">

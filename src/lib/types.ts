@@ -102,6 +102,43 @@ export interface MerchantGroupWithStats extends MerchantGroup {
   has_manual_mappings: boolean;
 }
 
+export interface Tag {
+  id: number;
+  user_id: string;
+  account_id: number; // References budget_accounts.id
+  name: string;
+  color?: string | null;
+  description?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TagWithStats extends Tag {
+  transaction_count: number;
+  total_amount: number;
+  last_used?: string | null;
+}
+
+export interface TransactionTag {
+  id: number;
+  transaction_id: number;
+  tag_id: number;
+  created_at: string;
+}
+
+export interface TagRule {
+  id: number;
+  user_id: string;
+  account_id: number;
+  tag_id: number;
+  rule_type: 'category' | 'merchant' | 'description' | 'amount';
+  rule_value: string;
+  priority: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface MerchantCategoryRule {
   id: number;
   user_id: string;
@@ -218,6 +255,7 @@ export interface CreateTransactionRequest {
   is_historical?: boolean;
   account_id?: number | null;
   credit_card_id?: number | null;
+  tag_ids?: number[]; // Optional tag IDs to assign to transaction
   splits: {
     category_id: number;
     amount: number; // Always positive
@@ -231,6 +269,7 @@ export interface UpdateTransactionRequest {
   merchant_group_id?: number | null;
   account_id?: number | null;
   credit_card_id?: number | null;
+  tag_ids?: number[]; // Optional tag IDs to assign to transaction
   splits?: {
     category_id: number;
     amount: number; // Always positive
@@ -276,6 +315,7 @@ export interface UpdateLoanRequest {
 // View models with joined data
 export interface TransactionWithSplits extends Transaction {
   splits: (TransactionSplit & { category_name: string })[];
+  tags?: Tag[]; // Tags associated with this transaction
   merchant_name?: string | null;
   account_name?: string | null;
   credit_card_name?: string | null;

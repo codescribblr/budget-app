@@ -293,6 +293,7 @@ export default function BatchReviewPage() {
           account_id: qi.target_account_id || undefined,
           credit_card_id: qi.target_credit_card_id || undefined,
           is_historical: qi.is_historical || false,
+          tag_ids: qi.tag_ids || [],
           splits: qi.suggested_category_id ? [{
             categoryId: qi.suggested_category_id,
             categoryName: category?.name || '',

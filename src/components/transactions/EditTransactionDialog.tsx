@@ -10,6 +10,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { Category, TransactionWithSplits, MerchantGroup, Account, CreditCard } from '@/lib/types';
 import { parseLocalDate, formatLocalDate, getTodayLocal } from '@/lib/date-utils';
 import { handleApiError } from '@/lib/api-error-handler';
+import TagSelector from '@/components/tags/TagSelector';
 
 interface EditTransactionDialogProps {
   isOpen: boolean;
@@ -41,6 +42,7 @@ export default function EditTransactionDialog({
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [selectedCreditCardId, setSelectedCreditCardId] = useState<number | null>(null);
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchivedCategories, setShowArchivedCategories] = useState(false);
   const [availableCategories, setAvailableCategories] = useState<Category[]>(categories);
@@ -53,6 +55,7 @@ export default function EditTransactionDialog({
       setSelectedAccountId(transaction.account_id || null);
       setSelectedCreditCardId(transaction.credit_card_id || null);
       setTransactionType(transaction.transaction_type || 'expense');
+      setSelectedTagIds(transaction.tags?.map(t => t.id) || []);
       setSplits(
         transaction.splits.map((split) => ({
           category_id: split.category_id,
@@ -222,6 +225,7 @@ export default function EditTransactionDialog({
           merchant_group_id: merchantGroupId,
           account_id: selectedAccountId || null,
           credit_card_id: selectedCreditCardId || null,
+          tag_ids: selectedTagIds,
           splits: validSplits.map(s => ({
             category_id: s.category_id,
             amount: parseFloat(s.amount),
@@ -339,6 +343,16 @@ export default function EditTransactionDialog({
                 )}
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <TagSelector
+              selectedTagIds={selectedTagIds}
+              onChange={setSelectedTagIds}
+              transactionDescription={description}
+              categoryIds={splits.map(s => s.category_id).filter(id => id > 0)}
+              merchantGroupId={merchantGroupId}
+            />
           </div>
 
           <div className="space-y-3">

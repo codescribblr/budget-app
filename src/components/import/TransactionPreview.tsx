@@ -288,8 +288,17 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
       if (item.id === updated.id) {
         // Auto-include when categorized (unless it's a duplicate)
         const hasSplits = updated.splits.length > 0;
-        const newStatus = updated.isDuplicate ? 'excluded' : (hasSplits ? 'pending' : 'excluded');
-        return { ...updated, status: newStatus };
+        const newStatus: 'pending' | 'confirmed' | 'excluded' = updated.isDuplicate ? 'excluded' : (hasSplits ? 'pending' : 'excluded');
+        const updatedItem = { ...updated, status: newStatus };
+        
+        // Save tag_ids to database if this is a queued import
+        if (typeof updated.id === 'string' && updated.id.startsWith('queued-')) {
+          saveQueuedImportChange(updated.id, {
+            tag_ids: updated.tag_ids || [],
+          });
+        }
+        
+        return updatedItem;
       }
       return item;
     }));
@@ -391,6 +400,10 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
 
         if (updates.isHistorical !== undefined) {
           updated.is_historical = updates.isHistorical;
+        }
+
+        if (updates.tagIds !== undefined) {
+          updated.tag_ids = updates.tagIds;
         }
 
         // Update status based on changes

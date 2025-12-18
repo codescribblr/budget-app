@@ -20,6 +20,7 @@ import {
   Sparkles,
   ChevronDown,
   Inbox,
+  Tag,
 } from "lucide-react"
 
 import {
@@ -75,12 +76,14 @@ const navigationSections = [
       { label: "Overview", path: "/reports", icon: FileText },
       { label: "Trends", path: "/reports/trends", icon: TrendingUp, featureKey: "advanced_reporting" },
       { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
+      { label: "Tag Reports", path: "/reports/tags", icon: Tag },
     ],
   },
   {
     label: "Other",
     items: [
       { label: "Merchants", path: "/merchants", icon: Store },
+      { label: "Tags", path: "/tags", icon: Tag },
       { label: "Category Rules", path: "/category-rules", icon: FolderTree },
       { label: "Settings", path: "/settings", icon: Settings },
     ],

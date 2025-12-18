@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Search, X, Upload, Filter, CalendarIcon, Copy, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, X, Upload, Filter, CalendarIcon, Copy, ArrowUpDown, ArrowUp, ArrowDown, Tag as TagIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -35,7 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { TransactionWithSplits, Category, MerchantGroup } from '@/lib/types';
+import type { TransactionWithSplits, Category, MerchantGroup, Tag } from '@/lib/types';
 import TransactionList from './TransactionList';
 import AddTransactionDialog from './AddTransactionDialog';
 import EditTransactionDialog from './EditTransactionDialog';
@@ -83,6 +83,11 @@ export default function TransactionsPage() {
     ? transactionTypeParam.split(',').filter(t => t === 'income' || t === 'expense') as ('income' | 'expense')[]
     : [];
   
+  const tagsParam = searchParams.get('tags');
+  const tagIds = tagsParam 
+    ? tagsParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
+    : [];
+  
   const startDateParam = searchParams.get('startDate');
   const endDateParam = searchParams.get('endDate');
   const searchQueryParam = searchParams.get('q');
@@ -93,6 +98,7 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<TransactionWithSplits[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [merchantGroups, setMerchantGroups] = useState<MerchantGroup[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -122,21 +128,24 @@ export default function TransactionsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [transactionsRes, categoriesRes, merchantGroupsRes] = await Promise.all([
+      const [transactionsRes, categoriesRes, merchantGroupsRes, tagsRes] = await Promise.all([
         fetch('/api/transactions'),
         fetch('/api/categories?excludeGoals=true'),
         fetch('/api/merchant-groups'),
+        fetch('/api/tags'),
       ]);
 
-      const [transactionsData, categoriesData, merchantGroupsData] = await Promise.all([
+      const [transactionsData, categoriesData, merchantGroupsData, tagsData] = await Promise.all([
         transactionsRes.ok ? transactionsRes.json() : [],
         categoriesRes.ok ? categoriesRes.json() : [],
         merchantGroupsRes.ok ? merchantGroupsRes.json() : [],
+        tagsRes.ok ? tagsRes.json() : [],
       ]);
 
       setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
       setMerchantGroups(Array.isArray(merchantGroupsData) ? merchantGroupsData : []);
+      setTags(Array.isArray(tagsData) ? tagsData : []);
     } catch (error) {
       console.error('Error fetching data:', error);
       setTransactions([]);
@@ -251,6 +260,15 @@ export default function TransactionsPage() {
       });
     }
 
+    // Apply tag filter if present (multi-select - transaction must have all selected tags)
+    if (tagIds.length > 0) {
+      filtered = filtered.filter(transaction => {
+        const transactionTagIds = transaction.tags?.map(t => t.id) || [];
+        // Transaction must have all selected tags (AND logic)
+        return tagIds.every(tagId => transactionTagIds.includes(tagId));
+      });
+    }
+
     // Apply date range filter if present (inclusive of both start and end dates)
     if (startDateParam || endDateParam) {
       filtered = filtered.filter(transaction => {
@@ -286,6 +304,15 @@ export default function TransactionsPage() {
         .join(' ');
 
       if (fuzzyMatch(categoryNames, searchQuery)) {
+        return true;
+      }
+
+      // Search in tag names
+      const tagNames = (transaction.tags || [])
+        .map(tag => tag.name)
+        .join(' ');
+
+      if (fuzzyMatch(tagNames, searchQuery)) {
         return true;
       }
 
@@ -383,6 +410,7 @@ export default function TransactionsPage() {
     categoryId?: number[] | null;
     merchantGroupId?: number[] | null;
     transactionType?: ('income' | 'expense')[] | null;
+    tags?: number[] | null;
     startDate?: string | null;
     endDate?: string | null;
   }) => {
@@ -408,6 +436,13 @@ export default function TransactionsPage() {
         params.set('transactionType', updates.transactionType.join(','));
       } else {
         params.delete('transactionType');
+      }
+    }
+    if (updates.tags !== undefined) {
+      if (updates.tags && updates.tags.length > 0) {
+        params.set('tags', updates.tags.join(','));
+      } else {
+        params.delete('tags');
       }
     }
     if (updates.startDate !== undefined) {
@@ -461,6 +496,13 @@ export default function TransactionsPage() {
     updateFilters({ transactionType: newTransactionTypes.length > 0 ? newTransactionTypes : null });
   };
 
+  const handleTagToggle = (tagId: number) => {
+    const newTagIds = tagIds.includes(tagId)
+      ? tagIds.filter(id => id !== tagId)
+      : [...tagIds, tagId];
+    updateFilters({ tags: newTagIds.length > 0 ? newTagIds : null });
+  };
+
   const handleDateRangeChange = (start: Date | undefined, end: Date | undefined) => {
     setStartDateObj(start);
     setEndDateObj(end);
@@ -470,9 +512,10 @@ export default function TransactionsPage() {
     });
   };
 
-  const hasFilters = merchantFilter || merchantGroupIds.length > 0 || categoryIds.length > 0 || transactionTypes.length > 0 || startDateParam || endDateParam;
+  const hasFilters = merchantFilter || merchantGroupIds.length > 0 || categoryIds.length > 0 || transactionTypes.length > 0 || tagIds.length > 0 || startDateParam || endDateParam;
   const selectedCategories = categoryIds.map(id => categories.find(c => c.id === id)).filter(Boolean) as Category[];
   const selectedMerchantGroups = merchantGroupIds.map(id => merchantGroups.find(g => g.id === id)).filter(Boolean) as MerchantGroup[];
+  const selectedTags = tagIds.map(id => tags.find(t => t.id === id)).filter(Boolean) as Tag[];
 
   return (
     <div className="space-y-6">
@@ -500,6 +543,18 @@ export default function TransactionsPage() {
                 {transactionTypes.map((type) => (
                   <Badge key={type} variant="secondary">
                     Type: {type === 'income' ? 'Income' : 'Expense'}
+                  </Badge>
+                ))}
+                {selectedTags.map((tag) => (
+                  <Badge key={tag.id} variant="secondary" className="cursor-pointer" onClick={() => handleTagToggle(tag.id)}>
+                    {tag.color && (
+                      <div
+                        className="w-2 h-2 rounded-full mr-1 inline-block"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                    )}
+                    Tag: {tag.name}
+                    <X className="ml-1 h-3 w-3" />
                   </Badge>
                 ))}
                 {(startDateParam || endDateParam) && (
@@ -659,6 +714,49 @@ export default function TransactionsPage() {
                   >
                     Expense
                   </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Tag Filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
+                    <TagIcon className="mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Tags</span>
+                    <span className="sm:hidden">Tags</span>
+                    {tagIds.length > 0 && <Badge variant="secondary" className="ml-2">{tagIds.length}</Badge>}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[200px]">
+                  <DropdownMenuLabel>Filter by tags</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    checked={tagIds.length === 0}
+                    onCheckedChange={() => {
+                      if (tagIds.length > 0) {
+                        updateFilters({ tags: null });
+                      }
+                    }}
+                  >
+                    All Tags
+                  </DropdownMenuCheckboxItem>
+                  {tags.map((tag) => (
+                    <DropdownMenuCheckboxItem
+                      key={tag.id}
+                      checked={tagIds.includes(tag.id)}
+                      onCheckedChange={() => handleTagToggle(tag.id)}
+                    >
+                      <div className="flex items-center gap-2">
+                        {tag.color && (
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: tag.color }}
+                          />
+                        )}
+                        {tag.name}
+                      </div>
+                    </DropdownMenuCheckboxItem>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
 

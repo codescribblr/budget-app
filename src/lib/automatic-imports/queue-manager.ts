@@ -357,6 +357,7 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
       csv_file_name: index === 0 ? (csvFileName || null) : null,
       csv_mapping_name: index === 0 ? (csvMappingName || null) : null,
       processing_tasks: index === 0 ? (processingTasks || null) : null, // Store only on first transaction
+      tag_ids: txn.tag_ids || [],
     };
   });
 
@@ -651,6 +652,7 @@ export async function convertQueuedImportToParsedTransaction(queuedImport: any):
     status: queuedImport.status === 'approved' ? 'confirmed' as const : 'pending' as const,
     splits,
     is_historical: queuedImport.is_historical || false,
+    tag_ids: queuedImport.tag_ids || [],
   };
 }
 
