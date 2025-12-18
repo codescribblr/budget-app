@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import type { ParsedTransaction } from '@/lib/import-types';
 import type { Category, Account, CreditCard } from '@/lib/types';
 import { parseLocalDate, formatLocalDate, getTodayLocal } from '@/lib/date-utils';
+import TagSelector from '@/components/tags/TagSelector';
 
 interface BulkEditDialogProps {
   transactions: ParsedTransaction[];
@@ -27,6 +28,7 @@ export interface BulkEditUpdates {
   accountId?: number | null;
   creditCardId?: number | null;
   isHistorical?: boolean;
+  tagIds?: number[];
 }
 
 export default function BulkEditDialog({
@@ -79,7 +81,21 @@ export default function BulkEditDialog({
   const [categoryId, setCategoryId] = useState<number | null | 'various'>(getInitialCategory());
   const [accountValue, setAccountValue] = useState<string | 'various'>(getInitialAccount());
   const [isHistorical, setIsHistorical] = useState<boolean | 'various'>(getInitialHistorical());
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  const getInitialTags = (): number[] => {
+    const tagIds = transactions.map(t => t.tag_ids || []).flat();
+    if (tagIds.length === 0) return [];
+    // If all transactions have the same tags, return them
+    const firstTags = transactions[0]?.tag_ids || [];
+    const allSame = transactions.every(t => {
+      const tTags = t.tag_ids || [];
+      return tTags.length === firstTags.length && 
+             tTags.every((id, idx) => id === firstTags[idx]);
+    });
+    return allSame ? firstTags : [];
+  };
 
   // Reset form when dialog opens/closes or transactions change
   useEffect(() => {
@@ -88,6 +104,7 @@ export default function BulkEditDialog({
       setCategoryId(getInitialCategory());
       setAccountValue(getInitialAccount());
       setIsHistorical(getInitialHistorical());
+      setSelectedTagIds(getInitialTags());
     }
   }, [open, transactions]);
 
@@ -134,6 +151,14 @@ export default function BulkEditDialog({
       const initialHistorical = getInitialHistorical();
       if (isHistorical !== 'various' && isHistorical !== initialHistorical) {
         updates.isHistorical = isHistorical;
+      }
+
+      const initialTags = getInitialTags();
+      // Only update tags if they changed
+      const tagsChanged = selectedTagIds.length !== initialTags.length ||
+        !selectedTagIds.every((id, idx) => id === initialTags[idx]);
+      if (tagsChanged) {
+        updates.tagIds = selectedTagIds;
       }
 
       // Only save if there are actual changes
@@ -238,6 +263,15 @@ export default function BulkEditDialog({
             {accountValue === 'various' && (
               <p className="text-sm text-muted-foreground">Various accounts selected</p>
             )}
+          </div>
+
+          {/* Tags */}
+          <div>
+            <TagSelector
+              selectedTagIds={selectedTagIds}
+              onChange={setSelectedTagIds}
+              placeholder="Select tags to assign..."
+            />
           </div>
 
           {/* Historical */}

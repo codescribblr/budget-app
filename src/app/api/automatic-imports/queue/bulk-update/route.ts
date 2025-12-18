@@ -27,6 +27,7 @@ export async function POST(request: Request) {
         accountId?: number | null;
         creditCardId?: number | null;
         isHistorical?: boolean;
+        tagIds?: number[];
       };
     };
 
@@ -58,6 +59,24 @@ export async function POST(request: Request) {
     }
     if (updates.isHistorical !== undefined) {
       updateData.is_historical = updates.isHistorical;
+    }
+    if (updates.tagIds !== undefined) {
+      // Validate tag IDs belong to the active account
+      if (Array.isArray(updates.tagIds) && updates.tagIds.length > 0) {
+        const { data: tags } = await supabase
+          .from('tags')
+          .select('id')
+          .in('id', updates.tagIds)
+          .eq('account_id', accountId);
+
+        if (!tags || tags.length !== updates.tagIds.length) {
+          return NextResponse.json(
+            { error: 'One or more tags do not belong to the active account' },
+            { status: 400 }
+          );
+        }
+      }
+      updateData.tag_ids = updates.tagIds;
     }
 
     // Update all transactions in bulk

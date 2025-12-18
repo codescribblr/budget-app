@@ -24,8 +24,22 @@ export async function GET(request: NextRequest) {
     if (search) {
       const { searchTags } = await import('@/lib/db/tags');
       tags = await searchTags(search);
+      // Search doesn't include stats, so return as array for consistency
+      return NextResponse.json(tags);
     } else {
       tags = await getTags(includeStats);
+    }
+
+    // If includeStats is true, also include total unique transactions count and amount
+    if (includeStats) {
+      const { getTotalUniqueTaggedTransactions, getTotalUniqueTaggedAmount } = await import('@/lib/db/tags');
+      const totalUniqueTransactions = await getTotalUniqueTaggedTransactions();
+      const totalUniqueAmount = await getTotalUniqueTaggedAmount();
+      return NextResponse.json({
+        tags,
+        total_unique_transactions: totalUniqueTransactions,
+        total_unique_amount: totalUniqueAmount,
+      });
     }
 
     return NextResponse.json(tags);

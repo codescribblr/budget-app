@@ -11,6 +11,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { ParsedTransaction, TransactionSplit } from '@/lib/import-types';
 import type { Category, Account, CreditCard } from '@/lib/types';
 import { parseLocalDate, formatLocalDate, getTodayLocal } from '@/lib/date-utils';
+import TagSelector from '@/components/tags/TagSelector';
 
 interface TransactionEditDialogProps {
   transaction: ParsedTransaction;
@@ -38,6 +39,7 @@ export default function TransactionEditDialog({
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(transaction.account_id || null);
   const [selectedCreditCardId, setSelectedCreditCardId] = useState<number | null>(transaction.credit_card_id || null);
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>(transaction.transaction_type || 'expense');
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>(transaction.tag_ids || []);
 
   useEffect(() => {
     fetchAccounts();
@@ -134,6 +136,7 @@ export default function TransactionEditDialog({
       transaction_type: transactionType,
       account_id: selectedAccountId || null,
       credit_card_id: selectedCreditCardId || null,
+      tag_ids: selectedTagIds,
       splits,
     };
 
@@ -235,6 +238,15 @@ export default function TransactionEditDialog({
                 )}
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <TagSelector
+              selectedTagIds={selectedTagIds}
+              onChange={setSelectedTagIds}
+              transactionDescription={description}
+              categoryIds={splits.map(s => s.categoryId).filter(id => id > 0)}
+            />
           </div>
 
           <div className="border-t pt-4">

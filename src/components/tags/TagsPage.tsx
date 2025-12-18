@@ -34,6 +34,8 @@ export default function TagsPage() {
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedForMerge, setSelectedForMerge] = useState<Set<number>>(new Set());
+  const [totalUniqueTransactions, setTotalUniqueTransactions] = useState<number>(0);
+  const [totalUniqueAmount, setTotalUniqueAmount] = useState<number>(0);
 
   const fetchTags = async () => {
     try {
@@ -41,7 +43,18 @@ export default function TagsPage() {
       const response = await fetch('/api/tags?includeStats=true');
       if (response.ok) {
         const data = await response.json();
-        setTags(data);
+        // Handle both array response (old) and object response (new with total_unique_transactions)
+        if (Array.isArray(data)) {
+          setTags(data);
+          // Fallback: calculate from tags if API doesn't return total
+          // This will be inaccurate but better than showing 0
+          setTotalUniqueTransactions(data.reduce((sum: number, t: TagWithStats) => sum + t.transaction_count, 0));
+          setTotalUniqueAmount(data.reduce((sum: number, t: TagWithStats) => sum + t.total_amount, 0));
+        } else {
+          setTags(data.tags || []);
+          setTotalUniqueTransactions(data.total_unique_transactions || 0);
+          setTotalUniqueAmount(data.total_unique_amount || 0);
+        }
       } else {
         toast.error('Failed to fetch tags');
       }
@@ -165,9 +178,6 @@ export default function TagsPage() {
     tag.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalTransactions = tags.reduce((sum, t) => sum + t.transaction_count, 0);
-  const totalAmount = tags.reduce((sum, t) => sum + t.total_amount, 0);
-
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -190,13 +200,13 @@ export default function TagsPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>Total Transactions</CardDescription>
-            <CardTitle className="text-3xl">{totalTransactions}</CardTitle>
+            <CardTitle className="text-3xl">{totalUniqueTransactions}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>Total Amount</CardDescription>
-            <CardTitle className="text-3xl">{formatCurrency(totalAmount)}</CardTitle>
+            <CardTitle className="text-3xl">{formatCurrency(totalUniqueAmount)}</CardTitle>
           </CardHeader>
         </Card>
       </div>

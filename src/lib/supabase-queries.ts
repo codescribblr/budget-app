@@ -1966,6 +1966,24 @@ export async function importTransactions(transactions: any[], isHistorical: bool
 
   if (linksError) throw linksError;
 
+  // ===== STEP 7: Assign tags to transactions =====
+  const transactionsWithTags = validTransactions.filter(txn => txn.tag_ids && txn.tag_ids.length > 0);
+  if (transactionsWithTags.length > 0) {
+    const { bulkAssignTags } = await import('@/lib/db/tags');
+    for (let i = 0; i < validTransactions.length; i++) {
+      const txn = validTransactions[i];
+      if (txn.tag_ids && txn.tag_ids.length > 0) {
+        const transactionId = createdTransactions[i].id;
+        try {
+          await bulkAssignTags([transactionId], txn.tag_ids);
+        } catch (error) {
+          console.error(`Error assigning tags to transaction ${transactionId}:`, error);
+          // Continue with other transactions even if tag assignment fails
+        }
+      }
+    }
+  }
+
   return createdTransactions.length;
 }
 

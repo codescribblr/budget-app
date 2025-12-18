@@ -98,6 +98,71 @@ export async function getTagsWithStats(): Promise<TagWithStats[]> {
 }
 
 /**
+ * Get total unique transactions and total amount across all tags
+ * This is useful for summary statistics to avoid double-counting
+ */
+export async function getTotalUniqueTaggedTransactions(): Promise<number> {
+  const supabase = await createClient();
+  const accountId = await getActiveAccountId();
+  if (!accountId) return 0;
+
+  // Get all unique transaction IDs that have at least one tag
+  const { data: transactionTags, error } = await supabase
+    .from('transaction_tags')
+    .select('transaction_id, transactions!inner(budget_account_id)')
+    .eq('transactions.budget_account_id', accountId);
+
+  if (error) throw error;
+
+  // Get unique transaction IDs
+  const uniqueTransactionIds = new Set(
+    (transactionTags || []).map(tt => tt.transaction_id).filter(Boolean)
+  );
+
+  return uniqueTransactionIds.size;
+}
+
+/**
+ * Get total amount for all unique tagged transactions
+ * This avoids double-counting transactions with multiple tags
+ */
+export async function getTotalUniqueTaggedAmount(): Promise<number> {
+  const supabase = await createClient();
+  const accountId = await getActiveAccountId();
+  if (!accountId) return 0;
+
+  // Get all unique transactions that have at least one tag
+  const { data: transactionTags, error } = await supabase
+    .from('transaction_tags')
+    .select('transaction_id, transactions!inner(id, total_amount, transaction_type, budget_account_id)')
+    .eq('transactions.budget_account_id', accountId);
+
+  if (error) throw error;
+
+  // Get unique transaction IDs and their amounts
+  const transactionMap = new Map<number, { total_amount: number; transaction_type: string }>();
+  
+  (transactionTags || []).forEach(tt => {
+    const transaction = tt.transactions as any;
+    if (transaction && transaction.id) {
+      transactionMap.set(transaction.id, {
+        total_amount: transaction.total_amount,
+        transaction_type: transaction.transaction_type || 'expense',
+      });
+    }
+  });
+
+  // Calculate net total (income reduces, expense increases)
+  let netTotal = 0;
+  transactionMap.forEach(t => {
+    const multiplier = t.transaction_type === 'income' ? -1 : 1;
+    netTotal += Number(t.total_amount) * multiplier;
+  });
+
+  return netTotal;
+}
+
+/**
  * Get tag by ID
  */
 export async function getTagById(id: number): Promise<Tag | null> {
@@ -127,12 +192,15 @@ export async function createTag(data: { name: string; color?: string; descriptio
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
+  // Automatically lowercase tag names to prevent duplicates
+  const lowercasedName = data.name.trim().toLowerCase();
+
   const { data: tag, error } = await supabase
     .from('tags')
     .insert({
       user_id: user.id,
       account_id: accountId,
-      name: data.name.trim(),
+      name: lowercasedName,
       color: data.color || null,
       description: data.description?.trim() || null,
     })
@@ -155,7 +223,8 @@ export async function updateTag(
   if (!accountId) throw new Error('No active account');
 
   const updateData: any = {};
-  if (data.name !== undefined) updateData.name = data.name.trim();
+  // Automatically lowercase tag names to prevent duplicates
+  if (data.name !== undefined) updateData.name = data.name.trim().toLowerCase();
   if (data.color !== undefined) updateData.color = data.color || null;
   if (data.description !== undefined) updateData.description = data.description?.trim() || null;
   updateData.updated_at = new Date().toISOString();
@@ -250,12 +319,13 @@ export async function mergeTags(
 
   let mergedCount = 0;
   if (tagsToInsert.length > 0) {
-    const { count } = await supabase
+    const { data, error: insertError } = await supabase
       .from('transaction_tags')
-      .insert(tagsToInsert)
+      .upsert(tagsToInsert, { onConflict: 'transaction_id,tag_id', ignoreDuplicates: true })
       .select();
 
-    mergedCount = count || 0;
+    if (insertError) throw insertError;
+    mergedCount = data?.length || 0;
   }
 
   // Delete source tags (cascade will delete their transaction_tags)
@@ -319,17 +389,22 @@ export async function addTagsToTransaction(transactionId: number, tagIds: number
     throw new Error('Transaction does not belong to the active account');
   }
 
-  // Insert transaction_tags (ignore conflicts)
-  await supabase
+  // Insert transaction_tags (ignore conflicts using upsert)
+  const { error: insertError } = await supabase
     .from('transaction_tags')
-    .insert(tagIds.map(tagId => ({ transaction_id: transactionId, tag_id: tagId })))
-    .select();
+    .upsert(
+      tagIds.map(tagId => ({ transaction_id: transactionId, tag_id: tagId })),
+      { onConflict: 'transaction_id,tag_id', ignoreDuplicates: true }
+    );
+
+  if (insertError) throw insertError;
 
   return getTransactionTags(transactionId);
 }
 
 /**
  * Remove tag from transaction
+ * RLS policies ensure transaction and tag belong to user's account
  */
 export async function removeTagFromTransaction(transactionId: number, tagId: number): Promise<boolean> {
   const supabase = await createClient();
@@ -351,7 +426,7 @@ export async function setTransactionTags(transactionId: number, tagIds: number[]
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
-  // Verify tags belong to active account
+  // Verify tags belong to active account (RLS handles transaction validation)
   if (tagIds.length > 0) {
     const { data: tags } = await supabase
       .from('tags')
@@ -364,17 +439,22 @@ export async function setTransactionTags(transactionId: number, tagIds: number[]
     }
   }
 
-  // Delete existing tags
+  // Delete existing tags (RLS ensures transaction belongs to user's account)
   await supabase
     .from('transaction_tags')
     .delete()
     .eq('transaction_id', transactionId);
 
-  // Insert new tags
+  // Insert new tags (use upsert to handle duplicates, RLS ensures transaction/tag belong to user's account)
   if (tagIds.length > 0) {
-    await supabase
+    const { error: insertError } = await supabase
       .from('transaction_tags')
-      .insert(tagIds.map(tagId => ({ transaction_id: transactionId, tag_id: tagId })));
+      .upsert(
+        tagIds.map(tagId => ({ transaction_id: transactionId, tag_id: tagId })),
+        { onConflict: 'transaction_id,tag_id', ignoreDuplicates: true }
+      );
+
+    if (insertError) throw insertError;
   }
 
   return getTransactionTags(transactionId);
@@ -406,12 +486,22 @@ export async function bulkAssignTags(transactionIds: number[], tagIds: number[])
     tagIds.map(tagId => ({ transaction_id: txId, tag_id: tagId }))
   );
 
-  const { count } = await supabase
+  // Use upsert with ignoreDuplicates to handle cases where tags already exist
+  const { data, error } = await supabase
     .from('transaction_tags')
-    .insert(inserts)
+    .upsert(inserts, { 
+      onConflict: 'transaction_id,tag_id',
+      ignoreDuplicates: true 
+    })
     .select();
 
-  return count || 0;
+  if (error) {
+    throw error;
+  }
+
+  // Return the number of tag-transaction relationships that were successfully created
+  // This represents the number of tags assigned (not transactions)
+  return data?.length || 0;
 }
 
 /**
@@ -419,6 +509,33 @@ export async function bulkAssignTags(transactionIds: number[], tagIds: number[])
  */
 export async function bulkRemoveTags(transactionIds: number[], tagIds: number[]): Promise<number> {
   const supabase = await createClient();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  // Verify transactions belong to active account
+  const { data: transactions } = await supabase
+    .from('transactions')
+    .select('id')
+    .in('id', transactionIds)
+    .eq('budget_account_id', accountId);
+
+  if (!transactions || transactions.length !== transactionIds.length) {
+    throw new Error('One or more transactions do not belong to the active account');
+  }
+
+  // Verify tags belong to active account
+  if (tagIds.length > 0) {
+    const { data: tags } = await supabase
+      .from('tags')
+      .select('id')
+      .in('id', tagIds)
+      .eq('account_id', accountId);
+
+    if (!tags || tags.length !== tagIds.length) {
+      throw new Error('One or more tags do not belong to the active account');
+    }
+  }
+
   const { count } = await supabase
     .from('transaction_tags')
     .delete()

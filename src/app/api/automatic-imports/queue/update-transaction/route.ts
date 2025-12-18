@@ -30,6 +30,7 @@ export async function PUT(request: Request) {
       target_credit_card_id,
       is_historical,
       suggested_category_id,
+      tag_ids,
     } = body;
 
     if (!queuedImportId) {
@@ -50,6 +51,7 @@ export async function PUT(request: Request) {
     if (target_credit_card_id !== undefined) updateData.target_credit_card_id = target_credit_card_id;
     if (is_historical !== undefined) updateData.is_historical = is_historical;
     if (suggested_category_id !== undefined) updateData.suggested_category_id = suggested_category_id;
+    if (tag_ids !== undefined) updateData.tag_ids = tag_ids;
 
     // If status is pending, change to reviewing when user starts editing
     updateData.status = 'reviewing';

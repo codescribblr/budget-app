@@ -152,9 +152,17 @@ export default function TagSpendingReport({
                         {formatCurrency(Math.abs(stat.totalAmount))}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {stat.expenseAmount > 0 && formatCurrency(stat.expenseAmount)} expenses
-                        {stat.expenseAmount > 0 && stat.incomeAmount > 0 && ' • '}
-                        {stat.incomeAmount > 0 && formatCurrency(stat.incomeAmount)} income
+                        {stat.expenseAmount > 0 && stat.incomeAmount > 0 ? (
+                          <>
+                            {formatCurrency(stat.expenseAmount)} expenses • {formatCurrency(stat.incomeAmount)} income
+                          </>
+                        ) : stat.expenseAmount > 0 ? (
+                          <>{formatCurrency(stat.expenseAmount)} expenses</>
+                        ) : stat.incomeAmount > 0 ? (
+                          <>{formatCurrency(stat.incomeAmount)} income</>
+                        ) : (
+                          <span className="text-muted-foreground">Net: {formatCurrency(Math.abs(stat.totalAmount))}</span>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -98,13 +98,14 @@ export async function POST(request: NextRequest) {
       }
 
       try {
+        // Tag names are automatically lowercased in createTag
         await createTag({
           name: tagName,
           color: tagColor || undefined,
           description: tagDescription || undefined,
         });
-        createdTags.push(tagName);
-        tagMap.set(tagName.toLowerCase(), { name: tagName } as any);
+        createdTags.push(tagName.toLowerCase());
+        tagMap.set(tagName.toLowerCase(), { name: tagName.toLowerCase() } as any);
       } catch (error: any) {
         console.error(`Error creating tag ${tagName}:`, error);
         skippedTags.push(tagName);

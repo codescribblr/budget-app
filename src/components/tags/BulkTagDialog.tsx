@@ -67,7 +67,11 @@ export default function BulkTagDialog({ isOpen, onClose, transactionIds, onSucce
       }
 
       const result = await response.json();
-      toast.success(`Tags assigned to ${result.updated_count} transactions`);
+      const tagCount = result.updated_count || 0;
+      const transactionCount = transactionIds.length;
+      const tagWord = tagCount === 1 ? 'tag' : 'tags';
+      const transactionWord = transactionCount === 1 ? 'transaction' : 'transactions';
+      toast.success(`${tagCount} ${tagWord} assigned to ${transactionCount} ${transactionWord}`);
       onSuccess();
       onClose();
     } catch (error: any) {
