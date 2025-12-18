@@ -34,6 +34,9 @@ if [ -z "$SUPABASE_DB_URL" ]; then
   echo ""
   echo "Example:"
   echo "export SUPABASE_DB_URL='postgresql://postgres:your-password@db.xxx.supabase.co:5432/postgres'"
+  echo ""
+  echo -e "${YELLOW}⚠️  Important: If your password contains special characters (@, :, /, #, etc.),${NC}"
+  echo -e "${YELLOW}   they must be URL-encoded in the connection string.${NC}"
   exit 1
 fi
 
@@ -43,22 +46,101 @@ fi
 PSQL_CONN=$(python3 -c "
 import sys
 import urllib.parse
+import re
+
 url = sys.argv[1]
-parsed = urllib.parse.urlparse(url)
-user = parsed.username or 'postgres'
-password = parsed.password or ''
-host = parsed.hostname or 'localhost'
-port = parsed.port or 5432
-database = parsed.path.lstrip('/') or 'postgres'
-# Use PGPASSWORD environment variable for password to avoid shell escaping issues
-print(f'PGPASSWORD={urllib.parse.unquote(password)}')
-print(f'export PGPASSWORD')
-print(f'-h {host} -p {port} -U {urllib.parse.unquote(user)} -d {database}')
+
+# Handle URL encoding issues - ensure password is properly encoded
+# If the URL doesn't start with a scheme, try to fix it
+if not url.startswith('postgresql://') and not url.startswith('postgres://'):
+    url = 'postgresql://' + url
+
+try:
+    parsed = urllib.parse.urlparse(url)
+    
+    # Try to access port - this will raise ValueError if URL is malformed
+    # We catch this specifically to provide better error message
+    try:
+        _ = parsed.port  # This access might raise ValueError if port is invalid
+    except ValueError as port_error:
+        # URL parsing failed due to malformed port (likely password contains special chars)
+        error_msg = str(port_error)
+        if 'Port could not be cast' in error_msg:
+            print(f'Error: Invalid URL format - password likely contains special characters', file=sys.stderr)
+            print(f'Details: {error_msg}', file=sys.stderr)
+            print(f'', file=sys.stderr)
+            print(f'The password in your SUPABASE_DB_URL contains special characters that must be URL-encoded.', file=sys.stderr)
+            print(f'', file=sys.stderr)
+            print(f'Common special characters and their encodings:', file=sys.stderr)
+            print(f'  @  ->  %40', file=sys.stderr)
+            print(f'  :  ->  %3A', file=sys.stderr)
+            print(f'  /  ->  %2F', file=sys.stderr)
+            print(f'  #  ->  %23', file=sys.stderr)
+            print(f'  %  ->  %25', file=sys.stderr)
+            print(f'  &  ->  %26', file=sys.stderr)
+            print(f'  =  ->  %3D', file=sys.stderr)
+            print(f'', file=sys.stderr)
+            print(f'To encode your password, run:', file=sys.stderr)
+            print(f'  python3 -c \"import urllib.parse; print(urllib.parse.quote(\'your-password\'))\"', file=sys.stderr)
+            print(f'', file=sys.stderr)
+            print(f'Then update your SUPABASE_DB_URL with the encoded password.', file=sys.stderr)
+            sys.exit(1)
+        else:
+            raise  # Re-raise if it's a different ValueError
+    
+    user = parsed.username or 'postgres'
+    password = parsed.password or ''
+    host = parsed.hostname or 'localhost'
+    
+    # Safely parse port
+    port = 5432  # default
+    if parsed.port is not None:
+        try:
+            port = int(parsed.port)
+        except (ValueError, TypeError):
+            # Fallback: check if hostname contains port info
+            if ':' in host:
+                host_parts = host.rsplit(':', 1)
+                try:
+                    port = int(host_parts[1])
+                    host = host_parts[0]
+                except (ValueError, IndexError):
+                    pass
+    
+    database = parsed.path.lstrip('/') or 'postgres'
+    
+    # URL-decode password and username
+    password_decoded = urllib.parse.unquote(password) if password else ''
+    user_decoded = urllib.parse.unquote(user) if user else 'postgres'
+    
+    # Use PGPASSWORD environment variable for password to avoid shell escaping issues
+    print(f'PGPASSWORD={password_decoded}')
+    print(f'export PGPASSWORD')
+    print(f'-h {host} -p {port} -U {user_decoded} -d {database}')
+except Exception as e:
+    print(f'Error parsing URL: {e}', file=sys.stderr)
+    print(f'URL format should be: postgresql://user:password@host:port/database', file=sys.stderr)
+    print(f'If your password contains special characters, they must be URL-encoded.', file=sys.stderr)
+    sys.exit(1)
 " "$SUPABASE_DB_URL")
+
+# Check if parsing succeeded
+if [ -z "$PSQL_CONN" ] || echo "$PSQL_CONN" | grep -q "Error parsing URL"; then
+  echo -e "${RED}❌ Failed to parse SUPABASE_DB_URL${NC}"
+  echo -e "${RED}   Make sure your password is properly URL-encoded${NC}"
+  echo -e "${YELLOW}   Special characters in passwords should be URL-encoded (e.g., @ becomes %40)${NC}"
+  exit 1
+fi
 
 # Extract PGPASSWORD and psql connection params
 PGPASSWORD_VAL=$(echo "$PSQL_CONN" | head -1 | sed 's/PGPASSWORD=//')
 PSQL_PARAMS=$(echo "$PSQL_CONN" | tail -1)
+
+# Validate that we got the required values
+if [ -z "$PSQL_PARAMS" ]; then
+  echo -e "${RED}❌ Failed to extract connection parameters from SUPABASE_DB_URL${NC}"
+  exit 1
+fi
 
 # Export password for psql
 export PGPASSWORD="$PGPASSWORD_VAL"
