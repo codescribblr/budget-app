@@ -179,8 +179,9 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     supabase.from('imported_transactions').select('*').eq('account_id', accountId),
     supabase
       .from('imported_transaction_links')
-      .select('*, imported_transactions!inner(account_id)')
-      .eq('imported_transactions.account_id', accountId),
+      .select('*, imported_transactions!inner(account_id), transactions!inner(budget_account_id)')
+      .eq('imported_transactions.account_id', accountId)
+      .eq('transactions.budget_account_id', accountId),
     supabase.from('merchant_groups').select('*').eq('account_id', accountId),
     supabase.from('merchant_mappings').select('*').eq('account_id', accountId),
     supabase.from('merchant_category_rules').select('*').eq('account_id', accountId),
