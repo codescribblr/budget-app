@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { useFeature } from '@/contexts/FeatureContext';
 import {
   User,
   Key,
@@ -42,6 +43,7 @@ const settingsNavItems = [
     href: '/settings/automatic-imports',
     icon: RefreshCw,
     description: 'Manage automatic transaction imports',
+    featureKey: 'automatic_imports',
   },
   {
     title: 'Import Templates',
@@ -93,30 +95,45 @@ interface SettingsSidebarProps {
 
 export function SettingsSidebar({ className }: SettingsSidebarProps) {
   const pathname = usePathname();
+  const automaticImportsEnabled = useFeature('automatic_imports');
 
   return (
     <nav className={cn('flex flex-col gap-1', className)}>
-      {settingsNavItems.map((item) => {
-        const Icon = item.icon;
-        const isActive = pathname === item.href;
-        
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-              'hover:bg-accent hover:text-accent-foreground',
-              isActive
-                ? 'bg-accent text-accent-foreground font-medium'
-                : 'text-muted-foreground'
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            <span>{item.title}</span>
-          </Link>
-        );
-      })}
+      {settingsNavItems
+        .filter((item) => {
+          // If item has a featureKey, check if feature is enabled
+          if ('featureKey' in item && item.featureKey) {
+            switch (item.featureKey) {
+              case 'automatic_imports':
+                return automaticImportsEnabled;
+              default:
+                return true;
+            }
+          }
+          // No feature requirement, show item
+          return true;
+        })
+        .map((item) => {
+          const Icon = item.icon;
+          const isActive = pathname === item.href;
+          
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                'hover:bg-accent hover:text-accent-foreground',
+                isActive
+                  ? 'bg-accent text-accent-foreground font-medium'
+                  : 'text-muted-foreground'
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              <span>{item.title}</span>
+            </Link>
+          );
+        })}
     </nav>
   );
 }

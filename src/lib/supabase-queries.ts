@@ -16,11 +16,13 @@ import type {
 } from './types';
 import { calculateGoalProgress, calculateGoalStatus } from './goals/calculations';
 import { getActiveAccountId } from './account-context';
+import { cache } from 'react';
 
 // =====================================================
 // HELPER: Get authenticated user
 // =====================================================
-export async function getAuthenticatedUser() {
+// Cache the authenticated user per request to avoid repeated auth calls
+export const getAuthenticatedUser = cache(async () => {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
 
@@ -29,7 +31,7 @@ export async function getAuthenticatedUser() {
   }
 
   return { supabase, user };
-}
+});
 
 // =====================================================
 // CATEGORIES

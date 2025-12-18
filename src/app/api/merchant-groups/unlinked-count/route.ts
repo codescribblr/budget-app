@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 
 /**
@@ -7,13 +7,7 @@ import { getActiveAccountId } from '@/lib/account-context';
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    const { supabase, user } = await getAuthenticatedUser();
     const accountId = await getActiveAccountId();
     if (!accountId) {
       return NextResponse.json({ count: 0 });
@@ -23,7 +17,7 @@ export async function GET() {
     const { data: transactions, error: transactionsError } = await supabase
       .from('transactions')
       .select('id, description')
-      .eq('user_id', user.id)
+      .eq('budget_account_id', accountId)
       .is('merchant_group_id', null);
 
     if (transactionsError) {
@@ -46,7 +40,6 @@ export async function GET() {
     const { data: mappings, error: mappingsError } = await supabase
       .from('merchant_mappings')
       .select('pattern')
-      .eq('user_id', user.id)
       .eq('account_id', accountId)
       .not('merchant_group_id', 'is', null);
 

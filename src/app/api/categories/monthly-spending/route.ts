@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase-queries';
+import { getActiveAccountId } from '@/lib/account-context';
 
 /**
  * GET /api/categories/monthly-spending
@@ -7,11 +8,11 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { supabase, user } = await getAuthenticatedUser();
+    const accountId = await getActiveAccountId();
     
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!accountId) {
+      return NextResponse.json({ error: 'No active account' }, { status: 400 });
     }
 
     // Get current month's date range (YYYY-MM-DD format)
@@ -35,7 +36,7 @@ export async function GET() {
           amount
         )
       `)
-      .eq('user_id', user.id)
+      .eq('budget_account_id', accountId)
       .gte('date', startDate)
       .lte('date', endDate);
 

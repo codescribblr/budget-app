@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -40,6 +40,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Plus, Mail, UserX, Shield, Edit, Eye, Loader2, X } from "lucide-react"
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 // Note: getActiveAccountId is server-only, we'll get accountId from API
 
 interface Member {
@@ -75,69 +76,102 @@ export default function CollaboratorsPage() {
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [invitationToCancel, setInvitationToCancel] = useState<number | null>(null)
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
+
   useEffect(() => {
-    loadData()
-  }, [])
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      loadData();
+    }
+  }, []);
 
   const loadData = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       // Get active budget account
-      const accountsResponse = await fetch('/api/budget-accounts')
+      const accountsResponse = await fetch('/api/budget-accounts');
       if (accountsResponse.ok) {
-        const accountsData = await accountsResponse.json()
-        const activeId = accountsData.activeAccountId
-        setAccountId(activeId)
+        const accountsData = await accountsResponse.json();
+        const activeId = accountsData.activeAccountId;
+        setAccountId(activeId);
         
         if (activeId) {
           await Promise.all([
             loadMembers(activeId),
             loadInvitations()
-          ])
+          ]);
         }
+      } else {
+        toast.error('Failed to load account information');
       }
     } catch (error) {
-      console.error('Error loading data:', error)
-      toast.error('Failed to load collaborators')
+      console.error('Error loading data:', error);
+      toast.error('Failed to load collaborators');
     } finally {
-      setLoading(false)
+      setLoading(false);
+      fetchingRef.current = false;
     }
-  }
+  };
 
   const loadMembers = async (id: number) => {
     try {
       const [membersResponse, accountsResponse] = await Promise.all([
         fetch(`/api/budget-accounts/${id}/members`),
         fetch('/api/budget-accounts')
-      ])
+      ]);
       
       if (membersResponse.ok) {
-        const data = await membersResponse.json()
-        const membersList = data.members || []
-        setMembers(membersList)
+        const data = await membersResponse.json();
+        
+        // Ensure members is always an array
+        if (data && Array.isArray(data.members)) {
+          setMembers(data.members);
+        } else {
+          console.error('Invalid members data:', data);
+          setMembers([]);
+        }
       }
       
       // Check if current user is owner
       if (accountsResponse.ok) {
-        const accountsData = await accountsResponse.json()
-        const currentAccount = accountsData.accounts?.find((a: any) => a.accountId === id)
-        setIsOwner(currentAccount?.isOwner || currentAccount?.role === 'owner' || false)
+        const accountsData = await accountsResponse.json();
+        const currentAccount = accountsData.accounts?.find((a: any) => a.accountId === id);
+        setIsOwner(currentAccount?.isOwner || currentAccount?.role === 'owner' || false);
       }
     } catch (error) {
-      console.error('Error loading members:', error)
+      console.error('Error loading members:', error);
+      setMembers([]); // Set empty array on error
     }
-  }
+  };
 
   const loadInvitations = async () => {
     try {
-      const response = await fetch('/api/invitations')
+      const response = await fetch('/api/invitations');
       if (response.ok) {
-        const data = await response.json()
-        setInvitations(data.invitations || [])
+        const data = await response.json();
+        
+        // Ensure invitations is always an array
+        if (data && Array.isArray(data.invitations)) {
+          setInvitations(data.invitations);
+        } else {
+          console.error('Invalid invitations data:', data);
+          setInvitations([]);
+        }
+      } else {
+        setInvitations([]);
       }
     } catch (error) {
-      console.error('Error loading invitations:', error)
+      console.error('Error loading invitations:', error);
+      setInvitations([]); // Set empty array on error
     }
-  }
+  };
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) {
@@ -261,11 +295,7 @@ export default function CollaboratorsPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    )
+    return <LoadingSpinner />;
   }
 
   if (!accountId) {

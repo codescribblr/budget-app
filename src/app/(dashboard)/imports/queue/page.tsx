@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -49,13 +49,17 @@ export default function QueueReviewPage() {
   const [batchToDelete, setBatchToDelete] = useState<QueuedImportBatch | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  useEffect(() => {
-    if (!permissionsLoading) {
-      fetchBatches();
-    }
-  }, [permissionsLoading]);
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
 
   const fetchBatches = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       const response = await fetch('/api/automatic-imports/queue?batches=true');
       if (!response.ok) throw new Error('Failed to fetch batches');
@@ -65,8 +69,16 @@ export default function QueueReviewPage() {
       console.error('Error fetching batches:', error);
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
+
+  useEffect(() => {
+    if (!permissionsLoading && !hasMountedRef.current) {
+      hasMountedRef.current = true;
+      fetchBatches();
+    }
+  }, [permissionsLoading]);
 
   const handleReviewBatch = async (batchId: string, sourceType?: string) => {
     try {

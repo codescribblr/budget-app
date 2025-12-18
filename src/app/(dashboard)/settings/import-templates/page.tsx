@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,22 +38,42 @@ export default function ImportTemplatesPage() {
   const [templateToDelete, setTemplateToDelete] = useState<CSVImportTemplate | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
+
   useEffect(() => {
-    if (!permissionsLoading) {
+    if (!permissionsLoading && !hasMountedRef.current) {
+      hasMountedRef.current = true;
       fetchTemplates();
     }
   }, [permissionsLoading]);
 
   const fetchTemplates = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       setLoading(true);
       const data = await listTemplates();
-      setTemplates(data);
+      
+      // Ensure templates is always an array
+      if (Array.isArray(data)) {
+        setTemplates(data);
+      } else {
+        console.error('Invalid templates data:', data);
+        setTemplates([]);
+      }
     } catch (error) {
       console.error('Error fetching templates:', error);
       toast.error('Failed to load templates');
+      setTemplates([]); // Set empty array on error
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 

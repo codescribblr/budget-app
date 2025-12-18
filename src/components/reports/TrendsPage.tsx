@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,18 +18,45 @@ export default function TrendsPage() {
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [timeRange, setTimeRange] = useState('12'); // months to show
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingTransactionsRef = useRef(false);
+  const fetchingCategoriesRef = useRef(false);
+  const hasMountedTransactionsRef = useRef(false);
+  const hasMountedCategoriesRef = useRef(false);
+
   // Fetch transactions
   useEffect(() => {
     const fetchTransactions = async () => {
+      // Prevent duplicate calls
+      if (fetchingTransactionsRef.current || hasMountedTransactionsRef.current) {
+        return;
+      }
+      hasMountedTransactionsRef.current = true;
+      fetchingTransactionsRef.current = true;
+
       try {
         setLoadingTransactions(true);
         const response = await fetch('/api/transactions');
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch transactions: ${response.status}`);
+        }
+        
         const data = await response.json();
-        setTransactions(data);
+        
+        // Ensure data is always an array
+        if (Array.isArray(data)) {
+          setTransactions(data);
+        } else {
+          console.error('Invalid transactions data:', data);
+          setTransactions([]);
+        }
       } catch (error) {
         console.error('Error fetching transactions:', error);
+        setTransactions([]); // Set empty array on error
       } finally {
         setLoadingTransactions(false);
+        fetchingTransactionsRef.current = false;
       }
     };
 
@@ -39,15 +66,36 @@ export default function TrendsPage() {
   // Fetch categories
   useEffect(() => {
     const fetchCategories = async () => {
+      // Prevent duplicate calls
+      if (fetchingCategoriesRef.current || hasMountedCategoriesRef.current) {
+        return;
+      }
+      hasMountedCategoriesRef.current = true;
+      fetchingCategoriesRef.current = true;
+
       try {
         setLoadingCategories(true);
         const response = await fetch('/api/categories?includeArchived=all');
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch categories: ${response.status}`);
+        }
+        
         const data = await response.json();
-        setCategories(data);
+        
+        // Ensure data is always an array
+        if (Array.isArray(data)) {
+          setCategories(data);
+        } else {
+          console.error('Invalid categories data:', data);
+          setCategories([]);
+        }
       } catch (error) {
         console.error('Error fetching categories:', error);
+        setCategories([]); // Set empty array on error
       } finally {
         setLoadingCategories(false);
+        fetchingCategoriesRef.current = false;
       }
     };
 
@@ -56,6 +104,11 @@ export default function TrendsPage() {
 
   // Filter transactions by time range
   const filteredTransactions = useMemo(() => {
+    // Ensure transactions is always an array before filtering
+    if (!Array.isArray(transactions)) {
+      return [];
+    }
+
     const monthsToShow = parseInt(timeRange);
     const cutoffDate = new Date();
     cutoffDate.setMonth(cutoffDate.getMonth() - monthsToShow);

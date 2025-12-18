@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -110,8 +110,18 @@ export default function Dashboard() {
     return calculateSummary(categories, accounts, creditCards, pendingChecks, monthlyNetIncome);
   }, [categories, accounts, creditCards, pendingChecks, monthlyNetIncome]);
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
+
   // Initial data fetch
   const fetchData = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       setLoading(true);
       const [categoriesRes, accountsRes, creditCardsRes, loansRes, pendingChecksRes, summaryRes, bufferRes] =
@@ -156,6 +166,7 @@ export default function Dashboard() {
       console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 
@@ -235,7 +246,11 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    fetchData();
+    // Only fetch once on mount
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      fetchData();
+    }
   }, []);
 
   if (loading) {

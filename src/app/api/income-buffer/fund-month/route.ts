@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase-queries';
+import { getActiveAccountId } from '@/lib/account-context';
+import { checkWriteAccess } from '@/lib/api-helpers';
 
 /**
  * POST /api/income-buffer/fund-month
@@ -8,16 +10,16 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { checkWriteAccess } = await import('@/lib/api-helpers');
+    const { supabase, user } = await getAuthenticatedUser();
+    
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
+
+    const accountId = await getActiveAccountId();
+    
+    if (!accountId) {
+      return NextResponse.json({ error: 'No active account' }, { status: 400 });
+    }
 
     const body = await request.json();
     const { amount } = body;
@@ -34,6 +36,7 @@ export async function POST(request: Request) {
       .from('user_feature_flags')
       .select('enabled')
       .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .eq('feature_name', 'income_buffer')
       .single();
 
@@ -48,7 +51,7 @@ export async function POST(request: Request) {
     const { data: bufferCategory, error: categoryError } = await supabase
       .from('categories')
       .select('id, current_balance')
-      .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .eq('name', 'Income Buffer')
       .eq('is_system', true)
       .single();

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase-queries';
+import { getActiveAccountId } from '@/lib/account-context';
 
 /**
  * GET /api/monthly-funding/[month]
@@ -11,11 +12,11 @@ export async function GET(
   { params }: { params: Promise<{ month: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { supabase, user } = await getAuthenticatedUser();
+    const accountId = await getActiveAccountId();
+    
+    if (!accountId) {
+      return NextResponse.json({ error: 'No active account' }, { status: 400 });
     }
 
     const { month } = await params;
@@ -33,7 +34,7 @@ export async function GET(
     const { data: categories, error: categoriesError } = await supabase
       .from('categories')
       .select('id, name, monthly_amount, current_balance, sort_order')
-      .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .order('sort_order');
 
     if (categoriesError) {
@@ -48,7 +49,7 @@ export async function GET(
     const { data: fundingRecords, error: fundingError } = await supabase
       .from('category_monthly_funding')
       .select('category_id, target_amount, funded_amount')
-      .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .eq('month', month);
 
     if (fundingError) {

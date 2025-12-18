@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -39,17 +39,40 @@ export default function DuplicateTransactionFinder() {
   const [selectedTransactions, setSelectedTransactions] = useState<Map<number, Set<number>>>(new Map());
   const [viewingTransactionId, setViewingTransactionId] = useState<number | null>(null);
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingCategoriesRef = useRef(false);
+  const hasMountedRef = useRef(false);
+
   useEffect(() => {
     // Fetch categories when component mounts
     const fetchCategories = async () => {
+      // Prevent duplicate calls
+      if (fetchingCategoriesRef.current || hasMountedRef.current) {
+        return;
+      }
+      hasMountedRef.current = true;
+      fetchingCategoriesRef.current = true;
+
       try {
         const response = await fetch('/api/categories?includeArchived=all');
         if (response.ok) {
           const data = await response.json();
-          setCategories(data);
+          
+          // Ensure categories is always an array
+          if (Array.isArray(data)) {
+            setCategories(data);
+          } else {
+            console.error('Invalid categories data:', data);
+            setCategories([]);
+          }
+        } else {
+          setCategories([]);
         }
       } catch (error) {
         console.error('Error fetching categories:', error);
+        setCategories([]); // Set empty array on error
+      } finally {
+        fetchingCategoriesRef.current = false;
       }
     };
     fetchCategories();
@@ -67,7 +90,14 @@ export default function DuplicateTransactionFinder() {
       }
 
       const data = await response.json();
-      setDuplicateGroups(data.duplicateGroups || []);
+      
+      // Ensure duplicateGroups is always an array
+      if (data && Array.isArray(data.duplicateGroups)) {
+        setDuplicateGroups(data.duplicateGroups);
+      } else {
+        console.error('Invalid duplicateGroups data:', data);
+        setDuplicateGroups([]);
+      }
       
       if (data.duplicateGroups.length === 0) {
         toast.success('No duplicate transactions found!');

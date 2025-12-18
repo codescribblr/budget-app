@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,23 +48,45 @@ export default function DataBackup() {
   const [importProgress, setImportProgress] = useState('');
   const [showProgressDialog, setShowProgressDialog] = useState(false);
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
+
   // Fetch backups
   const fetchBackups = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       const response = await fetch('/api/backups');
       if (!response.ok) throw new Error('Failed to fetch backups');
       const data = await response.json();
-      setBackups(data.backups);
+      
+      // Ensure backups is always an array
+      if (data && Array.isArray(data.backups)) {
+        setBackups(data.backups);
+      } else {
+        console.error('Invalid backups data:', data);
+        setBackups([]);
+      }
     } catch (error) {
       console.error('Error fetching backups:', error);
       toast.error('Failed to load backups');
+      setBackups([]); // Set empty array on error
     } finally {
       setIsLoading(false);
+      fetchingRef.current = false;
     }
   };
 
   useEffect(() => {
-    fetchBackups();
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      fetchBackups();
+    }
   }, []);
 
   // Create backup

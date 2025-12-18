@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Mail, CreditCard, AlertCircle, RefreshCw } from 'lucide-react';
@@ -31,22 +31,42 @@ export default function AutomaticImportsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
+
   useEffect(() => {
-    if (!permissionsLoading) {
+    if (!permissionsLoading && !hasMountedRef.current) {
+      hasMountedRef.current = true;
       fetchSetups();
     }
   }, [permissionsLoading]);
 
   const fetchSetups = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       const response = await fetch('/api/automatic-imports/setups');
       if (!response.ok) throw new Error('Failed to fetch setups');
       const data = await response.json();
-      setSetups(data.setups || []);
+      
+      // Ensure setups is always an array
+      if (data && Array.isArray(data.setups)) {
+        setSetups(data.setups);
+      } else {
+        console.error('Invalid setups data:', data);
+        setSetups([]);
+      }
     } catch (error) {
       console.error('Error fetching import setups:', error);
+      setSetups([]); // Set empty array on error
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 
 export async function GET(
@@ -7,18 +7,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
+    const { supabase } = await getAuthenticatedUser();
     const { id } = await params;
     const transactionId = parseInt(id);
 
     if (isNaN(transactionId)) {
       return NextResponse.json({ error: 'Invalid transaction ID' }, { status: 400 });
-    }
-
-    // Check authentication
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const accountId = await getActiveAccountId();

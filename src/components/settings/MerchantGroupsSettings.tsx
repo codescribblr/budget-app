@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -40,12 +40,25 @@ export default function MerchantGroupsSettings() {
   const [unlinkedCount, setUnlinkedCount] = useState<number | null>(null);
   const [isLoadingCount, setIsLoadingCount] = useState(true);
 
+  // Track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false);
+  const hasMountedRef = useRef(false);
+
   // Fetch unlinked transaction count on mount
   useEffect(() => {
-    fetchUnlinkedCount();
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      fetchUnlinkedCount();
+    }
   }, []);
 
   const fetchUnlinkedCount = async () => {
+    // Prevent duplicate calls
+    if (fetchingRef.current) {
+      return;
+    }
+    fetchingRef.current = true;
+
     try {
       setIsLoadingCount(true);
       const response = await fetch('/api/merchant-groups/unlinked-count');
@@ -55,13 +68,21 @@ export default function MerchantGroupsSettings() {
       }
 
       const data = await response.json();
-      setUnlinkedCount(data.count);
+      
+      // Validate count is a number
+      if (typeof data.count === 'number') {
+        setUnlinkedCount(data.count);
+      } else {
+        console.error('Invalid unlinked count data:', data);
+        setUnlinkedCount(null);
+      }
     } catch (error) {
       console.error('Error fetching unlinked count:', error);
       // Don't show error toast, just set count to null
       setUnlinkedCount(null);
     } finally {
       setIsLoadingCount(false);
+      fetchingRef.current = false;
     }
   };
 

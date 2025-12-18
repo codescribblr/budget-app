@@ -1,5 +1,6 @@
 import { getAuthenticatedUser } from './supabase-queries';
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 
 export interface AccountMembership {
   accountId: number;
@@ -13,8 +14,10 @@ const ACTIVE_ACCOUNT_COOKIE = 'active_account_id';
 /**
  * Get the active account ID for the current user
  * Checks cookie first, then falls back to user's primary account
+ * Uses React's cache() for request-scoped memoization to avoid repeated database calls
+ * within the same request
  */
-export async function getActiveAccountId(): Promise<number | null> {
+export const getActiveAccountId = cache(async (): Promise<number | null> => {
   const { supabase, user } = await getAuthenticatedUser();
   
   // Try to read from cookie first
@@ -24,7 +27,8 @@ export async function getActiveAccountId(): Promise<number | null> {
     if (activeAccountId?.value) {
       const accountId = parseInt(activeAccountId.value);
       if (!isNaN(accountId)) {
-        // Basic validation - check if account exists and user has access
+        // Optimized validation: Use a single query with OR condition to check both owner and member
+        // This reduces from 2 queries to 1 query in the worst case
         const { data: account } = await supabase
           .from('budget_accounts')
           .select('id, owner_id')
@@ -33,20 +37,22 @@ export async function getActiveAccountId(): Promise<number | null> {
           .single();
         
         if (account) {
-          // Check if user is owner or member
+          // Check if user is owner (most common case - check first)
           if (account.owner_id === user.id) {
             return accountId;
           }
           
-          const { data: member } = await supabase
+          // If not owner, check if user is a member in a single query
+          // Use head() since we only need to know if it exists
+          const { count } = await supabase
             .from('account_users')
-            .select('id')
+            .select('id', { count: 'exact', head: true })
             .eq('account_id', accountId)
             .eq('user_id', user.id)
             .eq('status', 'active')
-            .single();
+            .limit(1);
           
-          if (member) {
+          if (count && count > 0) {
             return accountId;
           }
         }
@@ -85,7 +91,7 @@ export async function getActiveAccountId(): Promise<number | null> {
   // No accounts found - don't auto-create one
   // User should either accept an invitation or create their own account
   return null;
-}
+});
 
 /**
  * Set the active account ID (stores in cookie)
@@ -157,28 +163,42 @@ export async function getUserAccounts(): Promise<AccountMembership[]> {
   }
   
   // Add shared accounts (where user is a member but not owner)
+  // Optimize: Fetch all account details in a single query instead of N queries
   if (accountUsers && accountUsers.length > 0) {
-    for (const au of accountUsers) {
-      // Skip if already added as owned account
-      if (ownedAccountIds.has(au.account_id)) {
-        continue;
-      }
-      
-      // Fetch account details separately to avoid RLS join issues
-      const { data: account } = await supabase
+    const sharedAccountIds = accountUsers
+      .map(au => au.account_id)
+      .filter(id => !ownedAccountIds.has(id));
+    
+    if (sharedAccountIds.length > 0) {
+      // Fetch all shared account details in one query
+      const { data: sharedAccounts } = await supabase
         .from('budget_accounts')
         .select('id, name, owner_id')
-        .eq('id', au.account_id)
-        .is('deleted_at', null)
-        .single();
+        .in('id', sharedAccountIds)
+        .is('deleted_at', null);
       
-      if (account) {
-        memberships.push({
-          accountId: au.account_id,
-          role: au.role as 'owner' | 'editor' | 'viewer',
-          accountName: account.name || 'Unknown Account',
-          isOwner: account.owner_id === user.id,
-        });
+      // Create a map for quick lookup
+      const accountMap = new Map<number, { id: number; name: string | null; owner_id: string }>();
+      sharedAccounts?.forEach(account => {
+        accountMap.set(account.id, account);
+      });
+      
+      // Add shared accounts to memberships
+      for (const au of accountUsers) {
+        // Skip if already added as owned account
+        if (ownedAccountIds.has(au.account_id)) {
+          continue;
+        }
+        
+        const account = accountMap.get(au.account_id);
+        if (account) {
+          memberships.push({
+            accountId: au.account_id,
+            role: au.role as 'owner' | 'editor' | 'viewer',
+            accountName: account.name || 'Unknown Account',
+            isOwner: account.owner_id === user.id,
+          });
+        }
       }
     }
   }

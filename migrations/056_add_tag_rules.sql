@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS tag_rules (
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_tag_rules_account_id ON tag_rules(account_id);
 CREATE INDEX IF NOT EXISTS idx_tag_rules_tag_id ON tag_rules(tag_id);
-CREATE INDEX IF NOT EXISTS idx_tag_rules_active ON tag_rules(account_id, is_active, priority DESC);
+CREATE INDEX IF NOT EXISTS idx_tag_rules_active ON tag_rules(account_id, is_active) WHERE is_active = TRUE;
 
 -- Enable RLS
 ALTER TABLE tag_rules ENABLE ROW LEVEL SECURITY;
@@ -35,6 +35,11 @@ CREATE POLICY "Users can view tag rules in their accounts" ON tag_rules FOR SELE
       SELECT account_id FROM account_users 
       WHERE user_id = auth.uid() AND status = 'active'
     )
+    AND EXISTS (
+      SELECT 1 FROM tags tag 
+      WHERE tag.id = tag_rules.tag_id 
+      AND tag.account_id = tag_rules.account_id
+    )
   );
 
 CREATE POLICY "Users can insert tag rules in their accounts" ON tag_rules FOR INSERT 
@@ -46,8 +51,10 @@ CREATE POLICY "Users can insert tag rules in their accounts" ON tag_rules FOR IN
       SELECT account_id FROM account_users 
       WHERE user_id = auth.uid() AND status = 'active'
     )
-    AND tag_id IN (
-      SELECT id FROM tags WHERE account_id = tag_rules.account_id
+    AND EXISTS (
+      SELECT 1 FROM tags tag 
+      WHERE tag.id = tag_rules.tag_id 
+      AND tag.account_id = tag_rules.account_id
     )
   );
 
