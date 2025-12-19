@@ -12,7 +12,8 @@ export type FeatureName =
   | 'loans'
   | 'advanced_reporting'
   | 'ai_chat'
-  | 'automatic_imports';
+  | 'automatic_imports'
+  | 'tags';
 
 export interface Feature {
   key: FeatureName;

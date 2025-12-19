@@ -12,6 +12,7 @@ import type { ParsedTransaction, TransactionSplit } from '@/lib/import-types';
 import type { Category, Account, CreditCard } from '@/lib/types';
 import { parseLocalDate, formatLocalDate, getTodayLocal } from '@/lib/date-utils';
 import TagSelector from '@/components/tags/TagSelector';
+import { useFeature } from '@/contexts/FeatureContext';
 
 interface TransactionEditDialogProps {
   transaction: ParsedTransaction;
@@ -40,6 +41,7 @@ export default function TransactionEditDialog({
   const [selectedCreditCardId, setSelectedCreditCardId] = useState<number | null>(transaction.credit_card_id || null);
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>(transaction.transaction_type || 'expense');
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>(transaction.tag_ids || []);
+  const tagsEnabled = useFeature('tags');
 
   useEffect(() => {
     fetchAccounts();
@@ -240,14 +242,16 @@ export default function TransactionEditDialog({
             </Select>
           </div>
 
-          <div>
-            <TagSelector
-              selectedTagIds={selectedTagIds}
-              onChange={setSelectedTagIds}
-              transactionDescription={description}
-              categoryIds={splits.map(s => s.categoryId).filter(id => id > 0)}
-            />
-          </div>
+          {tagsEnabled && (
+            <div>
+              <TagSelector
+                selectedTagIds={selectedTagIds}
+                onChange={setSelectedTagIds}
+                transactionDescription={description}
+                categoryIds={splits.map(s => s.categoryId).filter(id => id > 0)}
+              />
+            </div>
+          )}
 
           <div className="border-t pt-4">
             <div className="flex justify-between items-center mb-3">

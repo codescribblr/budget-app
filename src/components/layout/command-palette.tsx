@@ -83,7 +83,7 @@ const navigationItems = [
   { label: "Goals", path: "/goals", icon: Target, featureKey: "goals" },
   { label: "AI Assistant", path: "/dashboard/ai-assistant", icon: Sparkles, featureKey: "ai_chat" },
   { label: "Merchants", path: "/merchants", icon: Store },
-  { label: "Tags", path: "/tags", icon: Tag },
+  { label: "Tags", path: "/tags", icon: Tag, featureKey: "tags" },
   { label: "Category Rules", path: "/category-rules", icon: FolderTree },
   { label: "Settings", path: "/settings", icon: Settings },
   { label: "Help Center", path: "/help", icon: HelpCircle },
@@ -108,6 +108,7 @@ export function CommandPalette() {
   const goalsEnabled = useFeature('goals')
   const aiChatEnabled = useFeature('ai_chat')
   const advancedReportingEnabled = useFeature('advanced_reporting')
+  const tagsEnabled = useFeature('tags')
   const scrollTimeoutsRef = React.useRef<NodeJS.Timeout[]>([])
 
   React.useEffect(() => {
@@ -149,10 +150,10 @@ export function CommandPalette() {
           if (!res.ok) throw new Error(`Failed to fetch goals: ${res.status}`)
           return res.json()
         }),
-        fetch('/api/tags').then(res => {
+        tagsEnabled ? fetch('/api/tags').then(res => {
           if (!res.ok) throw new Error(`Failed to fetch tags: ${res.status}`)
           return res.json()
-        }),
+        }) : Promise.resolve([]),
       ])
         .then(([categoriesData, accountsData, creditCardsData, loansData, goalsData, tagsData]) => {
           // Filter out system categories
@@ -248,6 +249,8 @@ export function CommandPalette() {
                       return aiChatEnabled
                     case 'advanced_reporting':
                       return advancedReportingEnabled
+                    case 'tags':
+                      return tagsEnabled
                     default:
                       return true
                   }
@@ -294,7 +297,7 @@ export function CommandPalette() {
               ))}
             </CommandGroup>
           )}
-          {tags.length > 0 && (
+          {tagsEnabled && tags.length > 0 && (
             <CommandGroup heading="Tags">
               {tags.map((tag) => (
                 <CommandItem

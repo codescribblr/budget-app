@@ -41,6 +41,7 @@ import AddTransactionDialog from './AddTransactionDialog';
 import EditTransactionDialog from './EditTransactionDialog';
 import { format } from 'date-fns';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
+import { useFeature } from '@/contexts/FeatureContext';
 
 // Fuzzy search function
 function fuzzyMatch(text: string, search: string): boolean {
@@ -108,6 +109,7 @@ export default function TransactionsPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [sortBy, setSortBy] = useState<'date' | 'description' | 'merchant' | 'amount'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const tagsEnabled = useFeature('tags');
 
   // Initialize pagination state with values from URL params or defaults
   const [currentPage, setCurrentPage] = useState(() => {
@@ -138,19 +140,29 @@ export default function TransactionsPage() {
       setLoading(true);
       // Use regular fetch - the cache will be handled at a higher level
       // We'll prevent duplicate calls by using a ref to track if fetch is in progress
-      const [transactionsRes, categoriesRes, merchantGroupsRes, tagsRes] = await Promise.all([
+      const fetchPromises = [
         fetch('/api/transactions'),
         fetch('/api/categories?excludeGoals=true'),
         fetch('/api/merchant-groups'),
-        fetch('/api/tags'),
-      ]);
+      ];
+      
+      if (tagsEnabled) {
+        fetchPromises.push(fetch('/api/tags'));
+      }
 
-      const [transactionsData, categoriesData, merchantGroupsData, tagsData] = await Promise.all([
+      const responses = await Promise.all(fetchPromises);
+      const [transactionsRes, categoriesRes, merchantGroupsRes, ...tagResArray] = responses;
+
+      const [transactionsData, categoriesData, merchantGroupsData] = await Promise.all([
         transactionsRes.ok ? transactionsRes.json() : [],
         categoriesRes.ok ? categoriesRes.json() : [],
         merchantGroupsRes.ok ? merchantGroupsRes.json() : [],
-        tagsRes.ok ? tagsRes.json() : [],
       ]);
+
+      let tagsData: Tag[] = [];
+      if (tagsEnabled && tagResArray.length > 0) {
+        tagsData = tagResArray[0].ok ? await tagResArray[0].json() : [];
+      }
 
       setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
@@ -736,47 +748,49 @@ export default function TransactionsPage() {
               </DropdownMenu>
 
               {/* Tag Filter */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
-                    <TagIcon className="mr-2 h-4 w-4" />
-                    <span className="hidden sm:inline">Tags</span>
-                    <span className="sm:hidden">Tags</span>
-                    {tagIds.length > 0 && <Badge variant="secondary" className="ml-2">{tagIds.length}</Badge>}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[200px]">
-                  <DropdownMenuLabel>Filter by tags</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuCheckboxItem
-                    checked={tagIds.length === 0}
-                    onCheckedChange={() => {
-                      if (tagIds.length > 0) {
-                        updateFilters({ tags: null });
-                      }
-                    }}
-                  >
-                    All Tags
-                  </DropdownMenuCheckboxItem>
-                  {tags.map((tag) => (
+              {tagsEnabled && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
+                      <TagIcon className="mr-2 h-4 w-4" />
+                      <span className="hidden sm:inline">Tags</span>
+                      <span className="sm:hidden">Tags</span>
+                      {tagIds.length > 0 && <Badge variant="secondary" className="ml-2">{tagIds.length}</Badge>}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-[200px]">
+                    <DropdownMenuLabel>Filter by tags</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
                     <DropdownMenuCheckboxItem
-                      key={tag.id}
-                      checked={tagIds.includes(tag.id)}
-                      onCheckedChange={() => handleTagToggle(tag.id)}
+                      checked={tagIds.length === 0}
+                      onCheckedChange={() => {
+                        if (tagIds.length > 0) {
+                          updateFilters({ tags: null });
+                        }
+                      }}
                     >
-                      <div className="flex items-center gap-2">
-                        {tag.color && (
-                          <div
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: tag.color }}
-                          />
-                        )}
-                        {tag.name}
-                      </div>
+                      All Tags
                     </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    {tags.map((tag) => (
+                      <DropdownMenuCheckboxItem
+                        key={tag.id}
+                        checked={tagIds.includes(tag.id)}
+                        onCheckedChange={() => handleTagToggle(tag.id)}
+                      >
+                        <div className="flex items-center gap-2">
+                          {tag.color && (
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: tag.color }}
+                            />
+                          )}
+                          {tag.name}
+                        </div>
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
 
               {/* Date Range Filter */}
               <Popover>

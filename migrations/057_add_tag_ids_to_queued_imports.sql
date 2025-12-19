@@ -13,3 +13,4 @@ ALTER TABLE queued_imports
 CREATE INDEX IF NOT EXISTS idx_queued_imports_tag_ids ON queued_imports USING GIN(tag_ids);
 
 COMMIT;
+
