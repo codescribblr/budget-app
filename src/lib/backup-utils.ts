@@ -1072,24 +1072,83 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
             .filter((newId: number | undefined) => newId !== undefined) as number[]
         : [];
 
+      // Sort transaction IDs for consistent comparison (required by unique constraint)
+      const sortedTransactionIds = [...remappedTransactionIds].sort((a, b) => a - b);
+
       return {
         ...review,
         budget_account_id: accountId,
-        transaction_ids: remappedTransactionIds,
+        transaction_ids: sortedTransactionIds,
         reviewed_by: reviewed_by || null, // Keep reviewed_by if it exists, otherwise null
       };
     }).filter(review => review.transaction_ids.length > 0); // Only include reviews with valid remapped transaction IDs
 
     if (duplicateGroupReviewsToInsert.length > 0) {
-      const { error } = await supabase
+      // Check for existing duplicate_group_reviews to avoid constraint violations
+      // The unique constraint is on (budget_account_id, transaction_ids)
+      const transactionIdArrays = duplicateGroupReviewsToInsert.map(r => r.transaction_ids);
+      const { data: existingReviews } = await supabase
         .from('duplicate_group_reviews')
-        .insert(duplicateGroupReviewsToInsert);
+        .select('transaction_ids')
+        .eq('budget_account_id', accountId);
 
-      if (error) {
-        console.error('[Import] Error inserting duplicate group reviews:', error);
-        throw error;
+      const existingTransactionIdSets = new Set(
+        (existingReviews || []).map((r: any) => JSON.stringify(r.transaction_ids.sort((a: number, b: number) => a - b)))
+      );
+
+      // Filter out reviews that already exist
+      const newReviewsToInsert = duplicateGroupReviewsToInsert.filter(review => {
+        const sortedIds = JSON.stringify(review.transaction_ids);
+        return !existingTransactionIdSets.has(sortedIds);
+      });
+
+      // Also deduplicate within the backup data itself (in case multiple reviews map to same transaction_ids)
+      const seenInBackup = new Set<string>();
+      const deduplicatedReviews = newReviewsToInsert.filter(review => {
+        const sortedIds = JSON.stringify(review.transaction_ids);
+        if (seenInBackup.has(sortedIds)) {
+          return false; // Duplicate within backup
+        }
+        seenInBackup.add(sortedIds);
+        return true;
+      });
+
+      if (deduplicatedReviews.length > 0) {
+        const { error } = await supabase
+          .from('duplicate_group_reviews')
+          .insert(deduplicatedReviews);
+
+        if (error) {
+          // If we still get a constraint violation, try upsert instead
+          if (error.code === '23505') {
+            console.warn('[Import] Duplicate constraint violation on duplicate_group_reviews, using upsert...');
+            const upsertPromises = deduplicatedReviews.map(review =>
+              supabase
+                .from('duplicate_group_reviews')
+                .upsert(review, {
+                  onConflict: 'budget_account_id,transaction_ids',
+                })
+            );
+            const results = await Promise.all(upsertPromises);
+            const upsertErrors = results.filter(r => r.error).map(r => r.error);
+            if (upsertErrors.length > 0) {
+              console.error('[Import] Error upserting duplicate group reviews:', upsertErrors);
+              throw upsertErrors[0];
+            }
+            console.log('[Import] Upserted', deduplicatedReviews.length, 'duplicate group reviews');
+          } else {
+            console.error('[Import] Error inserting duplicate group reviews:', error);
+            throw error;
+          }
+        } else {
+          console.log('[Import] Inserted', deduplicatedReviews.length, 'duplicate group reviews', 
+            duplicateGroupReviewsToInsert.length !== deduplicatedReviews.length 
+              ? `(filtered ${duplicateGroupReviewsToInsert.length - deduplicatedReviews.length} duplicates)`
+              : '');
+        }
+      } else {
+        console.log('[Import] All duplicate group reviews were duplicates, skipping insert');
       }
-      console.log('[Import] Inserted', duplicateGroupReviewsToInsert.length, 'duplicate group reviews');
     }
   }
 
