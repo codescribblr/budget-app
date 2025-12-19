@@ -76,14 +76,14 @@ const navigationSections = [
       { label: "Overview", path: "/reports", icon: FileText },
       { label: "Trends", path: "/reports/trends", icon: TrendingUp, featureKey: "advanced_reporting" },
       { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
-      { label: "Tag Reports", path: "/reports/tags", icon: Tag },
+      { label: "Tag Reports", path: "/reports/tags", icon: Tag, featureKey: "tags" },
     ],
   },
   {
     label: "Other",
     items: [
       { label: "Merchants", path: "/merchants", icon: Store },
-      { label: "Tags", path: "/tags", icon: Tag },
+      { label: "Tags", path: "/tags", icon: Tag, featureKey: "tags" },
       { label: "Category Rules", path: "/category-rules", icon: FolderTree },
       { label: "Settings", path: "/settings", icon: Settings },
     ],
@@ -114,6 +114,7 @@ export function AppSidebar() {
   const goalsEnabled = useFeature('goals')
   const aiChatEnabled = useFeature('ai_chat')
   const advancedReportingEnabled = useFeature('advanced_reporting')
+  const tagsEnabled = useFeature('tags')
   const [openWizards, setOpenWizards] = React.useState(false)
 
   const isActive = (path: string) => {
@@ -173,6 +174,8 @@ export function AppSidebar() {
                           return aiChatEnabled
                         case 'advanced_reporting':
                           return advancedReportingEnabled
+                        case 'tags':
+                          return tagsEnabled
                         default:
                           return true
                       }
@@ -224,6 +227,8 @@ export function AppSidebar() {
                                           return aiChatEnabled;
                                         case 'advanced_reporting':
                                           return advancedReportingEnabled;
+                                        case 'tags':
+                                          return tagsEnabled;
                                         default:
                                           return true;
                                       }

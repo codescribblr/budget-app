@@ -28,6 +28,7 @@ import BulkEditDialog, { BulkEditUpdates } from '@/components/import/BulkEditDia
 import BulkTagDialog from '@/components/tags/BulkTagDialog';
 import { Tag } from 'lucide-react';
 import { toast } from 'sonner';
+import { useFeature } from '@/contexts/FeatureContext';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import { MoreVertical, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
@@ -65,6 +66,7 @@ export default function TransactionList({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [localTransactions, setLocalTransactions] = useState<TransactionWithSplits[]>(transactions);
+  const tagsEnabled = useFeature('tags');
 
   // Sync local transactions with prop changes
   useEffect(() => {
@@ -429,7 +431,7 @@ export default function TransactionList({
               ))}
             </div>
 
-            {transaction.tags && transaction.tags.length > 0 && (
+            {tagsEnabled && transaction.tags && transaction.tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {transaction.tags.slice(0, 3).map((tag) => (
                   <Badge
@@ -478,14 +480,16 @@ export default function TransactionList({
             <Edit className="h-4 w-4 mr-2" />
             Bulk Edit {selectedTransactions.size > 0 ? `(${selectedTransactions.size})` : ''}
           </Button>
-          <Button
-            onClick={() => setShowBulkTagDialog(true)}
-            variant="outline"
-            disabled={selectedTransactions.size < 1}
-          >
-            <Tag className="h-4 w-4 mr-2" />
-            Bulk Tag {selectedTransactions.size > 0 ? `(${selectedTransactions.size})` : ''}
-          </Button>
+          {tagsEnabled && (
+            <Button
+              onClick={() => setShowBulkTagDialog(true)}
+              variant="outline"
+              disabled={selectedTransactions.size < 1}
+            >
+              <Tag className="h-4 w-4 mr-2" />
+              Bulk Tag {selectedTransactions.size > 0 ? `(${selectedTransactions.size})` : ''}
+            </Button>
+          )}
           {selectedTransactions.size > 0 && (
             <Button
               onClick={() => setSelectedTransactions(new Set())}
@@ -633,7 +637,7 @@ export default function TransactionList({
                   <div className="truncate" title={transaction.description}>
                     {transaction.description}
                   </div>
-                  {transaction.tags && transaction.tags.length > 0 && (
+                  {tagsEnabled && transaction.tags && transaction.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {transaction.tags.slice(0, 3).map((tag) => (
                         <Badge
@@ -858,7 +862,7 @@ export default function TransactionList({
       )}
 
       {/* Bulk Tag Dialog */}
-      {showBulkTagDialog && (
+      {tagsEnabled && showBulkTagDialog && (
         <BulkTagDialog
           isOpen={showBulkTagDialog}
           onClose={() => setShowBulkTagDialog(false)}

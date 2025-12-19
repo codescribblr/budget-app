@@ -458,5 +458,145 @@ export const HELP_CONTENT = {
       },
     ],
   },
+
+  tags: {
+    title: 'Tags',
+    tooltip: 'Assign custom tags to transactions for flexible categorization, filtering, and reporting beyond categories and merchants.',
+    description: 'Tags provide a flexible, user-defined way to categorize and filter transactions beyond the existing category and merchant systems.',
+    sections: [
+      {
+        title: 'What are Tags?',
+        content: (
+          <>
+            <p>
+              Tags are custom labels you can assign to transactions to track specific attributes, projects, 
+              or classifications that don't fit into your category or merchant structure.
+            </p>
+            <p className="mt-2">
+              <strong>Example Use Cases:</strong>
+            </p>
+            <ul className="list-disc list-inside space-y-1 mt-1">
+              <li><strong>Rental Property Tracking:</strong> Tag all expenses related to "124 Irene Circle" to track property-specific costs</li>
+              <li><strong>Project Tracking:</strong> Tag transactions related to specific projects or clients</li>
+              <li><strong>Tax Preparation:</strong> Tag transactions for tax categories (e.g., "Business Expense", "Medical", "Charitable")</li>
+              <li><strong>Event Tracking:</strong> Tag expenses related to specific events or trips</li>
+              <li><strong>Custom Classifications:</strong> Any user-defined grouping that doesn't fit categories or merchants</li>
+            </ul>
+          </>
+        ),
+      },
+      {
+        title: 'How Tags Work',
+        content: (
+          <ol className="list-decimal list-inside space-y-2">
+            <li>
+              <strong>Create Tags:</strong> Go to the Tags page to create custom tags with names, colors, and optional descriptions
+            </li>
+            <li>
+              <strong>Assign to Transactions:</strong> When editing or creating transactions, use the tag selector to assign one or more tags
+            </li>
+            <li>
+              <strong>Filter by Tags:</strong> Use tags to filter transactions in the Transactions page or search by tag name
+            </li>
+            <li>
+              <strong>Tag Rules:</strong> Set up automatic tag assignment rules based on merchant, category, or description patterns
+            </li>
+            <li>
+              <strong>Tag Reports:</strong> View spending reports filtered by tags to analyze spending patterns across your custom classifications
+            </li>
+          </ol>
+        ),
+      },
+      {
+        title: 'Tag Management',
+        content: (
+          <div className="space-y-3">
+            <div>
+              <strong>Creating Tags</strong>
+              <p className="text-muted-foreground">
+                Create tags from the Tags page or inline when assigning tags to transactions. Each tag can have:
+              </p>
+              <ul className="list-disc list-inside space-y-1 mt-1">
+                <li>A unique name</li>
+                <li>An optional color for visual identification</li>
+                <li>An optional description</li>
+              </ul>
+            </div>
+            <div>
+              <strong>Editing Tags</strong>
+              <p className="text-muted-foreground">
+                Edit tag names, colors, or descriptions at any time. Changes apply to all transactions using that tag.
+              </p>
+            </div>
+            <div>
+              <strong>Merging Tags</strong>
+              <p className="text-muted-foreground">
+                If you have duplicate or similar tags, you can merge them. All transactions using the merged tags will be updated automatically.
+              </p>
+            </div>
+            <div>
+              <strong>Deleting Tags</strong>
+              <p className="text-muted-foreground">
+                When deleting a tag, you'll see how many transactions are using it. The tag will be removed from all transactions, but the transactions themselves remain unchanged.
+              </p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: 'Tag Rules',
+        content: (
+          <div className="space-y-2">
+            <p>
+              Tag Rules automatically assign tags to transactions based on patterns you define:
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Merchant-based:</strong> Automatically tag transactions from specific merchants</li>
+              <li><strong>Category-based:</strong> Tag all transactions in certain categories</li>
+              <li><strong>Description-based:</strong> Tag transactions containing specific keywords in descriptions</li>
+              <li><strong>Combined Rules:</strong> Create complex rules using multiple conditions</li>
+            </ul>
+            <p className="mt-2">
+              Tag Rules run automatically when transactions are imported or created, saving you time on manual tagging.
+            </p>
+          </div>
+        ),
+      },
+      {
+        title: 'Tag Reporting',
+        content: (
+          <div className="space-y-2">
+            <p>
+              Tag Reports provide insights into spending patterns by your custom tags:
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Spending by Tag:</strong> See total spending for each tag over any time period</li>
+              <li><strong>Tag Trends:</strong> Track how spending changes over time for specific tags</li>
+              <li><strong>Multi-Tag Analysis:</strong> Compare spending across multiple tags</li>
+              <li><strong>Tag Breakdowns:</strong> See which categories or merchants are associated with each tag</li>
+            </ul>
+            <p className="mt-2">
+              Tag Reports help you understand spending patterns that might not be visible when looking only at categories or merchants.
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Access Tag Reports from the Reports menu or by clicking on a tag in the Tags page.
+            </p>
+          </div>
+        ),
+      },
+      {
+        title: 'Best Practices',
+        content: (
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Keep it Simple:</strong> Don't create too many tags - aim for 10-20 meaningful tags</li>
+            <li><strong>Use Consistent Naming:</strong> Establish a naming convention (e.g., "Property: 124 Irene Circle" vs "124 Irene Circle")</li>
+            <li><strong>Leverage Tag Rules:</strong> Set up rules for common patterns to reduce manual tagging</li>
+            <li><strong>Review Regularly:</strong> Periodically review and merge duplicate tags to keep your tag list clean</li>
+            <li><strong>Combine with Categories:</strong> Tags work alongside categories - use categories for budgeting and tags for tracking</li>
+          </ul>
+        ),
+      },
+    ],
+  },
 };
 

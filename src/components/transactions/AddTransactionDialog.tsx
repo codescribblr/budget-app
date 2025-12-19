@@ -11,6 +11,7 @@ import type { Category, Account, CreditCard } from '@/lib/types';
 import { formatLocalDate, getTodayLocal } from '@/lib/date-utils';
 import { handleApiError } from '@/lib/api-error-handler';
 import TagSelector from '@/components/tags/TagSelector';
+import { useFeature } from '@/contexts/FeatureContext';
 
 interface AddTransactionDialogProps {
   isOpen: boolean;
@@ -42,6 +43,7 @@ export default function AddTransactionDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchivedCategories, setShowArchivedCategories] = useState(false);
   const [availableCategories, setAvailableCategories] = useState<Category[]>(categories);
+  const tagsEnabled = useFeature('tags');
 
   useEffect(() => {
     if (isOpen) {
@@ -271,14 +273,16 @@ export default function AddTransactionDialog({
             </Select>
           </div>
 
-          <div>
-            <TagSelector
-              selectedTagIds={selectedTagIds}
-              onChange={setSelectedTagIds}
-              transactionDescription={description}
-              categoryIds={splits.map(s => s.category_id).filter(id => id > 0)}
-            />
-          </div>
+          {tagsEnabled && (
+            <div>
+              <TagSelector
+                selectedTagIds={selectedTagIds}
+                onChange={setSelectedTagIds}
+                transactionDescription={description}
+                categoryIds={splits.map(s => s.category_id).filter(id => id > 0)}
+              />
+            </div>
+          )}
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">

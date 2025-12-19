@@ -1,5 +1,10 @@
 import TagRulesPage from '@/components/tags/TagRulesPage';
+import { TagsFeatureGate } from '@/components/tags/TagsFeatureGate';
 
 export default function TagRules() {
-  return <TagRulesPage />;
+  return (
+    <TagsFeatureGate>
+      <TagRulesPage />
+    </TagsFeatureGate>
+  );
 }

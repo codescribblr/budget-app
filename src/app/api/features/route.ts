@@ -88,6 +88,14 @@ const FEATURES = {
     dataLossWarning: false,
     requiresPremium: true,
   },
+  tags: {
+    name: 'Tags',
+    description: 'Assign custom tags to transactions for flexible categorization, filtering, and reporting beyond categories and merchants.',
+    level: 'intermediate',
+    dependencies: [],
+    dataLossWarning: false,
+    requiresPremium: false,
+  },
 } as const;
 
 export type FeatureName = keyof typeof FEATURES;

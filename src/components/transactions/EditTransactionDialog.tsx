@@ -11,6 +11,7 @@ import type { Category, TransactionWithSplits, MerchantGroup, Account, CreditCar
 import { parseLocalDate, formatLocalDate, getTodayLocal } from '@/lib/date-utils';
 import { handleApiError } from '@/lib/api-error-handler';
 import TagSelector from '@/components/tags/TagSelector';
+import { useFeature } from '@/contexts/FeatureContext';
 
 interface EditTransactionDialogProps {
   isOpen: boolean;
@@ -48,6 +49,7 @@ export default function EditTransactionDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchivedCategories, setShowArchivedCategories] = useState(false);
   const [availableCategories, setAvailableCategories] = useState<Category[]>(categories);
+  const tagsEnabled = useFeature('tags');
 
   useEffect(() => {
     if (transaction) {
@@ -351,15 +353,17 @@ export default function EditTransactionDialog({
             </Select>
           </div>
 
-          <div>
-            <TagSelector
-              selectedTagIds={selectedTagIds}
-              onChange={setSelectedTagIds}
-              transactionDescription={description}
-              categoryIds={splits.map(s => s.category_id).filter(id => id > 0)}
-              merchantGroupId={merchantGroupId}
-            />
-          </div>
+          {tagsEnabled && (
+            <div>
+              <TagSelector
+                selectedTagIds={selectedTagIds}
+                onChange={setSelectedTagIds}
+                transactionDescription={description}
+                categoryIds={splits.map(s => s.category_id).filter(id => id > 0)}
+                merchantGroupId={merchantGroupId}
+              />
+            </div>
+          )}
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
