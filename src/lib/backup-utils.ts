@@ -791,17 +791,23 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       throw error;
     } else {
       // Success - map all IDs
-      if (backupData.imported_transactions.length !== data.length) {
-        console.error(`[Import] Mismatch: Expected ${backupData.imported_transactions.length} imported transactions, got ${data.length} back from insert`);
+      if (!data) {
+        console.error('[Import] No data returned from imported_transactions insert');
+        throw new Error('Failed to insert imported transactions: no data returned');
+      }
+      
+      const insertedData = data;
+      if (backupData.imported_transactions.length !== insertedData.length) {
+        console.error(`[Import] Mismatch: Expected ${backupData.imported_transactions.length} imported transactions, got ${insertedData.length} back from insert`);
       }
       backupData.imported_transactions.forEach((oldImportedTx, index) => {
-        if (data[index]) {
-          importedTransactionIdMap.set(oldImportedTx.id, data[index].id);
+        if (insertedData[index]) {
+          importedTransactionIdMap.set(oldImportedTx.id, insertedData[index].id);
         } else {
           console.error(`[Import] Missing imported transaction data at index ${index} for imported transaction ID ${oldImportedTx.id}`);
         }
       });
-      console.log('[Import] Inserted', data.length, 'imported transactions');
+      console.log('[Import] Inserted', insertedData.length, 'imported transactions');
     }
     
     console.log('[Import] Imported transaction ID map size:', importedTransactionIdMap.size, 'expected:', backupData.imported_transactions.length);
