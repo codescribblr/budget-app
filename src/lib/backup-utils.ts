@@ -803,7 +803,11 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     console.log('[Import] Imported transaction ID map size:', importedTransactionIdMap.size);
     
     const importedTransactionLinksToInsert = backupData.imported_transaction_links
-      .map(({ id, imported_transaction_id, transaction_id, imported_transactions, ...link }) => {
+      .map((link: any) => {
+        // Extract only the actual column values, excluding relation fields and id
+        // The export query includes relations (transactions, imported_transactions) which we need to exclude
+        const { id, imported_transaction_id, transaction_id, transactions, imported_transactions, ...rest } = link;
+        
         // First check if the IDs exist in the backup data (data integrity check)
         if (transaction_id && !validTransactionIds.has(transaction_id)) {
           console.warn(`[Import] Orphaned link: transaction_id ${transaction_id} not found in backup transactions`);
@@ -824,10 +828,13 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
         if (transaction_id && !newTransactionId) {
           console.warn(`[Import] Missing transaction_id mapping: old ID ${transaction_id} not found in map (exists in backup: ${validTransactionIds.has(transaction_id)})`);
         }
+        
+        // Only include actual table columns: imported_transaction_id, transaction_id, and created_at (if present)
         return {
-          ...link,
           imported_transaction_id: newImportedTransactionId,
           transaction_id: newTransactionId,
+          // Include created_at if it exists in the backup (it's optional with a default)
+          ...(rest.created_at ? { created_at: rest.created_at } : {}),
         };
       })
       .filter(link => {
