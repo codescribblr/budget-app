@@ -1079,7 +1079,8 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
         ...review,
         budget_account_id: accountId,
         transaction_ids: sortedTransactionIds,
-        reviewed_by: reviewed_by || null, // Keep reviewed_by if it exists, otherwise null
+        // Remap reviewed_by to current user (since we're importing to a different account, the original reviewer may not exist)
+        reviewed_by: user.id, // Set to current importing user
       };
     }).filter(review => review.transaction_ids.length > 0); // Only include reviews with valid remapped transaction IDs
 
