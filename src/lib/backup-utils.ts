@@ -642,10 +642,18 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       throw error;
     }
 
+    if (backupData.transactions.length !== data.length) {
+      console.error(`[Import] Mismatch: Expected ${backupData.transactions.length} transactions, got ${data.length} back from insert`);
+    }
     backupData.transactions.forEach((oldTransaction, index) => {
-      transactionIdMap.set(oldTransaction.id, data[index].id);
+      if (data[index]) {
+        transactionIdMap.set(oldTransaction.id, data[index].id);
+      } else {
+        console.error(`[Import] Missing transaction data at index ${index} for transaction ID ${oldTransaction.id}`);
+      }
     });
     console.log('[Import] Inserted', data.length, 'transactions');
+    console.log('[Import] Transaction ID map size:', transactionIdMap.size, 'expected:', backupData.transactions.length);
   }
 
   // Insert transaction splits (batch with remapped IDs)
@@ -685,6 +693,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   }
 
   // Insert imported transactions (batch)
+  // Note: imported_transactions has UNIQUE(user_id, hash) constraint, so duplicates will fail
   if (backupData.imported_transactions && backupData.imported_transactions.length > 0) {
     const importedTransactionsToInsert = backupData.imported_transactions.map(({ id, account_id, user_id, ...importedTx }) => ({
       ...importedTx,
@@ -692,32 +701,129 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       account_id: accountId,
     }));
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('imported_transactions')
       .insert(importedTransactionsToInsert)
-      .select('id');
+      .select('id, hash');
 
-    if (error) {
+    // Handle duplicate hash constraint violations
+    if (error && error.code === '23505') {
+      console.warn('[Import] Duplicate hashes detected in imported_transactions, filtering duplicates...');
+      
+      // Get existing hashes for this user
+      const hashes = backupData.imported_transactions.map(tx => tx.hash).filter(h => h);
+      const { data: existingHashes } = await supabase
+        .from('imported_transactions')
+        .select('id, hash')
+        .eq('user_id', user.id)
+        .in('hash', hashes);
+
+      const existingHashSet = new Set(existingHashes?.map(h => h.hash) || []);
+      const existingHashToIdMap = new Map(existingHashes?.map(h => [h.hash, h.id]) || []);
+
+      // Filter out duplicates and retry
+      const nonDuplicates: any[] = [];
+      const duplicateIndices: number[] = [];
+      
+      backupData.imported_transactions.forEach((oldTx, index) => {
+        if (existingHashSet.has(oldTx.hash)) {
+          // Use existing imported_transaction ID for the map
+          const existingId = existingHashToIdMap.get(oldTx.hash);
+          if (existingId) {
+            importedTransactionIdMap.set(oldTx.id, existingId);
+            duplicateIndices.push(index);
+          }
+        } else {
+          nonDuplicates.push(importedTransactionsToInsert[index]);
+        }
+      });
+
+      if (nonDuplicates.length > 0) {
+        const { data: newData, error: retryError } = await supabase
+          .from('imported_transactions')
+          .insert(nonDuplicates)
+          .select('id, hash');
+
+        if (retryError) {
+          console.error('[Import] Error inserting non-duplicate imported transactions:', retryError);
+          throw retryError;
+        }
+
+        // Map the new inserted transactions
+        let newIndex = 0;
+        backupData.imported_transactions.forEach((oldTx, index) => {
+          if (!duplicateIndices.includes(index)) {
+            if (newData && newData[newIndex]) {
+              importedTransactionIdMap.set(oldTx.id, newData[newIndex].id);
+            }
+            newIndex++;
+          }
+        });
+
+        console.log('[Import] Inserted', newData?.length || 0, 'new imported transactions, reused', duplicateIndices.length, 'existing ones');
+        data = newData || [];
+      } else {
+        console.log('[Import] All imported transactions were duplicates, reusing existing ones');
+        data = [];
+      }
+    } else if (error) {
       console.error('[Import] Error inserting imported transactions:', error);
       throw error;
+    } else {
+      // Success - map all IDs
+      if (backupData.imported_transactions.length !== data.length) {
+        console.error(`[Import] Mismatch: Expected ${backupData.imported_transactions.length} imported transactions, got ${data.length} back from insert`);
+      }
+      backupData.imported_transactions.forEach((oldImportedTx, index) => {
+        if (data[index]) {
+          importedTransactionIdMap.set(oldImportedTx.id, data[index].id);
+        } else {
+          console.error(`[Import] Missing imported transaction data at index ${index} for imported transaction ID ${oldImportedTx.id}`);
+        }
+      });
+      console.log('[Import] Inserted', data.length, 'imported transactions');
     }
-
-    backupData.imported_transactions.forEach((oldImportedTx, index) => {
-      importedTransactionIdMap.set(oldImportedTx.id, data[index].id);
-    });
-    console.log('[Import] Inserted', data.length, 'imported transactions');
+    
+    console.log('[Import] Imported transaction ID map size:', importedTransactionIdMap.size, 'expected:', backupData.imported_transactions.length);
   }
 
   // Insert imported transaction links (batch with remapped IDs)
   // Note: imported_transaction_links doesn't have account_id - it links imported_transactions (which have account_id)
   // to transactions (which have budget_account_id). Both are remapped above, and we remap the IDs here.
   if (backupData.imported_transaction_links && backupData.imported_transaction_links.length > 0) {
+    console.log('[Import] Processing', backupData.imported_transaction_links.length, 'imported transaction links');
+    
+    // Build sets of valid IDs from backup data for validation
+    const validTransactionIds = new Set(backupData.transactions?.map(t => t.id) || []);
+    const validImportedTransactionIds = new Set(backupData.imported_transactions?.map(t => t.id) || []);
+    
+    console.log('[Import] Valid transaction IDs in backup:', validTransactionIds.size);
+    console.log('[Import] Valid imported transaction IDs in backup:', validImportedTransactionIds.size);
+    console.log('[Import] Transaction ID map size:', transactionIdMap.size);
+    console.log('[Import] Imported transaction ID map size:', importedTransactionIdMap.size);
+    
     const importedTransactionLinksToInsert = backupData.imported_transaction_links
       .map(({ id, imported_transaction_id, transaction_id, imported_transactions, ...link }) => {
+        // First check if the IDs exist in the backup data (data integrity check)
+        if (transaction_id && !validTransactionIds.has(transaction_id)) {
+          console.warn(`[Import] Orphaned link: transaction_id ${transaction_id} not found in backup transactions`);
+        }
+        if (imported_transaction_id && !validImportedTransactionIds.has(imported_transaction_id)) {
+          console.warn(`[Import] Orphaned link: imported_transaction_id ${imported_transaction_id} not found in backup imported_transactions`);
+        }
+        
         // Remap IDs: imported_transaction_id was remapped when imported_transactions were inserted (line 704)
         // and transaction_id was remapped when transactions were inserted (line 644)
         const newImportedTransactionId = imported_transaction_id ? (importedTransactionIdMap.get(imported_transaction_id) || null) : null;
         const newTransactionId = transaction_id ? (transactionIdMap.get(transaction_id) || null) : null;
+        
+        // Debug logging for missing mappings
+        if (imported_transaction_id && !newImportedTransactionId) {
+          console.warn(`[Import] Missing imported_transaction_id mapping: old ID ${imported_transaction_id} not found in map (exists in backup: ${validImportedTransactionIds.has(imported_transaction_id)})`);
+        }
+        if (transaction_id && !newTransactionId) {
+          console.warn(`[Import] Missing transaction_id mapping: old ID ${transaction_id} not found in map (exists in backup: ${validTransactionIds.has(transaction_id)})`);
+        }
         return {
           ...link,
           imported_transaction_id: newImportedTransactionId,
