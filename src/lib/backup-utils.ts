@@ -207,6 +207,26 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     supabase.from('tag_rules').select('*').eq('account_id', accountId),
   ]);
 
+  // Validate data integrity: ensure all referenced transactions exist
+  const transactionIds = new Set((transactions || []).map((t: any) => t.id));
+  const importedTransactionIds = new Set((imported_transactions || []).map((t: any) => t.id));
+  
+  // Filter out any links that reference non-existent transactions (data integrity check)
+  const validImportedTransactionLinks = (imported_transaction_links || []).filter((link: any) => {
+    const hasValidImportedTransaction = link.imported_transaction_id && importedTransactionIds.has(link.imported_transaction_id);
+    const hasValidTransaction = link.transaction_id && transactionIds.has(link.transaction_id);
+    
+    if (!hasValidImportedTransaction || !hasValidTransaction) {
+      console.warn(`[Export] Filtering out invalid link: imported_transaction_id=${link.imported_transaction_id} (exists: ${hasValidImportedTransaction}), transaction_id=${link.transaction_id} (exists: ${hasValidTransaction})`);
+      return false;
+    }
+    return true;
+  });
+
+  if (imported_transaction_links && imported_transaction_links.length !== validImportedTransactionLinks.length) {
+    console.warn(`[Export] Filtered out ${imported_transaction_links.length - validImportedTransactionLinks.length} invalid imported_transaction_links`);
+  }
+
   return {
     version: '2.1',
     created_at: new Date().toISOString(),
@@ -240,7 +260,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     transactions: transactions || [],
     transaction_splits: transaction_splits || [],
     imported_transactions: imported_transactions || [],
-    imported_transaction_links: imported_transaction_links || [],
+    imported_transaction_links: validImportedTransactionLinks,
     merchant_groups: merchant_groups || [],
     merchant_mappings: merchant_mappings || [],
     merchant_category_rules: merchant_category_rules || [],
