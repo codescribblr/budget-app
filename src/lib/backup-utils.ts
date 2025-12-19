@@ -1170,7 +1170,8 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       account_id: accountId,
       target_account_id: target_account_id ? (accountIdMap.get(target_account_id) || null) : null,
       target_credit_card_id: target_credit_card_id ? (creditCardIdMap.get(target_credit_card_id) || null) : null,
-      created_by: created_by || user.id,
+      // Remap created_by to current user (since we're importing to a different account, the original creator may not exist)
+      created_by: user.id,
     }));
 
     const { data, error } = await supabase
@@ -1225,7 +1226,8 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
           target_account_id: target_account_id ? (accountIdMap.get(target_account_id) || null) : null,
           target_credit_card_id: target_credit_card_id ? (creditCardIdMap.get(target_credit_card_id) || null) : null,
           imported_transaction_id: imported_transaction_id ? (transactionIdMap.get(imported_transaction_id) || null) : null,
-          reviewed_by: reviewed_by || null, // Keep reviewed_by if restoring to same user, otherwise null
+          // Remap reviewed_by to current user (since we're importing to a different account, the original reviewer may not exist)
+          reviewed_by: user.id, // Set to current importing user
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null);
