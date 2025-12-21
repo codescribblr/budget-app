@@ -35,7 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { TransactionWithSplits, Category, MerchantGroup, Tag } from '@/lib/types';
+import type { TransactionWithSplits, Category, MerchantGroup, Tag, Account, CreditCard } from '@/lib/types';
 import TransactionList from './TransactionList';
 import AddTransactionDialog from './AddTransactionDialog';
 import EditTransactionDialog from './EditTransactionDialog';
@@ -89,6 +89,23 @@ export default function TransactionsPage() {
     ? tagsParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
     : [];
   
+  // Parse account filter (supports both account IDs and credit card IDs)
+  // Format: "account-1,account-2,card-3" where account-X is account ID and card-X is credit card ID
+  const accountFilterParam = searchParams.get('accountId');
+  const accountFilterIds = accountFilterParam 
+    ? accountFilterParam.split(',').map(item => {
+        const trimmed = item.trim();
+        if (trimmed.startsWith('account-')) {
+          const id = parseInt(trimmed.replace('account-', ''));
+          return !isNaN(id) ? { type: 'account' as const, id } : null;
+        } else if (trimmed.startsWith('card-')) {
+          const id = parseInt(trimmed.replace('card-', ''));
+          return !isNaN(id) ? { type: 'card' as const, id } : null;
+        }
+        return null;
+      }).filter((item): item is { type: 'account' | 'card'; id: number } => item !== null)
+    : [];
+  
   const startDateParam = searchParams.get('startDate');
   const endDateParam = searchParams.get('endDate');
   const searchQueryParam = searchParams.get('q');
@@ -100,6 +117,8 @@ export default function TransactionsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [merchantGroups, setMerchantGroups] = useState<MerchantGroup[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -144,6 +163,8 @@ export default function TransactionsPage() {
         fetch('/api/transactions'),
         fetch('/api/categories?excludeGoals=true'),
         fetch('/api/merchant-groups'),
+        fetch('/api/accounts'),
+        fetch('/api/credit-cards'),
       ];
       
       if (tagsEnabled) {
@@ -151,12 +172,14 @@ export default function TransactionsPage() {
       }
 
       const responses = await Promise.all(fetchPromises);
-      const [transactionsRes, categoriesRes, merchantGroupsRes, ...tagResArray] = responses;
+      const [transactionsRes, categoriesRes, merchantGroupsRes, accountsRes, creditCardsRes, ...tagResArray] = responses;
 
-      const [transactionsData, categoriesData, merchantGroupsData] = await Promise.all([
+      const [transactionsData, categoriesData, merchantGroupsData, accountsData, creditCardsData] = await Promise.all([
         transactionsRes.ok ? transactionsRes.json() : [],
         categoriesRes.ok ? categoriesRes.json() : [],
         merchantGroupsRes.ok ? merchantGroupsRes.json() : [],
+        accountsRes.ok ? accountsRes.json() : [],
+        creditCardsRes.ok ? creditCardsRes.json() : [],
       ]);
 
       let tagsData: Tag[] = [];
@@ -167,6 +190,8 @@ export default function TransactionsPage() {
       setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
       setMerchantGroups(Array.isArray(merchantGroupsData) ? merchantGroupsData : []);
+      setAccounts(Array.isArray(accountsData) ? accountsData : []);
+      setCreditCards(Array.isArray(creditCardsData) ? creditCardsData : []);
       setTags(Array.isArray(tagsData) ? tagsData : []);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -299,6 +324,20 @@ export default function TransactionsPage() {
       });
     }
 
+    // Apply account filter if present (multi-select - supports both accounts and credit cards)
+    if (accountFilterIds.length > 0) {
+      filtered = filtered.filter(transaction => {
+        return accountFilterIds.some(filter => {
+          if (filter.type === 'account') {
+            return transaction.account_id === filter.id;
+          } else if (filter.type === 'card') {
+            return transaction.credit_card_id === filter.id;
+          }
+          return false;
+        });
+      });
+    }
+
     // Apply date range filter if present (inclusive of both start and end dates)
     if (startDateParam || endDateParam) {
       filtered = filtered.filter(transaction => {
@@ -359,7 +398,7 @@ export default function TransactionsPage() {
 
       return false;
     });
-  }, [transactions, categories, searchQuery, merchantFilter, merchantGroupIds, categoryIds, transactionTypes, startDateParam, endDateParam]);
+  }, [transactions, categories, searchQuery, merchantFilter, merchantGroupIds, categoryIds, transactionTypes, tagIds, accountFilterIds, startDateParam, endDateParam]);
 
   // Sort filtered transactions
   const sortedTransactions = useMemo(() => {
@@ -441,6 +480,7 @@ export default function TransactionsPage() {
     merchantGroupId?: number[] | null;
     transactionType?: ('income' | 'expense')[] | null;
     tags?: number[] | null;
+    accountId?: Array<{ type: 'account' | 'card'; id: number }> | null;
     startDate?: string | null;
     endDate?: string | null;
   }) => {
@@ -473,6 +513,16 @@ export default function TransactionsPage() {
         params.set('tags', updates.tags.join(','));
       } else {
         params.delete('tags');
+      }
+    }
+    if (updates.accountId !== undefined) {
+      if (updates.accountId && updates.accountId.length > 0) {
+        const accountFilterString = updates.accountId.map(item => 
+          item.type === 'account' ? `account-${item.id}` : `card-${item.id}`
+        ).join(',');
+        params.set('accountId', accountFilterString);
+      } else {
+        params.delete('accountId');
       }
     }
     if (updates.startDate !== undefined) {
@@ -533,6 +583,15 @@ export default function TransactionsPage() {
     updateFilters({ tags: newTagIds.length > 0 ? newTagIds : null });
   };
 
+  const handleAccountToggle = (type: 'account' | 'card', id: number) => {
+    const filterKey = type === 'account' ? { type: 'account' as const, id } : { type: 'card' as const, id };
+    const isSelected = accountFilterIds.some(f => f.type === filterKey.type && f.id === filterKey.id);
+    const newAccountFilterIds = isSelected
+      ? accountFilterIds.filter(f => !(f.type === filterKey.type && f.id === filterKey.id))
+      : [...accountFilterIds, filterKey];
+    updateFilters({ accountId: newAccountFilterIds.length > 0 ? newAccountFilterIds : null });
+  };
+
   const handleDateRangeChange = (start: Date | undefined, end: Date | undefined) => {
     setStartDateObj(start);
     setEndDateObj(end);
@@ -542,10 +601,12 @@ export default function TransactionsPage() {
     });
   };
 
-  const hasFilters = merchantFilter || merchantGroupIds.length > 0 || categoryIds.length > 0 || transactionTypes.length > 0 || tagIds.length > 0 || startDateParam || endDateParam;
+  const hasFilters = merchantFilter || merchantGroupIds.length > 0 || categoryIds.length > 0 || transactionTypes.length > 0 || tagIds.length > 0 || accountFilterIds.length > 0 || startDateParam || endDateParam;
   const selectedCategories = categoryIds.map(id => categories.find(c => c.id === id)).filter(Boolean) as Category[];
   const selectedMerchantGroups = merchantGroupIds.map(id => merchantGroups.find(g => g.id === id)).filter(Boolean) as MerchantGroup[];
   const selectedTags = tagIds.map(id => tags.find(t => t.id === id)).filter(Boolean) as Tag[];
+  const selectedAccounts = accountFilterIds.filter(f => f.type === 'account').map(f => accounts.find(a => a.id === f.id)).filter(Boolean) as Account[];
+  const selectedCreditCards = accountFilterIds.filter(f => f.type === 'card').map(f => creditCards.find(c => c.id === f.id)).filter(Boolean) as CreditCard[];
 
   return (
     <div className="space-y-6">
@@ -587,6 +648,24 @@ export default function TransactionsPage() {
                     <X className="ml-1 h-3 w-3" />
                   </Badge>
                 ))}
+                {selectedAccounts.map((account) => {
+                  const filterId = accountFilterIds.find(f => f.type === 'account' && f.id === account.id);
+                  return filterId ? (
+                    <Badge key={`account-${account.id}`} variant="secondary" className="cursor-pointer" onClick={() => handleAccountToggle('account', account.id)}>
+                      Account: {account.name}
+                      <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  ) : null;
+                })}
+                {selectedCreditCards.map((card) => {
+                  const filterId = accountFilterIds.find(f => f.type === 'card' && f.id === card.id);
+                  return filterId ? (
+                    <Badge key={`card-${card.id}`} variant="secondary" className="cursor-pointer" onClick={() => handleAccountToggle('card', card.id)}>
+                      Card: {card.name}
+                      <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  ) : null;
+                })}
                 {(startDateParam || endDateParam) && (
                   <Badge variant="secondary">
                     Date: {startDateParam || '...'} to {endDateParam || '...'}
@@ -791,6 +870,67 @@ export default function TransactionsPage() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
+
+              {/* Account Filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Account</span>
+                    <span className="sm:hidden">Acct.</span>
+                    {accountFilterIds.length > 0 && <Badge variant="secondary" className="ml-2">{accountFilterIds.length}</Badge>}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[200px]">
+                  <DropdownMenuLabel>Filter by account</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    checked={accountFilterIds.length === 0}
+                    onCheckedChange={() => {
+                      if (accountFilterIds.length > 0) {
+                        updateFilters({ accountId: null });
+                      }
+                    }}
+                  >
+                    All Accounts
+                  </DropdownMenuCheckboxItem>
+                  {accounts.length > 0 && (
+                    <>
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Accounts</DropdownMenuLabel>
+                      {accounts.map((account) => {
+                        const isSelected = accountFilterIds.some(f => f.type === 'account' && f.id === account.id);
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={`account-${account.id}`}
+                            checked={isSelected}
+                            onCheckedChange={() => handleAccountToggle('account', account.id)}
+                          >
+                            {account.name}
+                          </DropdownMenuCheckboxItem>
+                        );
+                      })}
+                    </>
+                  )}
+                  {creditCards.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Credit Cards</DropdownMenuLabel>
+                      {creditCards.map((card) => {
+                        const isSelected = accountFilterIds.some(f => f.type === 'card' && f.id === card.id);
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={`card-${card.id}`}
+                            checked={isSelected}
+                            onCheckedChange={() => handleAccountToggle('card', card.id)}
+                          >
+                            {card.name}
+                          </DropdownMenuCheckboxItem>
+                        );
+                      })}
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Date Range Filter */}
               <Popover>
