@@ -29,6 +29,7 @@ export interface BulkEditUpdates {
   creditCardId?: number | null;
   isHistorical?: boolean;
   tagIds?: number[];
+  transactionType?: 'income' | 'expense';
 }
 
 export default function BulkEditDialog({
@@ -77,10 +78,18 @@ export default function BulkEditDialog({
     return 'various';
   };
 
+  const getInitialTransactionType = (): 'income' | 'expense' | 'various' => {
+    const transactionTypes = transactions.map(t => t.transaction_type || 'expense');
+    const allSame = transactionTypes.every(t => t === transactionTypes[0]);
+    if (allSame) return transactionTypes[0] as 'income' | 'expense';
+    return 'various';
+  };
+
   const [date, setDate] = useState<Date | null>(getInitialDate());
   const [categoryId, setCategoryId] = useState<number | null | 'various'>(getInitialCategory());
   const [accountValue, setAccountValue] = useState<string | 'various'>(getInitialAccount());
   const [isHistorical, setIsHistorical] = useState<boolean | 'various'>(getInitialHistorical());
+  const [transactionType, setTransactionType] = useState<'income' | 'expense' | 'various'>(getInitialTransactionType());
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -104,6 +113,7 @@ export default function BulkEditDialog({
       setCategoryId(getInitialCategory());
       setAccountValue(getInitialAccount());
       setIsHistorical(getInitialHistorical());
+      setTransactionType(getInitialTransactionType());
       setSelectedTagIds(getInitialTags());
     }
   }, [open, transactions]);
@@ -159,6 +169,11 @@ export default function BulkEditDialog({
         !selectedTagIds.every((id, idx) => id === initialTags[idx]);
       if (tagsChanged) {
         updates.tagIds = selectedTagIds;
+      }
+
+      const initialTransactionType = getInitialTransactionType();
+      if (transactionType !== 'various' && transactionType !== initialTransactionType) {
+        updates.transactionType = transactionType;
       }
 
       // Only save if there are actual changes
@@ -272,6 +287,34 @@ export default function BulkEditDialog({
               onChange={setSelectedTagIds}
               placeholder="Select tags to assign..."
             />
+          </div>
+
+          {/* Transaction Type */}
+          <div className="space-y-2">
+            <Label htmlFor="bulk-transaction-type">Transaction Type</Label>
+            <Select
+              value={transactionType === 'various' ? 'various' : transactionType}
+              onValueChange={(value) => {
+                if (value === 'various') {
+                  setTransactionType('various');
+                } else {
+                  setTransactionType(value as 'income' | 'expense');
+                }
+              }}
+            >
+              <SelectTrigger id="bulk-transaction-type">
+                <SelectValue placeholder="Select type">
+                  {transactionType === 'various' ? 'Various' : transactionType === 'income' ? 'Income' : 'Expense'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="income">Income</SelectItem>
+                <SelectItem value="expense">Expense</SelectItem>
+              </SelectContent>
+            </Select>
+            {transactionType === 'various' && (
+              <p className="text-sm text-muted-foreground">Various types selected</p>
+            )}
           </div>
 
           {/* Historical */}

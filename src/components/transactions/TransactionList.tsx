@@ -310,6 +310,10 @@ export default function TransactionList({
           updated.is_historical = updates.isHistorical;
         }
 
+        if (updates.transactionType !== undefined) {
+          updated.transaction_type = updates.transactionType;
+        }
+
         return updated;
       }));
 
