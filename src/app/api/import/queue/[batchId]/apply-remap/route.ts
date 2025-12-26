@@ -7,6 +7,8 @@ import { resetTasksAfterRemap } from '@/lib/processing-tasks';
 import type { ColumnMapping } from '@/lib/mapping-templates';
 import type { ParsedTransaction } from '@/lib/import-types';
 import { generateAutomaticMappingName } from '@/lib/mapping-name-generator';
+import { convertTellerTransactionToParsed } from '@/lib/automatic-imports/providers/teller-service';
+import type { TellerTransaction } from '@/lib/automatic-imports/providers/teller-service';
 
 /**
  * POST /api/import/queue/[batchId]/apply-remap
@@ -44,34 +46,108 @@ export async function POST(
       deleteOldTemplate?: boolean;
     };
 
-    // Get CSV data and current template info, plus batch metadata
-    const { data: queuedImport, error: fetchError } = await supabase
+    // Get all queued imports from batch to check if this is API-based or CSV-based
+    const { data: allQueuedImports, error: fetchError } = await supabase
       .from('queued_imports')
-      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, import_setup_id, target_account_id, target_credit_card_id, is_historical, processing_tasks')
+      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, import_setup_id, target_account_id, target_credit_card_id, is_historical, processing_tasks, original_data, transaction_date, description, amount')
       .eq('account_id', accountId)
       .eq('source_batch_id', batchId)
-      .not('csv_data', 'is', null)
-      .limit(1)
-      .single();
+      .limit(1000);
 
-    if (fetchError || !queuedImport || !queuedImport.csv_data) {
+    if (fetchError || !allQueuedImports || allQueuedImports.length === 0) {
       return NextResponse.json(
-        { error: 'Batch not found or CSV data not available' },
+        { error: 'Batch not found' },
         { status: 404 }
       );
     }
 
-    const csvData = queuedImport.csv_data as string[][];
-    const csvAnalysis = queuedImport.csv_analysis as any;
-    const csvFileName = queuedImport.csv_file_name || 'unknown.csv';
-    const oldTemplateId = queuedImport.csv_mapping_template_id;
+    const firstQueuedImport = allQueuedImports[0];
+    const hasCsvData = !!firstQueuedImport.csv_data;
+    const hasOriginalData = !!firstQueuedImport.original_data;
+    
+    // Determine if this is an API-based import (has original_data but may or may not have CSV data)
+    const isApiImport = hasOriginalData && (!hasCsvData || firstQueuedImport.csv_file_name?.includes('Teller') || firstQueuedImport.csv_file_name?.includes('Account Transactions'));
 
-    // Parse CSV with new mapping
-    const transactions = await parseCSVWithMapping(
-      csvData,
-      mapping,
-      csvFileName
-    );
+    let transactions: ParsedTransaction[];
+    let csvData: string[][];
+    let csvAnalysis: any;
+    let csvFileName: string;
+    const oldTemplateId = firstQueuedImport.csv_mapping_template_id;
+
+    if (isApiImport) {
+      // API-based import: Re-process transactions from original_data using new mapping
+      // Get import setup to determine source type
+      const { data: importSetup } = await supabase
+        .from('automatic_import_setups')
+        .select('source_type')
+        .eq('id', firstQueuedImport.import_setup_id)
+        .single();
+      
+      const sourceType = importSetup?.source_type || 'unknown';
+      
+      // Re-process each transaction with new mapping
+      transactions = allQueuedImports.map(qi => {
+        const originalData = typeof qi.original_data === 'string' 
+          ? JSON.parse(qi.original_data) 
+          : qi.original_data;
+        
+        if (sourceType === 'teller') {
+          // Re-convert Teller transaction with new mapping
+          return convertTellerTransactionToParsed(
+            originalData as TellerTransaction,
+            qi.target_account_id || undefined,
+            qi.target_credit_card_id || undefined,
+            mapping // Use new mapping
+          );
+        } else {
+          // For other API sources, use similar logic
+          // For now, fall back to CSV parsing if virtual CSV exists
+          throw new Error(`API import remapping not yet supported for source type: ${sourceType}`);
+        }
+      });
+      
+      // Use virtual CSV data if available, otherwise create it
+      if (firstQueuedImport.csv_data) {
+        csvData = firstQueuedImport.csv_data as string[][];
+        csvAnalysis = firstQueuedImport.csv_analysis;
+      } else {
+        // Create virtual CSV for future remapping
+        const { convertApiTransactionsToVirtualCSV } = await import('@/lib/automatic-imports/api-to-csv-converter');
+        const { analyzeCSV } = await import('@/lib/column-analyzer');
+        const virtualCSV = convertApiTransactionsToVirtualCSV(
+          allQueuedImports.map(qi => ({
+            transaction_date: qi.transaction_date,
+            description: qi.description,
+            amount: qi.amount,
+            original_data: qi.original_data,
+          })),
+          sourceType
+        );
+        csvData = virtualCSV.csvData;
+        csvAnalysis = analyzeCSV(csvData);
+      }
+      
+      csvFileName = `${sourceType.charAt(0).toUpperCase() + sourceType.slice(1)} Account Transactions`;
+    } else {
+      // CSV-based import: Parse CSV with new mapping
+      if (!firstQueuedImport.csv_data) {
+        return NextResponse.json(
+          { error: 'Batch does not have CSV data available for remapping' },
+          { status: 404 }
+        );
+      }
+      
+      csvData = firstQueuedImport.csv_data as string[][];
+      csvAnalysis = firstQueuedImport.csv_analysis as any;
+      csvFileName = firstQueuedImport.csv_file_name || 'unknown.csv';
+
+      // Parse CSV with new mapping
+      transactions = await parseCSVWithMapping(
+        csvData,
+        mapping,
+        csvFileName
+      );
+    }
 
     if (transactions.length === 0) {
       return NextResponse.json(
@@ -123,7 +199,7 @@ export async function POST(
       } else {
         // Create new template - use Supabase directly since we're server-side
         try {
-          const fingerprint = csvAnalysis.fingerprint || queuedImport.csv_fingerprint || '';
+          const fingerprint = csvAnalysis.fingerprint || firstQueuedImport.csv_fingerprint || '';
           const { data: savedTemplate, error: insertError } = await supabase
             .from('csv_import_templates')
             .insert({
@@ -219,19 +295,26 @@ export async function POST(
       mappingName = generateAutomaticMappingName(csvAnalysis, csvFileName);
     }
 
-    // Get or create manual import setup
-    const importSetupId = await getOrCreateManualImportSetup(
-      undefined,
-      queuedImport.target_account_id || null,
-      queuedImport.target_credit_card_id || null
-    );
+    // Get or create manual import setup (or use existing automatic import setup)
+    let importSetupId: number;
+    if (firstQueuedImport.import_setup_id) {
+      // Use existing automatic import setup
+      importSetupId = firstQueuedImport.import_setup_id;
+    } else {
+      // Create manual import setup
+      importSetupId = await getOrCreateManualImportSetup(
+        undefined,
+        firstQueuedImport.target_account_id || null,
+        firstQueuedImport.target_credit_card_id || null
+      );
+    }
 
     // Apply batch metadata to transactions
     const transactionsWithMetadata = transactions.map(txn => ({
       ...txn,
-      account_id: queuedImport.target_account_id || undefined,
-      credit_card_id: queuedImport.target_credit_card_id || undefined,
-      is_historical: queuedImport.is_historical || false,
+      account_id: firstQueuedImport.target_account_id || undefined,
+      credit_card_id: firstQueuedImport.target_credit_card_id || undefined,
+      is_historical: firstQueuedImport.is_historical || false,
     }));
 
     // Delete old queued imports for this batch BEFORE queueing new ones
@@ -285,7 +368,7 @@ export async function POST(
 
     // Reset processing tasks after re-mapping
     // Keep csv_mapping as true (since we just re-mapped), reset all others
-    const currentTasks = (queuedImport.processing_tasks as any) || {};
+    const currentTasks = (firstQueuedImport.processing_tasks as any) || {};
     const resetTasks = resetTasksAfterRemap(currentTasks);
 
     // Queue transactions with SAME batch ID (replacing the old ones)
@@ -305,15 +388,45 @@ export async function POST(
       importSetupId,
       transactions: transactionsWithMetadata,
       sourceBatchId: batchId, // Reuse existing batchId
-      isHistorical: queuedImport.is_historical || false,
+      isHistorical: firstQueuedImport.is_historical || false,
       csvData,
       csvAnalysis,
-      csvFingerprint: csvAnalysis.fingerprint || queuedImport.csv_fingerprint || undefined,
+      csvFingerprint: csvAnalysis.fingerprint || firstQueuedImport.csv_fingerprint || undefined,
       csvMappingTemplateId: newTemplateId,
       csvFileName,
       csvMappingName: mappingName,
       processingTasks: resetTasks,
     });
+
+    // Update automatic import setup template if this is an automatic import
+    if (firstQueuedImport.import_setup_id && newTemplateId) {
+      const { data: importSetup } = await supabase
+        .from('automatic_import_setups')
+        .select('id, source_type, source_config')
+        .eq('id', firstQueuedImport.import_setup_id)
+        .single();
+
+      if (importSetup && importSetup.source_type !== 'manual') {
+        // Check if this is a Teller multi-account setup
+        if (importSetup.source_type === 'teller' && importSetup.source_config?.account_mappings) {
+          // Try to determine which account this batch belongs to
+          // We can check the batch transactions to see if they match a specific account
+          // For now, update the global template (user can update per-account separately if needed)
+          await supabase
+            .from('automatic_import_setups')
+            .update({ csv_mapping_template_id: newTemplateId })
+            .eq('id', importSetup.id);
+        } else {
+          // Update global template for other automatic import types
+          await supabase
+            .from('automatic_import_setups')
+            .update({ csv_mapping_template_id: newTemplateId })
+            .eq('id', importSetup.id);
+        }
+        
+        console.log(`Updated automatic import setup ${importSetup.id} with template ${newTemplateId}`);
+      }
+    }
 
     return NextResponse.json({
       success: true,

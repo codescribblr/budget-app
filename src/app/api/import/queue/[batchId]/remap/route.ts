@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
+import { convertApiTransactionsToVirtualCSV } from '@/lib/automatic-imports/api-to-csv-converter';
+import { analyzeCSV } from '@/lib/column-analyzer';
 
 /**
  * GET /api/import/queue/[batchId]/remap
  * Get CSV data and analysis for re-mapping a queued import batch
+ * Supports both CSV-based imports and API-based imports (Teller, etc.)
  */
 export async function GET(
   request: NextRequest,
@@ -19,30 +22,91 @@ export async function GET(
 
     const { batchId } = await params;
 
-    // Get first queued import from batch to extract CSV data
-    const { data: queuedImport, error } = await supabase
+    // Get all queued imports from batch to check for CSV data or API data
+    const { data: queuedImports, error: fetchError } = await supabase
       .from('queued_imports')
-      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name')
+      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, original_data, transaction_date, description, amount, import_setup_id')
       .eq('account_id', accountId)
       .eq('source_batch_id', batchId)
-      .not('csv_data', 'is', null) // Only get one that has CSV data
-      .limit(1)
-      .single();
+      .limit(100); // Get enough to check for CSV data
 
-    if (error || !queuedImport) {
+    if (fetchError || !queuedImports || queuedImports.length === 0) {
       return NextResponse.json(
-        { error: 'Batch not found or CSV data not available' },
+        { error: 'Batch not found' },
+        { status: 404 }
+      );
+    }
+
+    // Find first import with CSV data, or use first import if none have CSV data
+    const queuedImportWithCsv = queuedImports.find(qi => qi.csv_data);
+    const firstImport = queuedImports[0];
+    
+    let csvData: string[][] | null = null;
+    let csvAnalysis: any = null;
+    let csvFileName: string = 'unknown.csv';
+    let csvMappingTemplateId: number | null = null;
+    let csvFingerprint: string | null = null;
+    let csvMappingName: string | null = null;
+
+    // Check if this is a CSV-based import (has CSV data)
+    if (queuedImportWithCsv?.csv_data) {
+      // CSV-based import - use existing CSV data
+      csvData = queuedImportWithCsv.csv_data as string[][];
+      csvAnalysis = queuedImportWithCsv.csv_analysis;
+      csvFileName = queuedImportWithCsv.csv_file_name || 'unknown.csv';
+      csvMappingTemplateId = queuedImportWithCsv.csv_mapping_template_id;
+      csvFingerprint = queuedImportWithCsv.csv_fingerprint;
+      csvMappingName = queuedImportWithCsv.csv_mapping_name;
+    } else if (firstImport?.original_data) {
+      // API-based import - convert to virtual CSV
+      // Get import setup to determine source type
+      const { data: importSetup } = await supabase
+        .from('automatic_import_setups')
+        .select('source_type, csv_mapping_template_id')
+        .eq('id', firstImport.import_setup_id)
+        .single();
+      
+      const sourceType = importSetup?.source_type || 'unknown';
+      
+      // Convert API transactions to virtual CSV
+      const apiTransactions = queuedImports.map(qi => ({
+        transaction_date: qi.transaction_date,
+        description: qi.description,
+        amount: qi.amount,
+        original_data: qi.original_data,
+      }));
+      
+      const virtualCSV = convertApiTransactionsToVirtualCSV(apiTransactions, sourceType);
+      csvData = virtualCSV.csvData;
+      csvAnalysis = analyzeCSV(csvData);
+      csvFileName = `${sourceType.charAt(0).toUpperCase() + sourceType.slice(1)} Account Transactions`;
+      csvMappingTemplateId = importSetup?.csv_mapping_template_id || null;
+      csvFingerprint = virtualCSV.fingerprint;
+      
+      // Try to get template name if template exists
+      if (csvMappingTemplateId) {
+        const { data: template } = await supabase
+          .from('csv_import_templates')
+          .select('template_name')
+          .eq('id', csvMappingTemplateId)
+          .single();
+        csvMappingName = template?.template_name || null;
+      }
+    } else {
+      // No CSV data and no original_data - can't remap
+      return NextResponse.json(
+        { error: 'Batch does not have CSV data or API transaction data available for remapping' },
         { status: 404 }
       );
     }
 
     // Get template info if exists
     let currentTemplate = null;
-    if (queuedImport.csv_mapping_template_id) {
+    if (csvMappingTemplateId) {
       const { data: template } = await supabase
         .from('csv_import_templates')
         .select('id, template_name, date_column, amount_column, description_column, debit_column, credit_column, transaction_type_column, amount_sign_convention, date_format, has_headers, skip_rows')
-        .eq('id', queuedImport.csv_mapping_template_id)
+        .eq('id', csvMappingTemplateId)
         .eq('user_id', user.id)
         .single();
 
@@ -67,13 +131,13 @@ export async function GET(
     }
 
     return NextResponse.json({
-      csvData: queuedImport.csv_data,
-      csvAnalysis: queuedImport.csv_analysis,
-      csvFileName: queuedImport.csv_file_name || 'unknown.csv',
+      csvData,
+      csvAnalysis,
+      csvFileName,
       currentMapping: currentTemplate?.mapping,
       currentTemplateId: currentTemplate?.id,
       currentTemplateName: currentTemplate?.name,
-      currentMappingName: queuedImport.csv_mapping_name || null,
+      currentMappingName: csvMappingName,
     });
   } catch (error: any) {
     console.error('Error fetching remap data:', error);

@@ -8,6 +8,9 @@ import { queueTransactions } from '../queue-manager';
 import type { ParsedTransaction } from '../../import-types';
 import { generateTransactionHash } from '../../csv-parser';
 import { extractMerchant } from '../../csv-parser-helpers';
+import type { ColumnMapping } from '../../mapping-templates';
+import { convertApiTransactionsToVirtualCSV, analyzeVirtualCSV } from '../api-to-csv-converter';
+import { analyzeCSV } from '../../column-analyzer';
 
 export interface TellerTransaction {
   id: string;
@@ -240,18 +243,25 @@ export async function fetchTellerAccounts(accessToken: string): Promise<TellerAc
 
 /**
  * Convert Teller transaction to ParsedTransaction format
+ * @param mapping Optional ColumnMapping template - if provided, uses amountSignConvention from template
  */
 export function convertTellerTransactionToParsed(
   tellerTransaction: TellerTransaction,
   accountId?: number,
-  creditCardId?: number
+  creditCardId?: number,
+  mapping?: ColumnMapping
 ): ParsedTransaction {
   const parsedAmount = parseFloat(tellerTransaction.amount);
   if (isNaN(parsedAmount)) {
     throw new Error(`Invalid transaction amount: ${tellerTransaction.amount}`);
   }
   const amount = Math.abs(parsedAmount);
-  const isIncome = parsedAmount > 0;
+  
+  // Use mapping template if provided, otherwise default to positive_is_expense
+  const amountSignConvention = mapping?.amountSignConvention || 'positive_is_expense';
+  const isIncome = amountSignConvention === 'positive_is_income'
+    ? parsedAmount > 0
+    : parsedAmount < 0; // positive_is_expense: negative amounts are income
   
   // Extract merchant from description or counterparty
   const merchant = tellerTransaction.details?.counterparty?.name 
@@ -312,6 +322,7 @@ export async function fetchAndQueueTellerTransactions(options: {
     let actualIsHistorical = isHistorical;
     let targetAccountId: number | null = providedTargetAccountId ?? null;
     let targetCreditCardId: number | null = providedTargetCreditCardId ?? null;
+    let mappingToUse: ColumnMapping | undefined;
 
     // Fetch setup to get account_id, is_historical, and account mappings
     if (!supabase || !setupAccountId) {
@@ -323,7 +334,7 @@ export async function fetchAndQueueTellerTransactions(options: {
 
       const { data: setup, error: setupError } = await supabase
         .from('automatic_import_setups')
-        .select('account_id, is_historical, source_config')
+        .select('account_id, is_historical, source_config, csv_mapping_template_id')
         .eq('id', importSetupId)
         .single();
       
@@ -333,15 +344,39 @@ export async function fetchAndQueueTellerTransactions(options: {
       
       setupAccountId = setup.account_id;
       
+      // Load template mapping if available
+      let templateMapping: ColumnMapping | undefined;
+      if (setup.csv_mapping_template_id) {
+        const { loadTemplateById } = await import('../../mapping-templates');
+        const template = await loadTemplateById(setup.csv_mapping_template_id, supabase);
+        if (template) {
+          templateMapping = template.mapping;
+        }
+      }
+      
       // Try to get mapping for this specific Teller account
       const accountMappings = setup.source_config?.account_mappings || [];
-      const mapping = accountMappings.find((m: any) => m.teller_account_id === accountId);
-      if (mapping) {
-        targetAccountId = mapping.target_account_id || null;
-        targetCreditCardId = mapping.target_credit_card_id || null;
+      const accountMapping = accountMappings.find((m: any) => m.teller_account_id === accountId);
+      
+      // Check for per-account template first, then fall back to global template
+      let accountTemplateMapping: ColumnMapping | undefined;
+      if (accountMapping?.csv_mapping_template_id) {
+        const { loadTemplateById } = await import('../../mapping-templates');
+        const accountTemplate = await loadTemplateById(accountMapping.csv_mapping_template_id, supabase);
+        if (accountTemplate) {
+          accountTemplateMapping = accountTemplate.mapping;
+        }
+      }
+      
+      // Use per-account template if available, otherwise use global template
+      mappingToUse = accountTemplateMapping || templateMapping;
+      
+      if (accountMapping) {
+        targetAccountId = accountMapping.target_account_id || null;
+        targetCreditCardId = accountMapping.target_credit_card_id || null;
         // Use per-account is_historical if available, otherwise fall back to provided or global
-        if (actualIsHistorical === undefined && mapping.is_historical !== undefined) {
-          actualIsHistorical = mapping.is_historical;
+        if (actualIsHistorical === undefined && accountMapping.is_historical !== undefined) {
+          actualIsHistorical = accountMapping.is_historical;
         }
       } else {
         // Fallback to global is_historical if no mapping found
@@ -397,10 +432,83 @@ export async function fetchAndQueueTellerTransactions(options: {
       return { fetched: 0, queued: 0, errors: [] };
     }
 
-    // Convert to ParsedTransaction format with account mapping
+    // Load template mapping if not already loaded (for the else branch)
+    if (!mappingToUse && supabase) {
+      const { data: setup } = await supabase
+        .from('automatic_import_setups')
+        .select('csv_mapping_template_id, source_config')
+        .eq('id', importSetupId)
+        .single();
+      
+      if (setup) {
+        // Check for per-account template
+        const accountMappings = setup.source_config?.account_mappings || [];
+        const accountMapping = accountMappings.find((m: any) => m.teller_account_id === accountId);
+        
+        let templateId = accountMapping?.csv_mapping_template_id || setup.csv_mapping_template_id;
+        if (templateId) {
+          const { loadTemplateById } = await import('../../mapping-templates');
+          const template = await loadTemplateById(templateId, supabase);
+          if (template) {
+            mappingToUse = template.mapping;
+          }
+        }
+      }
+    }
+
+    // Convert to ParsedTransaction format with account mapping and template
     const parsedTransactions = transactions.map(txn => 
-      convertTellerTransactionToParsed(txn, targetAccountId || undefined, targetCreditCardId || undefined)
+      convertTellerTransactionToParsed(
+        txn, 
+        targetAccountId || undefined, 
+        targetCreditCardId || undefined,
+        mappingToUse
+      )
     );
+
+    // Create virtual CSV data for remapping support (API imports)
+    // This allows API imports to use the same remapping UI as CSV imports
+    const virtualCSV = convertApiTransactionsToVirtualCSV(
+      parsedTransactions.map(txn => ({
+        transaction_date: txn.date,
+        description: txn.description,
+        amount: txn.amount,
+        original_data: txn.originalData ? JSON.parse(txn.originalData) : null,
+      })),
+      'teller'
+    );
+    
+    // Analyze virtual CSV structure
+    const csvAnalysis = analyzeCSV(virtualCSV.csvData);
+    
+    // Get template info for CSV metadata
+    let csvMappingTemplateId: number | undefined;
+    let csvMappingName: string | undefined;
+    if (mappingToUse) {
+      // Try to find template ID from setup
+      const { data: setup } = await supabase
+        .from('automatic_import_setups')
+        .select('csv_mapping_template_id, source_config')
+        .eq('id', importSetupId)
+        .single();
+      
+      if (setup) {
+        const accountMappings = setup.source_config?.account_mappings || [];
+        const accountMapping = accountMappings.find((m: any) => m.teller_account_id === accountId);
+        csvMappingTemplateId = accountMapping?.csv_mapping_template_id || setup.csv_mapping_template_id || undefined;
+        
+        if (csvMappingTemplateId) {
+          // Get template name
+          const { data: template } = await supabase
+            .from('csv_import_templates')
+            .select('template_name')
+            .eq('id', csvMappingTemplateId)
+            .single();
+          
+          csvMappingName = template?.template_name || 'Teller Import Template';
+        }
+      }
+    }
 
     // Determine batch ID: use provided, find existing pending batch, or create new
     let sourceBatchId = providedSourceBatchId;
@@ -432,7 +540,7 @@ export async function fetchAndQueueTellerTransactions(options: {
       }
     }
 
-    // Queue transactions
+    // Queue transactions with virtual CSV data for remapping support
     const queued = await queueTransactions({
       importSetupId,
       transactions: parsedTransactions,
@@ -440,6 +548,13 @@ export async function fetchAndQueueTellerTransactions(options: {
       isHistorical: actualIsHistorical || false,
       accountId: setupAccountId,
       supabase,
+      // Virtual CSV data for API imports (enables remapping)
+      csvData: virtualCSV.csvData,
+      csvAnalysis: csvAnalysis,
+      csvFingerprint: virtualCSV.fingerprint,
+      csvMappingTemplateId: csvMappingTemplateId,
+      csvFileName: `Teller Account Transactions`,
+      csvMappingName: csvMappingName,
     });
 
     return {

@@ -97,6 +97,49 @@ export async function loadTemplate(fingerprint: string): Promise<CSVImportTempla
 }
 
 /**
+ * Load a template by ID (server-side only)
+ * This is used in server-side code where we have direct database access
+ */
+export async function loadTemplateById(
+  templateId: number,
+  supabase: any
+): Promise<CSVImportTemplate | null> {
+  const { data: template, error } = await supabase
+    .from('csv_import_templates')
+    .select('*')
+    .eq('id', templateId)
+    .single();
+
+  if (error || !template) {
+    return null;
+  }
+
+  // Convert database format to our format
+  return {
+    id: template.id,
+    userId: template.user_id,
+    templateName: template.template_name,
+    fingerprint: template.fingerprint,
+    columnCount: template.column_count,
+    mapping: {
+      dateColumn: template.date_column ?? null,
+      amountColumn: template.amount_column ?? null,
+      descriptionColumn: template.description_column ?? null,
+      debitColumn: template.debit_column ?? null,
+      creditColumn: template.credit_column ?? null,
+      transactionTypeColumn: template.transaction_type_column ?? null,
+      amountSignConvention: template.amount_sign_convention ?? 'positive_is_expense',
+      dateFormat: template.date_format ?? null,
+      hasHeaders: template.has_headers ?? true,
+      skipRows: template.skip_rows ?? 0,
+    },
+    usageCount: template.usage_count,
+    lastUsed: template.last_used,
+    createdAt: template.created_at,
+  };
+}
+
+/**
  * List all templates for the current user
  */
 export async function listTemplates(): Promise<CSVImportTemplate[]> {
