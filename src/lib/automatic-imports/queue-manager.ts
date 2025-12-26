@@ -256,18 +256,71 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
 
   // Check against queued_imports (get all statuses to check transaction_type)
   // Exclude the current batchId to avoid false positives during remap
+  // IMPORTANT: Also exclude queued_imports that have already been imported (status='imported')
+  // because those transactions already exist in the transactions table
   let query = supabase
     .from('queued_imports')
     .select('hash, source_batch_id, status, transaction_type')
     .eq('account_id', accountId)
-    .in('hash', Array.from(seenInBatch));
+    .in('hash', Array.from(seenInBatch))
+    .neq('status', 'imported'); // Exclude already-imported transactions
   
-  // Exclude current batch to prevent false duplicates during remap
+  // Exclude current batch to prevent false positives during remap
   if (sourceBatchId) {
     query = query.neq('source_batch_id', sourceBatchId);
   }
   
   const { data: existingQueued } = await query;
+
+  // CRITICAL FIX: Also check if transactions already exist in transactions table
+  // This catches cases where transactions were imported but queued_imports status wasn't updated
+  // We need to check by date + amount + description since transactions table doesn't have hash
+  const transactionsToCheck = deduplicatedTransactions.map(t => ({
+    hash: t.hash,
+    date: t.date,
+    amount: Math.abs(t.amount),
+    description: t.description,
+  }));
+
+  // Check transactions table for existing transactions
+  // Group by date+amount to minimize queries
+  const dateAmountGroups = new Map<string, typeof transactionsToCheck>();
+  transactionsToCheck.forEach(t => {
+    const key = `${t.date}|${t.amount}`;
+    if (!dateAmountGroups.has(key)) {
+      dateAmountGroups.set(key, []);
+    }
+    dateAmountGroups.get(key)!.push(t);
+  });
+
+  const existingInTransactions = new Set<string>();
+  for (const [key, txns] of dateAmountGroups.entries()) {
+    const [date, amountStr] = key.split('|');
+    const amount = parseFloat(amountStr);
+    
+    const { data: existingTxns } = await supabase
+      .from('transactions')
+      .select('date, description, total_amount')
+      .eq('budget_account_id', accountId)
+      .eq('date', date)
+      .eq('total_amount', amount);
+
+    if (existingTxns && existingTxns.length > 0) {
+      // Check if descriptions match (fuzzy match)
+      txns.forEach(txn => {
+        const matches = existingTxns.some(existing => {
+          const existingDesc = existing.description.toLowerCase().trim();
+          const txnDesc = txn.description.toLowerCase().trim();
+          return existingDesc === txnDesc || 
+                 existingDesc.includes(txnDesc) || 
+                 txnDesc.includes(existingDesc);
+        });
+        if (matches) {
+          existingInTransactions.add(txn.hash);
+        }
+      });
+    }
+  }
 
   // Build a map of hash -> { status, transaction_type } for queued imports
   const queuedHashInfo = new Map<string, { status: string; transaction_type: string }>();
@@ -275,7 +328,7 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     queuedHashInfo.set(t.hash, { status: t.status, transaction_type: t.transaction_type });
   });
 
-  // Build set of existing hashes (from imported or queued)
+  // Build set of existing hashes (from imported, queued, or transactions table)
   // Exclude hashes where:
   // 1. Status is 'rejected' (allow re-importing rejected transactions)
   // 2. Transaction_type differs (allow re-importing with correct type after convention fix)
@@ -284,6 +337,11 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
   // Add imported transaction hashes (can't check transaction_type here, so treat as duplicates)
   existingImported?.forEach(t => {
     existingHashes.add(t.hash);
+  });
+  
+  // Add transactions that exist in transactions table (already imported)
+  existingInTransactions.forEach(hash => {
+    existingHashes.add(hash);
   });
   
   // Add queued import hashes, but exclude rejected or different transaction_type

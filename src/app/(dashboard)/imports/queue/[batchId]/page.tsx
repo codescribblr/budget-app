@@ -59,6 +59,7 @@ export default function BatchReviewPage() {
   const [showProcessingDialog, setShowProcessingDialog] = useState(false);
   const [isRerunningDuplicates, setIsRerunningDuplicates] = useState(false);
   const [isRerunningCategorization, setIsRerunningCategorization] = useState(false);
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!permissionsLoading && batchId) {
@@ -608,21 +609,55 @@ export default function BatchReviewPage() {
   const handleDeleteBatch = async () => {
     setIsDeleting(true);
     try {
+      // Determine which transactions to delete
+      const transactionsToDelete = selectedTransactionIds.size > 0 
+        ? Array.from(selectedTransactionIds)
+        : transactions.map(t => t.id);
+
+      console.log('[Delete] Preparing to delete:', {
+        selectedCount: selectedTransactionIds.size,
+        totalCount: transactions.length,
+        transactionIds: transactionsToDelete,
+      });
+
       const response = await fetch(`/api/automatic-imports/queue/batch/${batchId}/delete`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionIds: transactionsToDelete,
+        }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to delete batch');
+        throw new Error(error.error || 'Failed to delete transactions');
       }
 
-      toast.success(`Deleted ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''} from queue`);
+      const result = await response.json();
+      const deletedCount = result.deleted || 0;
+      
+      if (deletedCount === 0) {
+        toast.error('No transactions were deleted. They may have already been deleted or imported.');
+      } else {
+        toast.success(`Deleted ${deletedCount} transaction${deletedCount !== 1 ? 's' : ''} from queue`);
+      }
+      
       setDeleteDialogOpen(false);
-      router.push('/imports/queue'); // Navigate back to queue list
+      setSelectedTransactionIds(new Set()); // Clear selection
+      
+      // If all transactions were deleted, navigate back to queue list
+      // Otherwise, reload the page to show remaining transactions
+      if (deletedCount > 0) {
+        if (deletedCount >= transactions.length) {
+          router.push('/imports/queue');
+        } else {
+          // Reload the page to refresh the transaction list
+          window.location.reload();
+        }
+      }
     } catch (error: any) {
-      console.error('Error deleting batch:', error);
-      toast.error(error.message || 'Failed to delete batch');
+      console.error('Error deleting transactions:', error);
+      toast.error(error.message || 'Failed to delete transactions');
     } finally {
       setIsDeleting(false);
     }
@@ -1006,6 +1041,9 @@ export default function BatchReviewPage() {
             variant="outline" 
             size="icon"
             onClick={() => setDeleteDialogOpen(true)}
+            title={selectedTransactionIds.size > 0 
+              ? `Delete ${selectedTransactionIds.size} selected transaction${selectedTransactionIds.size !== 1 ? 's' : ''}`
+              : 'Delete all transactions'}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -1016,6 +1054,9 @@ export default function BatchReviewPage() {
             variant="outline" 
             size="icon"
             onClick={() => setDeleteDialogOpen(true)}
+            title={selectedTransactionIds.size > 0 
+              ? `Delete ${selectedTransactionIds.size} selected transaction${selectedTransactionIds.size !== 1 ? 's' : ''}`
+              : 'Delete all transactions'}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -1070,6 +1111,7 @@ export default function BatchReviewPage() {
         <TransactionPreview 
           transactions={transactions} 
           onImportComplete={handleImportComplete}
+          onSelectionChange={setSelectedTransactionIds}
         />
       )}
 
@@ -1079,7 +1121,25 @@ export default function BatchReviewPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Import Batch</AlertDialogTitle>
             <AlertDialogDescription>
-              {batchInfo?.source_type === 'manual' ? (
+              {selectedTransactionIds.size > 0 ? (
+                <>
+                  Are you sure you want to delete {selectedTransactionIds.size} selected transaction{selectedTransactionIds.size !== 1 ? 's' : ''}? 
+                  This will permanently remove {selectedTransactionIds.size === 1 ? 'it' : 'them'} from the queue.
+                  {batchInfo?.source_type !== 'manual' && (
+                    <>
+                      <br /><br />
+                      <strong>Important:</strong> These transactions will not be automatically re-imported from{' '}
+                      {batchInfo?.source_type === 'teller' ? 'Teller' :
+                       batchInfo?.source_type === 'email' ? 'Email Import' :
+                       batchInfo?.source_type === 'plaid' ? 'Plaid' :
+                       batchInfo?.source_type === 'yodlee' ? 'Yodlee' :
+                       batchInfo?.source_type === 'finicity' ? 'Finicity' :
+                       batchInfo?.source_type === 'mx' ? 'MX' :
+                       'the integration'} on future syncs.
+                    </>
+                  )}
+                </>
+              ) : batchInfo?.source_type === 'manual' ? (
                 <>
                   Are you sure you want to delete this manual import batch? This will permanently remove{' '}
                   {transactions.length} transaction{transactions.length !== 1 ? 's' : ''} from the queue.
@@ -1088,6 +1148,8 @@ export default function BatchReviewPage() {
                 <>
                   Are you sure you want to delete this import batch from {batchInfo?.setup_name}? 
                   This will remove {transactions.length} transaction{transactions.length !== 1 ? 's' : ''} from the queue.
+                  <br /><br />
+                  <strong>Note:</strong> To delete only specific transactions, select them first using the checkboxes.
                   <br /><br />
                   <strong>Important:</strong> These transactions will not be automatically re-imported from{' '}
                   {batchInfo?.source_type === 'teller' ? 'Teller' :
@@ -1108,7 +1170,11 @@ export default function BatchReviewPage() {
               disabled={isDeleting}
               className="bg-red-600 hover:bg-red-700"
             >
-              {isDeleting ? 'Deleting...' : 'Delete'}
+              {isDeleting 
+                ? 'Deleting...' 
+                : selectedTransactionIds.size > 0 
+                  ? `Delete ${selectedTransactionIds.size} Selected`
+                  : 'Delete All'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -157,10 +157,19 @@ export default function TransactionsPage() {
     fetchingRef.current = true;
     try {
       setLoading(true);
+      // Build transactions URL with date filters if present (for server-side filtering)
+      let transactionsUrl = '/api/transactions';
+      if (startDateParam || endDateParam) {
+        const params = new URLSearchParams();
+        if (startDateParam) params.set('startDate', startDateParam);
+        if (endDateParam) params.set('endDate', endDateParam);
+        transactionsUrl = `/api/transactions?${params.toString()}`;
+      }
+      
       // Use regular fetch - the cache will be handled at a higher level
       // We'll prevent duplicate calls by using a ref to track if fetch is in progress
       const fetchPromises = [
-        fetch('/api/transactions'),
+        fetch(transactionsUrl),
         fetch('/api/categories?excludeGoals=true'),
         fetch('/api/merchant-groups'),
         fetch('/api/accounts'),
@@ -208,12 +217,30 @@ export default function TransactionsPage() {
   const hasMountedRef = useRef(false);
 
   useEffect(() => {
-    // Only fetch once on mount
+    // Fetch data on mount or when date filters change (to get server-side filtered data)
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
       fetchData();
     }
   }, []);
+
+  // Refetch when date filters change (to get server-side filtered data)
+  // Use a ref to track previous values to avoid unnecessary refetches
+  const prevDateParamsRef = useRef<{ start?: string | null; end?: string | null }>({});
+  useEffect(() => {
+    if (hasMountedRef.current) {
+      const prevStart = prevDateParamsRef.current.start;
+      const prevEnd = prevDateParamsRef.current.end;
+      
+      // Only refetch if date params actually changed
+      if (prevStart !== startDateParam || prevEnd !== endDateParam) {
+        prevDateParamsRef.current = { start: startDateParam, end: endDateParam };
+        // Reset fetching ref to allow refetch
+        fetchingRef.current = false;
+        fetchData();
+      }
+    }
+  }, [startDateParam, endDateParam]);
 
   // Initialize search query from URL parameter
   useEffect(() => {
@@ -283,6 +310,11 @@ export default function TransactionsPage() {
     }
     let filtered = transactions;
 
+    // Debug logging for date filtering
+    if (startDateParam || endDateParam) {
+      console.log('[TransactionsPage] Date filter active:', { startDateParam, endDateParam, totalTransactions: transactions.length });
+    }
+
     // Apply merchant filter if present
     if (merchantFilter) {
       filtered = filtered.filter(transaction => {
@@ -342,8 +374,18 @@ export default function TransactionsPage() {
     if (startDateParam || endDateParam) {
       filtered = filtered.filter(transaction => {
         const transactionDate = transaction.date; // YYYY-MM-DD format
-        if (startDateParam && transactionDate < startDateParam) return false;
-        if (endDateParam && transactionDate > endDateParam) return false;
+        // Skip transactions without valid dates
+        if (!transactionDate || typeof transactionDate !== 'string') {
+          return false;
+        }
+        // Ensure dates are in YYYY-MM-DD format for proper string comparison
+        const normalizedDate = transactionDate.trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+          // Invalid date format, exclude it
+          return false;
+        }
+        if (startDateParam && normalizedDate < startDateParam) return false;
+        if (endDateParam && normalizedDate > endDateParam) return false;
         return true;
       });
     }

@@ -23,7 +23,7 @@ import ImportProgressDialog from './ImportProgressDialog';
 import BulkEditDialog, { BulkEditUpdates } from './BulkEditDialog';
 import { generateTransactionHash } from '@/lib/csv-parser';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
-import { MoreVertical, Edit, X, Check, Sparkles, Loader2 } from 'lucide-react';
+import { MoreVertical, Edit, X, Check, Sparkles, Loader2, ChevronDown, CheckIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAIUsage } from '@/hooks/use-ai-usage';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -35,6 +35,7 @@ import { handleApiError } from '@/lib/api-error-handler';
 interface TransactionPreviewProps {
   transactions: ParsedTransaction[];
   onImportComplete: () => void;
+  onSelectionChange?: (selectedIds: Set<string>) => void;
 }
 
 interface EditingField {
@@ -96,7 +97,7 @@ function DatePickerWrapper({
   );
 }
 
-export default function TransactionPreview({ transactions, onImportComplete }: TransactionPreviewProps) {
+export default function TransactionPreview({ transactions, onImportComplete, onSelectionChange }: TransactionPreviewProps) {
   const router = useRouter();
   const [items, setItems] = useState<ParsedTransaction[]>(transactions);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -116,10 +117,64 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
   const [dateFormat, setDateFormat] = useState<string | null>(null);
   const [isAICategorizing, setIsAICategorizing] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
+
+  // Notify parent of selection changes
+  useEffect(() => {
+    if (onSelectionChange) {
+      onSelectionChange(selectedTransactions);
+    }
+  }, [selectedTransactions, onSelectionChange]);
   const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
   const { stats, refreshStats } = useAIUsage();
   const { isPremium } = useSubscription();
   const aiChatEnabled = useFeature('ai_chat');
+
+  // Helper functions for selection modes
+  const getDuplicateTransactions = () => {
+    return items.filter(t => 
+      t.duplicateType === 'database' || 
+      t.duplicateType === 'within-file' || 
+      t.isDuplicate
+    );
+  };
+
+  const getUncategorizedTransactions = () => {
+    return items.filter(t => {
+      const isDuplicate = t.duplicateType === 'database' || t.duplicateType === 'within-file' || t.isDuplicate;
+      return !isDuplicate && t.splits.length === 0;
+    });
+  };
+
+  const getNonDuplicateTransactions = () => {
+    return items.filter(t => 
+      t.duplicateType !== 'database' && 
+      t.duplicateType !== 'within-file' && 
+      !t.isDuplicate
+    );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedTransactions(new Set(items.map(t => t.id)));
+  };
+
+  const handleSelectDuplicates = () => {
+    const duplicates = getDuplicateTransactions();
+    setSelectedTransactions(new Set(duplicates.map(t => t.id)));
+  };
+
+  const handleSelectUncategorized = () => {
+    const uncategorized = getUncategorizedTransactions();
+    setSelectedTransactions(new Set(uncategorized.map(t => t.id)));
+  };
+
+  const handleSelectNonDuplicates = () => {
+    const nonDuplicates = getNonDuplicateTransactions();
+    setSelectedTransactions(new Set(nonDuplicates.map(t => t.id)));
+  };
+
+  const handleSelectNone = () => {
+    setSelectedTransactions(new Set());
+  };
 
   // Sync items state with transactions prop when it changes
   useEffect(() => {
@@ -848,16 +903,48 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
           <TableHeader>
             <TableRow className="border-border">
               <TableHead className="w-12">
-                <Checkbox
-                  checked={selectedTransactions.size === items.length && items.length > 0}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      setSelectedTransactions(new Set(items.map(t => t.id)));
-                    } else {
-                      setSelectedTransactions(new Set());
-                    }
-                  }}
-                />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 relative"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label="Select transactions"
+                    >
+                      <span
+                        className={`inline-flex items-center justify-center w-4 h-4 rounded-[4px] border shadow-xs transition-shadow ${
+                          selectedTransactions.size === items.length && items.length > 0
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'border-input dark:bg-input/30'
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {selectedTransactions.size === items.length && items.length > 0 && (
+                          <CheckIcon className="size-3.5" />
+                        )}
+                      </span>
+                      <ChevronDown className="h-3 w-3 ml-1 opacity-50 absolute right-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuItem onClick={handleSelectAll}>
+                      Select All ({items.length})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSelectDuplicates}>
+                      Select Only Duplicates ({getDuplicateTransactions().length})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSelectUncategorized}>
+                      Select Only Uncategorized ({getUncategorizedTransactions().length})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSelectNonDuplicates}>
+                      Select Only Non-Duplicates ({getNonDuplicateTransactions().length})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSelectNone}>
+                      Select None
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </TableHead>
               <TableHead className="whitespace-nowrap">Date</TableHead>
               <TableHead className="whitespace-nowrap">Merchant</TableHead>

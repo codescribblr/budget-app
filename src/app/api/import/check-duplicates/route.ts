@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
+import { getActiveAccountId } from '@/lib/account-context';
 import { distance } from 'fastest-levenshtein';
 
 interface TransactionData {
@@ -18,22 +19,86 @@ export async function POST(request: Request) {
     };
 
     const { supabase, user } = await getAuthenticatedUser();
-
+    const accountId = await getActiveAccountId();
+    
+    if (!accountId) {
+      return NextResponse.json({ error: 'No active account' }, { status: 400 });
+    }
 
     const duplicateHashes = new Set<string>();
 
-    // Method 1: Check by hash (primary method)
-    // Only check imported_transactions - don't check queued_imports since those haven't been imported yet
-    if (hashes && Array.isArray(hashes) && hashes.length > 0) {
-      const { data: existingHashes, error } = await supabase
+    // Method 1: Check by hash against imported_transactions, but verify transaction exists in transactions table
+    // We check imported_transactions for hash lookup, but then verify the transaction actually exists
+    // in the transactions table (which is what users see). This prevents false positives from
+    // orphaned records in imported_transactions.
+    if (hashes && Array.isArray(hashes) && hashes.length > 0 && transactions && Array.isArray(transactions)) {
+      // Build a map of hash -> transaction data for quick lookup
+      const hashToTransaction = new Map<string, TransactionData>();
+      transactions.forEach(txn => {
+        hashToTransaction.set(txn.hash, txn);
+      });
+
+      // Get hashes from imported_transactions
+      // IMPORTANT: Check for records with matching account_id OR NULL account_id
+      // (NULL might exist from before migration, though migration should have set them)
+      // Also, the unique constraint is (user_id, hash), so same hash can exist with different account_ids
+      const { data: importedHashes, error: importedError } = await supabase
         .from('imported_transactions')
-        .select('hash')
+        .select('hash, account_id')
         .eq('user_id', user.id)
-        .in('hash', hashes);
+        .in('hash', hashes)
+        .or(`account_id.eq.${accountId},account_id.is.null`);
 
-      if (error) throw error;
+      if (importedError) throw importedError;
 
-      existingHashes?.forEach(row => duplicateHashes.add(row.hash));
+      // For each imported hash, verify the corresponding transaction exists in transactions table
+      // Only mark as duplicate if:
+      // 1. The hash exists in imported_transactions with matching account_id (or NULL)
+      // 2. AND the transaction actually exists in transactions table
+      if (importedHashes && importedHashes.length > 0) {
+        // Group by hash to avoid duplicate checks
+        const uniqueHashes = new Set(importedHashes.map(h => h.hash));
+        
+        for (const hash of uniqueHashes) {
+          const txn = hashToTransaction.get(hash);
+          if (txn) {
+            const normalizedDate = normalizeDateForComparison(txn.date);
+            const normalizedAmount = Math.abs(txn.amount);
+            const normalizedDesc = normalizeDescriptionForComparison(txn.description);
+            
+            // Check if this transaction exists in the transactions table
+            // This is the source of truth - if it's not here, it's not a duplicate
+            const { data: existingTx, error: txError } = await supabase
+              .from('transactions')
+              .select('id, description')
+              .eq('budget_account_id', accountId)
+              .eq('date', normalizedDate)
+              .eq('total_amount', normalizedAmount)
+              .limit(10); // Get multiple to check description match
+
+            if (!txError && existingTx && existingTx.length > 0) {
+              // Check if description matches (fuzzy match)
+              const matching = existingTx.some(existingTxn => {
+                const existingDesc = normalizeDescriptionForComparison(existingTxn.description);
+                const existingLower = existingDesc.toLowerCase();
+                const normalizedLower = normalizedDesc.toLowerCase();
+                
+                // Exact match or substring match
+                return existingLower === normalizedLower || 
+                       existingLower.includes(normalizedLower) || 
+                       normalizedLower.includes(existingLower);
+              });
+
+              if (matching) {
+                // Transaction exists in transactions table with matching description, so it's a real duplicate
+                duplicateHashes.add(hash);
+              }
+            }
+            // If transaction doesn't exist in transactions table, it's NOT a duplicate
+            // (might be orphaned data in imported_transactions from a different account or deleted transaction)
+          }
+        }
+      }
     }
 
     // Method 2: Fallback - Check by date + description + amount
@@ -59,18 +124,21 @@ export async function POST(request: Request) {
         const [date, description, amountStr] = key.split('|');
         const amount = parseFloat(amountStr);
 
-        // Check imported_transactions only (don't check queued_imports since those haven't been imported yet)
-        // Use case-insensitive description matching and fuzzy matching for similar descriptions
-        const { data: existing, error } = await supabase
-          .from('imported_transactions')
-          .select('hash, transaction_date, description, amount')
-          .eq('user_id', user.id)
-          .eq('transaction_date', date)
-          .eq('amount', amount);
+        // Check transactions table directly (what users actually see)
+        // Only mark as duplicate if transaction exists in transactions table
+        // This prevents false positives from orphaned records in imported_transactions
+        const { data: existingTransactions, error: txError } = await supabase
+          .from('transactions')
+          .select('id, date, description, total_amount')
+          .eq('budget_account_id', accountId)
+          .eq('date', date)
+          .eq('total_amount', amount);
 
-        if (!error && existing && existing.length > 0) {
+        if (txError) throw txError;
+
+        if (existingTransactions && existingTransactions.length > 0) {
           // Check if description matches using multiple strategies
-          const matching = existing.filter(existingTxn => {
+          const matching = existingTransactions.filter(existingTxn => {
             const existingDesc = normalizeDescriptionForComparison(existingTxn.description);
             const normalizedDesc = normalizeDescriptionForComparison(description);
             
