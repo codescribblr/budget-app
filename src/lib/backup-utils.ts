@@ -170,6 +170,26 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     return allRecords;
   }
 
+  // Helper function to safely fetch records from a table that might not exist
+  async function fetchAllRecordsSafe<T>(
+    queryBuilder: (limit: number, offset: number) => any,
+    tableName: string,
+    batchSize: number = 1000
+  ): Promise<T[]> {
+    try {
+      return await fetchAllRecords(queryBuilder, batchSize);
+    } catch (error: any) {
+      // If table doesn't exist, return empty array (for backward compatibility)
+      if (error?.message?.includes('Could not find the table') || 
+          error?.message?.includes('does not exist') ||
+          error?.code === 'PGRST204') {
+        console.warn(`[Export] Table '${tableName}' does not exist, skipping (this is OK for older schemas)`);
+        return [];
+      }
+      throw error;
+    }
+  }
+
   // Fetch all account data (filtered by account_id)
   // Use pagination for tables that might have >1000 records (Supabase default limit)
   const [
@@ -226,8 +246,8 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     fetchAllRecords((limit, offset) => supabase.from('merchant_mappings').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
     fetchAllRecords((limit, offset) => supabase.from('merchant_category_rules').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
     fetchAllRecords((limit, offset) => supabase.from('pending_checks').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
-    fetchAllRecords((limit, offset) => supabase.from('income_settings').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
-    fetchAllRecords((limit, offset) => supabase.from('pre_tax_deductions').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('income_settings').select('*').eq('account_id', accountId).range(offset, offset + limit - 1), 'income_settings'),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('pre_tax_deductions').select('*').eq('account_id', accountId).range(offset, offset + limit - 1), 'pre_tax_deductions'),
     fetchAllRecords((limit, offset) => supabase.from('settings').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
     fetchAllRecords((limit, offset) => supabase.from('goals').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
     fetchAllRecords((limit, offset) => supabase.from('csv_import_templates').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
@@ -454,8 +474,21 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   await supabase.from('merchant_mappings').delete().eq('account_id', accountId);
   await supabase.from('merchant_groups').delete().eq('account_id', accountId);
   await supabase.from('pending_checks').delete().eq('account_id', accountId);
-  await supabase.from('pre_tax_deductions').delete().eq('account_id', accountId);
-  await supabase.from('income_settings').delete().eq('account_id', accountId);
+  // pre_tax_deductions and income_settings tables may not exist (data stored in settings table)
+  try {
+    await supabase.from('pre_tax_deductions').delete().eq('account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
+  try {
+    await supabase.from('income_settings').delete().eq('account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
   await supabase.from('settings').delete().eq('account_id', accountId);
   await supabase.from('csv_import_templates').delete().eq('account_id', accountId);
   await supabase.from('goals').delete().eq('account_id', accountId);
@@ -1107,41 +1140,79 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   }
 
   // Insert income settings (batch)
+  // Note: income_settings table may not exist (data stored in settings table)
   if (backupData.income_settings && backupData.income_settings.length > 0) {
-    const incomeSettingsToInsert = backupData.income_settings.map(({ id, account_id, user_id, ...income }) => ({
-      ...income,
-      user_id: user.id,
-      account_id: accountId,
-    }));
+    try {
+      const incomeSettingsToInsert = backupData.income_settings.map(({ id, account_id, user_id, ...income }) => ({
+        ...income,
+        user_id: user.id,
+        account_id: accountId,
+      }));
 
-    const { error } = await supabase
-      .from('income_settings')
-      .insert(incomeSettingsToInsert);
+      const { error } = await supabase
+        .from('income_settings')
+        .insert(incomeSettingsToInsert);
 
-    if (error) {
-      console.error('[Import] Error inserting income settings:', error);
-      throw error;
+      if (error) {
+        // If table doesn't exist, skip (for backward compatibility)
+        if (error.message?.includes('Could not find the table') || 
+            error.message?.includes('does not exist') ||
+            error.code === 'PGRST204') {
+          console.warn('[Import] income_settings table does not exist, skipping (this is OK for older schemas)');
+        } else {
+          console.error('[Import] Error inserting income settings:', error);
+          throw error;
+        }
+      } else {
+        console.log('[Import] Inserted', incomeSettingsToInsert.length, 'income settings');
+      }
+    } catch (error: any) {
+      if (error?.message?.includes('Could not find the table') || 
+          error?.message?.includes('does not exist') ||
+          error?.code === 'PGRST204') {
+        console.warn('[Import] income_settings table does not exist, skipping (this is OK for older schemas)');
+      } else {
+        throw error;
+      }
     }
-    console.log('[Import] Inserted', incomeSettingsToInsert.length, 'income settings');
   }
 
   // Insert pre-tax deductions (batch)
+  // Note: pre_tax_deductions table may not exist (data stored in settings table as JSON)
   if (backupData.pre_tax_deductions && backupData.pre_tax_deductions.length > 0) {
-    const preTaxDeductionsToInsert = backupData.pre_tax_deductions.map(({ id, account_id, user_id, ...deduction }) => ({
-      ...deduction,
-      user_id: user.id,
-      account_id: accountId,
-    }));
+    try {
+      const preTaxDeductionsToInsert = backupData.pre_tax_deductions.map(({ id, account_id, user_id, ...deduction }) => ({
+        ...deduction,
+        user_id: user.id,
+        account_id: accountId,
+      }));
 
-    const { error } = await supabase
-      .from('pre_tax_deductions')
-      .insert(preTaxDeductionsToInsert);
+      const { error } = await supabase
+        .from('pre_tax_deductions')
+        .insert(preTaxDeductionsToInsert);
 
-    if (error) {
-      console.error('[Import] Error inserting pre-tax deductions:', error);
-      throw error;
+      if (error) {
+        // If table doesn't exist, skip (for backward compatibility)
+        if (error.message?.includes('Could not find the table') || 
+            error.message?.includes('does not exist') ||
+            error.code === 'PGRST204') {
+          console.warn('[Import] pre_tax_deductions table does not exist, skipping (this is OK - data stored in settings table)');
+        } else {
+          console.error('[Import] Error inserting pre-tax deductions:', error);
+          throw error;
+        }
+      } else {
+        console.log('[Import] Inserted', preTaxDeductionsToInsert.length, 'pre-tax deductions');
+      }
+    } catch (error: any) {
+      if (error?.message?.includes('Could not find the table') || 
+          error?.message?.includes('does not exist') ||
+          error?.code === 'PGRST204') {
+        console.warn('[Import] pre_tax_deductions table does not exist, skipping (this is OK - data stored in settings table)');
+      } else {
+        throw error;
+      }
     }
-    console.log('[Import] Inserted', preTaxDeductionsToInsert.length, 'pre-tax deductions');
   }
 
   // Insert settings (batch)
