@@ -32,6 +32,8 @@ interface Backup {
 
 export default function DataBackup() {
   const [backups, setBackups] = useState<Backup[]>([]);
+  const [maxBackups, setMaxBackups] = useState(3); // Default to free tier
+  const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isDeletingId, setIsDeletingId] = useState<number | null>(null);
@@ -71,6 +73,14 @@ export default function DataBackup() {
       } else {
         console.error('Invalid backups data:', data);
         setBackups([]);
+      }
+      
+      // Update max backups and premium status from API response
+      if (data.maxBackups !== undefined) {
+        setMaxBackups(data.maxBackups);
+      }
+      if (data.isPremium !== undefined) {
+        setIsPremium(data.isPremium);
       }
     } catch (error) {
       console.error('Error fetching backups:', error);
@@ -308,7 +318,7 @@ export default function DataBackup() {
             Data Backup
           </CardTitle>
           <CardDescription>
-            Create and manage backups of your budget data (maximum 3 backups)
+            Create and manage backups of your budget data (maximum {maxBackups} {isPremium ? 'premium' : ''} backups)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -331,7 +341,7 @@ export default function DataBackup() {
             </Button>
           </div>
           <p className="text-sm text-muted-foreground">
-            {backups.length}/3 backups used
+            {backups.length}/{maxBackups} backups used
           </p>
 
           {/* Backups List */}

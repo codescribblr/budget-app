@@ -26,7 +26,16 @@ export async function GET() {
 
     if (error) throw error;
 
-    return NextResponse.json({ backups: backups || [] });
+    // Get subscription to determine max backup limit
+    const subscription = await getUserSubscription(accountId);
+    const isPremium = isPremiumUser(subscription);
+    const maxBackups = isPremium ? 10 : 3;
+
+    return NextResponse.json({ 
+      backups: backups || [],
+      maxBackups,
+      isPremium,
+    });
   } catch (error: any) {
     console.error('Error fetching backups:', error);
     if (error.message === 'Unauthorized') {
