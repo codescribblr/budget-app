@@ -144,92 +144,123 @@ export async function exportAccountData(): Promise<AccountBackupData> {
 
   if (invitationsError) throw invitationsError;
 
+  // Helper function to fetch all records with pagination (Supabase default limit is 1000)
+  async function fetchAllRecords<T>(
+    queryBuilder: (limit: number, offset: number) => any,
+    batchSize: number = 1000
+  ): Promise<T[]> {
+    const allRecords: T[] = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const query = queryBuilder(batchSize, offset);
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        allRecords.push(...data);
+        offset += batchSize;
+        hasMore = data.length === batchSize; // If we got a full batch, there might be more
+      } else {
+        hasMore = false;
+      }
+    }
+
+    return allRecords;
+  }
+
   // Fetch all account data (filtered by account_id)
+  // Use pagination for tables that might have >1000 records (Supabase default limit)
   const [
-    { data: accounts },
-    { data: categories },
-    { data: credit_cards },
-    { data: loans },
-    { data: transactions },
-    { data: transaction_splits },
-    { data: imported_transactions },
-    { data: imported_transaction_links },
-    { data: merchant_groups },
-    { data: merchant_mappings },
-    { data: merchant_category_rules },
-    { data: pending_checks },
-    { data: income_settings },
-    { data: pre_tax_deductions },
-    { data: settings },
-    { data: goals },
-    { data: csv_import_templates },
-    { data: category_monthly_funding },
-    { data: user_feature_flags },
-    { data: ai_conversations },
-    { data: duplicate_group_reviews },
-    { data: automatic_import_setups },
-    { data: queued_imports },
-    { data: tags },
-    { data: transaction_tags },
-    { data: tag_rules },
-    { data: recurring_transactions },
-    { data: recurring_transaction_matches },
-    { data: notifications },
+    accounts,
+    categories,
+    credit_cards,
+    loans,
+    transactions,
+    transaction_splits,
+    imported_transactions,
+    imported_transaction_links,
+    merchant_groups,
+    merchant_mappings,
+    merchant_category_rules,
+    pending_checks,
+    income_settings,
+    pre_tax_deductions,
+    settings,
+    goals,
+    csv_import_templates,
+    category_monthly_funding,
+    user_feature_flags,
+    ai_conversations,
+    duplicate_group_reviews,
+    automatic_import_setups,
+    queued_imports,
+    tags,
+    transaction_tags,
+    tag_rules,
+    recurring_transactions,
+    recurring_transaction_matches,
+    notifications,
   ] = await Promise.all([
-    supabase.from('accounts').select('*').eq('account_id', accountId),
-    supabase.from('categories').select('*').eq('account_id', accountId),
-    supabase.from('credit_cards').select('*').eq('account_id', accountId),
-    supabase.from('loans').select('*').eq('account_id', accountId),
-    supabase.from('transactions').select('*').eq('budget_account_id', accountId),
-    supabase
+    fetchAllRecords((limit, offset) => supabase.from('accounts').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('categories').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('credit_cards').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('loans').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('transactions').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase
       .from('transaction_splits')
       .select('*, transactions!inner(budget_account_id)')
-      .eq('transactions.budget_account_id', accountId),
-    supabase.from('imported_transactions').select('*').eq('account_id', accountId),
+      .eq('transactions.budget_account_id', accountId)
+      .range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('imported_transactions').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
     // Imported transaction links: ensure both imported_transaction and transaction belong to this account
     // When importing to a new account, account_id fields are remapped, but the link IDs are remapped via maps
-    supabase
+    fetchAllRecords((limit, offset) => supabase
       .from('imported_transaction_links')
       .select('*, imported_transactions!inner(account_id), transactions!inner(budget_account_id)')
       .eq('imported_transactions.account_id', accountId)
-      .eq('transactions.budget_account_id', accountId),
-    supabase.from('merchant_groups').select('*').eq('account_id', accountId),
-    supabase.from('merchant_mappings').select('*').eq('account_id', accountId),
-    supabase.from('merchant_category_rules').select('*').eq('account_id', accountId),
-    supabase.from('pending_checks').select('*').eq('account_id', accountId),
-    supabase.from('income_settings').select('*').eq('account_id', accountId),
-    supabase.from('pre_tax_deductions').select('*').eq('account_id', accountId),
-    supabase.from('settings').select('*').eq('account_id', accountId),
-    supabase.from('goals').select('*').eq('account_id', accountId),
-    supabase.from('csv_import_templates').select('*').eq('account_id', accountId),
-    supabase.from('category_monthly_funding').select('*').eq('account_id', accountId),
-    supabase.from('user_feature_flags').select('*').eq('account_id', accountId),
-    supabase.from('ai_conversations').select('*').eq('account_id', accountId),
-    supabase.from('duplicate_group_reviews').select('*').eq('budget_account_id', accountId),
-    supabase.from('automatic_import_setups').select('*').eq('account_id', accountId),
-    supabase.from('queued_imports').select('*').eq('account_id', accountId),
-    supabase.from('tags').select('*').eq('account_id', accountId),
-    supabase
+      .eq('transactions.budget_account_id', accountId)
+      .range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('merchant_groups').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('merchant_mappings').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('merchant_category_rules').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('pending_checks').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('income_settings').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('pre_tax_deductions').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('settings').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('goals').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('csv_import_templates').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('category_monthly_funding').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('user_feature_flags').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('ai_conversations').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('duplicate_group_reviews').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('automatic_import_setups').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('queued_imports').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('tags').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase
       .from('transaction_tags')
       .select('*, transactions!inner(budget_account_id)')
-      .eq('transactions.budget_account_id', accountId),
-    supabase.from('tag_rules').select('*').eq('account_id', accountId),
-    supabase.from('recurring_transactions').select('*').eq('budget_account_id', accountId),
-    supabase
+      .eq('transactions.budget_account_id', accountId)
+      .range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('tag_rules').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('recurring_transactions').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase
       .from('recurring_transaction_matches')
       .select('*, recurring_transactions!inner(budget_account_id)')
-      .eq('recurring_transactions.budget_account_id', accountId),
+      .eq('recurring_transactions.budget_account_id', accountId)
+      .range(offset, offset + limit - 1)),
     // Only export account-scoped notifications (budget_account_id IS NOT NULL)
     // User-level notifications (budget_account_id IS NULL) are not included in account backups
-    supabase.from('notifications').select('*').eq('budget_account_id', accountId),
+    fetchAllRecords((limit, offset) => supabase.from('notifications').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1)),
   ]);
 
   // Validate data integrity: ensure all referenced transactions exist
-  const transactionIds = new Set((transactions || []).map((t: any) => t.id));
-  const importedTransactionIds = new Set((imported_transactions || []).map((t: any) => t.id));
+  const transactionIds = new Set(transactions.map((t: any) => t.id));
+  const importedTransactionIds = new Set(imported_transactions.map((t: any) => t.id));
   
   // Filter out any links that reference non-existent transactions (data integrity check)
-  const validImportedTransactionLinks = (imported_transaction_links || []).filter((link: any) => {
+  const validImportedTransactionLinks = imported_transaction_links.filter((link: any) => {
     const hasValidImportedTransaction = link.imported_transaction_id && importedTransactionIds.has(link.imported_transaction_id);
     const hasValidTransaction = link.transaction_id && transactionIds.has(link.transaction_id);
     
@@ -240,9 +271,11 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     return true;
   });
 
-  if (imported_transaction_links && imported_transaction_links.length !== validImportedTransactionLinks.length) {
+  if (imported_transaction_links.length !== validImportedTransactionLinks.length) {
     console.warn(`[Export] Filtered out ${imported_transaction_links.length - validImportedTransactionLinks.length} invalid imported_transaction_links`);
   }
+
+  console.log(`[Export] Exported ${queued_imports.length} queued imports`);
 
   return {
     version: '2.2',
@@ -270,35 +303,35 @@ export async function exportAccountData(): Promise<AccountBackupData> {
       invited_by: inv.invited_by,
       expires_at: inv.expires_at,
     })),
-    accounts: accounts || [],
-    categories: categories || [],
-    credit_cards: credit_cards || [],
-    loans: loans || [],
-    transactions: transactions || [],
-    transaction_splits: transaction_splits || [],
-    imported_transactions: imported_transactions || [],
+    accounts: accounts,
+    categories: categories,
+    credit_cards: credit_cards,
+    loans: loans,
+    transactions: transactions,
+    transaction_splits: transaction_splits,
+    imported_transactions: imported_transactions,
     imported_transaction_links: validImportedTransactionLinks,
-    merchant_groups: merchant_groups || [],
-    merchant_mappings: merchant_mappings || [],
-    merchant_category_rules: merchant_category_rules || [],
-    pending_checks: pending_checks || [],
-    income_settings: income_settings || [],
-    pre_tax_deductions: pre_tax_deductions || [],
-    settings: settings || [],
-    goals: goals || [],
-    csv_import_templates: csv_import_templates || [],
-    category_monthly_funding: category_monthly_funding || [],
-    user_feature_flags: user_feature_flags || [],
-    ai_conversations: ai_conversations || [],
-    duplicate_group_reviews: duplicate_group_reviews || [],
-    automatic_import_setups: automatic_import_setups || [],
-    queued_imports: queued_imports || [],
-    tags: tags || [],
-    transaction_tags: transaction_tags || [],
-    tag_rules: tag_rules || [],
-    recurring_transactions: recurring_transactions || [],
-    recurring_transaction_matches: recurring_transaction_matches || [],
-    notifications: notifications || [],
+    merchant_groups: merchant_groups,
+    merchant_mappings: merchant_mappings,
+    merchant_category_rules: merchant_category_rules,
+    pending_checks: pending_checks,
+    income_settings: income_settings,
+    pre_tax_deductions: pre_tax_deductions,
+    settings: settings,
+    goals: goals,
+    csv_import_templates: csv_import_templates,
+    category_monthly_funding: category_monthly_funding,
+    user_feature_flags: user_feature_flags,
+    ai_conversations: ai_conversations,
+    duplicate_group_reviews: duplicate_group_reviews,
+    automatic_import_setups: automatic_import_setups,
+    queued_imports: queued_imports,
+    tags: tags,
+    transaction_tags: transaction_tags,
+    tag_rules: tag_rules,
+    recurring_transactions: recurring_transactions,
+    recurring_transaction_matches: recurring_transaction_matches,
+    notifications: notifications,
   };
 }
 
