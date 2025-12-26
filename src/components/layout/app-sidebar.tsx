@@ -21,6 +21,7 @@ import {
   ChevronDown,
   Inbox,
   Tag,
+  Repeat,
 } from "lucide-react"
 
 import {
@@ -56,6 +57,7 @@ const navigationSections = [
       { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
       { label: "Budgets", path: "/categories", icon: Mail },
       { label: "Transactions", path: "/transactions", icon: Receipt },
+      { label: "Recurring Transactions", path: "/recurring-transactions", icon: Repeat, featureKey: "recurring_transactions" },
       { label: "Import", path: "/import", icon: Upload },
       { label: "Import Queue", path: "/imports/queue", icon: Inbox },
       { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
@@ -115,6 +117,7 @@ export function AppSidebar() {
   const aiChatEnabled = useFeature('ai_chat')
   const advancedReportingEnabled = useFeature('advanced_reporting')
   const tagsEnabled = useFeature('tags')
+  const recurringTransactionsEnabled = useFeature('recurring_transactions')
   const [openWizards, setOpenWizards] = React.useState(false)
 
   const isActive = (path: string) => {
@@ -176,6 +179,8 @@ export function AppSidebar() {
                           return advancedReportingEnabled
                         case 'tags':
                           return tagsEnabled
+                        case 'recurring_transactions':
+                          return recurringTransactionsEnabled
                         default:
                           return true
                       }

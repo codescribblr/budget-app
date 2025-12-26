@@ -96,6 +96,14 @@ const FEATURES = {
     dataLossWarning: false,
     requiresPremium: false,
   },
+  recurring_transactions: {
+    name: 'Recurring Transactions',
+    description: 'Automatically detect and track recurring transactions like subscriptions, bills, and regular payments. Get notified about upcoming transactions and manage your recurring expenses.',
+    level: 'intermediate',
+    dependencies: [],
+    dataLossWarning: false,
+    requiresPremium: false,
+  },
 } as const;
 
 export type FeatureName = keyof typeof FEATURES;

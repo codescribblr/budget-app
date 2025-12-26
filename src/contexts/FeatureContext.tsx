@@ -13,7 +13,8 @@ export type FeatureName =
   | 'advanced_reporting'
   | 'ai_chat'
   | 'automatic_imports'
-  | 'tags';
+  | 'tags'
+  | 'recurring_transactions';
 
 export interface Feature {
   key: FeatureName;

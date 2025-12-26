@@ -17,6 +17,23 @@ export function renderEmailTemplate(
 
   let template = fs.readFileSync(templatePath, 'utf-8');
 
+  // Handle conditional blocks {{ if .VariableName }}...{{ end }}
+  // Remove blocks where the variable is empty or undefined
+  for (const [key, value] of Object.entries(variables)) {
+    const conditionalRegex = new RegExp(
+      `\\{\\{\\s*if\\s+\\.${key}\\s*\\}\\}([\\s\\S]*?)\\{\\{\\s*end\\s*\\}\\}`,
+      'g'
+    );
+    
+    if (value && value.trim() !== '') {
+      // Variable exists and is not empty - keep the content, remove the conditional tags
+      template = template.replace(conditionalRegex, '$1');
+    } else {
+      // Variable is empty or undefined - remove the entire block
+      template = template.replace(conditionalRegex, '');
+    }
+  }
+
   // Replace variables in format {{ .VariableName }}
   for (const [key, value] of Object.entries(variables)) {
     const regex = new RegExp(`\\{\\{\\s*\\.${key}\\s*\\}\\}`, 'g');

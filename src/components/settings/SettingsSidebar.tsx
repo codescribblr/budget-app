@@ -16,7 +16,8 @@ import {
   Crown,
   UserPlus,
   RefreshCw,
-  FileText
+  FileText,
+  Bell
 } from 'lucide-react';
 
 const settingsNavItems = [
@@ -37,6 +38,12 @@ const settingsNavItems = [
     href: '/settings/password',
     icon: Key,
     description: 'Change your password',
+  },
+  {
+    title: 'Notifications',
+    href: '/settings/notifications',
+    icon: Bell,
+    description: 'Manage notification preferences',
   },
   {
     title: 'Automatic Imports',

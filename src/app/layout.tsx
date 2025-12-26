@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { LogRocketProvider } from "@/components/providers/logrocket-provider";
+import { ServiceWorkerProvider } from "@/components/providers/service-worker-provider";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -82,8 +84,11 @@ export default function RootLayout({
       >
         <LogRocketProvider>
           <ThemeProvider>
-            {children}
-            <Toaster />
+            <ServiceWorkerProvider>
+              {children}
+              <Toaster />
+              <InstallPrompt />
+            </ServiceWorkerProvider>
           </ThemeProvider>
         </LogRocketProvider>
       </body>
