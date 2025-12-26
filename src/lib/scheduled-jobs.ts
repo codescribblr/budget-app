@@ -1,7 +1,7 @@
 import { createClient } from './supabase/server';
 
 /**
- * Job status types
+ * Job status types (mapped to new schema)
  */
 export type JobStatus = 'success' | 'failed' | 'running';
 
@@ -15,7 +15,24 @@ export interface JobResult {
 }
 
 /**
+ * Map old job status to new schema status
+ */
+function mapStatusToNewSchema(status: JobStatus): 'pending' | 'running' | 'completed' | 'failed' {
+  switch (status) {
+    case 'success':
+      return 'completed';
+    case 'failed':
+      return 'failed';
+    case 'running':
+      return 'running';
+    default:
+      return 'pending';
+  }
+}
+
+/**
  * Update the status of a scheduled job
+ * Updated to work with new schema (job_type, status, started_at, completed_at, error_message)
  */
 export async function updateJobStatus(
   jobName: string,
@@ -25,49 +42,71 @@ export async function updateJobStatus(
 ): Promise<void> {
   const supabase = await createClient();
 
+  // Map job_name to job_type (they're the same concept)
+  const jobType = jobName;
+  const newStatus = mapStatusToNewSchema(status);
+  const now = new Date().toISOString();
+
+  // Find existing job by job_type
+  const { data: existingJob } = await supabase
+    .from('scheduled_jobs')
+    .select('id, started_at, completed_at, metadata')
+    .eq('job_type', jobType)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const updateData: any = {
-    last_run_at: new Date().toISOString(),
-    last_run_status: status,
-    updated_at: new Date().toISOString(),
+    status: newStatus,
+    updated_at: now,
   };
 
-  if (duration !== undefined) {
-    updateData.last_run_duration_ms = duration;
+  // Set started_at if starting, completed_at if finishing
+  if (status === 'running') {
+    updateData.started_at = now;
+  } else if (status === 'success' || status === 'failed') {
+    if (!existingJob?.started_at) {
+      updateData.started_at = now; // Set started_at if not already set
+    }
+    updateData.completed_at = now;
   }
 
   if (error) {
-    updateData.last_error = error;
+    updateData.error_message = error;
   }
 
-  // Increment counters
-  if (status === 'success' || status === 'failed') {
-    const { data: currentJob } = await supabase
+  // Store duration in metadata
+  if (duration !== undefined) {
+    const existingMetadata = (existingJob?.metadata as Record<string, any>) || {};
+    updateData.metadata = {
+      ...existingMetadata,
+      last_run_duration_ms: duration,
+    };
+  }
+
+  // Upsert the job record (create if doesn't exist, update if it does)
+  if (existingJob) {
+    // Update existing job
+    await supabase
       .from('scheduled_jobs')
-      .select('run_count, failure_count')
-      .eq('job_name', jobName)
-      .single();
-
-    if (currentJob) {
-      updateData.run_count = currentJob.run_count + 1;
-      if (status === 'failed') {
-        updateData.failure_count = currentJob.failure_count + 1;
-      }
-    }
+      .update(updateData)
+      .eq('id', existingJob.id);
+  } else {
+    // Create new job record
+    await supabase
+      .from('scheduled_jobs')
+      .insert({
+        job_type: jobType,
+        status: newStatus,
+        scheduled_for: now, // Use current time as scheduled_for for tracking jobs
+        ...updateData,
+      });
   }
-
-  // Upsert the job record
-  await supabase
-    .from('scheduled_jobs')
-    .upsert({
-      job_name: jobName,
-      ...updateData,
-    }, {
-      onConflict: 'job_name',
-    });
 }
 
 /**
  * Get the status of a scheduled job
+ * Updated to work with new schema
  */
 export async function getJobStatus(jobName: string) {
   const supabase = await createClient();
@@ -75,11 +114,29 @@ export async function getJobStatus(jobName: string) {
   const { data, error } = await supabase
     .from('scheduled_jobs')
     .select('*')
-    .eq('job_name', jobName)
+    .eq('job_type', jobName) // Use job_type instead of job_name
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) throw error;
-  return data;
+  
+  // Transform to old format for backward compatibility
+  if (data) {
+    return {
+      ...data,
+      job_name: data.job_type, // Map job_type back to job_name for compatibility
+      last_run_at: data.started_at || data.completed_at,
+      last_run_status: data.status === 'completed' ? 'success' : data.status === 'failed' ? 'failed' : data.status === 'running' ? 'running' : null,
+      last_run_duration_ms: data.metadata?.last_run_duration_ms,
+      last_error: data.error_message,
+      next_run_at: data.scheduled_for,
+      run_count: 0, // Not tracked in new schema
+      failure_count: 0, // Not tracked in new schema
+    };
+  }
+  
+  return null;
 }
 
 /**
@@ -143,6 +200,7 @@ export async function monthlyFundingRollover(): Promise<void> {
 
 /**
  * Get all scheduled jobs (admin only)
+ * Updated to work with new schema and provide backward compatibility
  */
 export async function getAllScheduledJobs() {
   const supabase = await createClient();
@@ -150,9 +208,21 @@ export async function getAllScheduledJobs() {
   const { data, error } = await supabase
     .from('scheduled_jobs')
     .select('*')
-    .order('job_name');
+    .order('job_type'); // Use job_type instead of job_name
 
   if (error) throw error;
-  return data || [];
+  
+  // Transform to old format for backward compatibility
+  return (data || []).map(job => ({
+    ...job,
+    job_name: job.job_type, // Map job_type back to job_name
+    last_run_at: job.started_at || job.completed_at,
+    last_run_status: job.status === 'completed' ? 'success' : job.status === 'failed' ? 'failed' : job.status === 'running' ? 'running' : null,
+    last_run_duration_ms: job.metadata?.last_run_duration_ms,
+    last_error: job.error_message,
+    next_run_at: job.scheduled_for,
+    run_count: 0, // Not tracked in new schema
+    failure_count: 0, // Not tracked in new schema
+  }));
 }
 
