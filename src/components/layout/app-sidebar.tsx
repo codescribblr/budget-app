@@ -21,6 +21,7 @@ import {
   ChevronDown,
   Inbox,
   Tag,
+  Repeat,
 } from "lucide-react"
 
 import {
@@ -56,6 +57,7 @@ const navigationSections = [
       { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
       { label: "Budgets", path: "/categories", icon: Mail },
       { label: "Transactions", path: "/transactions", icon: Receipt },
+      { label: "Recurring Transactions", path: "/recurring-transactions", icon: Repeat },
       { label: "Import", path: "/import", icon: Upload },
       { label: "Import Queue", path: "/imports/queue", icon: Inbox },
       { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },

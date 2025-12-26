@@ -7,6 +7,7 @@ import { CommandPalette } from "@/components/layout/command-palette"
 import { CommandPaletteTrigger } from "@/components/layout/command-palette-trigger"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext"
+import { NotificationCenter } from "@/components/notifications/NotificationCenter"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -19,6 +20,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <Separator orientation="vertical" className="mr-2 h-4" />
             <div className="flex flex-1 items-center gap-3 justify-end">
               <CommandPaletteTrigger />
+              <NotificationCenter />
               <ThemeToggle />
             </div>
           </header>
