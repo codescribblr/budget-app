@@ -1005,6 +1005,9 @@ export default function TransactionPreview({ transactions, onImportComplete }: T
                                 {category.is_archived && (
                                   <span className="text-muted-foreground" title="Archived category">Archived</span>
                                 )}
+                                {category.is_system && (
+                                  <span className="text-muted-foreground" title="System category">⚙️</span>
+                                )}
                               </div>
                             </SelectItem>
                           ))}
