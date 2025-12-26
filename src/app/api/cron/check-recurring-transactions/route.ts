@@ -136,7 +136,7 @@ async function checkRecurringTransactions() {
               merchantName: rt.merchant_name,
               expectedAmount: rt.expected_amount || 0,
               currentBalance,
-              shortfall,
+              shortfall: shortfall ?? undefined,
             }
           );
         }

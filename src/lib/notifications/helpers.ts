@@ -35,7 +35,7 @@ export async function createRecurringTransactionNotification(
   userId: string,
   budgetAccountId: number,
   recurringTransactionId: number,
-  type: 'upcoming' | 'insufficient_funds' | 'missed' | 'amount_changed',
+  type: 'upcoming' | 'insufficient_funds' | 'amount_changed',
   data: {
     merchantName: string;
     expectedAmount: number;
@@ -73,13 +73,6 @@ export async function createRecurringTransactionNotification(
       message = `Your ${data.merchantName} payment of $${data.expectedAmount.toFixed(2)} is due soon, but your account balance is only $${data.currentBalance?.toFixed(2) || '0.00'}.`;
       metadata.current_balance = data.currentBalance;
       metadata.shortfall = data.shortfall;
-      break;
-
-    case 'missed':
-      notificationTypeId = 'recurring_transaction_missed';
-      title = `We didn't see your expected ${data.merchantName} transaction`;
-      message = `Your expected ${data.merchantName} payment of $${data.expectedAmount.toFixed(2)} was due on ${data.dueDate} but hasn't appeared yet.`;
-      metadata.expected_date = data.dueDate;
       break;
 
     case 'amount_changed':

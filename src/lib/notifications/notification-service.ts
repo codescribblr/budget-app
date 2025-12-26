@@ -1,6 +1,9 @@
 import { createClient, createServiceRoleClient } from '../supabase/server';
 import { sendEmail, renderEmailTemplate } from '../email-utils';
 import type { NotificationData, NotificationPreferences, Notification } from './types';
+import { sendPushNotificationToUser } from '../push-notification-sender';
+import fs from 'fs';
+import path from 'path';
 
 export class NotificationService {
   /**
@@ -59,7 +62,7 @@ export class NotificationService {
     // Check user preferences first
     const { data: userPrefs } = await supabase
       .from('user_notification_preferences')
-      .select('email_enabled, in_app_enabled, settings')
+      .select('email_enabled, in_app_enabled, push_enabled, settings')
       .eq('user_id', userId)
       .eq('notification_type_id', notificationTypeId)
       .single();
@@ -68,6 +71,7 @@ export class NotificationService {
       return {
         emailEnabled: userPrefs.email_enabled,
         inAppEnabled: userPrefs.in_app_enabled,
+        pushEnabled: userPrefs.push_enabled ?? true,
         settings: userPrefs.settings || {},
       };
     }
@@ -75,7 +79,7 @@ export class NotificationService {
     // Fall back to notification_types defaults
     const { data: notificationType } = await supabase
       .from('notification_types')
-      .select('default_email_enabled, default_in_app_enabled')
+      .select('default_email_enabled, default_in_app_enabled, default_push_enabled')
       .eq('id', notificationTypeId)
       .single();
 
@@ -84,6 +88,7 @@ export class NotificationService {
       return {
         emailEnabled: true,
         inAppEnabled: true,
+        pushEnabled: true,
         settings: {},
       };
     }
@@ -91,6 +96,7 @@ export class NotificationService {
     return {
       emailEnabled: notificationType.default_email_enabled,
       inAppEnabled: notificationType.default_in_app_enabled,
+      pushEnabled: notificationType.default_push_enabled ?? true,
       settings: {},
     };
   }
@@ -156,6 +162,7 @@ export class NotificationService {
     const now = new Date().toISOString();
     let emailSent = notification.email_sent;
     let inAppCreated = notification.in_app_created;
+    let pushSent = false;
 
     // Send email if enabled
     if (preferences.emailEnabled && !emailSent) {
@@ -165,13 +172,58 @@ export class NotificationService {
       } catch (error: any) {
         console.error(`Error sending email for notification ${notificationId}:`, error);
         await this.logDelivery(notificationId, 'email', 'failed', error.message);
-        // Continue to try in-app even if email fails
+        // Continue to try other channels even if email fails
       }
     }
 
-    // Create in-app notification if enabled
-    if (preferences.inAppEnabled && !inAppCreated) {
+    // ALWAYS create in-app notification (bell icon) - this cannot be disabled
+    // The in-app notification is the core notification system
+    if (!inAppCreated) {
       inAppCreated = true;
+    }
+
+    // Send push notification if:
+    // 1. User has "in-app" enabled for this notification type (this setting controls push)
+    // 2. User has push notifications enabled (has subscribed)
+    if (preferences.inAppEnabled) {
+      // Check if user has push subscriptions
+      const { data: pushSubscriptions, error: pushSubError } = await supabase
+        .from('push_subscriptions')
+        .select('id')
+        .eq('user_id', notification.user_id)
+        .limit(1);
+
+      if (pushSubError) {
+        console.error(`Error checking push subscriptions for notification ${notificationId}:`, pushSubError);
+      }
+
+      const hasPushSubscription = pushSubscriptions && pushSubscriptions.length > 0;
+
+      if (hasPushSubscription) {
+        try {
+          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+          const actionUrl = notification.action_url || `${baseUrl}/notifications`;
+          
+          const { sent, failed } = await sendPushNotificationToUser(notification.user_id, {
+            title: notification.title,
+            body: notification.message,
+            icon: `${baseUrl}/icon-192.png`,
+            badge: `${baseUrl}/icon-192.png`,
+            tag: `notification-${notificationId}`,
+            data: {
+              url: actionUrl,
+              notificationId: notificationId,
+            },
+          });
+
+          if (sent > 0) {
+            pushSent = true;
+          }
+        } catch (error: any) {
+          console.error(`Error sending push notification ${notificationId}:`, error);
+          await this.logDelivery(notificationId, 'push', 'failed', error.message);
+        }
+      }
     }
 
     // Update notification status
@@ -182,7 +234,7 @@ export class NotificationService {
         email_sent_at: emailSent ? now : null,
         in_app_created: inAppCreated,
         in_app_created_at: inAppCreated ? now : null,
-        sent_at: (emailSent || inAppCreated) ? now : null,
+        sent_at: (emailSent || inAppCreated || pushSent) ? now : null,
         updated_at: now,
       })
       .eq('id', notificationId);
@@ -193,6 +245,9 @@ export class NotificationService {
     }
     if (inAppCreated) {
       await this.logDelivery(notificationId, 'in_app', 'sent');
+    }
+    if (pushSent) {
+      await this.logDelivery(notificationId, 'push', 'sent');
     }
   }
 
@@ -213,13 +268,35 @@ export class NotificationService {
     }
 
     // Get notification type for template selection
-    const { data: notificationType } = await supabase
+    const { data: notificationType } = await adminSupabase
       .from('notification_types')
       .select('id, category')
       .eq('id', notification.notification_type_id)
       .single();
 
     // Try to render type-specific template, fall back to generic
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    
+    // Use data URI in development (localhost URLs don't work in emails)
+    // Use hosted URL in production for better email client compatibility
+    let logoUrl: string;
+    if (process.env.NODE_ENV === 'development' || baseUrl.includes('localhost')) {
+      // In development, embed as base64 data URI since localhost URLs won't work
+      try {
+        const logoPath = path.join(process.cwd(), 'public', 'icon-192.png');
+        const logoBuffer = fs.readFileSync(logoPath);
+        const logoBase64 = logoBuffer.toString('base64');
+        logoUrl = `data:image/png;base64,${logoBase64}`;
+      } catch (error) {
+        console.error('Failed to load logo for email:', error);
+        // Fallback: use a placeholder or empty string
+        logoUrl = '';
+      }
+    } else {
+      // In production, use hosted URL
+      logoUrl = `${baseUrl}/icon-192.png`;
+    }
+    
     let html: string;
     try {
       const templateName = notificationType?.id.replace(/_/g, '-') || 'notification-generic';
@@ -228,7 +305,8 @@ export class NotificationService {
         Message: notification.message,
         ActionURL: notification.action_url || '',
         ActionLabel: notification.action_label || 'View Details',
-        UnsubscribeURL: `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/settings/notifications`,
+        UnsubscribeURL: `${baseUrl}/settings/notifications`,
+        LogoURL: logoUrl,
       });
     } catch (error) {
       // Fall back to generic template
@@ -237,7 +315,8 @@ export class NotificationService {
         Message: notification.message,
         ActionURL: notification.action_url || '',
         ActionLabel: notification.action_label || 'View Details',
-        UnsubscribeURL: `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/settings/notifications`,
+        UnsubscribeURL: `${baseUrl}/settings/notifications`,
+        LogoURL: logoUrl,
       });
     }
 
@@ -249,7 +328,7 @@ export class NotificationService {
    */
   private async logDelivery(
     notificationId: number,
-    channel: 'email' | 'in_app',
+    channel: 'email' | 'in_app' | 'push',
     status: 'pending' | 'sent' | 'failed' | 'skipped',
     errorMessage?: string
   ): Promise<void> {

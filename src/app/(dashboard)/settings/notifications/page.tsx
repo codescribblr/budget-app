@@ -10,6 +10,8 @@ import { Separator } from '@/components/ui/separator';
 import { Bell, Mail, Smartphone } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import { useFeature } from '@/contexts/FeatureContext';
+import { PushNotificationSetup } from '@/components/notifications/PushNotificationSetup';
 
 interface NotificationType {
   id: string;
@@ -22,7 +24,6 @@ interface NotificationType {
 const IMPLEMENTED_NOTIFICATION_TYPES = new Set([
   'recurring_transaction_upcoming',
   'recurring_transaction_insufficient_funds',
-  'recurring_transaction_missed',
   'recurring_transaction_amount_changed',
 ]);
 
@@ -33,6 +34,7 @@ interface NotificationPreference {
 }
 
 export default function NotificationPreferencesPage() {
+  const recurringTransactionsEnabled = useFeature('recurring_transactions');
   const [loading, setLoading] = useState(true);
   const [notificationTypes, setNotificationTypes] = useState<NotificationType[]>([]);
   const [preferences, setPreferences] = useState<Record<string, NotificationPreference>>({});
@@ -142,7 +144,20 @@ export default function NotificationPreferencesPage() {
     }
   };
 
-  const groupedTypes = notificationTypes.reduce((acc, type) => {
+  // Filter out recurring transaction notifications if feature is disabled
+  // Also filter out the missed recurring transaction notification (removed feature)
+  const filteredTypes = notificationTypes.filter(type => {
+    // Remove missed recurring transaction notification completely
+    if (type.id === 'recurring_transaction_missed') {
+      return false;
+    }
+    if (type.category === 'recurring_transactions') {
+      return recurringTransactionsEnabled;
+    }
+    return true;
+  });
+
+  const groupedTypes = filteredTypes.reduce((acc, type) => {
     const category = type.category;
     if (!acc[category]) {
       acc[category] = [];
@@ -167,6 +182,8 @@ export default function NotificationPreferencesPage() {
           Control how and when you receive notifications
         </p>
       </div>
+
+      <PushNotificationSetup />
 
       {Object.entries(groupedTypes).map(([category, types]) => (
         <Card key={category}>
@@ -212,12 +229,17 @@ export default function NotificationPreferencesPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Smartphone className="h-4 w-4 text-muted-foreground shrink-0 -mt-px" />
-                        <Label 
-                          htmlFor={`${type.id}-inapp`} 
-                          className={`leading-none mb-0 ${!isImplemented ? 'text-muted-foreground' : ''}`}
-                        >
-                          In-App
-                        </Label>
+                        <div className="flex flex-col">
+                          <Label 
+                            htmlFor={`${type.id}-inapp`} 
+                            className={`leading-none mb-0 ${!isImplemented ? 'text-muted-foreground' : ''}`}
+                          >
+                            Push Notifications
+                          </Label>
+                          <span className="text-xs text-muted-foreground">
+                            Receive on device when app is closed
+                          </span>
+                        </div>
                       </div>
                       <Switch
                         id={`${type.id}-inapp`}
@@ -225,6 +247,9 @@ export default function NotificationPreferencesPage() {
                         onCheckedChange={(checked) => handleToggle(type.id, 'inApp', checked)}
                         disabled={!isImplemented}
                       />
+                    </div>
+                    <div className="pl-6 text-xs text-muted-foreground">
+                      Note: Notifications will always appear in the app (bell icon). This setting controls push notifications to your device.
                     </div>
                     {type.id === 'recurring_transaction_upcoming' && isImplemented && (
                       <div className="flex items-center gap-2 pl-6">

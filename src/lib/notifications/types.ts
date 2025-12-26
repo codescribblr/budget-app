@@ -13,6 +13,7 @@ export interface NotificationData {
 export interface NotificationPreferences {
   emailEnabled: boolean;
   inAppEnabled: boolean;
+  pushEnabled?: boolean;
   settings?: Record<string, any>;
 }
 
