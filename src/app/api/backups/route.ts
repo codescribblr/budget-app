@@ -3,6 +3,8 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { exportAccountData } from '@/lib/backup-utils';
 import { getActiveAccountId } from '@/lib/account-context';
 import { checkWriteAccess } from '@/lib/api-helpers';
+import { compressBackup } from '@/lib/backup-storage';
+import { getUserSubscription, isPremiumUser } from '@/lib/subscription-utils';
 
 /**
  * GET /api/backups
@@ -54,7 +56,12 @@ export async function POST() {
       return NextResponse.json({ error: 'No active account' }, { status: 400 });
     }
 
-    // Check if account already has 3 backups
+    // Check subscription for backup limit (free: 3, premium: 10)
+    const subscription = await getUserSubscription(accountId);
+    const isPremium = isPremiumUser(subscription);
+    const backupLimit = isPremium ? 10 : 3;
+
+    // Check if account already has max backups
     const { data: existingBackups, error: countError } = await supabase
       .from('user_backups')
       .select('id')
@@ -62,9 +69,12 @@ export async function POST() {
 
     if (countError) throw countError;
 
-    if (existingBackups && existingBackups.length >= 3) {
+    if (existingBackups && existingBackups.length >= backupLimit) {
+      const limitMessage = isPremium 
+        ? 'Maximum of 10 backups allowed for premium accounts.'
+        : 'Maximum of 3 backups allowed. Upgrade to premium for up to 10 backups.';
       return NextResponse.json(
-        { error: 'Maximum of 3 backups allowed. Please delete an old backup before creating a new one.' },
+        { error: limitMessage },
         { status: 400 }
       );
     }
@@ -72,19 +82,51 @@ export async function POST() {
     // Export all account data
     const backupData = await exportAccountData();
 
-    // Save the backup
+    // Compress backup data
+    const compressedData = await compressBackup(backupData);
+
+    // Generate unique filename using timestamp and random string
+    const timestamp = Date.now();
+    const randomStr = Math.random().toString(36).substring(2, 15);
+    const storagePath = `${accountId}/${timestamp}-${randomStr}.json.gz`;
+
+    // Upload compressed backup to Storage first
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('backups')
+        .upload(storagePath, compressedData, {
+          contentType: 'application/gzip',
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+    } catch (uploadErr: any) {
+      console.error('Error uploading backup to storage:', uploadErr);
+      throw new Error(`Failed to upload backup: ${uploadErr.message}`);
+    }
+
+    // Create backup record with storage path
     const { data: backup, error: insertError } = await supabase
       .from('user_backups')
       .insert({
         user_id: user.id, // Required for backward compatibility and RLS
         account_id: accountId,
         created_by: user.id,
-        backup_data: backupData,
+        storage_path: storagePath,
+        backup_data: null, // No longer storing in database
       })
       .select('id, created_at')
       .single();
 
-    if (insertError) throw insertError;
+    if (insertError) {
+      // If DB insert failed, try to clean up the uploaded file
+      try {
+        await supabase.storage.from('backups').remove([storagePath]);
+      } catch (cleanupErr) {
+        console.error('Failed to cleanup uploaded backup after DB error:', cleanupErr);
+      }
+      throw insertError;
+    }
 
     return NextResponse.json({ backup });
   } catch (error: any) {

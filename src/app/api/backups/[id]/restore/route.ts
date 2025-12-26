@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { importUserData, UserBackupData } from '@/lib/backup-utils';
 import { getActiveAccountId } from '@/lib/account-context';
 import { checkWriteAccess } from '@/lib/api-helpers';
+import { downloadBackupFromStorage, decompressBackup } from '@/lib/backup-storage';
 
 /**
  * POST /api/backups/[id]/restore
@@ -31,10 +32,10 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid backup ID' }, { status: 400 });
     }
 
-    // Fetch the backup data (check account_id instead of user_id)
+    // Fetch the backup record (check account_id instead of user_id)
     const { data: backup, error: fetchError } = await supabase
       .from('user_backups')
-      .select('backup_data')
+      .select('storage_path, backup_data')
       .eq('id', backupId)
       .eq('account_id', accountId)
       .single();
@@ -45,8 +46,23 @@ export async function POST(
       return NextResponse.json({ error: 'Backup not found' }, { status: 404 });
     }
 
+    let backupData: UserBackupData;
+
+    // Support both new (storage) and legacy (JSONB) backups
+    if (backup.storage_path) {
+      // New format: download and decompress from Storage
+      const compressedData = await downloadBackupFromStorage(backup.storage_path);
+      const decompressed = await decompressBackup(compressedData);
+      backupData = decompressed as UserBackupData;
+    } else if (backup.backup_data) {
+      // Legacy format: use JSONB data directly
+      backupData = backup.backup_data as UserBackupData;
+    } else {
+      return NextResponse.json({ error: 'Backup data not found' }, { status: 404 });
+    }
+
     // Restore the data
-    await importUserData(backup.backup_data as UserBackupData);
+    await importUserData(backupData);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

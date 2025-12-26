@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { checkWriteAccess } from '@/lib/api-helpers';
+import { deleteBackupFromStorage } from '@/lib/backup-storage';
 
 /**
  * DELETE /api/backups/[id]
@@ -30,7 +31,22 @@ export async function DELETE(
       return NextResponse.json({ error: 'No active account' }, { status: 400 });
     }
 
-    // Delete the backup (RLS policy ensures account owner/editor can delete)
+    // Fetch backup to get storage path before deletion
+    const { data: backup, error: fetchError } = await supabase
+      .from('user_backups')
+      .select('storage_path')
+      .eq('id', backupId)
+      .eq('account_id', accountId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Delete from Storage if it exists
+    if (backup?.storage_path) {
+      await deleteBackupFromStorage(backup.storage_path);
+    }
+
+    // Delete the backup record (RLS policy ensures account owner/editor can delete)
     const { error } = await supabase
       .from('user_backups')
       .delete()

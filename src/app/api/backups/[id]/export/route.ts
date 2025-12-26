@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
+import { downloadBackupFromStorage, decompressBackup } from '@/lib/backup-storage';
 
 /**
  * GET /api/backups/[id]/export
@@ -24,10 +25,10 @@ export async function GET(
       return NextResponse.json({ error: 'No active account' }, { status: 400 });
     }
 
-    // Fetch the backup data (RLS ensures user has access)
+    // Fetch the backup record (RLS ensures user has access)
     const { data: backup, error: fetchError } = await supabase
       .from('user_backups')
-      .select('backup_data')
+      .select('storage_path, backup_data')
       .eq('id', backupId)
       .eq('account_id', accountId)
       .single();
@@ -38,8 +39,22 @@ export async function GET(
       return NextResponse.json({ error: 'Backup not found' }, { status: 404 });
     }
 
+    let backupData: any;
+
+    // Support both new (storage) and legacy (JSONB) backups
+    if (backup.storage_path) {
+      // New format: download and decompress from Storage
+      const compressedData = await downloadBackupFromStorage(backup.storage_path);
+      backupData = await decompressBackup(compressedData);
+    } else if (backup.backup_data) {
+      // Legacy format: use JSONB data directly
+      backupData = backup.backup_data;
+    } else {
+      return NextResponse.json({ error: 'Backup data not found' }, { status: 404 });
+    }
+
     // Return the backup data as JSON
-    return NextResponse.json(backup.backup_data);
+    return NextResponse.json(backupData);
   } catch (error: any) {
     console.error('Error exporting backup:', error);
     if (error.message === 'Unauthorized') {
