@@ -231,7 +231,12 @@ export default function BulkEditDialog({
                 <SelectItem value="none">None</SelectItem>
                 {categories.map((category) => (
                   <SelectItem key={category.id} value={category.id.toString()}>
-                    {category.name}
+                    <div className="flex items-center gap-2">
+                      {category.name}
+                      {category.is_system && (
+                        <span className="text-muted-foreground" title="System category">⚙️</span>
+                      )}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
