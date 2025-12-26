@@ -61,6 +61,9 @@ export interface AccountBackupData {
   tags?: any[];
   transaction_tags?: any[];
   tag_rules?: any[];
+  recurring_transactions?: any[];
+  recurring_transaction_matches?: any[];
+  notifications?: any[];
 }
 
 // Legacy interface for backward compatibility
@@ -93,6 +96,9 @@ export interface UserBackupData {
   tags?: any[];
   transaction_tags?: any[];
   tag_rules?: any[];
+  recurring_transactions?: any[];
+  recurring_transaction_matches?: any[];
+  notifications?: any[];
 }
 
 /**
@@ -166,6 +172,9 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     { data: tags },
     { data: transaction_tags },
     { data: tag_rules },
+    { data: recurring_transactions },
+    { data: recurring_transaction_matches },
+    { data: notifications },
   ] = await Promise.all([
     supabase.from('accounts').select('*').eq('account_id', accountId),
     supabase.from('categories').select('*').eq('account_id', accountId),
@@ -205,6 +214,14 @@ export async function exportAccountData(): Promise<AccountBackupData> {
       .select('*, transactions!inner(budget_account_id)')
       .eq('transactions.budget_account_id', accountId),
     supabase.from('tag_rules').select('*').eq('account_id', accountId),
+    supabase.from('recurring_transactions').select('*').eq('budget_account_id', accountId),
+    supabase
+      .from('recurring_transaction_matches')
+      .select('*, recurring_transactions!inner(budget_account_id)')
+      .eq('recurring_transactions.budget_account_id', accountId),
+    // Only export account-scoped notifications (budget_account_id IS NOT NULL)
+    // User-level notifications (budget_account_id IS NULL) are not included in account backups
+    supabase.from('notifications').select('*').eq('budget_account_id', accountId),
   ]);
 
   // Validate data integrity: ensure all referenced transactions exist
@@ -228,7 +245,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
   }
 
   return {
-    version: '2.1',
+    version: '2.2',
     created_at: new Date().toISOString(),
     created_by: user.id,
     account: {
@@ -279,6 +296,9 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     tags: tags || [],
     transaction_tags: transaction_tags || [],
     tag_rules: tag_rules || [],
+    recurring_transactions: recurring_transactions || [],
+    recurring_transaction_matches: recurring_transaction_matches || [],
+    notifications: notifications || [],
   };
 }
 
@@ -319,6 +339,9 @@ export async function exportUserData(): Promise<UserBackupData> {
     tags: accountData.tags,
     transaction_tags: accountData.transaction_tags,
     tag_rules: accountData.tag_rules,
+    recurring_transactions: accountData.recurring_transactions,
+    recurring_transaction_matches: accountData.recurring_transaction_matches,
+    notifications: accountData.notifications,
   };
 }
 
@@ -366,6 +389,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   if (transactionIds.length > 0) {
     await supabase.from('transaction_tags').delete().in('transaction_id', transactionIds);
     await supabase.from('transaction_splits').delete().in('transaction_id', transactionIds);
+    await supabase.from('recurring_transaction_matches').delete().in('transaction_id', transactionIds);
   }
 
   if (importedTransactionIds.length > 0) {
@@ -374,6 +398,23 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   await supabase.from('tag_rules').delete().eq('account_id', accountId);
   await supabase.from('tags').delete().eq('account_id', accountId);
+  // Only delete recurring_transactions if they exist in the backup (to avoid data loss with older backups)
+  if (backupData.recurring_transactions !== undefined) {
+    // Delete recurring_transaction_matches first (they reference recurring_transactions)
+    const { data: recurringTransactions } = await supabase
+      .from('recurring_transactions')
+      .select('id')
+      .eq('budget_account_id', accountId);
+    const recurringTransactionIds = recurringTransactions?.map(rt => rt.id) || [];
+    if (recurringTransactionIds.length > 0) {
+      await supabase.from('recurring_transaction_matches').delete().in('recurring_transaction_id', recurringTransactionIds);
+    }
+    await supabase.from('recurring_transactions').delete().eq('budget_account_id', accountId);
+  }
+  // Only delete notifications if they exist in the backup (to avoid data loss with older backups)
+  if (backupData.notifications !== undefined) {
+    await supabase.from('notifications').delete().eq('budget_account_id', accountId);
+  }
   await supabase.from('transactions').delete().eq('budget_account_id', accountId);
   await supabase.from('imported_transactions').delete().eq('account_id', accountId);
   await supabase.from('merchant_category_rules').delete().eq('account_id', accountId);
@@ -407,6 +448,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   const merchantGroupIdMap = new Map<number, number>();
   const importedTransactionIdMap = new Map<number, number>();
   const tagIdMap = new Map<number, number>();
+  const recurringTransactionIdMap = new Map<number, number>();
 
   // Insert accounts (batch)
   if (backupData.accounts && backupData.accounts.length > 0) {
@@ -908,6 +950,108 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       }
       console.log('[Import] Inserted', transactionTagsToInsert.length, 'transaction tags');
     }
+  }
+
+  // Insert recurring_transactions (after transactions, categories, accounts, credit_cards, merchant_groups are inserted)
+  if (backupData.recurring_transactions && backupData.recurring_transactions.length > 0) {
+    const recurringTransactionsToInsert = backupData.recurring_transactions.map(({ 
+      id, 
+      budget_account_id, 
+      user_id, 
+      merchant_group_id, 
+      category_id, 
+      account_id, 
+      credit_card_id, 
+      ...recurringTx 
+    }) => ({
+      ...recurringTx,
+      user_id: user.id,
+      budget_account_id: accountId,
+      merchant_group_id: merchant_group_id ? (merchantGroupIdMap.get(merchant_group_id) || null) : null,
+      category_id: category_id ? (categoryIdMap.get(category_id) || null) : null,
+      account_id: account_id ? (accountIdMap.get(account_id) || null) : null,
+      credit_card_id: credit_card_id ? (creditCardIdMap.get(credit_card_id) || null) : null,
+    }));
+
+    const { data, error } = await supabase
+      .from('recurring_transactions')
+      .insert(recurringTransactionsToInsert)
+      .select('id');
+
+    if (error) {
+      console.error('[Import] Error inserting recurring transactions:', error);
+      throw error;
+    }
+
+    if (backupData.recurring_transactions.length !== data.length) {
+      console.error(`[Import] Mismatch: Expected ${backupData.recurring_transactions.length} recurring transactions, got ${data.length} back from insert`);
+    }
+    backupData.recurring_transactions.forEach((oldRecurringTx, index) => {
+      if (data[index]) {
+        recurringTransactionIdMap.set(oldRecurringTx.id, data[index].id);
+      } else {
+        console.warn(`[Import] Missing recurring transaction data at index ${index} for recurring transaction ID ${oldRecurringTx.id}`);
+      }
+    });
+    console.log('[Import] Inserted', data.length, 'recurring transactions');
+  }
+
+  // Insert recurring_transaction_matches (after recurring_transactions and transactions are inserted)
+  if (backupData.recurring_transaction_matches && backupData.recurring_transaction_matches.length > 0) {
+    const recurringTransactionMatchesToInsert = backupData.recurring_transaction_matches
+      .map(({ id, recurring_transaction_id, transaction_id, recurring_transactions, ...match }) => ({
+        ...match,
+        recurring_transaction_id: recurring_transaction_id ? (recurringTransactionIdMap.get(recurring_transaction_id) || null) : null,
+        transaction_id: transaction_id ? (transactionIdMap.get(transaction_id) || null) : null,
+      }))
+      .filter(match => match.recurring_transaction_id && match.transaction_id); // Only include valid mappings
+
+    if (recurringTransactionMatchesToInsert.length > 0) {
+      const { error } = await supabase
+        .from('recurring_transaction_matches')
+        .insert(recurringTransactionMatchesToInsert);
+
+      if (error) {
+        console.error('[Import] Error inserting recurring transaction matches:', error);
+        throw error;
+      }
+      console.log('[Import] Inserted', recurringTransactionMatchesToInsert.length, 'recurring transaction matches');
+    }
+  }
+
+  // Insert notifications (after transactions are inserted, in case metadata references them)
+  // Note: We only export account-scoped notifications (budget_account_id IS NOT NULL)
+  // User-level notifications (budget_account_id IS NULL) are not included in account backups
+  // All notifications in the backup should have budget_account_id set (from export filter)
+  if (backupData.notifications && backupData.notifications.length > 0) {
+    const notificationsToInsert = backupData.notifications
+      .map(({ 
+        id, 
+        budget_account_id, 
+        user_id, 
+        ...notification 
+      }) => ({
+        ...notification,
+        user_id: user.id, // Remap to current user (notifications are user-specific)
+        budget_account_id: accountId, // Always set to target account (we only export account-scoped notifications)
+        // Note: notification_type_id is a reference to notification_types table (lookup table)
+        // We don't remap it as it's a reference table that should exist in the system
+      }))
+      .filter(notification => {
+        // Ensure notification_type_id exists (should always be true, but safety check)
+        // Also filter out any notifications that somehow have NULL budget_account_id (shouldn't happen, but safety)
+        return notification.notification_type_id && accountId;
+      });
+
+    const { error } = await supabase
+      .from('notifications')
+      .insert(notificationsToInsert);
+
+    if (error) {
+      console.error('[Import] Error inserting notifications:', error);
+      throw error;
+    }
+    console.log('[Import] Inserted', notificationsToInsert.length, 'notifications');
   }
 
   // Insert pending checks (batch)
