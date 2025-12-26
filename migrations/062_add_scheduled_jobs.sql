@@ -18,55 +18,128 @@ CREATE TABLE IF NOT EXISTS scheduled_jobs (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Add columns if they don't exist (for cases where table was partially created)
+-- Migrate from old schema (migration 018) to new schema if needed
+-- Old schema had: job_name, last_run_at, last_run_status, etc.
+-- New schema has: job_type, status, scheduled_for, etc.
 DO $$
 BEGIN
-  -- Add job_type if missing
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                 WHERE table_name = 'scheduled_jobs' AND column_name = 'job_type') THEN
-    ALTER TABLE scheduled_jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT '';
-  END IF;
-  
-  -- Add status if missing
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                 WHERE table_name = 'scheduled_jobs' AND column_name = 'status') THEN
-    ALTER TABLE scheduled_jobs ADD COLUMN status TEXT NOT NULL DEFAULT 'pending';
-  END IF;
-  
-  -- Add other columns if missing
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                 WHERE table_name = 'scheduled_jobs' AND column_name = 'scheduled_for') THEN
-    ALTER TABLE scheduled_jobs ADD COLUMN scheduled_for TIMESTAMPTZ NOT NULL DEFAULT NOW();
-  END IF;
-  
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                 WHERE table_name = 'scheduled_jobs' AND column_name = 'started_at') THEN
-    ALTER TABLE scheduled_jobs ADD COLUMN started_at TIMESTAMPTZ;
-  END IF;
-  
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                 WHERE table_name = 'scheduled_jobs' AND column_name = 'completed_at') THEN
-    ALTER TABLE scheduled_jobs ADD COLUMN completed_at TIMESTAMPTZ;
-  END IF;
-  
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                 WHERE table_name = 'scheduled_jobs' AND column_name = 'error_message') THEN
-    ALTER TABLE scheduled_jobs ADD COLUMN error_message TEXT;
-  END IF;
-  
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                 WHERE table_name = 'scheduled_jobs' AND column_name = 'metadata') THEN
-    ALTER TABLE scheduled_jobs ADD COLUMN metadata JSONB DEFAULT '{}'::jsonb;
-  END IF;
-  
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                 WHERE table_name = 'scheduled_jobs' AND column_name = 'created_at') THEN
-    ALTER TABLE scheduled_jobs ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-  END IF;
-  
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                 WHERE table_name = 'scheduled_jobs' AND column_name = 'updated_at') THEN
-    ALTER TABLE scheduled_jobs ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  -- Check if old schema exists (has job_name column)
+  IF EXISTS (SELECT 1 FROM information_schema.columns 
+             WHERE table_name = 'scheduled_jobs' AND column_name = 'job_name') THEN
+    -- Old schema detected - migrate to new schema
+    -- Add new columns first
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'job_type') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN job_type TEXT;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'status') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN status TEXT DEFAULT 'pending';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'scheduled_for') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN scheduled_for TIMESTAMPTZ;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'started_at') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN started_at TIMESTAMPTZ;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'completed_at') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN completed_at TIMESTAMPTZ;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'error_message') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN error_message TEXT;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'metadata') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN metadata JSONB DEFAULT '{}'::jsonb;
+    END IF;
+    
+    -- Migrate data from old columns to new columns
+    UPDATE scheduled_jobs SET
+      job_type = COALESCE(job_type, job_name),
+      status = COALESCE(status, 
+        CASE 
+          WHEN last_run_status = 'running' THEN 'running'
+          WHEN last_run_status = 'failed' THEN 'failed'
+          WHEN last_run_status = 'success' THEN 'completed'
+          ELSE 'pending'
+        END),
+      scheduled_for = COALESCE(scheduled_for, next_run_at, NOW()),
+      started_at = COALESCE(started_at, last_run_at),
+      completed_at = CASE WHEN last_run_status IN ('success', 'failed') THEN last_run_at ELSE NULL END,
+      error_message = COALESCE(error_message, last_error)
+    WHERE job_name IS NOT NULL;
+    
+    -- Ensure all rows have values for required columns
+    UPDATE scheduled_jobs SET job_type = COALESCE(job_type, 'unknown') WHERE job_type IS NULL;
+    UPDATE scheduled_jobs SET status = COALESCE(status, 'pending') WHERE status IS NULL;
+    UPDATE scheduled_jobs SET scheduled_for = COALESCE(scheduled_for, NOW()) WHERE scheduled_for IS NULL;
+    
+    -- Make new columns NOT NULL after ensuring all rows have values
+    ALTER TABLE scheduled_jobs ALTER COLUMN job_type SET NOT NULL;
+    ALTER TABLE scheduled_jobs ALTER COLUMN status SET NOT NULL;
+    ALTER TABLE scheduled_jobs ALTER COLUMN status SET DEFAULT 'pending';
+    ALTER TABLE scheduled_jobs ALTER COLUMN scheduled_for SET NOT NULL;
+    
+    -- Drop old columns (after ensuring new columns are populated)
+    ALTER TABLE scheduled_jobs DROP COLUMN IF EXISTS job_name;
+    ALTER TABLE scheduled_jobs DROP COLUMN IF EXISTS last_run_at;
+    ALTER TABLE scheduled_jobs DROP COLUMN IF EXISTS last_run_status;
+    ALTER TABLE scheduled_jobs DROP COLUMN IF EXISTS last_run_duration_ms;
+    ALTER TABLE scheduled_jobs DROP COLUMN IF EXISTS last_error;
+    ALTER TABLE scheduled_jobs DROP COLUMN IF EXISTS next_run_at;
+    ALTER TABLE scheduled_jobs DROP COLUMN IF EXISTS run_count;
+    ALTER TABLE scheduled_jobs DROP COLUMN IF EXISTS failure_count;
+    
+    -- Drop old indexes
+    DROP INDEX IF EXISTS idx_scheduled_jobs_name;
+    DROP INDEX IF EXISTS idx_scheduled_jobs_next_run;
+    DROP INDEX IF EXISTS idx_scheduled_jobs_status;
+  ELSE
+    -- New schema - just add columns if missing
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'job_type') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT '';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'status') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN status TEXT NOT NULL DEFAULT 'pending';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'scheduled_for') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN scheduled_for TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'started_at') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN started_at TIMESTAMPTZ;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'completed_at') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN completed_at TIMESTAMPTZ;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'error_message') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN error_message TEXT;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'scheduled_jobs' AND column_name = 'metadata') THEN
+      ALTER TABLE scheduled_jobs ADD COLUMN metadata JSONB DEFAULT '{}'::jsonb;
+    END IF;
   END IF;
 END $$;
 
