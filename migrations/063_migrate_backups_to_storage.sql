@@ -10,10 +10,9 @@ ALTER TABLE user_backups ADD COLUMN IF NOT EXISTS storage_path TEXT;
 -- Create index for storage_path lookups
 CREATE INDEX IF NOT EXISTS idx_user_backups_storage_path ON user_backups(storage_path) WHERE storage_path IS NOT NULL;
 
--- Make backup_data nullable since new backups use storage_path instead
 -- Note: backup_data column is kept for backward compatibility during migration
 -- It will be removed in a future migration after all backups are migrated
-ALTER TABLE user_backups ALTER COLUMN backup_data DROP NOT NULL;
+-- Note: backup_data will be made nullable in migration 065
 
 -- Update comment
 COMMENT ON TABLE user_backups IS 'Stores user data backups. Backups are stored in Supabase Storage (compressed) and referenced by storage_path. Free tier: 3 backups, Premium: 10 backups.';
