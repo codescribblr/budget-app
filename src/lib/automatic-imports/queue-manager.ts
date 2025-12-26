@@ -414,6 +414,11 @@ export async function getQueuedImports(options?: {
 
   if (options?.status) {
     query = query.eq('status', options.status);
+  } else if (options?.batchId) {
+    // When fetching for a batch, exclude imported transactions by default
+    // (unless status is explicitly set to 'imported')
+    // This matches the behavior of getQueuedImportBatches which only shows pending/reviewing
+    query = query.in('status', ['pending', 'reviewing', 'approved', 'rejected']);
   }
 
   if (options?.importSetupId) {
