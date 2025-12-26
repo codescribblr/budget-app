@@ -167,13 +167,10 @@ export async function handleSendNotifications(): Promise<JobResult> {
 
 /**
  * Handler for monthly_rollover job
+ * Monthly funding rollover - resets monthly funding tracking for the new month
  */
 export async function handleMonthlyRollover(): Promise<JobResult> {
   try {
-    const supabase = createServiceRoleClient();
-
-    // Monthly funding rollover job
-    // Resets monthly funding tracking for the new month
     // This job doesn't need to do anything currently
     // Monthly funding records are created on-demand when allocations are made
     // Old records are kept for historical tracking

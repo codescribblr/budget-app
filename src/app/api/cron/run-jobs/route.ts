@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
         const result = await handler();
 
         if (result.success) {
-          await markJobCompleted(job.id, result.message);
+          await markJobCompleted(job.id, result.message, job.metadata);
           
           // Schedule next run for recurring jobs
           await scheduleNextRun(job.job_type, job.metadata);

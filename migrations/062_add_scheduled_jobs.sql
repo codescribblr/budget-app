@@ -13,7 +13,9 @@ CREATE TABLE IF NOT EXISTS scheduled_jobs (
   error_message TEXT,
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- Ensure we don't have duplicate pending jobs of the same type
+  UNIQUE(job_type, status, scheduled_for) WHERE status = 'pending'
 );
 
 -- Create index for efficient querying of pending jobs
@@ -53,11 +55,38 @@ CREATE POLICY "Users can read scheduled jobs"
   USING (true);
 
 -- Insert initial scheduled jobs for existing cron jobs
--- These will be created daily by the system, but we can seed them here
-INSERT INTO scheduled_jobs (job_type, status, scheduled_for, metadata)
-VALUES
-  ('check_recurring_transactions', 'pending', NOW() + INTERVAL '1 day', '{"schedule": "0 8 * * *"}'::jsonb),
-  ('send_notifications', 'pending', NOW() + INTERVAL '1 day', '{"schedule": "0 8 * * *"}'::jsonb),
-  ('monthly_rollover', 'pending', DATE_TRUNC('month', NOW() + INTERVAL '1 month') + INTERVAL '1 day', '{"schedule": "0 0 1 * *"}'::jsonb)
-ON CONFLICT DO NOTHING;
+-- These will be automatically rescheduled after each run
+-- Calculate next run times:
+-- - Daily jobs: tomorrow at 8 AM UTC
+-- - Monthly job: 1st of next month at midnight UTC
+DO $$
+DECLARE
+  next_daily_run TIMESTAMPTZ;
+  next_monthly_run TIMESTAMPTZ;
+BEGIN
+  -- Calculate next daily run (tomorrow at 8 AM UTC)
+  next_daily_run := DATE_TRUNC('day', NOW() + INTERVAL '1 day') + INTERVAL '8 hours';
+  
+  -- Calculate next monthly run (1st of next month at midnight UTC)
+  next_monthly_run := DATE_TRUNC('month', NOW() + INTERVAL '1 month') + INTERVAL '1 day';
+  
+  -- Insert jobs (only if no pending job of this type already exists)
+  INSERT INTO scheduled_jobs (job_type, status, scheduled_for, metadata)
+  SELECT 'check_recurring_transactions', 'pending', next_daily_run, '{"schedule": "0 8 * * *"}'::jsonb
+  WHERE NOT EXISTS (
+    SELECT 1 FROM scheduled_jobs WHERE job_type = 'check_recurring_transactions' AND status = 'pending'
+  );
+  
+  INSERT INTO scheduled_jobs (job_type, status, scheduled_for, metadata)
+  SELECT 'send_notifications', 'pending', next_daily_run, '{"schedule": "0 8 * * *"}'::jsonb
+  WHERE NOT EXISTS (
+    SELECT 1 FROM scheduled_jobs WHERE job_type = 'send_notifications' AND status = 'pending'
+  );
+  
+  INSERT INTO scheduled_jobs (job_type, status, scheduled_for, metadata)
+  SELECT 'monthly_rollover', 'pending', next_monthly_run, '{"schedule": "0 0 1 * *"}'::jsonb
+  WHERE NOT EXISTS (
+    SELECT 1 FROM scheduled_jobs WHERE job_type = 'monthly_rollover' AND status = 'pending'
+  );
+END $$;
 

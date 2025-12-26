@@ -88,7 +88,7 @@ export async function markJobRunning(jobId: number): Promise<void> {
 /**
  * Mark a job as completed
  */
-export async function markJobCompleted(jobId: number, message?: string): Promise<void> {
+export async function markJobCompleted(jobId: number, message?: string, existingMetadata?: Record<string, any>): Promise<void> {
   const supabase = createServiceRoleClient();
 
   const updateData: any = {
@@ -96,8 +96,12 @@ export async function markJobCompleted(jobId: number, message?: string): Promise
     completed_at: new Date().toISOString(),
   };
 
-  if (message) {
-    updateData.metadata = { message };
+  // Preserve existing metadata and add message if provided
+  if (existingMetadata || message) {
+    updateData.metadata = {
+      ...existingMetadata,
+      ...(message && { lastMessage: message }),
+    };
   }
 
   const { error } = await supabase
@@ -139,13 +143,18 @@ export async function scheduleNextRun(jobType: string, metadata?: Record<string,
   let nextRun: Date;
   
   if (schedule === '0 0 1 * *') {
-    // Monthly on 1st
+    // Monthly on 1st at midnight
     nextRun = new Date();
     nextRun.setMonth(nextRun.getMonth() + 1);
     nextRun.setDate(1);
     nextRun.setHours(0, 0, 0, 0);
+  } else if (schedule === '0 8 * * *') {
+    // Daily at 8 AM
+    nextRun = new Date();
+    nextRun.setDate(nextRun.getDate() + 1);
+    nextRun.setHours(8, 0, 0, 0);
   } else {
-    // Daily (default)
+    // Default: daily at 8 AM
     nextRun = new Date();
     nextRun.setDate(nextRun.getDate() + 1);
     nextRun.setHours(8, 0, 0, 0);
