@@ -27,6 +27,7 @@ export async function POST(request: Request) {
         accountId?: number | null;
         creditCardId?: number | null;
         isHistorical?: boolean;
+        transactionType?: 'income' | 'expense';
       };
     };
 
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
       try {
         const updateData: {
           date?: string;
+          transaction_type?: 'income' | 'expense';
           account_id?: number | null;
           credit_card_id?: number | null;
           splits?: { category_id: number; amount: number }[];
@@ -53,6 +55,10 @@ export async function POST(request: Request) {
 
         if (updates.date !== undefined) {
           updateData.date = updates.date;
+        }
+
+        if (updates.transactionType !== undefined) {
+          updateData.transaction_type = updates.transactionType;
         }
 
         if (updates.categoryId !== undefined) {
