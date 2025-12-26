@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Trash2, Edit, Mail, AlertCircle, CheckCircle2, RefreshCw, CreditCard, Settings, Loader2 } from 'lucide-react';
+import { Trash2, Edit, Mail, AlertCircle, CheckCircle2, RefreshCw, CreditCard, Settings, Loader2, ExternalLink } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import TellerAccountMappingDialog from './TellerAccountMappingDialog';
 import {
   AlertDialog,
@@ -52,12 +53,14 @@ interface ImportSetupCardProps {
 }
 
 export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportSetupCardProps) {
+  const router = useRouter();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isActive, setIsActive] = useState(setup.is_active);
   const [updating, setUpdating] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [loadingMappings, setLoadingMappings] = useState(false);
   const [showEditAccounts, setShowEditAccounts] = useState(false);
+  const [findingBatchForAccount, setFindingBatchForAccount] = useState<string | null>(null);
   const [mappingData, setMappingData] = useState<{
     enrollmentId: string;
     institutionName: string;
@@ -217,6 +220,146 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
     onUpdated();
   };
 
+  const handleRemapLatestBatch = async () => {
+    setFindingBatchForAccount('__global__');
+    try {
+      // Find the latest pending/reviewing batch for this setup
+      const response = await fetch(`/api/automatic-imports/queue?importSetupId=${setup.id}&status=pending&limit=1`);
+      if (!response.ok) throw new Error('Failed to fetch batches');
+      
+      const data = await response.json();
+      const imports = data.imports || [];
+      
+      if (imports.length === 0) {
+        // Try reviewing status
+        const reviewingResponse = await fetch(`/api/automatic-imports/queue?importSetupId=${setup.id}&status=reviewing&limit=1`);
+        if (reviewingResponse.ok) {
+          const reviewingData = await reviewingResponse.json();
+          const reviewingImports = reviewingData.imports || [];
+          if (reviewingImports.length > 0) {
+            const batchId = reviewingImports[0].source_batch_id;
+            if (batchId) {
+              router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
+              return;
+            }
+          }
+        }
+        alert('No pending batches found for this import setup. All transactions may have already been imported.');
+        return;
+      }
+      
+      const batchId = imports[0].source_batch_id;
+      if (batchId) {
+        router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
+      } else {
+        alert('No batch ID found');
+      }
+    } catch (error: any) {
+      console.error('Error finding batch:', error);
+      alert(error.message || 'Failed to find batch');
+    } finally {
+      setFindingBatchForAccount(null);
+    }
+  };
+
+  const handleRemapAccountBatch = async (mapping: AccountMapping) => {
+    setFindingBatchForAccount(mapping.teller_account_id);
+    try {
+      // Find batches for this specific account
+      // We need to filter by target_account_id or target_credit_card_id
+      const accountId = mapping.target_account_id;
+      const creditCardId = mapping.target_credit_card_id;
+      
+      if (!accountId && !creditCardId) {
+        alert('This account is not mapped to a budget account yet. Please configure the account mapping first.');
+        return;
+      }
+
+      // Get all batches and filter client-side (since API doesn't support filtering by target_account_id)
+      const response = await fetch(`/api/automatic-imports/queue?importSetupId=${setup.id}&status=pending`);
+      if (!response.ok) {
+        // Try reviewing status
+        const reviewingResponse = await fetch(`/api/automatic-imports/queue?importSetupId=${setup.id}&status=reviewing`);
+        if (!reviewingResponse.ok) throw new Error('Failed to fetch batches');
+        
+        const reviewingData = await reviewingResponse.json();
+        const reviewingImports = reviewingData.imports || [];
+        
+        // Filter by account
+        const accountBatches = reviewingImports.filter((qi: any) => 
+          (accountId && qi.target_account_id === accountId) ||
+          (creditCardId && qi.target_credit_card_id === creditCardId)
+        );
+        
+        if (accountBatches.length === 0) {
+          alert('No pending batches found for this account. All transactions may have already been imported.');
+          return;
+        }
+        
+        // Get the latest batch
+        const latestBatch = accountBatches.sort((a: any, b: any) => 
+          new Date(b.source_fetched_at).getTime() - new Date(a.source_fetched_at).getTime()
+        )[0];
+        
+        if (latestBatch.source_batch_id) {
+          router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`);
+        }
+        return;
+      }
+      
+      const data = await response.json();
+      const imports = data.imports || [];
+      
+      // Filter by account
+      const accountBatches = imports.filter((qi: any) => 
+        (accountId && qi.target_account_id === accountId) ||
+        (creditCardId && qi.target_credit_card_id === creditCardId)
+      );
+      
+      if (accountBatches.length === 0) {
+        // Try reviewing status
+        const reviewingResponse = await fetch(`/api/automatic-imports/queue?importSetupId=${setup.id}&status=reviewing`);
+        if (reviewingResponse.ok) {
+          const reviewingData = await reviewingResponse.json();
+          const reviewingImports = reviewingData.imports || [];
+          const reviewingAccountBatches = reviewingImports.filter((qi: any) => 
+            (accountId && qi.target_account_id === accountId) ||
+            (creditCardId && qi.target_credit_card_id === creditCardId)
+          );
+          
+          if (reviewingAccountBatches.length > 0) {
+            const latestBatch = reviewingAccountBatches.sort((a: any, b: any) => 
+              new Date(b.source_fetched_at).getTime() - new Date(a.source_fetched_at).getTime()
+            )[0];
+            
+            if (latestBatch.source_batch_id) {
+              router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`);
+              return;
+            }
+          }
+        }
+        alert('No pending batches found for this account. All transactions may have already been imported.');
+        return;
+      }
+      
+      // Get the latest batch
+      const latestBatch = accountBatches.sort((a: any, b: any) => 
+        new Date(b.source_fetched_at).getTime() - new Date(a.source_fetched_at).getTime()
+      )[0];
+      
+      if (latestBatch.source_batch_id) {
+        router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`);
+      } else {
+        alert('No batch ID found');
+      }
+    } catch (error: any) {
+      console.error('Error finding batch:', error);
+      alert(error.message || 'Failed to find batch');
+    } finally {
+      setFindingBatchForAccount(null);
+    }
+  };
+
   const getSourceIcon = () => {
     switch (setup.source_type) {
       case 'email':
@@ -358,6 +501,29 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
                           </div>
                         )}
                       </div>
+                      <div className="flex items-center gap-2 ml-4">
+                        {isEnabled && (mappedAccountName || mappedCreditCardName) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRemapAccountBatch(mapping)}
+                            disabled={findingBatchForAccount !== null}
+                            title="Remap transactions for this account"
+                          >
+                            {findingBatchForAccount === mapping.teller_account_id ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                                Finding...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="h-3 w-3 mr-1.5" />
+                                Re-map
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -376,8 +542,54 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
               </div>
             )}
 
+            {/* Remap and Queue Actions - Only show for non-Teller setups or as fallback */}
+            {setup.source_type !== 'teller' && (
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRemapLatestBatch}
+                  disabled={findingBatchForAccount !== null}
+                >
+                  {findingBatchForAccount === '__global__' ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Finding...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Remap Latest Batch
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push('/imports/queue')}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Queue
+                </Button>
+              </div>
+            )}
+            
+            {/* For Teller setups, show View Queue button below account list */}
+            {setup.source_type === 'teller' && (
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push('/imports/queue')}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Queue
+                </Button>
+              </div>
+            )}
+
             {/* Global status info */}
-            <div className="flex items-center justify-between text-sm pt-2 border-t">
+            <div className="flex items-center justify-between text-sm pt-2">
               <span className="text-muted-foreground">Last successful fetch:</span>
               <span>{setup.last_successful_fetch_at ? formatDate(setup.last_successful_fetch_at) : 'Never'}</span>
             </div>

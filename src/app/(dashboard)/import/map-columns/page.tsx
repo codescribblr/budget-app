@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import type { CSVAnalysisResult, ColumnAnalysis } from '@/lib/column-analyzer';
 import type { ColumnMapping } from '@/lib/mapping-templates';
-import { CheckCircle2, AlertCircle, XCircle, ArrowLeft } from 'lucide-react';
+import { CheckCircle2, AlertCircle, XCircle, ArrowLeft, Info } from 'lucide-react';
 import { saveTemplate } from '@/lib/mapping-templates';
 import { parseCSVWithMapping, processTransactions } from '@/lib/csv-parser-helpers';
 import type { ParsedTransaction } from '@/lib/import-types';
@@ -825,6 +825,16 @@ export default function MapColumnsPage() {
           <CardDescription>
             Review the detected columns and adjust the mapping if needed. At minimum, you need to map Date, Amount, and Description columns.
           </CardDescription>
+          {/* Show helpful message for API imports */}
+          {(fileName.includes('Teller') || fileName.includes('Account Transactions')) && (
+            <div className="mt-4 flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
+              <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-blue-800 dark:text-blue-200">
+                <p className="font-medium mb-1">This is an automatic import from your bank account.</p>
+                <p>The most important setting is the <strong>Amount Sign Convention</strong> below. If transactions are showing as the wrong type (income vs expense), adjust this setting.</p>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="border rounded-lg overflow-x-auto">

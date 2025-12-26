@@ -967,7 +967,7 @@ export default function BatchReviewPage() {
         {/* Desktop: Show individual buttons */}
         <div className="hidden md:flex items-center gap-2">
           {/* Re-map button - show for manual imports (CSV or PDF) with CSV data */}
-          {hasCsvData && (batchInfo?.source_type === 'manual' || batchId.startsWith('manual-')) && (
+          {hasCsvData && (
             <Button 
               variant="outline" 
               onClick={async () => {
@@ -1032,8 +1032,8 @@ export default function BatchReviewPage() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            {/* Re-map option - show for manual imports (CSV or PDF) with CSV data */}
-            {hasCsvData && (batchInfo?.source_type === 'manual' || batchId.startsWith('manual-')) && (
+            {/* Re-map option - show for any import with CSV data (includes virtual CSV for API imports) */}
+            {hasCsvData && (
               <DropdownMenuItem
                 onClick={async () => {
                   try {
