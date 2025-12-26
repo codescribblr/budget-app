@@ -1,15 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron/monthly-rollover",
-      "schedule": "0 0 1 * *"
-    },
-    {
-      "path": "/api/cron/send-notifications",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/check-recurring-transactions",
+      "path": "/api/cron/run-jobs",
       "schedule": "0 8 * * *"
     }
   ]
