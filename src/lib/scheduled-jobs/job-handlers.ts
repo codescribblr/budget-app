@@ -168,6 +168,7 @@ export async function handleSendNotifications(): Promise<JobResult> {
 /**
  * Handler for monthly_rollover job
  * Monthly funding rollover - resets monthly funding tracking for the new month
+ * Note: Runs at 8 AM UTC on the 1st of each month (when the daily cron executes)
  */
 export async function handleMonthlyRollover(): Promise<JobResult> {
   try {

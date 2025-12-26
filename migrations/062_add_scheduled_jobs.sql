@@ -67,8 +67,9 @@ BEGIN
   -- Calculate next daily run (tomorrow at 8 AM UTC)
   next_daily_run := DATE_TRUNC('day', NOW() + INTERVAL '1 day') + INTERVAL '8 hours';
   
-  -- Calculate next monthly run (1st of next month at midnight UTC)
-  next_monthly_run := DATE_TRUNC('month', NOW() + INTERVAL '1 month') + INTERVAL '1 day';
+  -- Calculate next monthly run (1st of next month at 8 AM UTC)
+  -- Note: Since cron only runs once per day at 8 AM UTC, monthly jobs will execute at 8 AM UTC on the 1st
+  next_monthly_run := DATE_TRUNC('month', NOW() + INTERVAL '1 month') + INTERVAL '1 day' + INTERVAL '8 hours';
   
   -- Insert jobs (only if no pending job of this type already exists)
   INSERT INTO scheduled_jobs (job_type, status, scheduled_for, metadata)

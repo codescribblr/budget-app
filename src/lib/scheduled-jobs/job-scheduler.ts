@@ -143,11 +143,12 @@ export async function scheduleNextRun(jobType: string, metadata?: Record<string,
   let nextRun: Date;
   
   if (schedule === '0 0 1 * *') {
-    // Monthly on 1st at midnight
+    // Monthly on 1st - note: actual execution will be at 8 AM UTC when cron runs
+    // We schedule for the 1st, but it will run at 8 AM UTC on that day
     nextRun = new Date();
     nextRun.setMonth(nextRun.getMonth() + 1);
     nextRun.setDate(1);
-    nextRun.setHours(0, 0, 0, 0);
+    nextRun.setHours(8, 0, 0, 0); // Set to 8 AM UTC to match cron schedule
   } else if (schedule === '0 8 * * *') {
     // Daily at 8 AM
     nextRun = new Date();
