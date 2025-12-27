@@ -255,22 +255,16 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     .in('hash', Array.from(seenInBatch));
 
   // Check against queued_imports (get all statuses to check transaction_type)
-  // Exclude the current batchId to avoid false positives during remap
   // IMPORTANT: Also exclude queued_imports that have already been imported (status='imported')
   // because those transactions already exist in the transactions table
-  let query = supabase
+  // NOTE: We now check INCLUDING the current batch to catch duplicates within the same batch
+  // This prevents unique constraint violations when appending to existing batches or refetching
+  const { data: existingQueued } = await supabase
     .from('queued_imports')
     .select('hash, source_batch_id, status, transaction_type')
     .eq('account_id', accountId)
     .in('hash', Array.from(seenInBatch))
     .neq('status', 'imported'); // Exclude already-imported transactions
-  
-  // Exclude current batch to prevent false positives during remap
-  if (sourceBatchId) {
-    query = query.neq('source_batch_id', sourceBatchId);
-  }
-  
-  const { data: existingQueued } = await query;
 
   // CRITICAL FIX: Also check if transactions already exist in transactions table
   // This catches cases where transactions were imported but queued_imports status wasn't updated
@@ -322,10 +316,20 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     }
   }
 
-  // Build a map of hash -> { status, transaction_type } for queued imports
-  const queuedHashInfo = new Map<string, { status: string; transaction_type: string }>();
+  // Build maps to track duplicates:
+  // 1. Exact duplicates in current batch (account_id, hash, source_batch_id) - always skip
+  // 2. Duplicates in other batches - check status/type to allow re-importing rejected or type-changed transactions
+  const currentBatchDuplicates = new Set<string>(); // Hashes that exist in current batch
+  const otherBatchHashInfo = new Map<string, { status: string; transaction_type: string }>(); // Hashes in other batches
+  
   existingQueued?.forEach(t => {
-    queuedHashInfo.set(t.hash, { status: t.status, transaction_type: t.transaction_type });
+    if (t.source_batch_id === sourceBatchId) {
+      // Exact duplicate in current batch - always skip to avoid unique constraint violation
+      currentBatchDuplicates.add(t.hash);
+    } else {
+      // Duplicate in other batch - store info to check status/type
+      otherBatchHashInfo.set(t.hash, { status: t.status, transaction_type: t.transaction_type });
+    }
   });
 
   // Build set of existing hashes (from imported, queued, or transactions table)
@@ -345,8 +349,18 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
   });
   
   // Add queued import hashes, but exclude rejected or different transaction_type
+  // For current batch duplicates, always skip (exact match on account_id, hash, source_batch_id)
+  // For other batches, allow re-import if rejected or transaction_type differs
   deduplicatedTransactions.forEach(t => {
-    const queuedInfo = queuedHashInfo.get(t.hash);
+    // First check if this exact transaction already exists in the current batch
+    if (currentBatchDuplicates.has(t.hash)) {
+      // Exact duplicate in current batch - always skip to avoid unique constraint violation
+      existingHashes.add(t.hash);
+      return;
+    }
+    
+    // Check other batches
+    const queuedInfo = otherBatchHashInfo.get(t.hash);
     if (queuedInfo) {
       // Allow re-import if rejected or transaction_type differs
       const isRejected = queuedInfo.status === 'rejected';
@@ -376,7 +390,8 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
   const queuedImports = newTransactions.map((txn, index) => {
     // Check if this transaction is a duplicate (for manual imports, we still queue them but mark status)
     const isDuplicate = existingHashes.has(txn.hash);
-    const queuedInfo = queuedHashInfo.get(txn.hash);
+    // Check if duplicate is rejected (only relevant for manual imports from other batches)
+    const queuedInfo = otherBatchHashInfo.get(txn.hash);
     const isRejected = queuedInfo?.status === 'rejected';
     
     // For manual imports, mark duplicates as 'pending' so user can review them
@@ -428,6 +443,19 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     .select('id, source_batch_id');
 
   if (error) {
+    // Handle unique constraint violations gracefully
+    // This can happen in race conditions despite our deduplication checks
+    if (error.code === '23505' && error.message?.includes('queued_imports_account_id_hash_source_batch_id_key')) {
+      console.warn('Duplicate transactions detected during insert (likely race condition):', error.details);
+      console.warn('This should be rare now that we check for duplicates including the current batch.');
+      console.warn('Some transactions may have been inserted successfully before the conflict.');
+      
+      // Since we can't determine which transactions succeeded, return 0 to be conservative
+      // The caller should handle this gracefully (e.g., by checking the batch status)
+      // In practice, some transactions were likely inserted successfully
+      return 0;
+    }
+    
     console.error('Error queueing transactions:', error);
     console.error('Error details:', JSON.stringify(error, null, 2));
     throw error;
