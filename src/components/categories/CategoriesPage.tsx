@@ -50,6 +50,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { Category } from '@/lib/types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { useFeature } from '@/contexts/FeatureContext';
+import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
 import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
 import {
@@ -450,15 +451,6 @@ export default function CategoriesPage() {
     setSelectedIds((cur) => new Set(Array.from(cur).filter((id) => visibleIds.has(id))));
   }, [bulkMode, filteredCategories]);
 
-  const toggleSelected = (id: number, checked: boolean) => {
-    setSelectedIds((cur) => {
-      const next = new Set(cur);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  };
-
   const clearSelection = () => setSelectedIds(new Set());
 
   const selectAllVisible = (checked: boolean) => {
@@ -767,6 +759,14 @@ export default function CategoriesPage() {
   const categoriesToRender = isReorderMode ? reorderedCategories : filteredCategories;
   const isArchivedOnlyView = statusSelections.includes('archived') && !statusSelections.includes('active');
 
+  // Shift-click selection handler
+  const handleCheckboxClick = useShiftClickSelection(
+    categoriesToRender,
+    (category) => category.id,
+    selectedIds,
+    setSelectedIds
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -1055,12 +1055,16 @@ export default function CategoriesPage() {
                     <div className="flex items-start justify-between gap-2">
                       {bulkMode && (
                         <div className="pt-1">
-                          <Checkbox
-                            checked={selectedIds.has(category.id)}
-                            onCheckedChange={(v) => toggleSelected(category.id, !!v)}
-                            aria-label="Select category"
-                            disabled={!canEdit}
-                          />
+                            <Checkbox
+                              checked={selectedIds.has(category.id)}
+                              onClick={(e) => {
+                                const checked = !selectedIds.has(category.id);
+                                handleCheckboxClick(category.id, e, checked);
+                              }}
+                              onCheckedChange={() => {}} // Required for controlled checkbox
+                              aria-label="Select category"
+                              disabled={!canEdit}
+                            />
                         </div>
                       )}
                       <div className="min-w-0">
@@ -1218,12 +1222,16 @@ export default function CategoriesPage() {
                         <TableRow key={category.id} className={isArchived ? 'opacity-70' : ''}>
                           <TableCell className="w-[44px]">
                             {bulkMode ? (
-                              <Checkbox
-                                checked={selectedIds.has(category.id)}
-                                onCheckedChange={(v) => toggleSelected(category.id, !!v)}
-                                aria-label="Select category"
-                                disabled={!canEdit}
-                              />
+                            <Checkbox
+                              checked={selectedIds.has(category.id)}
+                              onClick={(e) => {
+                                const checked = !selectedIds.has(category.id);
+                                handleCheckboxClick(category.id, e, checked);
+                              }}
+                              onCheckedChange={() => {}} // Required for controlled checkbox
+                              aria-label="Select category"
+                              disabled={!canEdit}
+                            />
                             ) : null}
                           </TableCell>
                           <TableCell className="max-w-[260px]">

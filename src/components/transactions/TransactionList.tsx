@@ -32,6 +32,7 @@ import { useFeature } from '@/contexts/FeatureContext';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import { MoreVertical, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
+import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
 
 interface TransactionListProps {
   transactions: TransactionWithSplits[];
@@ -67,6 +68,14 @@ export default function TransactionList({
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [localTransactions, setLocalTransactions] = useState<TransactionWithSplits[]>(transactions);
   const tagsEnabled = useFeature('tags');
+
+  // Shift-click selection handler
+  const handleCheckboxClick = useShiftClickSelection(
+    localTransactions,
+    (transaction) => transaction.id,
+    selectedTransactions,
+    setSelectedTransactions
+  );
 
   // Sync local transactions with prop changes
   useEffect(() => {
@@ -605,15 +614,11 @@ export default function TransactionList({
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={isSelected}
-                    onCheckedChange={(checked) => {
-                      const newSelected = new Set(selectedTransactions);
-                      if (checked) {
-                        newSelected.add(transaction.id);
-                      } else {
-                        newSelected.delete(transaction.id);
-                      }
-                      setSelectedTransactions(newSelected);
+                    onClick={(e) => {
+                      const checked = !isSelected;
+                      handleCheckboxClick(transaction.id, e, checked);
                     }}
+                    onCheckedChange={() => {}} // Required for controlled checkbox
                   />
                 </TableCell>
                 {/* Date Cell - Inline Editable */}

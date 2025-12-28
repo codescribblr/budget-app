@@ -31,6 +31,7 @@ import { useFeature } from '@/contexts/FeatureContext';
 import { useRouter } from 'next/navigation';
 import { Crown } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
+import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
 
 interface TransactionPreviewProps {
   transactions: ParsedTransaction[];
@@ -175,6 +176,14 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
   const handleSelectNone = () => {
     setSelectedTransactions(new Set());
   };
+
+  // Shift-click selection handler
+  const handleCheckboxClick = useShiftClickSelection(
+    items,
+    (item) => item.id,
+    selectedTransactions,
+    setSelectedTransactions
+  );
 
   // Sync items state with transactions prop when it changes
   useEffect(() => {
@@ -999,15 +1008,11 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={isSelected}
-                      onCheckedChange={(checked) => {
-                        const newSelected = new Set(selectedTransactions);
-                        if (checked) {
-                          newSelected.add(transaction.id);
-                        } else {
-                          newSelected.delete(transaction.id);
-                        }
-                        setSelectedTransactions(newSelected);
+                      onClick={(e) => {
+                        const checked = !isSelected;
+                        handleCheckboxClick(transaction.id, e, checked);
                       }}
+                      onCheckedChange={() => {}} // Required for controlled checkbox
                     />
                   </TableCell>
                   {/* Date Cell - Inline Editable */}

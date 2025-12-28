@@ -21,6 +21,7 @@ import type { MerchantGroupWithStats } from '@/lib/types';
 import EditMerchantGroupDialog from './EditMerchantGroupDialog';
 import MergeMerchantGroupsDialog from './MergeMerchantGroupsDialog';
 import DeleteMerchantGroupDialog from './DeleteMerchantGroupDialog';
+import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
 
 export default function MerchantsPage() {
   const router = useRouter();
@@ -63,16 +64,6 @@ export default function MerchantsPage() {
   const handleDelete = (group: MerchantGroupWithStats) => {
     setSelectedGroup(group);
     setShowDeleteDialog(true);
-  };
-
-  const handleMergeToggle = (groupId: number) => {
-    const newSelected = new Set(selectedForMerge);
-    if (newSelected.has(groupId)) {
-      newSelected.delete(groupId);
-    } else {
-      newSelected.add(groupId);
-    }
-    setSelectedForMerge(newSelected);
   };
 
   const handleMergeClick = () => {
@@ -120,6 +111,14 @@ export default function MerchantsPage() {
 
   const filteredGroups = merchantGroups.filter(group =>
     group.display_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Shift-click selection handler
+  const handleCheckboxClick = useShiftClickSelection(
+    filteredGroups,
+    (group) => group.id,
+    selectedForMerge,
+    setSelectedForMerge
   );
 
   const totalTransactions = merchantGroups.reduce((sum, g) => sum + g.transaction_count, 0);
@@ -234,7 +233,11 @@ export default function MerchantsPage() {
                       <input
                         type="checkbox"
                         checked={selectedForMerge.has(group.id)}
-                        onChange={() => handleMergeToggle(group.id)}
+                        onClick={(e) => {
+                          const checked = !selectedForMerge.has(group.id);
+                          handleCheckboxClick(group.id, e, checked);
+                        }}
+                        onChange={() => {}} // Required for controlled checkbox
                         className="h-4 w-4 rounded border-gray-300"
                       />
                     </TableCell>

@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
+import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
 
 interface RecurringTransaction {
   id: number;
@@ -302,17 +303,6 @@ export default function RecurringTransactionsPage() {
     }
   };
 
-  const toggleSelected = (id: number, checked: boolean) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (checked) {
-        next.add(id);
-      } else {
-        next.delete(id);
-      }
-      return next;
-    });
-  };
 
   const unconfirmedCount = recurringTransactions.filter(rt => !rt.is_confirmed).length;
 
@@ -360,6 +350,14 @@ export default function RecurringTransactionsPage() {
 
     return filtered;
   }, [recurringTransactions, isActiveParam, isConfirmedParam, frequencyParam, transactionTypeParam, searchQuery]);
+
+  // Shift-click selection handler
+  const handleCheckboxClick = useShiftClickSelection(
+    filteredTransactions,
+    (rt) => rt.id,
+    selectedIds,
+    setSelectedIds
+  );
 
   const getFrequencyLabel = (frequency: string) => {
     const labels: Record<string, string> = {
@@ -586,7 +584,11 @@ export default function RecurringTransactionsPage() {
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={selectedIds.has(rt.id)}
-                          onCheckedChange={(checked) => toggleSelected(rt.id, checked as boolean)}
+                          onClick={(e) => {
+                            const checked = !selectedIds.has(rt.id);
+                            handleCheckboxClick(rt.id, e, checked);
+                          }}
+                          onCheckedChange={() => {}} // Required for controlled checkbox
                         />
                       </TableCell>
                     )}
