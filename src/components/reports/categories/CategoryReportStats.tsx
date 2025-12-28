@@ -30,12 +30,27 @@ export default function CategoryReportStats({
     const effectiveEndDate = endDate || now.toISOString().split('T')[0];
     
     // Calculate the number of months in the period
-    const startDateObj = new Date(effectiveStartDate);
-    const endDateObj = new Date(effectiveEndDate);
-    const monthsInPeriod = Math.max(1, 
-      (endDateObj.getFullYear() - startDateObj.getFullYear()) * 12 + 
-      (endDateObj.getMonth() - startDateObj.getMonth()) + 1
-    );
+    // Parse dates manually to avoid timezone issues with Date constructor
+    const calculateMonthsInPeriod = (start: string, end: string): number => {
+      const [startYear, startMonth, startDay] = start.split('-').map(Number);
+      const [endYear, endMonth, endDay] = end.split('-').map(Number);
+      
+      // Calculate months difference
+      let monthsDiff = (endYear - startYear) * 12 + (endMonth - startMonth);
+      
+      // If same month, it's 1 month regardless of days
+      if (monthsDiff === 0) {
+        return 1;
+      }
+      
+      // For different months, we need to check if we should count the partial months
+      // If start is at the beginning of a month and end is at the end of a month,
+      // we count both months fully. Otherwise, we count the difference.
+      // For simplicity, if monthsDiff > 0, we add 1 to include both endpoints
+      return monthsDiff + 1;
+    };
+    
+    const monthsInPeriod = calculateMonthsInPeriod(effectiveStartDate, effectiveEndDate);
 
     // Calculate spending (expenses add, income subtracts) for the period
     let totalSpent = 0;
