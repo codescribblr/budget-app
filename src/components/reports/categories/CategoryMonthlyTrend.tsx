@@ -119,9 +119,9 @@ export default function CategoryMonthlyTrend({ transactions, category, startDate
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white border border-gray-300 rounded-lg shadow-lg p-3">
-          <div className="font-semibold mb-2">{isDaily ? data.day : data.month}</div>
-          <div className="font-medium">{formatCurrency(data.total)}</div>
+        <div className="bg-background border rounded-lg shadow-lg p-3">
+          <div className="font-semibold mb-2 text-foreground">{isDaily ? data.day : data.month}</div>
+          <div className="font-medium text-foreground">{formatCurrency(data.total)}</div>
         </div>
       );
     }

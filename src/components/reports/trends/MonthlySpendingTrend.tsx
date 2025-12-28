@@ -122,10 +122,10 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white border border-gray-300 rounded-lg shadow-lg p-3">
-          <div className="font-semibold mb-2">{data.month}</div>
+        <div className="bg-background border rounded-lg shadow-lg p-3">
+          <div className="font-semibold mb-2 text-foreground">{data.month}</div>
           <div className="text-sm space-y-1">
-            <div className="font-medium">{formatCurrency(data.total)}</div>
+            <div className="font-medium text-foreground">{formatCurrency(data.total)}</div>
             <div className="text-xs text-muted-foreground mt-2">
               <div>Total Transactions: {data.totalTransactions}</div>
               <div className="ml-2 space-y-0.5 mt-1">

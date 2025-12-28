@@ -181,6 +181,29 @@ export default function CategoryMerchantBreakdown({ transactions, category, star
     );
   };
 
+  // Custom tooltip component
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-background border rounded-lg shadow-lg p-3">
+          <div className="font-semibold mb-2 text-foreground">{label}</div>
+          <div className="text-sm space-y-1">
+            {payload.map((entry: any, index: number) => (
+              <div key={index} className="text-foreground">
+                <span
+                  className="inline-block w-3 h-3 rounded-full mr-2"
+                  style={{ backgroundColor: entry.color }}
+                />
+                {entry.name}: {formatCurrency(entry.value)}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   if (topMerchants.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-8">
@@ -227,10 +250,7 @@ export default function CategoryMerchantBreakdown({ transactions, category, star
             tick={{ fontSize: 12 }}
             tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
           />
-          <Tooltip
-            formatter={(value: number) => formatCurrency(value)}
-            labelStyle={{ color: '#000' }}
-          />
+          <Tooltip content={<CustomTooltip />} />
           <Legend />
           {topMerchants.map((merchantName, index) => (
             selectedMerchants.includes(merchantName) && (

@@ -178,8 +178,27 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
               tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
             />
             <Tooltip
-              formatter={(value: number) => formatCurrency(value)}
-              labelStyle={{ color: '#000' }}
+              content={({ active, payload, label }) => {
+                if (active && payload && payload.length) {
+                  return (
+                    <div className="bg-background border rounded-lg shadow-lg p-3">
+                      <div className="font-semibold mb-2 text-foreground">{label}</div>
+                      <div className="text-sm space-y-1">
+                        {payload.map((entry: any, index: number) => (
+                          <div key={index} className="text-foreground">
+                            <span
+                              className="inline-block w-3 h-3 rounded-full mr-2"
+                              style={{ backgroundColor: entry.color }}
+                            />
+                            {entry.name}: {formatCurrency(entry.value)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              }}
             />
             <Legend />
             {topMerchants.map((merchantName, index) => (

@@ -118,8 +118,23 @@ export default function TagSpendingReport({
                 />
                 <YAxis />
                 <Tooltip
-                  formatter={(value: number) => formatCurrency(value)}
-                  labelFormatter={(label) => `Tag: ${label}`}
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-background border rounded-lg shadow-lg p-3">
+                          <div className="font-semibold mb-2 text-foreground">Tag: {label}</div>
+                          <div className="text-sm space-y-1">
+                            {payload.map((entry: any, index: number) => (
+                              <div key={index} className="text-foreground">
+                                {entry.name}: {formatCurrency(entry.value)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
                 />
                 <Legend />
                 <Bar dataKey="expenses" fill="#ef4444" name="Expenses" />

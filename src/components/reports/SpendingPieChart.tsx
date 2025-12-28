@@ -236,8 +236,8 @@ export default function SpendingPieChart({
         // Show breakdown of "Other" items
         return (
           <div className="bg-background border rounded-lg p-3 shadow-lg max-w-xs">
-            <p className="font-semibold mb-2">Other ({data.otherItems.length} items)</p>
-            <p className="text-sm font-semibold mb-2">{formatCurrency(data.value)} ({percentage.toFixed(1)}%)</p>
+            <p className="font-semibold mb-2 text-foreground">Other ({data.otherItems.length} items)</p>
+            <p className="text-sm font-semibold mb-2 text-foreground">{formatCurrency(data.value)} ({percentage.toFixed(1)}%)</p>
             <div className="border-t pt-2 mt-2 space-y-1 max-h-48 overflow-y-auto">
               {data.otherItems.map((item: any, idx: number) => {
                 const itemPercentage = (item.value / totalSpent) * 100;
@@ -257,8 +257,8 @@ export default function SpendingPieChart({
 
       return (
         <div className="bg-background border rounded-lg p-3 shadow-lg">
-          <p className="font-semibold">{data.name}</p>
-          <p className="text-sm">{formatCurrency(data.value)}</p>
+          <p className="font-semibold text-foreground">{data.name}</p>
+          <p className="text-sm text-foreground">{formatCurrency(data.value)}</p>
           <p className="text-sm text-muted-foreground">{percentage.toFixed(1)}%</p>
         </div>
       );

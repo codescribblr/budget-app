@@ -76,10 +76,10 @@ export default function CategoryTransactionSizeDistribution({ transactions, cate
       const data = payload[0].payload;
       const percentage = totalTransactions > 0 ? (data.count / totalTransactions) * 100 : 0;
       return (
-        <div className="bg-white border border-gray-300 rounded-lg shadow-lg p-3">
-          <div className="font-semibold mb-2">{data.bucket}</div>
+        <div className="bg-background border rounded-lg shadow-lg p-3">
+          <div className="font-semibold mb-2 text-foreground">{data.bucket}</div>
           <div className="text-sm space-y-1">
-            <div className="font-medium">Transactions: {data.count}</div>
+            <div className="font-medium text-foreground">Transactions: {data.count}</div>
             <div className="text-xs text-muted-foreground">
               {percentage.toFixed(1)}% of total
             </div>
