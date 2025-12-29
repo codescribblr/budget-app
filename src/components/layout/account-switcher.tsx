@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/components/ui/sidebar"
+import { cn } from "@/lib/utils"
 
 interface Account {
   accountId: number
@@ -153,14 +154,25 @@ export function AccountSwitcher() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="flex items-center gap-2 px-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground w-full justify-start h-auto py-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden shrink-0">
+          <Button 
+            variant="ghost" 
+            className={cn(
+              "flex items-center hover:bg-sidebar-accent hover:text-sidebar-accent-foreground w-full h-auto py-2",
+              state === "expanded" 
+                ? "gap-2 px-2 justify-start" 
+                : "justify-center px-1"
+            )}
+          >
+            <div className={cn(
+              "flex items-center justify-center rounded-lg overflow-hidden shrink-0",
+              state === "expanded" ? "h-8 w-8" : "h-7 w-7"
+            )}>
               <Image
                 src={logoSrc}
                 alt="Budget App"
                 width={32}
                 height={32}
-                className="h-8 w-8"
+                className={state === "expanded" ? "h-8 w-8" : "h-7 w-7"}
                 priority
               />
             </div>

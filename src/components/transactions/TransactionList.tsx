@@ -33,6 +33,7 @@ import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import { MoreVertical, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
 import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
+import { TruncatedTextWithTooltip } from '@/components/ui/truncated-text-with-tooltip';
 
 interface TransactionListProps {
   transactions: TransactionWithSplits[];
@@ -643,9 +644,7 @@ export default function TransactionList({
                   )}
                 </TableCell>
                 <TableCell className="font-medium text-sm max-w-[250px]">
-                  <div className="truncate" title={transaction.description}>
-                    {transaction.description}
-                  </div>
+                  <TruncatedTextWithTooltip text={transaction.description} />
                   {tagsEnabled && transaction.tags && transaction.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {transaction.tags.slice(0, 3).map((tag) => (
@@ -678,8 +677,8 @@ export default function TransactionList({
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
                   {transaction.merchant_name ? (
-                    <Badge variant="outline" className="text-xs max-w-[120px] truncate" title={transaction.merchant_name}>
-                      {transaction.merchant_name}
+                    <Badge variant="outline" className="text-xs max-w-[120px] block">
+                      <TruncatedTextWithTooltip text={transaction.merchant_name} />
                     </Badge>
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>

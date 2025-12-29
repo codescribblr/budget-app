@@ -32,6 +32,7 @@ import { useRouter } from 'next/navigation';
 import { Crown } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
 import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
+import { TruncatedTextWithTooltip } from '@/components/ui/truncated-text-with-tooltip';
 
 interface TransactionPreviewProps {
   transactions: ParsedTransaction[];
@@ -1038,11 +1039,13 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
                   </TableCell>
 
                   {/* Merchant Cell - Not Editable */}
-                  <TableCell className="font-medium min-w-[150px] max-w-[200px] truncate">{transaction.merchant}</TableCell>
+                  <TableCell className="font-medium min-w-[150px] max-w-[200px]">
+                    <TruncatedTextWithTooltip text={transaction.merchant} />
+                  </TableCell>
 
                   {/* Description Cell - Not Editable */}
-                  <TableCell className="text-sm text-muted-foreground min-w-[150px] max-w-[250px] truncate">
-                    {transaction.description}
+                  <TableCell className="text-sm text-muted-foreground min-w-[150px] max-w-[250px]">
+                    <TruncatedTextWithTooltip text={transaction.description} />
                   </TableCell>
 
                   {/* Amount Cell - Inline Editable */}

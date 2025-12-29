@@ -49,6 +49,7 @@ import { UserMenu } from "@/components/layout/user-menu"
 import { AccountSwitcher } from "@/components/layout/account-switcher"
 import { useFeature } from "@/contexts/FeatureContext"
 import { useSubscription } from "@/contexts/SubscriptionContext"
+import { cn } from "@/lib/utils"
 
 const navigationSections = [
   {
@@ -153,7 +154,10 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="h-16 border-b border-sidebar-border p-0">
-        <div className="flex h-full items-center px-2">
+        <div className={cn(
+          "flex h-full items-center",
+          state === "expanded" ? "px-2" : "px-1"
+        )}>
           <AccountSwitcher />
         </div>
       </SidebarHeader>
