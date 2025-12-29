@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { parseLocalDate } from '@/lib/date-utils';
 import { useFeature } from '@/contexts/FeatureContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 interface GoalsWidgetProps {
   disabled?: boolean;
@@ -25,7 +26,7 @@ export default function GoalsWidget({ disabled = false }: GoalsWidgetProps) {
   const { isPremium } = useSubscription();
   const [goals, setGoals] = useState<GoalWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useLocalStorage('dashboard-card-goals', true);
 
   useEffect(() => {
     const fetchGoals = async () => {

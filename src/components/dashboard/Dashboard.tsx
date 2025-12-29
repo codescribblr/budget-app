@@ -28,6 +28,7 @@ import IncomeBufferCard from './IncomeBufferCard';
 import { AIInsightsWidget } from '@/components/ai/AIInsightsWidget';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { useFeature } from '@/contexts/FeatureContext';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 // Helper function to calculate summary from local state
 function calculateSummary(
@@ -97,11 +98,11 @@ export default function Dashboard() {
   const [pendingChecks, setPendingChecks] = useState<PendingCheck[]>([]);
   const [monthlyNetIncome, setMonthlyNetIncome] = useState<number>(0);
   const [loading, setLoading] = useState(true);
-  const [isPendingChecksOpen, setIsPendingChecksOpen] = useState(true);
-  const [isAccountsOpen, setIsAccountsOpen] = useState(true);
-  const [isCreditCardsOpen, setIsCreditCardsOpen] = useState(true);
-  const [isLoansOpen, setIsLoansOpen] = useState(true);
-  const [isCategoriesOpen, setIsCategoriesOpen] = useState(true);
+  const [isPendingChecksOpen, setIsPendingChecksOpen] = useLocalStorage('dashboard-card-pending-checks', true);
+  const [isAccountsOpen, setIsAccountsOpen] = useLocalStorage('dashboard-card-accounts', true);
+  const [isCreditCardsOpen, setIsCreditCardsOpen] = useLocalStorage('dashboard-card-credit-cards', true);
+  const [isLoansOpen, setIsLoansOpen] = useLocalStorage('dashboard-card-loans', true);
+  const [isCategoriesOpen, setIsCategoriesOpen] = useLocalStorage('dashboard-card-categories', true);
   const [bufferStatus, setBufferStatus] = useState<any>(null);
   const [showBufferNotice, setShowBufferNotice] = useState(false);
 

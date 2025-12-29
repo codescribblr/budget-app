@@ -13,6 +13,7 @@ import { useRotatingLoadingMessage } from '@/hooks/use-rotating-loading-message'
 import { useFeature } from '@/contexts/FeatureContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 import { DataSummary } from '@/components/ai/DataSummary';
 import type { MonthlyInsights } from '@/lib/ai/types';
 
@@ -41,7 +42,7 @@ export function AIInsightsWidget() {
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useLocalStorage('dashboard-card-ai-insights', true);
   const [showAllInsights, setShowAllInsights] = useState(false);
   const { stats, refreshStats } = useAIUsage();
   const loadingMessage = useRotatingLoadingMessage(5000, generating);

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
 import { Wallet, TrendingUp, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 interface IncomeBufferStatus {
   enabled: boolean;
@@ -20,7 +21,7 @@ interface IncomeBufferStatus {
 export default function IncomeBufferCard() {
   const [status, setStatus] = useState<IncomeBufferStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useLocalStorage('dashboard-card-income-buffer', true);
 
   useEffect(() => {
     fetchStatus();
