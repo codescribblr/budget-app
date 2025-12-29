@@ -136,6 +136,7 @@ export default function TransactionList({
     return date?.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
+      year: '2-digit',
     }) || dateString;
   };
 

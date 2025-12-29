@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { useDebounceValue, useDebounceCallback } from '@/hooks/use-debounce';
 import { Search, X, Upload, Filter, CalendarIcon, Copy, ArrowUpDown, ArrowUp, ArrowDown, Tag as TagIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -120,6 +121,9 @@ export default function TransactionsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [totalTransactions, setTotalTransactions] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [startDateObj, setStartDateObj] = useState<Date | undefined>(undefined);
@@ -156,18 +160,37 @@ export default function TransactionsPage() {
     }
     fetchingRef.current = true;
     try {
-      setLoading(true);
-      // Build transactions URL with date filters if present (for server-side filtering)
-      let transactionsUrl = '/api/transactions';
-      if (startDateParam || endDateParam) {
-        const params = new URLSearchParams();
-        if (startDateParam) params.set('startDate', startDateParam);
-        if (endDateParam) params.set('endDate', endDateParam);
-        transactionsUrl = `/api/transactions?${params.toString()}`;
+      // Only show table loading if we've already loaded once
+      if (hasMountedRef.current) {
+        setTableLoading(true);
+      } else {
+        setLoading(true);
       }
       
-      // Use regular fetch - the cache will be handled at a higher level
-      // We'll prevent duplicate calls by using a ref to track if fetch is in progress
+      // Build transactions URL with all filters and pagination
+      const params = new URLSearchParams();
+      params.set('page', currentPage.toString());
+      params.set('pageSize', pageSize.toString());
+      
+      if (startDateParam) params.set('startDate', startDateParam);
+      if (endDateParam) params.set('endDate', endDateParam);
+      if (debouncedSearchQuery.trim()) params.set('q', debouncedSearchQuery.trim());
+      if (debouncedCategoryIds.length > 0) params.set('categoryId', debouncedCategoryIds.join(','));
+      if (debouncedMerchantGroupIds.length > 0) params.set('merchantGroupId', debouncedMerchantGroupIds.join(','));
+      if (debouncedTransactionTypes.length > 0) params.set('transactionType', debouncedTransactionTypes.join(','));
+      if (debouncedTagIds.length > 0) params.set('tags', debouncedTagIds.join(','));
+      if (debouncedAccountFilterIds.length > 0) {
+        const accountFilterString = debouncedAccountFilterIds.map(item => 
+          item.type === 'account' ? `account-${item.id}` : `card-${item.id}`
+        ).join(',');
+        params.set('accountId', accountFilterString);
+      }
+      params.set('sortBy', sortBy);
+      params.set('sortDirection', sortDirection);
+      
+      const transactionsUrl = `/api/transactions?${params.toString()}`;
+      
+      // Fetch transactions and other data in parallel
       const fetchPromises = [
         fetch(transactionsUrl),
         fetch('/api/categories?excludeGoals=true'),
@@ -183,8 +206,8 @@ export default function TransactionsPage() {
       const responses = await Promise.all(fetchPromises);
       const [transactionsRes, categoriesRes, merchantGroupsRes, accountsRes, creditCardsRes, ...tagResArray] = responses;
 
-      const [transactionsData, categoriesData, merchantGroupsData, accountsData, creditCardsData] = await Promise.all([
-        transactionsRes.ok ? transactionsRes.json() : [],
+      const [transactionsResult, categoriesData, merchantGroupsData, accountsData, creditCardsData] = await Promise.all([
+        transactionsRes.ok ? transactionsRes.json() : null,
         categoriesRes.ok ? categoriesRes.json() : [],
         merchantGroupsRes.ok ? merchantGroupsRes.json() : [],
         accountsRes.ok ? accountsRes.json() : [],
@@ -196,7 +219,18 @@ export default function TransactionsPage() {
         tagsData = tagResArray[0].ok ? await tagResArray[0].json() : [];
       }
 
-      setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
+      // Handle paginated response
+      if (transactionsResult && transactionsResult.transactions) {
+        setTransactions(Array.isArray(transactionsResult.transactions) ? transactionsResult.transactions : []);
+        setTotalTransactions(transactionsResult.total || 0);
+        setTotalPages(transactionsResult.totalPages || 0);
+      } else {
+        // Fallback for legacy response format
+        setTransactions(Array.isArray(transactionsResult) ? transactionsResult : []);
+        setTotalTransactions(Array.isArray(transactionsResult) ? transactionsResult.length : 0);
+        setTotalPages(Math.ceil((Array.isArray(transactionsResult) ? transactionsResult.length : 0) / pageSize));
+      }
+      
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
       setMerchantGroups(Array.isArray(merchantGroupsData) ? merchantGroupsData : []);
       setAccounts(Array.isArray(accountsData) ? accountsData : []);
@@ -207,8 +241,11 @@ export default function TransactionsPage() {
       setTransactions([]);
       setCategories([]);
       setMerchantGroups([]);
+      setTotalTransactions(0);
+      setTotalPages(0);
     } finally {
       setLoading(false);
+      setTableLoading(false);
       fetchingRef.current = false;
     }
   };
@@ -216,31 +253,33 @@ export default function TransactionsPage() {
   // Track if component has mounted to prevent duplicate calls
   const hasMountedRef = useRef(false);
 
+  // Debounce search query (500ms delay)
+  const debouncedSearchQuery = useDebounceValue(searchQuery, 500);
+  
+  // Debounce filter arrays (300ms delay for rapid filter changes)
+  const debouncedCategoryIds = useDebounceValue(categoryIds, 300);
+  const debouncedMerchantGroupIds = useDebounceValue(merchantGroupIds, 300);
+  const debouncedTransactionTypes = useDebounceValue(transactionTypes, 300);
+  const debouncedTagIds = useDebounceValue(tagIds, 300);
+  const debouncedAccountFilterIds = useDebounceValue(accountFilterIds, 300);
+
   useEffect(() => {
-    // Fetch data on mount or when date filters change (to get server-side filtered data)
+    // Fetch data on mount
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
       fetchData();
     }
   }, []);
 
-  // Refetch when date filters change (to get server-side filtered data)
-  // Use a ref to track previous values to avoid unnecessary refetches
-  const prevDateParamsRef = useRef<{ start?: string | null; end?: string | null }>({});
+  // Refetch when debounced filters, search, pagination, or sorting change
   useEffect(() => {
     if (hasMountedRef.current) {
-      const prevStart = prevDateParamsRef.current.start;
-      const prevEnd = prevDateParamsRef.current.end;
-      
-      // Only refetch if date params actually changed
-      if (prevStart !== startDateParam || prevEnd !== endDateParam) {
-        prevDateParamsRef.current = { start: startDateParam, end: endDateParam };
-        // Reset fetching ref to allow refetch
-        fetchingRef.current = false;
-        fetchData();
-      }
+      // Reset fetching ref to allow refetch
+      fetchingRef.current = false;
+      fetchData();
     }
-  }, [startDateParam, endDateParam]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDateParam, endDateParam, debouncedSearchQuery, debouncedCategoryIds.join(','), debouncedMerchantGroupIds.join(','), debouncedTransactionTypes.join(','), debouncedTagIds.join(','), debouncedAccountFilterIds.map(f => `${f.type}-${f.id}`).join(','), sortBy, sortDirection, currentPage, pageSize]);
 
   // Initialize search query from URL parameter
   useEffect(() => {
@@ -248,6 +287,21 @@ export default function TransactionsPage() {
       setSearchQuery(searchQueryParam);
     }
   }, [searchQueryParam]);
+
+  // Update URL when debounced search query changes
+  useEffect(() => {
+    if (hasMountedRef.current) {
+      const params = new URLSearchParams(searchParams.toString());
+      if (debouncedSearchQuery.trim()) {
+        params.set('q', debouncedSearchQuery.trim());
+      } else {
+        params.delete('q');
+      }
+      // Reset to page 1 when search changes
+      params.set('page', '1');
+      router.replace(`/transactions?${params.toString()}`);
+    }
+  }, [debouncedSearchQuery, searchParams, router]);
 
   // Open edit dialog if editId is in URL
   useEffect(() => {
@@ -302,187 +356,9 @@ export default function TransactionsPage() {
 
   // No longer needed - we use merchantGroups array directly
 
-  // Filter transactions based on all filters and search query
-  const filteredTransactions = useMemo(() => {
-    // Ensure transactions is always an array
-    if (!Array.isArray(transactions)) {
-      return [];
-    }
-    let filtered = transactions;
-
-    // Debug logging for date filtering
-    if (startDateParam || endDateParam) {
-      console.log('[TransactionsPage] Date filter active:', { startDateParam, endDateParam, totalTransactions: transactions.length });
-    }
-
-    // Apply merchant filter if present
-    if (merchantFilter) {
-      filtered = filtered.filter(transaction => {
-        // Compare with null check
-        if (!transaction.merchant_name) return false;
-        return transaction.merchant_name === merchantFilter;
-      });
-    }
-
-    // Apply merchant group filter if present (multi-select)
-    if (merchantGroupIds.length > 0) {
-      filtered = filtered.filter(transaction => {
-        return transaction.merchant_group_id !== null && 
-               transaction.merchant_group_id !== undefined &&
-               merchantGroupIds.includes(transaction.merchant_group_id);
-      });
-    }
-
-    // Apply category filter if present (multi-select)
-    if (categoryIds.length > 0) {
-      filtered = filtered.filter(transaction => {
-        return transaction.splits.some(split => categoryIds.includes(split.category_id));
-      });
-    }
-
-    // Apply transaction type filter if present (multi-select)
-    if (transactionTypes.length > 0) {
-      filtered = filtered.filter(transaction => {
-        return transactionTypes.includes(transaction.transaction_type);
-      });
-    }
-
-    // Apply tag filter if present (multi-select - transaction must have all selected tags)
-    if (tagIds.length > 0) {
-      filtered = filtered.filter(transaction => {
-        const transactionTagIds = transaction.tags?.map(t => t.id) || [];
-        // Transaction must have all selected tags (AND logic)
-        return tagIds.every(tagId => transactionTagIds.includes(tagId));
-      });
-    }
-
-    // Apply account filter if present (multi-select - supports both accounts and credit cards)
-    if (accountFilterIds.length > 0) {
-      filtered = filtered.filter(transaction => {
-        return accountFilterIds.some(filter => {
-          if (filter.type === 'account') {
-            return transaction.account_id === filter.id;
-          } else if (filter.type === 'card') {
-            return transaction.credit_card_id === filter.id;
-          }
-          return false;
-        });
-      });
-    }
-
-    // Apply date range filter if present (inclusive of both start and end dates)
-    if (startDateParam || endDateParam) {
-      filtered = filtered.filter(transaction => {
-        const transactionDate = transaction.date; // YYYY-MM-DD format
-        // Skip transactions without valid dates
-        if (!transactionDate || typeof transactionDate !== 'string') {
-          return false;
-        }
-        // Ensure dates are in YYYY-MM-DD format for proper string comparison
-        const normalizedDate = transactionDate.trim();
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
-          // Invalid date format, exclude it
-          return false;
-        }
-        if (startDateParam && normalizedDate < startDateParam) return false;
-        if (endDateParam && normalizedDate > endDateParam) return false;
-        return true;
-      });
-    }
-
-    // Then apply search query filter
-    if (!searchQuery.trim()) {
-      return filtered;
-    }
-
-    return filtered.filter(transaction => {
-      // Search in description
-      if (fuzzyMatch(transaction.description, searchQuery)) {
-        return true;
-      }
-
-      // Search in merchant name
-      if (transaction.merchant_name && fuzzyMatch(transaction.merchant_name, searchQuery)) {
-        return true;
-      }
-
-      // Search in category names
-      const categoryNames = transaction.splits
-        .map(split => {
-          const category = categories.find(c => c.id === split.category_id);
-          return category?.name || '';
-        })
-        .join(' ');
-
-      if (fuzzyMatch(categoryNames, searchQuery)) {
-        return true;
-      }
-
-      // Search in tag names
-      const tagNames = (transaction.tags || [])
-        .map(tag => tag.name)
-        .join(' ');
-
-      if (fuzzyMatch(tagNames, searchQuery)) {
-        return true;
-      }
-
-      // Search in amount (convert to string)
-      const amountStr = transaction.total_amount.toString();
-      if (fuzzyMatch(amountStr, searchQuery)) {
-        return true;
-      }
-
-      // Search in date
-      if (fuzzyMatch(transaction.date, searchQuery)) {
-        return true;
-      }
-
-      return false;
-    });
-  }, [transactions, categories, searchQuery, merchantFilter, merchantGroupIds, categoryIds, transactionTypes, tagIds, accountFilterIds, startDateParam, endDateParam]);
-
-  // Sort filtered transactions
-  const sortedTransactions = useMemo(() => {
-    const sorted = [...filteredTransactions];
-    
-    sorted.sort((a, b) => {
-      let comparison = 0;
-      
-      switch (sortBy) {
-        case 'date':
-          // Compare dates (YYYY-MM-DD format sorts correctly as strings)
-          comparison = a.date.localeCompare(b.date);
-          // If same date, sort by ID for consistency
-          if (comparison === 0) {
-            comparison = a.id - b.id;
-          }
-          break;
-        case 'description':
-          comparison = a.description.localeCompare(b.description, undefined, { sensitivity: 'base' });
-          break;
-        case 'merchant':
-          const merchantA = a.merchant_name || '';
-          const merchantB = b.merchant_name || '';
-          comparison = merchantA.localeCompare(merchantB, undefined, { sensitivity: 'base' });
-          break;
-        case 'amount':
-          comparison = a.total_amount - b.total_amount;
-          break;
-      }
-      
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
-    
-    return sorted;
-  }, [filteredTransactions, sortBy, sortDirection]);
-
-  // Calculate pagination
-  const totalTransactions = sortedTransactions.length;
-  const totalPages = Math.ceil(totalTransactions / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedTransactions = sortedTransactions.slice(startIndex, endIndex);
+  // Transactions are now filtered and sorted server-side
+  // No need for client-side filtering/sorting/pagination
+  const paginatedTransactions = transactions;
 
   // Handle sort change
   const handleSort = (column: 'date' | 'description' | 'merchant' | 'amount') => {
@@ -503,7 +379,8 @@ export default function TransactionsPage() {
     }
   }, [currentPage, totalPages]);
 
-  if (loading) {
+  // Show full page loading only on initial mount
+  if (loading && !hasMountedRef.current) {
     return <LoadingSpinner />;
   }
 
@@ -1018,20 +895,27 @@ export default function TransactionsPage() {
             </div>
           </div>
 
-          {(searchQuery || hasFilters) && (
+          {(debouncedSearchQuery || hasFilters) && (
             <p className="text-sm text-muted-foreground mb-4">
-              Found {filteredTransactions.length} of {transactions.length} transactions
+              Found {totalTransactions} transaction{totalTransactions !== 1 ? 's' : ''}
             </p>
           )}
 
-          <TransactionList
-            transactions={paginatedTransactions}
-            categories={categories}
-            onUpdate={fetchData}
-            sortBy={sortBy}
-            sortDirection={sortDirection}
-            onSort={handleSort}
-          />
+          <div className="relative">
+            {tableLoading && (
+              <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+                <LoadingSpinner />
+              </div>
+            )}
+            <TransactionList
+              transactions={paginatedTransactions}
+              categories={categories}
+              onUpdate={fetchData}
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+          </div>
 
           {/* Pagination Controls */}
           {totalTransactions > 0 && (
@@ -1039,7 +923,7 @@ export default function TransactionsPage() {
               {/* Pagination Info and Page Size Selector */}
               <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-sm text-muted-foreground w-full sm:w-auto">
                 <div className="text-center sm:text-left">
-                  Showing {startIndex + 1}-{Math.min(endIndex, totalTransactions)} of {totalTransactions}
+                  Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, totalTransactions)} of {totalTransactions}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="hidden sm:inline">Rows per page:</span>

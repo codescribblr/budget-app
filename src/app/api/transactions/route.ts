@@ -1,17 +1,92 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllTransactions, createTransaction } from '@/lib/supabase-queries';
+import { getAllTransactions, createTransaction, getTransactionsPaginated } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import type { CreateTransactionRequest } from '@/lib/types';
 
 export async function GET(request: NextRequest) {
   try {
-    // Check for date filter parameters
     const { searchParams } = new URL(request.url);
+    
+    // Check if pagination parameters are present - if so, use paginated endpoint
+    const page = searchParams.get('page');
+    const pageSize = searchParams.get('pageSize');
+    
+    if (page || pageSize || searchParams.get('q') || searchParams.get('categoryId') || 
+        searchParams.get('merchantGroupId') || searchParams.get('transactionType') || 
+        searchParams.get('tags') || searchParams.get('accountId')) {
+      // Use paginated endpoint with all filters
+      const pageNum = page ? parseInt(page) : 1;
+      const pageSizeNum = pageSize ? parseInt(pageSize) : 50;
+      
+      // Parse filters
+      const searchQuery = searchParams.get('q') || undefined;
+      const startDate = searchParams.get('startDate') || undefined;
+      const endDate = searchParams.get('endDate') || undefined;
+      
+      const categoryIdParam = searchParams.get('categoryId');
+      const categoryIds = categoryIdParam 
+        ? categoryIdParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
+        : undefined;
+      
+      const merchantGroupIdParam = searchParams.get('merchantGroupId');
+      const merchantGroupIds = merchantGroupIdParam
+        ? merchantGroupIdParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
+        : undefined;
+      
+      const transactionTypeParam = searchParams.get('transactionType');
+      const transactionTypes = transactionTypeParam
+        ? transactionTypeParam.split(',').filter(t => t === 'income' || t === 'expense') as ('income' | 'expense')[]
+        : undefined;
+      
+      const tagsParam = searchParams.get('tags');
+      const tagIds = tagsParam
+        ? tagsParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
+        : undefined;
+      
+      // Parse account filter (supports both account IDs and credit card IDs)
+      const accountIdParam = searchParams.get('accountId');
+      const accountIds: number[] = [];
+      const creditCardIds: number[] = [];
+      
+      if (accountIdParam) {
+        accountIdParam.split(',').forEach(item => {
+          const trimmed = item.trim();
+          if (trimmed.startsWith('account-')) {
+            const id = parseInt(trimmed.replace('account-', ''));
+            if (!isNaN(id)) accountIds.push(id);
+          } else if (trimmed.startsWith('card-')) {
+            const id = parseInt(trimmed.replace('card-', ''));
+            if (!isNaN(id)) creditCardIds.push(id);
+          }
+        });
+      }
+      
+      const sortBy = (searchParams.get('sortBy') as 'date' | 'description' | 'merchant' | 'amount') || 'date';
+      const sortDirection = (searchParams.get('sortDirection') as 'asc' | 'desc') || 'desc';
+      
+      const result = await getTransactionsPaginated({
+        page: pageNum,
+        pageSize: pageSizeNum,
+        searchQuery,
+        startDate,
+        endDate,
+        categoryIds,
+        merchantGroupIds,
+        transactionTypes,
+        tagIds,
+        accountIds: accountIds.length > 0 ? accountIds : undefined,
+        creditCardIds: creditCardIds.length > 0 ? creditCardIds : undefined,
+        sortBy,
+        sortDirection,
+      });
+      
+      return NextResponse.json(result);
+    }
+    
+    // Legacy: If no pagination params, return all transactions (for backward compatibility)
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     
-    // If date filters are provided, use a more efficient query that filters server-side
-    // Otherwise, get all transactions (but this may be limited to 1000 by Supabase default)
     const transactions = startDate || endDate 
       ? await getAllTransactionsWithDateFilter(startDate || undefined, endDate || undefined)
       : await getAllTransactions();

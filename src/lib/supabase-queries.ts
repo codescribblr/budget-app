@@ -1189,6 +1189,316 @@ export async function searchTransactions(
   return transactionsWithSplits;
 }
 
+export interface GetTransactionsPaginatedParams {
+  page?: number;
+  pageSize?: number;
+  searchQuery?: string;
+  startDate?: string;
+  endDate?: string;
+  categoryIds?: number[];
+  merchantGroupIds?: number[];
+  transactionTypes?: ('income' | 'expense')[];
+  tagIds?: number[];
+  accountIds?: number[];
+  creditCardIds?: number[];
+  sortBy?: 'date' | 'description' | 'merchant' | 'amount';
+  sortDirection?: 'asc' | 'desc';
+}
+
+export interface GetTransactionsPaginatedResult {
+  transactions: TransactionWithSplits[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export async function getTransactionsPaginated(
+  params: GetTransactionsPaginatedParams = {}
+): Promise<GetTransactionsPaginatedResult> {
+  const {
+    page = 1,
+    pageSize = 50,
+    searchQuery,
+    startDate,
+    endDate,
+    categoryIds = [],
+    merchantGroupIds = [],
+    transactionTypes = [],
+    tagIds = [],
+    accountIds = [],
+    creditCardIds = [],
+    sortBy = 'date',
+    sortDirection = 'desc',
+  } = params;
+
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  // Build base query
+  let query = supabase
+    .from('transactions')
+    .select(`
+      *,
+      merchant_groups (
+        display_name
+      ),
+      accounts (
+        name
+      ),
+      credit_cards (
+        name
+      ),
+      transaction_tags (
+        tags (*)
+      )
+    `, { count: 'exact' })
+    .eq('budget_account_id', accountId);
+
+  // Apply date filters
+  if (startDate) {
+    query = query.gte('date', startDate);
+  }
+  if (endDate) {
+    query = query.lte('date', endDate);
+  }
+
+  // Apply merchant group filters
+  if (merchantGroupIds.length > 0) {
+    query = query.in('merchant_group_id', merchantGroupIds);
+  }
+
+  // Apply transaction type filters
+  if (transactionTypes.length > 0) {
+    query = query.in('transaction_type', transactionTypes);
+  }
+
+  // Apply account filters
+  if (accountIds.length > 0 && creditCardIds.length > 0) {
+    // If both accounts and credit cards, use OR logic
+    query = query.or(`account_id.in.(${accountIds.join(',')}),credit_card_id.in.(${creditCardIds.join(',')})`);
+  } else if (accountIds.length > 0) {
+    query = query.in('account_id', accountIds);
+  } else if (creditCardIds.length > 0) {
+    query = query.in('credit_card_id', creditCardIds);
+  }
+
+  // Apply search query (description search)
+  if (searchQuery && searchQuery.trim().length > 0) {
+    query = query.ilike('description', `%${searchQuery.trim()}%`);
+  }
+
+  // If category or tag filters are active, we need to filter before pagination
+  // First, get all matching transaction IDs
+  let transactionIdsToFetch: number[] | null = null;
+  let finalTotal = 0;
+  
+  if (categoryIds.length > 0 || tagIds.length > 0) {
+    // Fetch all matching transaction IDs first (without pagination)
+    // Build a separate query for counting (we don't need the count here, just the IDs)
+    const { data: allMatchingTransactions, error: countError } = await query
+      .select('id')
+      .limit(50000); // Reasonable limit
+    
+    if (countError) throw countError;
+    
+    if (!allMatchingTransactions || allMatchingTransactions.length === 0) {
+      return {
+        transactions: [],
+        total: 0,
+        page,
+        pageSize,
+        totalPages: 0,
+      };
+    }
+    
+    const allIds = allMatchingTransactions.map((t: any) => t.id);
+    
+    // Get splits and tags for all matching transactions
+    const [splitsResult, tagsResult] = await Promise.all([
+      categoryIds.length > 0 
+        ? supabase.from('transaction_splits').select('transaction_id').in('transaction_id', allIds).in('category_id', categoryIds)
+        : Promise.resolve({ data: null, error: null }),
+      tagIds.length > 0
+        ? supabase.from('transaction_tags').select('transaction_id').in('transaction_id', allIds).in('tag_id', tagIds)
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+    
+    // Filter IDs based on category/tag filters
+    let filteredIds = new Set(allIds);
+    
+    if (categoryIds.length > 0 && splitsResult.data) {
+      const transactionIdsWithCategories = new Set(splitsResult.data.map((s: any) => s.transaction_id));
+      filteredIds = new Set([...filteredIds].filter(id => transactionIdsWithCategories.has(id)));
+    }
+    
+    if (tagIds.length > 0 && tagsResult.data) {
+      // For tags, transaction must have ALL selected tags (AND logic)
+      const tagCountsByTransaction = new Map<number, number>();
+      tagsResult.data.forEach((tt: any) => {
+        tagCountsByTransaction.set(tt.transaction_id, (tagCountsByTransaction.get(tt.transaction_id) || 0) + 1);
+      });
+      filteredIds = new Set([...filteredIds].filter(id => tagCountsByTransaction.get(id) === tagIds.length));
+    }
+    
+    transactionIdsToFetch = Array.from(filteredIds);
+    finalTotal = transactionIdsToFetch.length;
+    
+    // Now rebuild query to fetch only the filtered IDs, with sorting and pagination
+    query = supabase
+      .from('transactions')
+      .select(`
+        *,
+        merchant_groups (
+          display_name
+        ),
+        accounts (
+          name
+        ),
+        credit_cards (
+          name
+        ),
+        transaction_tags (
+          tags (*)
+        )
+      `)
+      .eq('budget_account_id', accountId)
+      .in('id', transactionIdsToFetch);
+    
+    // Reapply sorting
+    const ascending = sortDirection === 'asc';
+    switch (sortBy) {
+      case 'date':
+        query = query.order('date', { ascending }).order('created_at', { ascending });
+        break;
+      case 'description':
+        query = query.order('description', { ascending }).order('date', { ascending: false });
+        break;
+      case 'amount':
+        query = query.order('total_amount', { ascending }).order('date', { ascending: false });
+        break;
+      case 'merchant':
+        query = query.order('merchant_group_id', { ascending }).order('date', { ascending: false });
+        break;
+    }
+    
+    // Apply pagination
+    const offset = (page - 1) * pageSize;
+    query = query.range(offset, offset + pageSize - 1);
+  } else {
+    // No category/tag filters - can use normal pagination
+    const ascending = sortDirection === 'asc';
+    switch (sortBy) {
+      case 'date':
+        query = query.order('date', { ascending }).order('created_at', { ascending });
+        break;
+      case 'description':
+        query = query.order('description', { ascending }).order('date', { ascending: false });
+        break;
+      case 'amount':
+        query = query.order('total_amount', { ascending }).order('date', { ascending: false });
+        break;
+      case 'merchant':
+        query = query.order('merchant_group_id', { ascending }).order('date', { ascending: false });
+        break;
+    }
+    
+    // Apply pagination
+    const offset = (page - 1) * pageSize;
+    query = query.range(offset, offset + pageSize - 1);
+  }
+
+  // Execute query
+  const { data: transactions, error: txError, count } = await query;
+  
+  if (!transactionIdsToFetch) {
+    finalTotal = count || 0;
+  }
+
+  if (txError) throw txError;
+
+  if (!transactions || transactions.length === 0) {
+    return {
+      transactions: [],
+      total: count || 0,
+      page,
+      pageSize,
+      totalPages: Math.ceil((count || 0) / pageSize),
+    };
+  }
+
+  // Get all transaction IDs
+  const transactionIds = transactions.map((t: any) => t.id);
+
+  // Get splits for these transactions
+  const { data: allSplits, error: splitError } = await supabase
+    .from('transaction_splits')
+    .select(`
+      *,
+      categories (
+        name
+      )
+    `)
+    .in('transaction_id', transactionIds);
+
+  if (splitError) throw splitError;
+
+  // Group splits by transaction_id
+  const splitsByTransaction = new Map<number, any[]>();
+  (allSplits || []).forEach((split: any) => {
+    if (!splitsByTransaction.has(split.transaction_id)) {
+      splitsByTransaction.set(split.transaction_id, []);
+    }
+    splitsByTransaction.get(split.transaction_id)!.push({
+      ...split,
+      category_name: split.categories?.name || 'Unknown',
+    });
+  });
+
+  // Build the final result
+  let transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => ({
+    id: transaction.id,
+    date: transaction.date,
+    description: transaction.description,
+    total_amount: transaction.total_amount,
+    transaction_type: transaction.transaction_type || 'expense',
+    merchant_group_id: transaction.merchant_group_id,
+    account_id: transaction.account_id,
+    credit_card_id: transaction.credit_card_id,
+    is_historical: transaction.is_historical || false,
+    created_at: transaction.created_at,
+    updated_at: transaction.updated_at,
+    merchant_name: transaction.merchant_groups?.display_name || null,
+    account_name: transaction.accounts?.name || null,
+    credit_card_name: transaction.credit_cards?.name || null,
+    tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
+    splits: splitsByTransaction.get(transaction.id) || [],
+  }));
+
+  // Category and tag filters are already applied before pagination (if they were active)
+  // No need to filter again here
+
+  // Apply merchant sorting if needed (since merchant is a relation)
+  if (sortBy === 'merchant') {
+    transactionsWithSplits.sort((a, b) => {
+      const merchantA = a.merchant_name || '';
+      const merchantB = b.merchant_name || '';
+      const comparison = merchantA.localeCompare(merchantB, undefined, { sensitivity: 'base' });
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }
+
+
+  return {
+    transactions: transactionsWithSplits,
+    total: finalTotal,
+    page,
+    pageSize,
+    totalPages: Math.ceil(finalTotal / pageSize),
+  };
+}
+
 export async function getTransactionById(id: number): Promise<TransactionWithSplits | null> {
   const { supabase } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
