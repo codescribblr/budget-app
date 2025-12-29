@@ -24,6 +24,17 @@ import {
   Inbox,
   Tag,
   Repeat,
+  User,
+  Key,
+  Database,
+  Copy,
+  Users,
+  Download,
+  Trash2,
+  Crown,
+  UserPlus,
+  RefreshCw,
+  Bell,
 } from "lucide-react"
 import { useFeature } from "@/contexts/FeatureContext"
 
@@ -40,13 +51,19 @@ import type { Category, Account, CreditCard, Loan, TransactionWithSplits, GoalWi
 
 // Settings items for search
 const settingsItems = [
-  { label: "Features", path: "/settings", section: "features", keywords: "features enable disable advanced power user" },
-  { label: "Data Backup & Restore", path: "/settings", section: "backup", keywords: "backup restore export import data" },
-  { label: "Merchant Groups", path: "/merchants", section: null, keywords: "merchant groups manage" },
-  { label: "Category Rules", path: "/category-rules", section: null, keywords: "category rules auto categorize" },
-  { label: "Duplicate Transactions", path: "/settings", section: "duplicates", keywords: "duplicate transactions find delete" },
-  { label: "Clear All Data", path: "/settings", section: "clear-data", keywords: "clear delete all data reset" },
-  { label: "Delete Account", path: "/settings", section: "delete-account", keywords: "delete account close" },
+  { label: "Features", path: "/settings", icon: Sparkles, section: "features", keywords: "features enable disable advanced power user" },
+  { label: "Subscription", path: "/settings/subscription", icon: Crown, section: null, keywords: "subscription premium upgrade billing payment" },
+  { label: "Password", path: "/settings/password", icon: Key, section: null, keywords: "password change reset security" },
+  { label: "Notifications", path: "/settings/notifications", icon: Bell, section: null, keywords: "notifications alerts preferences" },
+  { label: "Automatic Imports", path: "/settings/automatic-imports", icon: RefreshCw, section: null, keywords: "automatic imports teller plaid yodlee email", featureKey: "automatic_imports" },
+  { label: "Import Templates", path: "/settings/import-templates", icon: FileText, section: null, keywords: "import templates csv mapping" },
+  { label: "Duplicate Transactions", path: "/settings/duplicates", icon: Copy, section: null, keywords: "duplicate transactions find delete" },
+  { label: "Merchants", path: "/settings/merchants", icon: Store, section: null, keywords: "merchant groups manage" },
+  { label: "Category Rules", path: "/category-rules", icon: FolderTree, section: null, keywords: "category rules auto categorize" },
+  { label: "Backup & Restore", path: "/settings/backup", icon: Download, section: null, keywords: "backup restore export import data" },
+  { label: "Data Management", path: "/settings/data", icon: Database, section: null, keywords: "clear delete all data reset import" },
+  { label: "Collaborators", path: "/settings/collaborators", icon: UserPlus, section: null, keywords: "collaborators team members share account" },
+  { label: "Delete Account", path: "/settings/account", icon: Trash2, section: null, keywords: "delete account close remove" },
 ]
 
 // Simple debounce hook
@@ -112,6 +129,7 @@ export function CommandPalette() {
   const advancedReportingEnabled = useFeature('advanced_reporting')
   const tagsEnabled = useFeature('tags')
   const recurringTransactionsEnabled = useFeature('recurring_transactions')
+  const automaticImportsEnabled = useFeature('automatic_imports')
   const scrollTimeoutsRef = React.useRef<NodeJS.Timeout[]>([])
 
   React.useEffect(() => {
@@ -414,6 +432,7 @@ export function CommandPalette() {
                     const date = new Date(transaction.date).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
+                      year: '2-digit',
                     })
                     const amountClass = transaction.transaction_type === 'income' ? 'text-green-500' : 'text-red-500'
                     const formattedAmount = `$${transaction.total_amount.toFixed(2)}`
@@ -470,28 +489,45 @@ export function CommandPalette() {
           )}
           {settingsItems.length > 0 && (
             <CommandGroup heading="Settings">
-              {settingsItems.map((item) => (
-                <CommandItem
-                  key={item.path + item.section}
-                  value={`${item.label} ${item.keywords}`}
-                  onSelect={() => {
-                    runCommand(() => {
-                      router.push(item.path)
-                      // Scroll to section if specified
-                      if (item.section) {
-                        const timeout = setTimeout(() => {
-                          const element = document.getElementById(item.section)
-                          element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                        }, 100)
-                        scrollTimeoutsRef.current.push(timeout)
-                      }
-                    })
-                  }}
-                >
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>{item.label}</span>
-                </CommandItem>
-              ))}
+              {settingsItems
+                .filter((item) => {
+                  // If item has a featureKey, check if feature is enabled
+                  if ('featureKey' in item && item.featureKey) {
+                    switch (item.featureKey) {
+                      case 'automatic_imports':
+                        return automaticImportsEnabled
+                      default:
+                        return true
+                    }
+                  }
+                  // No feature requirement, show item
+                  return true
+                })
+                .map((item) => {
+                  const Icon = item.icon || Settings
+                  return (
+                    <CommandItem
+                      key={item.path + (item.section || '')}
+                      value={`${item.label} ${item.keywords}`}
+                      onSelect={() => {
+                        runCommand(() => {
+                          router.push(item.path)
+                          // Scroll to section if specified (for main settings page)
+                          if (item.section) {
+                            const timeout = setTimeout(() => {
+                              const element = document.getElementById(item.section)
+                              element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                            }, 100)
+                            scrollTimeoutsRef.current.push(timeout)
+                          }
+                        })
+                      }}
+                    >
+                      <Icon className="mr-2 h-4 w-4" />
+                      <span>{item.label}</span>
+                    </CommandItem>
+                  )
+                })}
             </CommandGroup>
           )}
         </CommandList>
