@@ -180,3 +180,4 @@ Future enhancements may require:
    - Test transactions with categories → verify auto-approval
    - Test transactions without categories → verify queued for review
    - Test error handling (approval fails → fallback to queue)
+

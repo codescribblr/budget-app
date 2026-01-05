@@ -252,3 +252,4 @@ VERCEL_PROJECT_ID=...
 
 **Ready to deploy!** Push to `main` and your app will automatically deploy with database migrations! 🚀
 
+

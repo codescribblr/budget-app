@@ -4,3 +4,4 @@ export default function Merchants() {
   return <MerchantsPage />;
 }
 
+

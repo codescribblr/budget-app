@@ -111,3 +111,4 @@ export const DEFAULT_SETTINGS = [
   // - monthly_budget = sum of all category monthly_amounts
 ];
 
+

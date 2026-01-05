@@ -46,3 +46,4 @@ CREATE POLICY "Users can delete own loans"
 -- Add comment
 COMMENT ON TABLE loans IS 'Tracks user loans and debts. Loans are liabilities and do not affect cash-based budget totals.';
 
+

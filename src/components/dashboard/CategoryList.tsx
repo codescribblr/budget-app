@@ -1546,3 +1546,4 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
   );
 }
 
+

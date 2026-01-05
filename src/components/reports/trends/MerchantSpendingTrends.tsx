@@ -221,3 +221,4 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
   );
 }
 
+

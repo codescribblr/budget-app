@@ -41,3 +41,4 @@ CREATE POLICY "Users can delete own backups"
 COMMENT ON TABLE user_backups IS 'Stores user data backups in JSON format. Each user can have up to 3 backups.';
 COMMENT ON COLUMN user_backups.backup_data IS 'JSON object containing all user data: accounts, categories, transactions, etc.';
 
+

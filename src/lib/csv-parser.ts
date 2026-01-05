@@ -401,3 +401,4 @@ function isWellsFargoFormat(row: string[]): boolean {
 
   return true;
 }
+

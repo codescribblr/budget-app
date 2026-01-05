@@ -274,3 +274,4 @@ export function calculateConfidence(similarity: number, descriptionCount: number
   return Math.round(confidence * 100) / 100;
 }
 
+

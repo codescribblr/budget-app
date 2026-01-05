@@ -453,3 +453,4 @@ if (queuedImport.original_data && !queuedImport.csv_file_name?.endsWith('.csv'))
 5. **Template Sharing**: Allow sharing templates across users/accounts
 6. **Virtual CSV Enhancements**: Add more columns to virtual CSV (e.g., transaction type field if available in API)
 
+

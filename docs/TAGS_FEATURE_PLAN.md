@@ -1320,3 +1320,4 @@ const { data } = await supabase
 The tags feature will provide users with flexible, multi-dimensional categorization capabilities that complement the existing category and merchant systems. By implementing tags as a many-to-many relationship with transactions, we enable powerful filtering, reporting, and analysis capabilities while maintaining performance and data integrity.
 
 The phased implementation approach allows for incremental delivery, starting with core functionality and building up to advanced features. The design decisions prioritize user experience, performance, and maintainability.
+

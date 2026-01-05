@@ -162,3 +162,4 @@ export default function SpendingVelocityTrend({ transactions, categories }: Spen
   );
 }
 
+

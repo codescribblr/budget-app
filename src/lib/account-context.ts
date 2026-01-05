@@ -327,3 +327,4 @@ export async function userHasAccountWriteAccess(accountId: number): Promise<bool
   return !!member;
 }
 
+

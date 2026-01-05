@@ -918,3 +918,4 @@ Respond in a friendly, professional tone.`;
 
 export const geminiService = new GeminiService();
 
+

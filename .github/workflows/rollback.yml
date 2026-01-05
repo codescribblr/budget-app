@@ -88,3 +88,4 @@ jobs:
           echo "⚠️  Note: You may need to redeploy the application if the code version"
           echo "   doesn't match the database schema."
 
+

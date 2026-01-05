@@ -21,3 +21,4 @@ COMMENT ON COLUMN user_backups.backup_data IS 'DEPRECATED: Legacy JSONB storage.
 
 COMMIT;
 
+

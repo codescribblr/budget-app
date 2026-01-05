@@ -215,3 +215,4 @@ Once email import is working:
    - Improve queue UI
    - Add cost tracking
    - Add integration marketplace
+

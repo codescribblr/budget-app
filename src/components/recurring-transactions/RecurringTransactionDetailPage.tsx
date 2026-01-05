@@ -387,3 +387,4 @@ export default function RecurringTransactionDetailPage({ id }: { id: string }) {
 
 
 
+

@@ -964,3 +964,4 @@ Split Total: $80.00 ✓ (matches transaction amount)
 - Consider adding statistics: "X duplicate groups found, Y merged, Z marked as reviewed"
 - Consider adding "Merge Similar" suggestion (transactions that are close but not exact duplicates)
 
+

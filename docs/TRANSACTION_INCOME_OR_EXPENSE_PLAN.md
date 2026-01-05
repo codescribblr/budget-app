@@ -898,3 +898,4 @@ No changes needed - transaction_type is just another column, existing RLS polici
   - Net calculations: Income adds, expenses subtract
   - Merchant reports: Account for transaction_type in totals
 
+

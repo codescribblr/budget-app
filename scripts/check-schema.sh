@@ -47,3 +47,4 @@ psql "$SUPABASE_DB_URL" -c "SELECT column_name, data_type, is_nullable, column_d
 echo ""
 echo -e "${GREEN}✅ Schema check complete${NC}"
 
+

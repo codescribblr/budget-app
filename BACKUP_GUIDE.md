@@ -231,3 +231,4 @@ ls -t backup_*.sql | tail -n +8 | xargs rm -f
 - The scripts use PostgreSQL's standard tools (`pg_dump` and `psql`)
 - Backups are plain SQL files that you can inspect with any text editor
 
+

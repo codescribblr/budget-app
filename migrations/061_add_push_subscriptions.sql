@@ -57,3 +57,4 @@ WHERE default_push_enabled IS NULL;
 
 COMMIT;
 
+

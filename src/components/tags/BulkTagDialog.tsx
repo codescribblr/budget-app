@@ -136,3 +136,4 @@ export default function BulkTagDialog({ isOpen, onClose, transactionIds, onSucce
     </Dialog>
   );
 }
+

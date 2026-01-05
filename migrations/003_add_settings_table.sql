@@ -38,3 +38,4 @@ CREATE POLICY "Users can delete their own settings"
   ON settings FOR DELETE
   USING (auth.uid() = user_id);
 
+

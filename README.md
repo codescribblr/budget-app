@@ -229,3 +229,4 @@ Built with amazing open-source tools:
 **Made with ❤️ by [Jonathan Wadsworth](https://github.com/codescribblr)**
 
 If you find this project helpful, please consider giving it a ⭐️ on GitHub!
+

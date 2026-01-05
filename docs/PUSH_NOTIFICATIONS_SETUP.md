@@ -190,3 +190,4 @@ const nextConfig: NextConfig = {
 - `src/components/notifications/PushNotificationSetup.tsx` - UI component
 - `migrations/061_add_push_subscriptions.sql` - Database migration
 
+

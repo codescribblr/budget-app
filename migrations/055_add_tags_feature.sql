@@ -137,3 +137,4 @@ CREATE POLICY "Users can delete transaction tags in their accounts" ON transacti
   );
 
 COMMIT;
+

@@ -298,3 +298,4 @@ function extractCoreDescription(description: string): string | null {
   
   return normalized.toLowerCase();
 }
+

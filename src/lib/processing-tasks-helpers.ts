@@ -22,3 +22,4 @@ export async function markTaskCompleteForBatch(
     console.warn('Failed to mark task complete for batch:', error);
   }
 }
+

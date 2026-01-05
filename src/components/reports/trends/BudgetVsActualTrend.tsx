@@ -153,3 +153,4 @@ export default function BudgetVsActualTrend({ transactions, categories }: Budget
   );
 }
 
+

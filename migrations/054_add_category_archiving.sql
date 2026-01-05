@@ -16,3 +16,4 @@ COMMENT ON COLUMN categories.is_archived IS 'Whether the category is archived. A
 
 COMMIT;
 
+

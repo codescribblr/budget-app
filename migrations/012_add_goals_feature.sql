@@ -66,3 +66,4 @@ CREATE POLICY "Users can delete own goals"
 -- Add foreign key constraint for linked_category_id (must be done after goals table exists)
 -- Note: This is a self-referencing constraint that will be handled by application logic
 
+

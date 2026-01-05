@@ -1360,3 +1360,4 @@ See `migrations/046_add_automatic_imports.sql` (to be created)
 - Removed non-US integrations (TrueLayer, Salt Edge, Yapily, Flinks) and browser automation (security concerns)
 - Focused on US-only secure integrations: Plaid, Yodlee, Finicity, MX, Teller, Email/PDF
 - Added comprehensive backup/restore updates section covering automatic_import_setups and queued_imports tables
+

@@ -123,3 +123,4 @@ else
     echo -e "${YELLOW}   The schema will be reloaded automatically on next API request${NC}"
   fi
 fi
+

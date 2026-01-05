@@ -214,3 +214,4 @@ All features are **opt-in** to keep the app simple for basic users.
 **Status:** Implementation Phase
 **Branch:** `feature/variable-income-enhancements`
 
+

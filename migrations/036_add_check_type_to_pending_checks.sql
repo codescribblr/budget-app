@@ -17,3 +17,4 @@ WHERE type IS NULL;
 ALTER TABLE pending_checks
 ALTER COLUMN type SET NOT NULL;
 
+

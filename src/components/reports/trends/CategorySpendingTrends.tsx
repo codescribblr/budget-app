@@ -191,3 +191,4 @@ export default function CategorySpendingTrends({ transactions, categories }: Cat
   );
 }
 
+

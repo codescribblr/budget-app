@@ -55,3 +55,4 @@ console.log('\n✅ Merchant learning migration complete!');
 
 db.close();
 
+

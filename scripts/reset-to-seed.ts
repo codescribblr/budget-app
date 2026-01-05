@@ -29,3 +29,4 @@ execSync('npx tsx scripts/seed.ts', { stdio: 'inherit' });
 console.log('\n✅ Database reset to initial seed data!');
 console.log('💡 Your previous database was backed up in database/backups/');
 
+

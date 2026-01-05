@@ -16,3 +16,4 @@ export default async function RecurringTransactionDetail({ params }: { params: P
 
 
 
+

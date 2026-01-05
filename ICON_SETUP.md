@@ -205,3 +205,4 @@ cd budget-app && rsvg-convert -w 192 -h 192 public/icon-darkmode.svg -o public/i
 - Theme color matches app's dark slate background
 - Icons use same color palette as spending distribution chart for brand consistency
 
+

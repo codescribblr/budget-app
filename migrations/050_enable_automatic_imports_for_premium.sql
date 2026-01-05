@@ -31,3 +31,4 @@ ON CONFLICT (account_id, feature_name) DO NOTHING;
 COMMENT ON COLUMN user_feature_flags.feature_name IS 'Feature name - now includes automatic_imports';
 
 COMMIT;
+

@@ -122,3 +122,4 @@ export default function CategoryWeekOfMonthSpending({ transactions, category }: 
   );
 }
 
+

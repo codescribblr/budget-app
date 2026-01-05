@@ -46,3 +46,4 @@ CREATE POLICY "Users can delete own templates"
   ON csv_import_templates FOR DELETE
   USING (auth.uid() = user_id);
 
+

@@ -240,3 +240,4 @@
 - Quick reference: `docs/QUICK_REFERENCE.md`
 - Database migration: `migrations/018_add_monthly_funding_tracking.sql`
 
+

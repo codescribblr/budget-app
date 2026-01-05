@@ -88,3 +88,4 @@ export async function DELETE(
     return NextResponse.json({ error: 'Failed to delete category' }, { status: 500 });
   }
 }
+

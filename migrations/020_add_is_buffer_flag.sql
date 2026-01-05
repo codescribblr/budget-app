@@ -16,3 +16,4 @@ WHERE name = 'Income Buffer' AND is_system = TRUE;
 -- Add comment to document the column
 COMMENT ON COLUMN categories.is_buffer IS 'Identifies the Income Buffer category. Unlike other system categories, this one counts toward total envelopes and Available to Save calculations, but does not appear in category dropdowns.';
 
+

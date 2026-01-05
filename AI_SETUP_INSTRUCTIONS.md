@@ -85,3 +85,4 @@ After fixing both issues:
 
 The code now handles missing tables gracefully (won't crash), but you should still run the migration for full functionality.
 
+

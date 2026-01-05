@@ -199,3 +199,4 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
   );
 }
 
+

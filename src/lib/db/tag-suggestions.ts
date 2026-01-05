@@ -126,3 +126,4 @@ export async function getTagSuggestions(
     .slice(0, 5)
     .map(item => item.tag);
 }
+
