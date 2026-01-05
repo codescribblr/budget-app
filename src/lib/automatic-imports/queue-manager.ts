@@ -168,6 +168,8 @@ export async function findExistingPendingBatch(options: {
   }
   
   // Build query to find pending/reviewing batches for this setup and target account
+  // CRITICAL: This ensures transactions from the same import setup + account are always
+  // added to the same batch, preventing multiple queues for the same setup
   let query = supabase
     .from('queued_imports')
     .select('source_batch_id')
@@ -193,6 +195,7 @@ export async function findExistingPendingBatch(options: {
   }
   
   // Order by most recent batch first (in case of multiple batches due to race conditions)
+  // This ensures we always use the most recent pending batch
   query = query.order('source_fetched_at', { ascending: false });
   
   const { data, error } = await query.limit(1);
@@ -206,7 +209,15 @@ export async function findExistingPendingBatch(options: {
     return null;
   }
   
-  return data[0].source_batch_id;
+  const batchId = data[0].source_batch_id;
+  
+  // Validate that we found a valid batch ID
+  if (!batchId || typeof batchId !== 'string') {
+    console.warn('Invalid batch ID found:', batchId);
+    return null;
+  }
+  
+  return batchId;
 }
 
 /**

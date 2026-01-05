@@ -397,10 +397,10 @@ export async function fetchAndQueueTellerTransactions(options: {
         }
       }
     } else if (!targetAccountId && !targetCreditCardId) {
-      // If supabase and accountId provided, fetch setup for account mappings
+      // If supabase and accountId provided, fetch setup for account mappings and mapping template
       const { data: setup, error: setupError } = await supabase
         .from('automatic_import_setups')
-        .select('source_config')
+        .select('source_config, csv_mapping_template_id')
         .eq('id', importSetupId)
         .single();
       
@@ -413,6 +413,19 @@ export async function fetchAndQueueTellerTransactions(options: {
           // Use per-account is_historical if available
           if (actualIsHistorical === undefined && mapping.is_historical !== undefined) {
             actualIsHistorical = mapping.is_historical;
+          }
+        }
+        
+        // Load mapping template if not already loaded
+        if (!mappingToUse) {
+          // Check for per-account template first, then fall back to global template
+          let templateId = mapping?.csv_mapping_template_id || setup.csv_mapping_template_id;
+          if (templateId) {
+            const { loadTemplateById } = await import('../../mapping-templates');
+            const template = await loadTemplateById(templateId, supabase);
+            if (template) {
+              mappingToUse = template.mapping;
+            }
           }
         }
       }
@@ -432,7 +445,8 @@ export async function fetchAndQueueTellerTransactions(options: {
       return { fetched: 0, queued: 0, errors: [] };
     }
 
-    // Load template mapping if not already loaded (for the else branch)
+    // CRITICAL: Ensure mapping template is always loaded before converting transactions
+    // This ensures field mappings (especially amountSignConvention) are correctly applied
     if (!mappingToUse && supabase) {
       const { data: setup } = await supabase
         .from('automatic_import_setups')
@@ -441,7 +455,7 @@ export async function fetchAndQueueTellerTransactions(options: {
         .single();
       
       if (setup) {
-        // Check for per-account template
+        // Check for per-account template first, then fall back to global template
         const accountMappings = setup.source_config?.account_mappings || [];
         const accountMapping = accountMappings.find((m: any) => m.teller_account_id === accountId);
         
@@ -454,6 +468,11 @@ export async function fetchAndQueueTellerTransactions(options: {
           }
         }
       }
+    }
+    
+    // Log warning if no mapping template found (transactions will use default convention)
+    if (!mappingToUse) {
+      console.warn(`No mapping template found for import setup ${importSetupId}, account ${accountId}. Using default amountSignConvention: positive_is_expense`);
     }
 
     // Convert to ParsedTransaction format with account mapping and template
@@ -510,11 +529,13 @@ export async function fetchAndQueueTellerTransactions(options: {
       }
     }
 
-    // Determine batch ID: use provided, find existing pending batch, or create new
+    // Determine batch ID: use provided, find existing pending batch, or create deterministic batch ID
+    // CRITICAL: Batch ID must be deterministic based on import_setup_id + teller_account_id
+    // to prevent creating multiple queues for the same import setup
     let sourceBatchId = providedSourceBatchId;
     
     if (!sourceBatchId) {
-      // Try to find an existing pending batch for this account/import setup
+      // First, try to find an existing pending batch for this account/import setup
       // This implements the batching window feature - append to existing batch if available
       try {
         const { findExistingPendingBatch } = await import('../queue-manager');
@@ -530,13 +551,26 @@ export async function fetchAndQueueTellerTransactions(options: {
         if (existingBatchId) {
           sourceBatchId = existingBatchId;
         } else {
-          // Create new batch ID for this account
-          sourceBatchId = `teller-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+          // Create deterministic batch ID based on import_setup_id + teller_account_id
+          // This ensures the same setup+account always uses the same batch ID
+          // Format: teller-{importSetupId}-{tellerAccountId}
+          // This prevents race conditions where multiple webhooks create separate batches
+          const accountIdentifier = targetAccountId 
+            ? `acc-${targetAccountId}` 
+            : targetCreditCardId 
+              ? `cc-${targetCreditCardId}` 
+              : `teller-${accountId}`;
+          sourceBatchId = `teller-${importSetupId}-${accountIdentifier}`;
         }
       } catch (error: any) {
-        // If finding existing batch fails, log and create new batch
-        console.warn(`Error finding existing pending batch, creating new batch:`, error);
-        sourceBatchId = `teller-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+        // If finding existing batch fails, still use deterministic batch ID
+        console.warn(`Error finding existing pending batch, using deterministic batch ID:`, error);
+        const accountIdentifier = targetAccountId 
+          ? `acc-${targetAccountId}` 
+          : targetCreditCardId 
+            ? `cc-${targetCreditCardId}` 
+            : `teller-${accountId}`;
+        sourceBatchId = `teller-${importSetupId}-${accountIdentifier}`;
       }
     }
 
