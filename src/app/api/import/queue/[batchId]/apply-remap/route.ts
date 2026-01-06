@@ -35,7 +35,7 @@ export async function POST(
     const {
       mapping,
       saveAsTemplate = false,
-      templateName,
+      templateName: providedTemplateName,
       overwriteTemplateId,
       deleteOldTemplate = false,
     } = body as {
@@ -45,6 +45,8 @@ export async function POST(
       overwriteTemplateId?: number;
       deleteOldTemplate?: boolean;
     };
+    
+    let templateName = providedTemplateName;
 
     // Get all queued imports from batch to check if this is API-based or CSV-based
     const { data: allQueuedImports, error: fetchError } = await supabase
@@ -160,8 +162,54 @@ export async function POST(
     let newTemplateId: number | undefined;
     let mappingName: string | undefined;
     
-    if (saveAsTemplate) {
-      if (overwriteTemplateId) {
+    // For automatic imports, always update/create the template (even if saveAsTemplate is false)
+    // This ensures the mapping persists for future webhook imports
+    const isAutomaticImport = !!firstQueuedImport.import_setup_id;
+    const shouldUpdateTemplate = saveAsTemplate || isAutomaticImport;
+    
+    if (shouldUpdateTemplate) {
+      // If this is an automatic import with an existing template, update it first
+      if (isAutomaticImport && oldTemplateId && !saveAsTemplate) {
+        // Update existing template without creating a new one
+        const { data: updated, error: updateError } = await supabase
+          .from('csv_import_templates')
+          .update({
+            date_column: mapping.dateColumn,
+            amount_column: mapping.amountColumn,
+            description_column: mapping.descriptionColumn,
+            debit_column: mapping.debitColumn,
+            credit_column: mapping.creditColumn,
+            transaction_type_column: mapping.transactionTypeColumn,
+            amount_sign_convention: mapping.amountSignConvention || 'positive_is_expense',
+            date_format: mapping.dateFormat,
+            has_headers: mapping.hasHeaders,
+            skip_rows: mapping.skipRows || 0,
+            last_used: new Date().toISOString(),
+          })
+          .eq('id', oldTemplateId)
+          .eq('user_id', user.id)
+          .select('id, template_name')
+          .single();
+
+        if (updateError) {
+          console.error('Error updating existing template:', updateError);
+          // Fall through to create new template if update fails
+        } else if (updated) {
+          newTemplateId = updated.id;
+          mappingName = updated.template_name || 'Saved Template';
+          console.log('Updated existing template for automatic import:', { templateId: newTemplateId, templateName: mappingName });
+        }
+      }
+      
+      // For automatic imports without an existing template, we'll create one below
+      // Set a default template name if not provided
+      if (isAutomaticImport && !saveAsTemplate && !templateName && !oldTemplateId) {
+        templateName = 'Automatic Import Template';
+      }
+      
+      // If we don't have a template ID yet (either saveAsTemplate is true, or update failed), create/update as requested
+      if (!newTemplateId) {
+        if (overwriteTemplateId) {
         // Update existing template
         const { data: updated, error: updateError } = await supabase
           .from('csv_import_templates')
@@ -275,18 +323,19 @@ export async function POST(
         }
       }
 
-      // Delete old template if requested
-      if (deleteOldTemplate && oldTemplateId && oldTemplateId !== newTemplateId) {
-        await supabase
-          .from('csv_import_templates')
-          .delete()
-          .eq('id', oldTemplateId)
-          .eq('user_id', user.id);
-      }
+        // Delete old template if requested
+        if (deleteOldTemplate && oldTemplateId && oldTemplateId !== newTemplateId) {
+          await supabase
+            .from('csv_import_templates')
+            .delete()
+            .eq('id', oldTemplateId)
+            .eq('user_id', user.id);
+        }
 
-      // Verify template was saved successfully
-      if (!newTemplateId) {
-        throw new Error('Template save was requested but template ID was not set');
+        // Verify template was saved successfully (only if saveAsTemplate was explicitly true)
+        if (saveAsTemplate && !newTemplateId) {
+          throw new Error('Template save was requested but template ID was not set');
+        }
       }
     }
     
@@ -409,22 +458,62 @@ export async function POST(
       if (importSetup && importSetup.source_type !== 'manual') {
         // Check if this is a Teller multi-account setup
         if (importSetup.source_type === 'teller' && importSetup.source_config?.account_mappings) {
-          // Try to determine which account this batch belongs to
-          // We can check the batch transactions to see if they match a specific account
-          // For now, update the global template (user can update per-account separately if needed)
-          await supabase
-            .from('automatic_import_setups')
-            .update({ csv_mapping_template_id: newTemplateId })
-            .eq('id', importSetup.id);
+          // Determine which Teller account this batch belongs to
+          // Extract account_id from original_data (Teller transaction format)
+          let tellerAccountId: string | null = null;
+          if (firstQueuedImport.original_data) {
+            try {
+              const originalData = typeof firstQueuedImport.original_data === 'string'
+                ? JSON.parse(firstQueuedImport.original_data)
+                : firstQueuedImport.original_data;
+              tellerAccountId = originalData?.account_id || null;
+            } catch (e) {
+              console.warn('Failed to parse original_data to find Teller account_id:', e);
+            }
+          }
+          
+          // Find the account mapping for this Teller account
+          const accountMappings = importSetup.source_config.account_mappings || [];
+          const accountMappingIndex = tellerAccountId
+            ? accountMappings.findIndex((m: any) => m.teller_account_id === tellerAccountId)
+            : -1;
+          
+          if (tellerAccountId && accountMappingIndex >= 0) {
+            // Update per-account template in source_config
+            const updatedAccountMappings = [...accountMappings];
+            updatedAccountMappings[accountMappingIndex] = {
+              ...updatedAccountMappings[accountMappingIndex],
+              csv_mapping_template_id: newTemplateId,
+            };
+            
+            await supabase
+              .from('automatic_import_setups')
+              .update({
+                source_config: {
+                  ...importSetup.source_config,
+                  account_mappings: updatedAccountMappings,
+                },
+              })
+              .eq('id', importSetup.id);
+            
+            console.log(`Updated per-account template for Teller account ${tellerAccountId} in setup ${importSetup.id} with template ${newTemplateId}`);
+          } else {
+            // Fallback: update global template if we can't determine the account
+            console.warn(`Could not determine Teller account for batch, updating global template instead`);
+            await supabase
+              .from('automatic_import_setups')
+              .update({ csv_mapping_template_id: newTemplateId })
+              .eq('id', importSetup.id);
+            console.log(`Updated global template for setup ${importSetup.id} with template ${newTemplateId}`);
+          }
         } else {
           // Update global template for other automatic import types
           await supabase
             .from('automatic_import_setups')
             .update({ csv_mapping_template_id: newTemplateId })
             .eq('id', importSetup.id);
+          console.log(`Updated global template for setup ${importSetup.id} with template ${newTemplateId}`);
         }
-        
-        console.log(`Updated automatic import setup ${importSetup.id} with template ${newTemplateId}`);
       }
     }
 
