@@ -174,6 +174,7 @@ export async function POST(
         const { data: updated, error: updateError } = await supabase
           .from('csv_import_templates')
           .update({
+            account_id: accountId, // Ensure account_id is set
             date_column: mapping.dateColumn,
             amount_column: mapping.amountColumn,
             description_column: mapping.descriptionColumn,
@@ -214,6 +215,7 @@ export async function POST(
         const { data: updated, error: updateError } = await supabase
           .from('csv_import_templates')
           .update({
+            account_id: accountId, // Ensure account_id is set
             template_name: templateName || undefined,
             date_column: mapping.dateColumn,
             amount_column: mapping.amountColumn,
@@ -251,6 +253,7 @@ export async function POST(
           const { data: savedTemplate, error: insertError } = await supabase
             .from('csv_import_templates')
             .insert({
+              account_id: accountId, // Required: account_id is NOT NULL
               user_id: user.id,
               template_name: templateName || undefined,
               fingerprint: fingerprint,
@@ -278,6 +281,7 @@ export async function POST(
               const { data: updated, error: updateError } = await supabase
                 .from('csv_import_templates')
                 .update({
+                  account_id: accountId, // Ensure account_id is set
                   template_name: templateName,
                   date_column: mapping.dateColumn,
                   amount_column: mapping.amountColumn,
