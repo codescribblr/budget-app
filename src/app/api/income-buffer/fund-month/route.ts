@@ -35,7 +35,6 @@ export async function POST(request: Request) {
     const { data: featureFlag } = await supabase
       .from('user_feature_flags')
       .select('enabled')
-      .eq('user_id', user.id)
       .eq('account_id', accountId)
       .eq('feature_name', 'income_buffer')
       .single();

@@ -12,6 +12,7 @@ import { Wallet, TrendingUp, TrendingDown, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useFeature } from '@/contexts/FeatureContext';
+import { AddToBufferDialog } from '@/components/money-movement/AddToBufferDialog';
 
 interface BufferStatus {
   enabled: boolean;
@@ -27,6 +28,8 @@ export default function IncomeBufferPage() {
   const [loading, setLoading] = useState(true);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [currentSavings, setCurrentSavings] = useState<number>(0);
+  const [isAddToBufferOpen, setIsAddToBufferOpen] = useState(false);
   const router = useRouter();
   const incomeBufferEnabled = useFeature('income_buffer');
 
@@ -36,6 +39,7 @@ export default function IncomeBufferPage() {
       return;
     }
     fetchStatus();
+    fetchCurrentSavings();
   }, [incomeBufferEnabled, router]);
 
   const fetchStatus = async () => {
@@ -51,6 +55,23 @@ export default function IncomeBufferPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchCurrentSavings = async () => {
+    try {
+      const response = await fetch('/api/dashboard');
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentSavings(data.current_savings || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching current savings:', error);
+    }
+  };
+
+  const handleAddToBufferSuccess = () => {
+    fetchStatus();
+    fetchCurrentSavings();
   };
 
   const handleWithdraw = async () => {
@@ -259,22 +280,30 @@ export default function IncomeBufferPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="p-4 bg-muted rounded-md">
+              <div className="text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Available to Allocate:</span>
+                  <span className="font-semibold">{formatCurrency(currentSavings)}</span>
+                </div>
+              </div>
+            </div>
+
+            <Button
+              className="w-full"
+              onClick={() => setIsAddToBufferOpen(true)}
+            >
+              <TrendingUp className="mr-2 h-4 w-4" />
+              Add to Income Buffer
+            </Button>
+
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
-                To add funds to your buffer, go to Money Movement → Allocate to Envelopes
-                and click the "Add to Income Buffer" button.
+                Transfer funds from your available savings to your Income Buffer. 
+                You can withdraw these funds later to allocate to your categories.
               </AlertDescription>
             </Alert>
-
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => router.push('/money-movement?tab=allocate')}
-            >
-              <Wallet className="mr-2 h-4 w-4" />
-              Go to Money Movement
-            </Button>
           </CardContent>
         </Card>
       </div>
@@ -305,14 +334,21 @@ export default function IncomeBufferPage() {
             <h3 className="font-semibold mb-2">Typical Workflow</h3>
             <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1">
               <li>Receive income and update your account balance</li>
-              <li>Go to Money Movement → Allocate to Envelopes</li>
-              <li>If you have excess funds, click "Add to Income Buffer"</li>
-              <li>On the 1st of each month, come here to withdraw your monthly budget</li>
-              <li>Allocate the withdrawn funds to your categories</li>
+              <li>If you have excess funds, click "Add to Income Buffer" on this page</li>
+              <li>On the 1st of each month, withdraw your monthly budget from the buffer</li>
+              <li>Go to Money Movement → Allocate to Envelopes to distribute the funds</li>
             </ol>
           </div>
         </CardContent>
       </Card>
+
+      {/* Add to Income Buffer Dialog */}
+      <AddToBufferDialog
+        open={isAddToBufferOpen}
+        onOpenChange={setIsAddToBufferOpen}
+        availableToSave={currentSavings}
+        onSuccess={handleAddToBufferSuccess}
+      />
     </div>
   );
 }

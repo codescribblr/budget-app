@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
+import { getActiveAccountId } from '@/lib/account-context';
 
 /**
  * GET /api/income-buffer/status
@@ -8,12 +9,23 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 export async function GET() {
   try {
     const { supabase, user } = await getAuthenticatedUser();
+    const accountId = await getActiveAccountId();
+    
+    if (!accountId) {
+      return NextResponse.json({
+        enabled: false,
+        balance: 0,
+        monthsOfRunway: 0,
+        monthlyBudget: 0,
+        error: 'No active account',
+      });
+    }
 
     // Check if Income Buffer feature is enabled
     const { data: featureFlag } = await supabase
       .from('user_feature_flags')
       .select('enabled')
-      .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .eq('feature_name', 'income_buffer')
       .single();
 
@@ -30,7 +42,7 @@ export async function GET() {
     const { data: bufferCategory } = await supabase
       .from('categories')
       .select('id, current_balance')
-      .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .eq('name', 'Income Buffer')
       .eq('is_system', true)
       .single();
@@ -49,7 +61,7 @@ export async function GET() {
     const { data: categories } = await supabase
       .from('categories')
       .select('monthly_amount')
-      .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .eq('is_system', false);
 
     const monthlyBudget = categories?.reduce((sum, cat) => sum + (cat.monthly_amount || 0), 0) || 0;
@@ -60,7 +72,7 @@ export async function GET() {
     const { data: fundingData } = await supabase
       .from('category_monthly_funding')
       .select('funded_amount')
-      .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .eq('month', currentMonth);
 
     const totalFundedThisMonth = fundingData?.reduce((sum, f) => sum + (f.funded_amount || 0), 0) || 0;
