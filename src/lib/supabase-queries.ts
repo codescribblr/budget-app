@@ -1297,8 +1297,27 @@ export async function getTransactionsPaginated(
   if (categoryIds.length > 0 || tagIds.length > 0) {
     // Fetch all matching transaction IDs first (without pagination)
     // Build a separate query for counting (we don't need the count here, just the IDs)
-    const { data: allMatchingTransactions, error: countError } = await query
-      .select('id')
+    // Apply ordering to ensure we get the most recent transactions first
+    const ascending = sortDirection === 'asc';
+    let idQuery = query.select('id');
+    
+    // Apply the same ordering as the final query to ensure consistency
+    switch (sortBy) {
+      case 'date':
+        idQuery = idQuery.order('date', { ascending }).order('created_at', { ascending });
+        break;
+      case 'description':
+        idQuery = idQuery.order('description', { ascending }).order('date', { ascending: false });
+        break;
+      case 'amount':
+        idQuery = idQuery.order('total_amount', { ascending }).order('date', { ascending: false });
+        break;
+      case 'merchant':
+        idQuery = idQuery.order('merchant_group_id', { ascending }).order('date', { ascending: false });
+        break;
+    }
+    
+    const { data: allMatchingTransactions, error: countError } = await idQuery
       .limit(50000); // Reasonable limit
     
     if (countError) throw countError;
@@ -1366,8 +1385,7 @@ export async function getTransactionsPaginated(
       .eq('budget_account_id', accountId)
       .in('id', transactionIdsToFetch);
     
-    // Reapply sorting
-    const ascending = sortDirection === 'asc';
+    // Reapply sorting (ascending already defined above)
     switch (sortBy) {
       case 'date':
         query = query.order('date', { ascending }).order('created_at', { ascending });
