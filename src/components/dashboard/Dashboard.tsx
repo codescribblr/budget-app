@@ -469,12 +469,6 @@ export default function Dashboard() {
           <GoalsWidget disabled={!isEditor || permissionsLoading} />
         </div>
       </div>
-
-      <div className="flex gap-4 justify-center pt-6">
-        <Button size="lg" onClick={() => window.location.href = '/transactions'}>
-          View Transactions
-        </Button>
-      </div>
     </div>
   );
 }

@@ -195,48 +195,49 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
     try {
       setIsSubmitting(true);
 
-      // Update all categories with allocations
-      const categoryUpdates = categories
-        .filter(cat => allocations[cat.id] > 0)
-        .map(async cat => {
-          const response = await fetch(`/api/categories/${cat.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              current_balance: cat.current_balance + allocations[cat.id],
-            }),
-          });
-          if (!response.ok) {
-            await handleApiError(response, 'Failed to update category');
-            throw new Error('Failed to update category');
-          }
-          return response;
-        });
-      
-      // Update goal categories with allocations
-      const goalUpdates = envelopeGoals
-        .filter(goal => goal.linked_category_id !== null && goalAllocations[goal.linked_category_id] > 0)
-        .map(async goal => {
-          if (!goal.linked_category_id) return null;
-          const category = categories.find(c => c.id === goal.linked_category_id);
-          if (!category) return null;
-          const allocation = goalAllocations[goal.linked_category_id];
-          const response = await fetch(`/api/categories/${goal.linked_category_id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              current_balance: category.current_balance + allocation,
-            }),
-          });
-          if (!response.ok) {
-            await handleApiError(response, 'Failed to update goal category');
-            throw new Error('Failed to update goal category');
-          }
-          return response;
-        })
-        .filter((update): update is Promise<Response> => update !== null);
+      // Build allocations array for batch API
+      const batchAllocations: Array<{ categoryId: number; amount: number }> = [];
 
-      await Promise.all([...categoryUpdates, ...goalUpdates]);
+      // Add regular category allocations
+      categories
+        .filter(cat => allocations[cat.id] > 0)
+        .forEach(cat => {
+          batchAllocations.push({
+            categoryId: cat.id,
+            amount: allocations[cat.id],
+          });
+        });
+
+      // Add goal category allocations
+      envelopeGoals
+        .filter(goal => goal.linked_category_id !== null && goalAllocations[goal.linked_category_id] > 0)
+        .forEach(goal => {
+          if (goal.linked_category_id) {
+            batchAllocations.push({
+              categoryId: goal.linked_category_id,
+              amount: goalAllocations[goal.linked_category_id],
+            });
+          }
+        });
+
+      if (batchAllocations.length === 0) {
+        alert('Please allocate funds to at least one category');
+        return;
+      }
+
+      // Use batch allocation API which includes audit logging
+      const response = await fetch('/api/allocations/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          allocations: batchAllocations,
+        }),
+      });
+
+      if (!response.ok) {
+        await handleApiError(response, 'Failed to allocate funds');
+        throw new Error('Failed to allocate funds');
+      }
 
       // Reset form
       setAllocations({});

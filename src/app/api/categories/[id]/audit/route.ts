@@ -45,9 +45,9 @@ export async function GET(
     const offset = parseInt(searchParams.get('offset') || '0', 10);
 
     // For proper sorting by transaction_date (which is in metadata JSONB),
-    // we fetch batches ordered by created_at ASC (oldest audit records first),
+    // we fetch batches ordered by created_at DESC (newest audit records first),
     // then sort by transaction_date within each batch
-    // This provides roughly chronological order for troubleshooting discrepancies
+    // Newest items appear at the top for easier viewing
     const batchSize = 200; // Fetch 200 records at a time for sorting
     const batchNumber = Math.floor(offset / batchSize);
     const fetchStart = batchNumber * batchSize;
@@ -57,7 +57,7 @@ export async function GET(
       .select('*')
       .eq('category_id', categoryId)
       .eq('account_id', accountId)
-      .order('created_at', { ascending: true }) // Oldest audit records first
+      .order('created_at', { ascending: false }) // Newest audit records first
       .range(fetchStart, fetchStart + batchSize - 1);
 
     if (auditError) {
@@ -151,13 +151,13 @@ export async function GET(
       };
     });
 
-    // Sort by transaction date (ascending - oldest first, newest last)
+    // Sort by transaction date (descending - newest first, oldest last)
     // If transaction_date is not available, fall back to created_at
     formattedRecords.sort((a, b) => {
       const dateA = new Date(a.transaction_date).getTime();
       const dateB = new Date(b.transaction_date).getTime();
       if (dateA !== dateB) {
-        return dateA - dateB; // Ascending order (oldest first)
+        return dateB - dateA; // Descending order (newest first)
       }
       // If dates are equal, use created_at as tiebreaker (newer operations first)
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
