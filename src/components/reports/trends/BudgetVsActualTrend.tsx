@@ -13,9 +13,9 @@ interface BudgetVsActualTrendProps {
 
 export default function BudgetVsActualTrend({ transactions, categories }: BudgetVsActualTrendProps) {
   const chartData = useMemo(() => {
-    // Calculate total monthly budget (excluding system categories)
+    // Calculate total monthly budget (excluding system and buffer categories)
     const totalMonthlyBudget = categories
-      .filter(c => !c.is_system)
+      .filter(c => !c.is_system && !c.is_buffer)
       .reduce((sum, c) => sum + c.monthly_amount, 0);
 
     // Group transactions by month
@@ -25,11 +25,11 @@ export default function BudgetVsActualTrend({ transactions, categories }: Budget
       const date = new Date(transaction.date);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-      // Sum only splits that are NOT in system categories
+      // Sum only splits that are NOT in system or buffer categories
       // Expenses add, income subtracts
       const nonSystemTotal = transaction.splits.reduce((sum, split) => {
         const category = categories.find(c => c.id === split.category_id);
-        if (category && !category.is_system) {
+        if (category && !category.is_system && !category.is_buffer) {
           const amount = transaction.transaction_type === 'expense'
             ? split.amount
             : -split.amount;

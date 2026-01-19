@@ -26,10 +26,10 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
     transactions.forEach(transaction => {
       const merchantName = transaction.merchant_name || 'Unknown';
 
-      // Sum only splits that are NOT in system categories
+      // Sum only splits that are NOT in system or buffer categories
       const nonSystemTotal = transaction.splits.reduce((sum, split) => {
         const category = categories.find(c => c.id === split.category_id);
-        if (category && !category.is_system) {
+        if (category && !category.is_system && !category.is_buffer) {
           const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
           return sum + signedAmount;
         }
@@ -59,10 +59,10 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
 
       if (!selectedMerchants.includes(merchantName)) return;
 
-      // Sum only splits that are NOT in system categories
+      // Sum only splits that are NOT in system or buffer categories
       const nonSystemTotal = transaction.splits.reduce((sum, split) => {
         const category = categories.find(c => c.id === split.category_id);
-        if (category && !category.is_system) {
+        if (category && !category.is_system && !category.is_buffer) {
           const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
           return sum + signedAmount;
         }

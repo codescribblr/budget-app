@@ -26,7 +26,7 @@ export default function CategorySpendingTrends({ transactions, categories }: Cat
     transactions.forEach(transaction => {
       transaction.splits.forEach(split => {
         const category = categories.find(c => c.id === split.category_id);
-        if (category && !category.is_system) {
+        if (category && !category.is_system && !category.is_buffer) {
           const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
           const current = categoryTotals.get(split.category_id) || 0;
           categoryTotals.set(split.category_id, current + signedAmount);

@@ -20,11 +20,11 @@ export default function SpendingVelocityTrend({ transactions, categories }: Spen
       const date = new Date(transaction.date);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-      // Sum only splits that are NOT in system categories
+      // Sum only splits that are NOT in system or buffer categories
       // Expenses add, income subtracts
       const nonSystemTotal = transaction.splits.reduce((sum, split) => {
         const category = categories.find(c => c.id === split.category_id);
-        if (category && !category.is_system) {
+        if (category && !category.is_system && !category.is_buffer) {
           const amount = transaction.transaction_type === 'expense'
             ? split.amount
             : -split.amount;

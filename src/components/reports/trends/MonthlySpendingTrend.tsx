@@ -43,11 +43,11 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
       let uncategorizedCount = 0;
 
       monthTransactions.forEach(transaction => {
-        // Sum only splits that are NOT in system categories
+        // Sum only splits that are NOT in system or buffer categories
         // Expenses add, income subtracts
         const nonSystemTotal = transaction.splits.reduce((sum, split) => {
           const category = categories.find(c => c.id === split.category_id);
-          if (category && !category.is_system) {
+          if (category && !category.is_system && !category.is_buffer) {
             const amount = transaction.transaction_type === 'expense'
               ? split.amount
               : -split.amount;
@@ -61,12 +61,12 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
         // Categorize transaction
         const hasCategorizedSplit = transaction.splits.some(split => {
           const category = categories.find(c => c.id === split.category_id);
-          return category && !category.is_system;
+          return category && !category.is_system && !category.is_buffer;
         });
 
         const isSystemOnly = transaction.splits.every(split => {
           const category = categories.find(c => c.id === split.category_id);
-          return category?.is_system;
+          return category?.is_system || category?.is_buffer;
         });
 
         if (hasCategorizedSplit) {
