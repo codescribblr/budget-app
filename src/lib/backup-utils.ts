@@ -515,6 +515,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   const importedTransactionIdMap = new Map<number, number>();
   const tagIdMap = new Map<number, number>();
   const recurringTransactionIdMap = new Map<number, number>();
+  const csvImportTemplateIdMap = new Map<number, number>();
 
   // Insert accounts (batch)
   if (backupData.accounts && backupData.accounts.length > 0) {
@@ -1242,13 +1243,23 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       account_id: accountId,
     }));
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('csv_import_templates')
-      .insert(csvImportTemplatesToInsert);
+      .insert(csvImportTemplatesToInsert)
+      .select('id');
 
     if (error) {
       console.error('[Import] Error inserting CSV import templates:', error);
       throw error;
+    }
+
+    // Build ID mapping (old ID -> new ID) for foreign key remapping
+    if (data) {
+      backupData.csv_import_templates.forEach((oldTemplate, index) => {
+        if (data[index]) {
+          csvImportTemplateIdMap.set(oldTemplate.id, data[index].id);
+        }
+      });
     }
     console.log('[Import] Inserted', csvImportTemplatesToInsert.length, 'CSV import templates');
   }
@@ -1401,7 +1412,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     }
   }
 
-  // Insert automatic_import_setups (after accounts, credit_cards are inserted)
+  // Insert automatic_import_setups (after accounts, credit_cards, csv_import_templates are inserted)
   const importSetupIdMap = new Map<number, number>();
   if (backupData.automatic_import_setups && backupData.automatic_import_setups.length > 0) {
     const setupsToInsert = backupData.automatic_import_setups.map(({ 
@@ -1410,6 +1421,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       user_id, 
       target_account_id, 
       target_credit_card_id,
+      csv_mapping_template_id,
       created_by,
       ...setup 
     }) => ({
@@ -1418,6 +1430,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       account_id: accountId,
       target_account_id: target_account_id ? (accountIdMap.get(target_account_id) || null) : null,
       target_credit_card_id: target_credit_card_id ? (creditCardIdMap.get(target_credit_card_id) || null) : null,
+      csv_mapping_template_id: csv_mapping_template_id ? (csvImportTemplateIdMap.get(csv_mapping_template_id) || null) : null,
       // Remap created_by to current user (since we're importing to a different account, the original creator may not exist)
       created_by: user.id,
     }));
@@ -1455,6 +1468,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
         target_account_id,
         target_credit_card_id,
         imported_transaction_id,
+        csv_mapping_template_id,
         reviewed_by,
         ...queuedImport 
       }) => {
@@ -1474,6 +1488,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
           target_account_id: target_account_id ? (accountIdMap.get(target_account_id) || null) : null,
           target_credit_card_id: target_credit_card_id ? (creditCardIdMap.get(target_credit_card_id) || null) : null,
           imported_transaction_id: imported_transaction_id ? (transactionIdMap.get(imported_transaction_id) || null) : null,
+          csv_mapping_template_id: csv_mapping_template_id ? (csvImportTemplateIdMap.get(csv_mapping_template_id) || null) : null,
           // Remap reviewed_by to current user (since we're importing to a different account, the original reviewer may not exist)
           reviewed_by: user.id, // Set to current importing user
         };
