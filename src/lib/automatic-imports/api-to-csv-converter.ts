@@ -25,26 +25,28 @@ export function convertApiTransactionsToVirtualCSV(
 } {
   if (transactions.length === 0) {
     return {
-      csvData: [['Date', 'Amount', 'Description']],
+      csvData: [['Date', 'Amount', 'Description', 'Status']],
       fingerprint: `api-${sourceType}-empty`,
     };
   }
 
-  // Create CSV structure: Date, Amount (signed), Description
+  // Create CSV structure: Date, Amount (signed), Description, Status
+  // Include Status column for API imports (Teller has status: 'posted' | 'pending')
   const csvData: string[][] = [
-    ['Date', 'Amount', 'Description'], // Header row
+    ['Date', 'Amount', 'Description', 'Status'], // Header row
     ...transactions.map(t => {
       // Extract original signed amount from original_data if available
       // Otherwise use the amount field (which is already absolute)
       let signedAmount: string;
+      let status: string = '';
       
       if (t.original_data) {
-        // Try to get original signed amount from API response
+        // Try to get original signed amount and status from API response
         const originalData = typeof t.original_data === 'string' 
           ? JSON.parse(t.original_data) 
           : t.original_data;
         
-        // For Teller: amount field is signed string
+        // For Teller: amount field is signed string, status is 'posted' | 'pending'
         if (originalData.amount !== undefined) {
           signedAmount = originalData.amount.toString();
         } else {
@@ -52,6 +54,11 @@ export function convertApiTransactionsToVirtualCSV(
           // This is less ideal but works if original_data doesn't have amount
           const sign = t.original_data.transaction_type === 'income' ? '+' : '-';
           signedAmount = `${sign}${Math.abs(t.amount)}`;
+        }
+        
+        // Extract status if available (Teller has status field)
+        if (originalData.status !== undefined) {
+          status = originalData.status.toString();
         }
       } else {
         // Fallback: reconstruct signed amount
@@ -63,6 +70,7 @@ export function convertApiTransactionsToVirtualCSV(
         t.transaction_date,
         signedAmount,
         t.description,
+        status, // Status column for filtering pending transactions
       ];
     }),
   ];

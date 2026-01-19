@@ -328,7 +328,7 @@ export default function TransactionsPage() {
           creditCardsRes?.ok ? creditCardsRes.json() : creditCards,
         ]);
 
-        if (tagsEnabled && tagResArray.length > 0) {
+        if (tagsEnabled && tagResArray.length > 0 && tagResArray[0] && 'ok' in tagResArray[0]) {
           tagsData = tagResArray[0].ok ? await tagResArray[0].json() : tags;
         }
       }

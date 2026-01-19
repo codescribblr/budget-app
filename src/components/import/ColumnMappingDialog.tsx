@@ -35,7 +35,7 @@ interface ColumnMappingDialogProps {
   onConfirm: (mapping: ColumnMapping, saveTemplate: boolean, templateName?: string) => void;
 }
 
-type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'ignore';
+type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'status' | 'ignore';
 
 export default function ColumnMappingDialog({
   open,
@@ -114,6 +114,7 @@ export default function ColumnMappingDialog({
       debitColumn: findColumnForField('debit'),
       creditColumn: findColumnForField('credit'),
       transactionTypeColumn: null,
+      statusColumn: findColumnForField('status'),
       amountSignConvention: 'positive_is_expense',
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
@@ -207,6 +208,7 @@ export default function ColumnMappingDialog({
                             <SelectItem value="description">Description {findColumnForField('description') === column.columnIndex && '✓'}</SelectItem>
                             <SelectItem value="debit">Debit {findColumnForField('debit') === column.columnIndex && '✓'}</SelectItem>
                             <SelectItem value="credit">Credit {findColumnForField('credit') === column.columnIndex && '✓'}</SelectItem>
+                            <SelectItem value="status">Status {findColumnForField('status') === column.columnIndex && '✓'}</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>

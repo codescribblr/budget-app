@@ -105,7 +105,7 @@ export async function GET(
     if (csvMappingTemplateId) {
       const { data: template } = await supabase
         .from('csv_import_templates')
-        .select('id, template_name, date_column, amount_column, description_column, debit_column, credit_column, transaction_type_column, amount_sign_convention, date_format, has_headers, skip_rows')
+        .select('id, template_name, date_column, amount_column, description_column, debit_column, credit_column, transaction_type_column, status_column, amount_sign_convention, date_format, has_headers, skip_rows')
         .eq('id', csvMappingTemplateId)
         .eq('user_id', user.id)
         .single();
@@ -121,6 +121,7 @@ export async function GET(
             debitColumn: template.debit_column,
             creditColumn: template.credit_column,
             transactionTypeColumn: template.transaction_type_column,
+            statusColumn: template.status_column,
             amountSignConvention: template.amount_sign_convention || 'positive_is_expense',
             dateFormat: template.date_format,
             hasHeaders: template.has_headers,

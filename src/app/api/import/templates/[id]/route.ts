@@ -56,6 +56,7 @@ export async function PUT(
       updateData.debit_column = mapping.debitColumn;
       updateData.credit_column = mapping.creditColumn;
       updateData.transaction_type_column = mapping.transactionTypeColumn;
+      updateData.status_column = mapping.statusColumn;
       updateData.amount_sign_convention = mapping.amountSignConvention || 'positive_is_expense';
       updateData.date_format = mapping.dateFormat;
       updateData.has_headers = mapping.hasHeaders;

@@ -36,7 +36,7 @@ import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
 import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
 
-type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'ignore';
+type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'status' | 'ignore';
 
 /**
  * Parse amount string to number (helper function)
@@ -131,6 +131,7 @@ export default function MapColumnsPage() {
   const [sampleData, setSampleData] = useState<string[][]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [transactionTypeColumn, setTransactionTypeColumn] = useState<number | null>(null);
+  const [statusColumn, setStatusColumn] = useState<number | null>(null);
   const [amountSignConvention, setAmountSignConvention] = useState<'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit'>('positive_is_expense');
   const [remapBatchId, setRemapBatchId] = useState<string | null>(null);
   const [currentTemplateId, setCurrentTemplateId] = useState<number | null>(null);
@@ -243,6 +244,7 @@ export default function MapColumnsPage() {
           if (currentMapping.creditColumn !== null) initialMappings[currentMapping.creditColumn] = 'credit';
           setAmountSignConvention(currentMapping.amountSignConvention);
           setTransactionTypeColumn(currentMapping.transactionTypeColumn);
+          setStatusColumn(currentMapping.statusColumn);
         } else {
           // Initialize from analysis
           if (Array.isArray(analysisData.columns)) {
@@ -333,6 +335,7 @@ export default function MapColumnsPage() {
       debitColumn: findColumnForField('debit'),
       creditColumn: findColumnForField('credit'),
       transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
+      statusColumn: statusColumn,
       amountSignConvention,
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
@@ -656,6 +659,7 @@ export default function MapColumnsPage() {
       debitColumn: findColumnForField('debit'),
       creditColumn: findColumnForField('credit'),
       transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
+      statusColumn: statusColumn,
       amountSignConvention,
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
@@ -871,6 +875,7 @@ export default function MapColumnsPage() {
                             <SelectItem value="description">Description {findColumnForField('description') === column.columnIndex && '✓'}</SelectItem>
                             <SelectItem value="debit">Debit {findColumnForField('debit') === column.columnIndex && '✓'}</SelectItem>
                             <SelectItem value="credit">Credit {findColumnForField('credit') === column.columnIndex && '✓'}</SelectItem>
+                            <SelectItem value="status">Status {findColumnForField('status') === column.columnIndex && '✓'}</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -955,6 +960,41 @@ export default function MapColumnsPage() {
                   </p>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Status Column Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Status Column (Optional)</CardTitle>
+              <CardDescription>
+                Map a column containing transaction status (e.g., "pending", "cleared", "posted") to automatically filter out pending transactions
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="status-column">Status Column</Label>
+                <Select
+                  value={statusColumn?.toString() || ''}
+                  onValueChange={(value) => setStatusColumn(value ? parseInt(value) : null)}
+                >
+                  <SelectTrigger id="status-column">
+                    <SelectValue placeholder="Select column (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None (don't filter by status)</SelectItem>
+                    {analysis.columns.map((col) => (
+                      <SelectItem key={col.columnIndex} value={col.columnIndex.toString()}>
+                        {col.headerName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  If mapped, transactions with status "pending", "processing", "authorized", etc. will be automatically excluded from the import.
+                  Transactions with status "posted", "cleared", "completed", etc. will be included.
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -1291,6 +1331,7 @@ export default function MapColumnsPage() {
                     debitColumn: findColumnForField('debit'),
                     creditColumn: findColumnForField('credit'),
                     transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
+                    statusColumn: statusColumn,
                     amountSignConvention,
                     dateFormat: analysis.dateFormat,
                     hasHeaders: analysis.hasHeaders,

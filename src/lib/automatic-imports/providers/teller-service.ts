@@ -476,14 +476,25 @@ export async function fetchAndQueueTellerTransactions(options: {
     }
 
     // Convert to ParsedTransaction format with account mapping and template
-    const parsedTransactions = transactions.map(txn => 
-      convertTellerTransactionToParsed(
-        txn, 
-        targetAccountId || undefined, 
-        targetCreditCardId || undefined,
-        mappingToUse
-      )
-    );
+    // Filter out pending transactions - they will be sent again when they clear
+    const parsedTransactions = transactions
+      .filter(txn => {
+        // Skip pending transactions - they'll be sent again when cleared
+        // Only include transactions with status 'posted' (cleared/completed)
+        if (txn.status === 'pending') {
+          console.log(`Skipping pending Teller transaction: ${txn.id} - ${txn.description}`);
+          return false;
+        }
+        return true;
+      })
+      .map(txn => 
+        convertTellerTransactionToParsed(
+          txn, 
+          targetAccountId || undefined, 
+          targetCreditCardId || undefined,
+          mappingToUse
+        )
+      );
 
     // Create virtual CSV data for remapping support (API imports)
     // This allows API imports to use the same remapping UI as CSV imports

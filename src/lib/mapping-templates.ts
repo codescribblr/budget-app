@@ -9,8 +9,9 @@ export interface ColumnMapping {
   descriptionColumn: number | null;
   debitColumn: number | null;
   creditColumn: number | null;
-  transactionTypeColumn: number | null; // NEW: Column with "INCOME", "EXPENSE", "DEBIT", "CREDIT", etc.
-  amountSignConvention: 'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit'; // NEW
+  transactionTypeColumn: number | null; // Column with "INCOME", "EXPENSE", "DEBIT", "CREDIT", etc.
+  statusColumn: number | null; // Column with transaction status (e.g., "pending", "cleared", "posted")
+  amountSignConvention: 'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit';
   dateFormat: string | null;
   hasHeaders: boolean;
   skipRows?: number;
@@ -88,6 +89,7 @@ export async function loadTemplate(fingerprint: string): Promise<CSVImportTempla
       debitColumn: template.debit_column ?? null,
       creditColumn: template.credit_column ?? null,
       transactionTypeColumn: template.transaction_type_column ?? null,
+      statusColumn: template.status_column ?? null,
       amountSignConvention: template.amount_sign_convention ?? 'positive_is_expense',
       dateFormat: template.date_format ?? null,
       hasHeaders: template.has_headers ?? true,
@@ -128,6 +130,7 @@ export async function loadTemplateById(
       debitColumn: template.debit_column ?? null,
       creditColumn: template.credit_column ?? null,
       transactionTypeColumn: template.transaction_type_column ?? null,
+      statusColumn: template.status_column ?? null,
       amountSignConvention: template.amount_sign_convention ?? 'positive_is_expense',
       dateFormat: template.date_format ?? null,
       hasHeaders: template.has_headers ?? true,
@@ -166,6 +169,7 @@ export async function listTemplates(): Promise<CSVImportTemplate[]> {
       debitColumn: template.debit_column ?? null,
       creditColumn: template.credit_column ?? null,
       transactionTypeColumn: template.transaction_type_column ?? null,
+      statusColumn: template.status_column ?? null,
       amountSignConvention: template.amount_sign_convention ?? 'positive_is_expense',
       dateFormat: template.date_format ?? null,
       hasHeaders: template.has_headers ?? true,

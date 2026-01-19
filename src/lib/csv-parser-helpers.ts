@@ -29,6 +29,58 @@ export function extractMerchant(description: string): string {
 }
 
 /**
+ * Check if a transaction is pending based on status column value
+ * Returns true if the transaction should be filtered out (is pending)
+ * Returns false if the transaction should be included (is cleared/posted)
+ * Returns null if status cannot be determined (keep transaction to be safe)
+ */
+export function isPendingTransaction(statusValue: string | null | undefined): boolean | null {
+  if (!statusValue) {
+    // No status value - can't determine, so keep the transaction (be safe)
+    return null;
+  }
+  
+  const normalizedStatus = statusValue.trim().toLowerCase();
+  
+  // Common pending status values
+  const pendingStatuses = [
+    'pending',
+    'processing',
+    'authorized',
+    'hold',
+    'on hold',
+    'temporary',
+    'temp',
+  ];
+  
+  // Common cleared/posted status values
+  const clearedStatuses = [
+    'posted',
+    'cleared',
+    'completed',
+    'complete',
+    'settled',
+    'settlement',
+    'final',
+    'confirmed',
+    'approved',
+  ];
+  
+  // Check if it's clearly pending
+  if (pendingStatuses.includes(normalizedStatus)) {
+    return true; // Filter out - it's pending
+  }
+  
+  // Check if it's clearly cleared
+  if (clearedStatuses.includes(normalizedStatus)) {
+    return false; // Keep - it's cleared
+  }
+  
+  // If we can't determine, keep the transaction (be safe)
+  return null;
+}
+
+/**
  * Generate hash for deduplication
  * Includes originalData to distinguish identical transactions that occur separately
  */
@@ -169,6 +221,20 @@ export async function parseCSVWithMapping(
           transaction_type = amount >= 0 ? 'income' : 'expense';
         }
         amount = Math.abs(amount); // Normalize to positive
+      }
+
+      // Check status column if mapped - filter out pending transactions
+      if (mapping.statusColumn !== null && mapping.statusColumn !== undefined) {
+        const statusValue = row[mapping.statusColumn]?.trim() || null;
+        const isPending = isPendingTransaction(statusValue);
+        
+        // If we can reliably determine it's pending, skip this transaction
+        if (isPending === true) {
+          console.log(`Skipping pending transaction (row ${i}): ${descriptionValue || 'unknown'} - status: ${statusValue}`);
+          continue;
+        }
+        // If isPending is null, we can't determine status, so keep it (be safe)
+        // If isPending is false, it's cleared, so keep it
       }
 
       // Validate required fields

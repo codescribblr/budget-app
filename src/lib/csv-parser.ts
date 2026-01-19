@@ -136,6 +136,7 @@ async function processCSVData(
       debitColumn: analysis.debitColumn,
       creditColumn: analysis.creditColumn,
       transactionTypeColumn: null,
+      statusColumn: null,
       amountSignConvention: detectedConvention,
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
