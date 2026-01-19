@@ -331,7 +331,7 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
           <div className="text-xs text-muted-foreground">Activity</div>
           <div className="mt-2 space-y-1 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Transactions (mo)</span>
+              <span className="text-muted-foreground">Transactions (MTD)</span>
               <span className="font-medium">{monthTransactionCount ?? '—'}</span>
             </div>
             <div className="flex items-center justify-between">

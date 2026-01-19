@@ -32,14 +32,26 @@ export default function CategoryReportsList() {
   const [transactions, setTransactions] = useState<TransactionWithSplits[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch categories and transactions
+  // Fetch categories and transactions (YTD only to avoid Supabase limit)
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        
+        // Calculate YTD date range (January 1 to today)
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const ytdStartDate = `${currentYear}-01-01`;
+        const today = now.toISOString().split('T')[0];
+        
+        // Build transactions URL with YTD date filters
+        const transactionsUrl = new URL('/api/transactions', window.location.origin);
+        transactionsUrl.searchParams.set('startDate', ytdStartDate);
+        transactionsUrl.searchParams.set('endDate', today);
+        
         const [categoriesRes, transactionsRes] = await Promise.all([
           fetch('/api/categories?includeArchived=all'),
-          fetch('/api/transactions'),
+          fetch(transactionsUrl.toString()),
         ]);
 
         if (!categoriesRes.ok || !transactionsRes.ok) {
