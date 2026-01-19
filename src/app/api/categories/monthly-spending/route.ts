@@ -31,6 +31,7 @@ export async function GET() {
       .select(`
         id,
         date,
+        transaction_type,
         splits:transaction_splits(
           category_id,
           amount
@@ -49,17 +50,26 @@ export async function GET() {
     }
 
     // Calculate spending by category
+    // For expenses: add amount to spending
+    // For income: subtract amount from spending (refunds, etc.)
     const spendingByCategory: Record<number, number> = {};
 
     transactions?.forEach((transaction: any) => {
+      const transactionType = transaction.transaction_type || 'expense'; // Default to expense for backward compatibility
       transaction.splits?.forEach((split: any) => {
         const categoryId = split.category_id;
-        const amount = split.amount;
+        const amount = Number(split.amount);
         
         if (!spendingByCategory[categoryId]) {
           spendingByCategory[categoryId] = 0;
         }
-        spendingByCategory[categoryId] += amount;
+        
+        // Expenses add to spending, income subtracts from spending
+        if (transactionType === 'expense') {
+          spendingByCategory[categoryId] += amount;
+        } else if (transactionType === 'income') {
+          spendingByCategory[categoryId] -= amount;
+        }
       });
     });
 

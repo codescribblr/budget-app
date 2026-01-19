@@ -75,12 +75,25 @@ export default function ReportsPage() {
     setIsInitialized(true);
   }, [searchParams]); // Re-run when searchParams change
 
-  // Fetch transactions
+  // Fetch transactions with date filters to avoid hitting Supabase limit
   useEffect(() => {
     const fetchTransactions = async () => {
+      // Don't fetch until dates are initialized
+      if (!isInitialized) return;
+
       try {
         setLoadingTransactions(true);
-        const response = await fetch('/api/transactions');
+        
+        // Build transactions URL with date filters if dates are set
+        const transactionsUrl = new URL('/api/transactions', window.location.origin);
+        if (startDate) {
+          transactionsUrl.searchParams.set('startDate', startDate);
+        }
+        if (endDate) {
+          transactionsUrl.searchParams.set('endDate', endDate);
+        }
+        
+        const response = await fetch(transactionsUrl.toString());
         const data = await response.json();
         setTransactions(data);
       } catch (error) {
@@ -91,7 +104,7 @@ export default function ReportsPage() {
     };
 
     fetchTransactions();
-  }, []);
+  }, [startDate, endDate, isInitialized]);
 
   // Fetch categories
   useEffect(() => {

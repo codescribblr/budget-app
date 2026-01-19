@@ -105,8 +105,8 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper function to fetch transactions with date filtering (server-side)
+// Uses pagination to handle large date ranges that exceed Supabase limits
 async function getAllTransactionsWithDateFilter(startDate?: string, endDate?: string) {
-  const { getAllTransactions } = await import('@/lib/supabase-queries');
   const { getAuthenticatedUser } = await import('@/lib/supabase-queries');
   const { getActiveAccountId } = await import('@/lib/account-context');
   
@@ -116,62 +116,96 @@ async function getAllTransactionsWithDateFilter(startDate?: string, endDate?: st
     throw new Error('No active account');
   }
 
-  // Build query with date filters
-  let query = supabase
-    .from('transactions')
-    .select(`
-      *,
-      merchant_groups (
-        display_name
-      ),
-      accounts (
-        name
-      ),
-      credit_cards (
-        name
-      ),
-      transaction_tags (
-        tags (*)
-      )
-    `)
-    .eq('budget_account_id', accountId);
+  const PAGE_SIZE = 1000; // Supabase's default limit
+  const allTransactions: any[] = [];
+  let page = 0;
+  let hasMore = true;
 
-  // Apply date filters
-  if (startDate) {
-    query = query.gte('date', startDate);
+  // Fetch transactions in pages until we get all of them
+  while (hasMore) {
+    // Build base query
+    let query = supabase
+      .from('transactions')
+      .select(`
+        *,
+        merchant_groups (
+          display_name
+        ),
+        accounts (
+          name
+        ),
+        credit_cards (
+          name
+        ),
+        transaction_tags (
+          tags (*)
+        )
+      `, { count: 'exact' })
+      .eq('budget_account_id', accountId);
+
+    // Apply date filters
+    if (startDate) {
+      query = query.gte('date', startDate);
+    }
+    if (endDate) {
+      query = query.lte('date', endDate);
+    }
+
+    // Apply pagination
+    const offset = page * PAGE_SIZE;
+    query = query
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1);
+
+    const { data: transactions, error: txError, count } = await query;
+
+    if (txError) throw txError;
+
+    if (!transactions || transactions.length === 0) {
+      hasMore = false;
+      break;
+    }
+
+    allTransactions.push(...transactions);
+
+    // Check if we've fetched all transactions
+    const totalCount = count || 0;
+    if (allTransactions.length >= totalCount || transactions.length < PAGE_SIZE) {
+      hasMore = false;
+    } else {
+      page++;
+    }
   }
-  if (endDate) {
-    query = query.lte('date', endDate);
-  }
 
-  query = query
-    .order('date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(10000); // Increase limit for date-filtered queries
-
-  const { data: transactions, error: txError } = await query;
-
-  if (txError) throw txError;
-
-  if (!transactions || transactions.length === 0) {
+  if (allTransactions.length === 0) {
     return [];
   }
 
   // Get all transaction IDs
-  const transactionIds = transactions.map((t: any) => t.id);
+  const transactionIds = allTransactions.map((t: any) => t.id);
 
-  // Get ALL splits for ALL transactions in a single query
-  const { data: allSplits, error: splitError } = await supabase
-    .from('transaction_splits')
-    .select(`
-      *,
-      categories (
-        name
-      )
-    `)
-    .in('transaction_id', transactionIds);
+  // Fetch splits in batches (Supabase has a limit on IN clause size)
+  const SPLIT_BATCH_SIZE = 1000;
+  const allSplits: any[] = [];
+  
+  for (let i = 0; i < transactionIds.length; i += SPLIT_BATCH_SIZE) {
+    const batchIds = transactionIds.slice(i, i + SPLIT_BATCH_SIZE);
+    const { data: splits, error: splitError } = await supabase
+      .from('transaction_splits')
+      .select(`
+        *,
+        categories (
+          name
+        )
+      `)
+      .in('transaction_id', batchIds);
 
-  if (splitError) throw splitError;
+    if (splitError) throw splitError;
+    if (splits) {
+      allSplits.push(...splits);
+    }
+  }
 
   // Group splits by transaction_id
   const splitsByTransaction = new Map<number, any[]>();
@@ -186,7 +220,7 @@ async function getAllTransactionsWithDateFilter(startDate?: string, endDate?: st
   });
 
   // Build the final result (same format as getAllTransactions)
-  const transactionsWithSplits = transactions.map((txn: any) => ({
+  const transactionsWithSplits = allTransactions.map((txn: any) => ({
     ...txn,
     splits: splitsByTransaction.get(txn.id) || [],
     merchant_name: txn.merchant_groups?.display_name || null,

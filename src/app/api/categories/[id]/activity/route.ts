@@ -43,16 +43,23 @@ export async function GET(
 
     if (lastError) throw lastError;
 
-    // Count transactions this month for this category
-    const { count, error: countError } = await supabase
+    // Count distinct transactions this month for this category
+    // We need to count transactions, not splits, to match the report view
+    const { data: transactionData, error: countError } = await supabase
       .from('transaction_splits')
-      .select('id, transactions!inner(id, date, budget_account_id)', { count: 'exact', head: true })
+      .select('transaction_id, transactions!inner(id, date, budget_account_id)')
       .eq('category_id', categoryId)
       .eq('transactions.budget_account_id', accountId)
       .gte('transactions.date', startDate)
       .lte('transactions.date', endDate);
 
     if (countError) throw countError;
+
+    // Count distinct transactions (a transaction may have multiple splits for the same category)
+    const distinctTransactionIds = new Set(
+      transactionData?.map((split: any) => split.transaction_id) || []
+    );
+    const count = distinctTransactionIds.size;
 
     const lastTransactionDate = (lastSplit as any)?.transactions?.date ?? null;
 

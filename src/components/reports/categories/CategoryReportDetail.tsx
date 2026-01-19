@@ -74,10 +74,21 @@ export default function CategoryReportDetail() {
 
       try {
         setLoading(true);
+        
+        // Build transactions URL with date filters if dates are set
+        // This prevents hitting the Supabase 1000 row limit
+        const transactionsUrl = new URL('/api/transactions', window.location.origin);
+        if (startDate) {
+          transactionsUrl.searchParams.set('startDate', startDate);
+        }
+        if (endDate) {
+          transactionsUrl.searchParams.set('endDate', endDate);
+        }
+        
         const [categoryRes, categoriesRes, transactionsRes] = await Promise.all([
           fetch(`/api/categories/${categoryId}`),
           fetch('/api/categories?includeArchived=all'),
-          fetch('/api/transactions'),
+          fetch(transactionsUrl.toString()),
         ]);
 
         if (!categoryRes.ok || !categoriesRes.ok || !transactionsRes.ok) {
@@ -98,8 +109,11 @@ export default function CategoryReportDetail() {
       }
     };
 
-    fetchData();
-  }, [categoryId]);
+    // Only fetch when dates are initialized to avoid fetching all transactions
+    if (isInitialized) {
+      fetchData();
+    }
+  }, [categoryId, startDate, endDate, isInitialized]);
 
   // Update dates when date range preset changes
   useEffect(() => {

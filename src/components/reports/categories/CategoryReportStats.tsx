@@ -61,20 +61,28 @@ export default function CategoryReportStats({
     let averageAmount = 0;
 
     transactions.forEach(transaction => {
-      const split = transaction.splits.find(s => s.category_id === category.id);
-      if (split) {
+      // Get all splits for this category (a transaction might have multiple splits for the same category)
+      const categorySplits = transaction.splits.filter(s => s.category_id === category.id);
+      if (categorySplits.length > 0) {
+        // Count the transaction once (even if it has multiple splits for this category)
         transactionCount++;
-        const amount = split.amount;
+        
+        // Sum all splits for this category in this transaction
+        const totalAmount = categorySplits.reduce((sum, split) => sum + Number(split.amount), 0);
 
         if (transaction.transaction_type === 'expense') {
-          totalSpent += amount;
-          if (amount > largestExpense) {
-            largestExpense = amount;
+          totalSpent += totalAmount;
+          // Track largest single split amount for this category
+          const maxSplitAmount = Math.max(...categorySplits.map(s => Number(s.amount)));
+          if (maxSplitAmount > largestExpense) {
+            largestExpense = maxSplitAmount;
           }
         } else {
-          totalIncome += amount;
-          if (amount > largestIncome) {
-            largestIncome = amount;
+          totalIncome += totalAmount;
+          // Track largest single split amount for this category
+          const maxSplitAmount = Math.max(...categorySplits.map(s => Number(s.amount)));
+          if (maxSplitAmount > largestIncome) {
+            largestIncome = maxSplitAmount;
           }
         }
       }
