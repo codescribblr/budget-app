@@ -64,6 +64,7 @@ export interface AccountBackupData {
   recurring_transactions?: any[];
   recurring_transaction_matches?: any[];
   notifications?: any[];
+  category_balance_audit?: any[];
 }
 
 // Legacy interface for backward compatibility
@@ -99,6 +100,7 @@ export interface UserBackupData {
   recurring_transactions?: any[];
   recurring_transaction_matches?: any[];
   notifications?: any[];
+  category_balance_audit?: any[];
 }
 
 /**
@@ -222,6 +224,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     recurring_transactions,
     recurring_transaction_matches,
     notifications,
+    category_balance_audit,
   ] = await Promise.all([
     fetchAllRecords((limit, offset) => supabase.from('accounts').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
     fetchAllRecords((limit, offset) => supabase.from('categories').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
@@ -273,6 +276,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     // Only export account-scoped notifications (budget_account_id IS NOT NULL)
     // User-level notifications (budget_account_id IS NULL) are not included in account backups
     fetchAllRecords((limit, offset) => supabase.from('notifications').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('category_balance_audit').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
   ]);
 
   // Validate data integrity: ensure all referenced transactions exist
@@ -352,6 +356,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     recurring_transactions: recurring_transactions,
     recurring_transaction_matches: recurring_transaction_matches,
     notifications: notifications,
+    category_balance_audit: category_balance_audit,
   };
 }
 
@@ -395,6 +400,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     recurring_transactions: accountData.recurring_transactions,
     recurring_transaction_matches: accountData.recurring_transaction_matches,
     notifications: accountData.notifications,
+    category_balance_audit: accountData.category_balance_audit,
   };
 }
 
@@ -500,6 +506,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   await supabase.from('duplicate_group_reviews').delete().eq('budget_account_id', accountId);
   await supabase.from('queued_imports').delete().eq('account_id', accountId);
   await supabase.from('automatic_import_setups').delete().eq('account_id', accountId);
+  await supabase.from('category_balance_audit').delete().eq('account_id', accountId);
   await supabase.from('categories').delete().eq('account_id', accountId);
   await supabase.from('accounts').delete().eq('account_id', accountId);
 
@@ -1513,6 +1520,49 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       }
     } else if (backupData.queued_imports.length > 0) {
       console.warn('[Import] All queued imports were skipped - no valid import_setup_id mappings found (likely from older backup without automatic_import_setups)');
+    }
+  }
+
+  // Insert category_balance_audit (after categories, transactions are inserted)
+  if (backupData.category_balance_audit && backupData.category_balance_audit.length > 0) {
+    const categoryBalanceAuditToInsert = backupData.category_balance_audit.map(({ 
+      id, 
+      category_id, 
+      account_id, 
+      user_id, 
+      transaction_id,
+      ...audit 
+    }) => ({
+      ...audit,
+      category_id: category_id ? (categoryIdMap.get(category_id) || null) : null,
+      account_id: accountId,
+      user_id: user.id, // Remap to current importing user
+      transaction_id: transaction_id ? (transactionIdMap.get(transaction_id) || null) : null,
+    }))
+    .filter((audit) => {
+      // Filter out audit records that don't have a valid category_id mapping
+      // This handles cases where categories might not exist in the backup
+      return audit.category_id !== null;
+    });
+
+    if (categoryBalanceAuditToInsert.length > 0) {
+      const { error } = await supabase
+        .from('category_balance_audit')
+        .insert(categoryBalanceAuditToInsert);
+
+      if (error) {
+        console.error('[Import] Error inserting category_balance_audit:', error);
+        throw error;
+      }
+      console.log('[Import] Inserted', categoryBalanceAuditToInsert.length, 'category balance audit records');
+      
+      // Log if any were skipped
+      const skipped = backupData.category_balance_audit.length - categoryBalanceAuditToInsert.length;
+      if (skipped > 0) {
+        console.warn(`[Import] Skipped ${skipped} category balance audit records due to missing category_id mapping`);
+      }
+    } else if (backupData.category_balance_audit.length > 0) {
+      console.warn('[Import] All category balance audit records were skipped - no valid category_id mappings found');
     }
   }
 
