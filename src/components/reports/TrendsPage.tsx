@@ -24,19 +24,31 @@ export default function TrendsPage() {
   const hasMountedTransactionsRef = useRef(false);
   const hasMountedCategoriesRef = useRef(false);
 
-  // Fetch transactions
+  // Fetch transactions with date filtering based on time range to avoid Supabase limit
   useEffect(() => {
     const fetchTransactions = async () => {
       // Prevent duplicate calls
-      if (fetchingTransactionsRef.current || hasMountedTransactionsRef.current) {
+      if (fetchingTransactionsRef.current) {
         return;
       }
-      hasMountedTransactionsRef.current = true;
       fetchingTransactionsRef.current = true;
 
       try {
         setLoadingTransactions(true);
-        const response = await fetch('/api/transactions');
+        
+        // Calculate date range based on selected time range
+        const monthsToShow = parseInt(timeRange);
+        const cutoffDate = new Date();
+        cutoffDate.setMonth(cutoffDate.getMonth() - monthsToShow);
+        const startDate = cutoffDate.toISOString().split('T')[0];
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Build transactions URL with date filters
+        const transactionsUrl = new URL('/api/transactions', window.location.origin);
+        transactionsUrl.searchParams.set('startDate', startDate);
+        transactionsUrl.searchParams.set('endDate', today);
+        
+        const response = await fetch(transactionsUrl.toString());
         
         if (!response.ok) {
           throw new Error(`Failed to fetch transactions: ${response.status}`);
@@ -61,7 +73,7 @@ export default function TrendsPage() {
     };
 
     fetchTransactions();
-  }, []);
+  }, [timeRange]);
 
   // Fetch categories
   useEffect(() => {
@@ -102,22 +114,15 @@ export default function TrendsPage() {
     fetchCategories();
   }, []);
 
-  // Filter transactions by time range
+  // Transactions are already filtered by date range in the API call
+  // No need for additional client-side filtering
   const filteredTransactions = useMemo(() => {
-    // Ensure transactions is always an array before filtering
+    // Ensure transactions is always an array
     if (!Array.isArray(transactions)) {
       return [];
     }
-
-    const monthsToShow = parseInt(timeRange);
-    const cutoffDate = new Date();
-    cutoffDate.setMonth(cutoffDate.getMonth() - monthsToShow);
-
-    // Convert cutoff date to YYYY-MM-DD string for consistent comparison
-    const cutoffDateString = cutoffDate.toISOString().split('T')[0];
-
-    return transactions.filter(t => t.date >= cutoffDateString);
-  }, [transactions, timeRange]);
+    return transactions;
+  }, [transactions]);
 
   const loading = loadingTransactions || loadingCategories;
 
