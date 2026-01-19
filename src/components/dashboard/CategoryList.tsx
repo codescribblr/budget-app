@@ -129,7 +129,7 @@ function SortableRow({
       )}
       <TableCell className="font-medium">
         <a
-          href={`/reports?category=${category.id}`}
+          href={`/categories/${category.id}`}
           className="hover:underline cursor-pointer"
         >
           {category.name}
@@ -303,7 +303,7 @@ function CategoryCard({
         {/* Header: Category name and action button */}
         <div className="flex items-start justify-between gap-2">
           <a
-            href={`/reports?category=${category.id}`}
+            href={`/categories/${category.id}`}
             className="hover:underline cursor-pointer font-medium text-sm flex-1 min-w-0"
           >
             {category.name}

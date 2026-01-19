@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import { getActiveAccountId } from '@/lib/account-context';
+import { logBalanceChanges } from '@/lib/audit/category-balance-audit';
 
 export async function POST(request: Request) {
   try {
@@ -37,6 +38,8 @@ export async function POST(request: Request) {
         date,
         description,
         total_amount,
+        transaction_type,
+        is_historical,
         splits:transaction_splits(
           id,
           category_id,
@@ -54,18 +57,34 @@ export async function POST(request: Request) {
     }
 
     // Collect all unique category IDs that need balance updates
-    const categoryUpdates = new Map<number, number>();
+    // Only process non-historical transactions
     const categoryIds = new Set<number>();
+    const transactionAuditLogs: Array<{
+      transactionId: number;
+      transactionDate: string;
+      transactionDescription: string;
+      transactionType: string;
+      categoryId: number;
+      oldBalance: number;
+      balanceChange: number;
+    }> = [];
     
-    transactions.forEach(transaction => {
+    // Sort transactions by date (ascending) for proper audit log ordering
+    const sortedTransactions = transactions
+      .filter(t => !t.is_historical) // Only process non-historical
+      .sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        return dateA - dateB; // Ascending order (oldest first)
+      });
+
+    // Get initial category balances
+    sortedTransactions.forEach(transaction => {
       transaction.splits?.forEach((split: any) => {
         categoryIds.add(split.category_id);
-        const current = categoryUpdates.get(split.category_id) || 0;
-        categoryUpdates.set(split.category_id, current + Number(split.amount));
       });
     });
 
-    // Fetch all categories in a single query (fixes N+1 problem)
     if (categoryIds.size > 0) {
       const { data: categories, error: categoriesError } = await supabase
         .from('categories')
@@ -74,21 +93,89 @@ export async function POST(request: Request) {
         .eq('account_id', accountId);
 
       if (!categoriesError && categories) {
+        // Store initial balances
+        const initialBalanceMap = new Map<number, number>();
+        const runningBalanceMap = new Map<number, number>();
+        categories
+          .filter(cat => !cat.is_system)
+          .forEach(cat => {
+            const balance = Number(cat.current_balance);
+            initialBalanceMap.set(cat.id, balance);
+            runningBalanceMap.set(cat.id, balance);
+          });
+
+        // Process transactions in date order and track individual changes
+        sortedTransactions.forEach(transaction => {
+          const transactionType = transaction.transaction_type || 'expense';
+          transaction.splits?.forEach((split: any) => {
+            const category = categories.find(c => c.id === split.category_id);
+            if (!category || category.is_system) return;
+
+            // Reverse the transaction's impact:
+            // - If it was income (added to balance), subtract it (negative)
+            // - If it was expense (subtracted from balance), add it back (positive)
+            const adjustment = transactionType === 'income'
+              ? -Number(split.amount)  // Reverse income: subtract
+              : Number(split.amount);   // Reverse expense: add back
+
+            const oldBalance = runningBalanceMap.get(split.category_id) || initialBalanceMap.get(split.category_id) || 0;
+            
+            // Track individual transaction for audit logging
+            transactionAuditLogs.push({
+              transactionId: transaction.id,
+              transactionDate: transaction.date,
+              transactionDescription: transaction.description,
+              transactionType,
+              categoryId: split.category_id,
+              oldBalance,
+              balanceChange: adjustment,
+            });
+
+            // Update running balance for next transaction
+            runningBalanceMap.set(split.category_id, oldBalance + adjustment);
+          });
+        });
+
+        // Calculate final balances for updates
+        const categoryUpdates = new Map<number, number>();
+        transactionAuditLogs.forEach(log => {
+          const current = categoryUpdates.get(log.categoryId) || 0;
+          categoryUpdates.set(log.categoryId, current + log.balanceChange);
+        });
+
         // Update all categories in parallel
         const updatePromises = categories
           .filter(cat => !cat.is_system && categoryUpdates.has(cat.id))
           .map(category => {
             const adjustment = categoryUpdates.get(category.id)!;
+            const oldBalance = initialBalanceMap.get(category.id)!;
+            const newBalance = oldBalance + adjustment;
             return supabase
               .from('categories')
               .update({
-                current_balance: Number(category.current_balance) + adjustment,
+                current_balance: newBalance,
                 updated_at: new Date().toISOString(),
               })
               .eq('id', category.id);
           });
         
         await Promise.all(updatePromises);
+
+        // Log individual balance changes for each transaction (already sorted by date ascending)
+        const auditChanges = transactionAuditLogs.map(log => ({
+          categoryId: log.categoryId,
+          oldBalance: log.oldBalance,
+          newBalance: log.oldBalance + log.balanceChange,
+          changeType: 'transaction_delete' as const,
+          metadata: {
+            transaction_id: log.transactionId,
+            transaction_description: log.transactionDescription,
+            transaction_date: log.transactionDate,
+            deleted_transaction_ids: transactionIds,
+          },
+        }));
+
+        await logBalanceChanges(auditChanges);
       }
     }
 

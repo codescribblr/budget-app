@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
+import { logBalanceChange } from '@/lib/audit/category-balance-audit';
 
 /**
  * POST /api/income-buffer/add
@@ -58,7 +59,8 @@ export async function POST(request: Request) {
     }
 
     // Update the buffer category balance
-    const newBalance = bufferCategory.current_balance + amount;
+    const oldBalance = bufferCategory.current_balance;
+    const newBalance = oldBalance + amount;
     const { error: updateError } = await supabase
       .from('categories')
       .update({ 
@@ -74,6 +76,15 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    // Log balance change
+    await logBalanceChange(
+      bufferCategory.id,
+      oldBalance,
+      newBalance,
+      'income_buffer_fund',
+      {}
+    );
 
     return NextResponse.json({
       success: true,

@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import { getActiveAccountId } from '@/lib/account-context';
 import { getTransactionById } from '@/lib/supabase-queries';
+import { logBalanceChange } from '@/lib/audit/category-balance-audit';
 
 export async function POST(request: Request) {
   try {
@@ -83,6 +84,7 @@ export async function POST(request: Request) {
             .single();
 
           if (category && !category.is_system) {
+            const oldBalance = Number(category.current_balance);
             // Reverse the transaction's impact on envelope
             const balanceChange = transaction.transaction_type === 'income'
               ? -split.amount  // Reverse income: subtract
@@ -91,10 +93,22 @@ export async function POST(request: Request) {
             await supabase
               .from('categories')
               .update({
-                current_balance: Number(category.current_balance) + balanceChange,
+                current_balance: oldBalance + balanceChange,
                 updated_at: new Date().toISOString(),
               })
               .eq('id', split.category_id);
+
+            // Log balance change
+            await logBalanceChange(
+              split.category_id,
+              oldBalance,
+              oldBalance + balanceChange,
+              'transaction_merge',
+              {
+                transaction_id: transaction.id,
+                transaction_description: transaction.description,
+              }
+            );
           }
         }
       }
@@ -166,6 +180,7 @@ export async function POST(request: Request) {
           .single();
 
         if (category && !category.is_system) {
+          const oldBalance = Number(category.current_balance);
           const balanceChange = mergeData.transaction_type === 'income'
             ? split.amount   // Income adds
             : -split.amount;  // Expense subtracts
@@ -173,10 +188,22 @@ export async function POST(request: Request) {
           await supabase
             .from('categories')
             .update({
-              current_balance: Number(category.current_balance) + balanceChange,
+              current_balance: oldBalance + balanceChange,
               updated_at: new Date().toISOString(),
             })
             .eq('id', split.category_id);
+
+          // Log balance change
+          await logBalanceChange(
+            split.category_id,
+            oldBalance,
+            oldBalance + balanceChange,
+            'transaction_merge',
+            {
+              transaction_id: baseTransactionId,
+              transaction_description: mergeData.description,
+            }
+          );
         }
       }
     }

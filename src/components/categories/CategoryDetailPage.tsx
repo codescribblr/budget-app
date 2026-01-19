@@ -41,6 +41,7 @@ import { useFeature } from '@/contexts/FeatureContext';
 import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
 import { ArrowLeft, Archive, ArchiveRestore, Edit, Trash2, FileText } from 'lucide-react';
+import CategoryBalanceAudit from './CategoryBalanceAudit';
 
 function canArchiveCategory(category: Category) {
   if (category.is_system) return false;
@@ -347,6 +348,8 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
           <div className="text-sm">{category.notes}</div>
         </Card>
       ) : null}
+
+      <CategoryBalanceAudit categoryId={category.id} />
 
       {/* Edit dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

@@ -48,32 +48,20 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
     try {
       setIsSubmitting(true);
 
-      // Update both categories
-      const [fromResponse, toResponse] = await Promise.all([
-        fetch(`/api/categories/${fromCategoryId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            current_balance: fromCategory.current_balance - transferAmount,
-          }),
+      // Transfer funds using the transfer API endpoint
+      const transferResponse = await fetch('/api/transfers/envelopes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fromCategoryId: parseInt(fromCategoryId),
+          toCategoryId: parseInt(toCategoryId),
+          amount: transferAmount,
         }),
-        fetch(`/api/categories/${toCategoryId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            current_balance: (toCategory?.current_balance || 0) + transferAmount,
-          }),
-        }),
-      ]);
+      });
 
-      if (!fromResponse.ok) {
-        await handleApiError(fromResponse, 'Failed to update source category');
-        throw new Error('Failed to update source category');
-      }
-
-      if (!toResponse.ok) {
-        await handleApiError(toResponse, 'Failed to update destination category');
-        throw new Error('Failed to update destination category');
+      if (!transferResponse.ok) {
+        await handleApiError(transferResponse, 'Failed to transfer funds');
+        throw new Error('Failed to transfer funds');
       }
 
       // Reset form

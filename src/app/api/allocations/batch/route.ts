@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { recordMonthlyFunding, isFeatureEnabled } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
+import { logBalanceChanges } from '@/lib/audit/category-balance-audit';
 
 /**
  * POST /api/allocations/batch
@@ -89,7 +90,8 @@ export async function POST(request: NextRequest) {
       if (!category) {
         throw new Error(`Category ${allocation.categoryId} not found`);
       }
-      const newBalance = (category.current_balance || 0) + allocation.amount;
+      const oldBalance = category.current_balance || 0;
+      const newBalance = oldBalance + allocation.amount;
 
       return supabase
         .from('categories')
@@ -113,6 +115,22 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Log balance changes
+    await logBalanceChanges(
+      allocations.map(allocation => {
+        const category = categoryMap.get(allocation.categoryId);
+        return {
+          categoryId: allocation.categoryId,
+          oldBalance: category?.current_balance || 0,
+          newBalance: (category?.current_balance || 0) + allocation.amount,
+          changeType: 'allocation_batch' as const,
+          metadata: {
+            allocation_month: allocationMonth,
+          },
+        };
+      })
+    );
 
     // Record monthly funding if feature is enabled
     let fundingTracked = false;

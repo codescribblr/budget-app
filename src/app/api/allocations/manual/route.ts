@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { recordMonthlyFunding, isFeatureEnabled } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
+import { logBalanceChange } from '@/lib/audit/category-balance-audit';
 
 /**
  * POST /api/allocations/manual
@@ -59,7 +60,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Update category balance
-    const newBalance = (category.current_balance || 0) + amount;
+    const oldBalance = category.current_balance || 0;
+    const newBalance = oldBalance + amount;
     const { error: updateError } = await supabase
       .from('categories')
       .update({ 
@@ -76,6 +78,17 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Log balance change
+    await logBalanceChange(
+      categoryId,
+      oldBalance,
+      newBalance,
+      'allocation_manual',
+      {
+        allocation_month: allocationMonth,
+      }
+    );
 
     // Record monthly funding if feature is enabled
     let fundingTracked = false;

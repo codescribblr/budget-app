@@ -17,6 +17,7 @@ import type {
 import { calculateGoalProgress, calculateGoalStatus } from './goals/calculations';
 import { getActiveAccountId } from './account-context';
 import { cache } from 'react';
+import { logBalanceChange, logBalanceChanges } from './audit/category-balance-audit';
 
 // =====================================================
 // HELPER: Get authenticated user
@@ -207,6 +208,18 @@ export async function updateCategory(
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
+  // Get old balance if current_balance is being updated
+  let oldBalance: number | null = null;
+  if (data.current_balance !== undefined) {
+    const { data: oldCategory } = await supabase
+      .from('categories')
+      .select('current_balance')
+      .eq('id', id)
+      .eq('account_id', accountId)
+      .single();
+    oldBalance = oldCategory?.current_balance ?? 0;
+  }
+
   const updateData: any = { updated_at: new Date().toISOString() };
 
   // Auto-calculate fields based on category type
@@ -267,6 +280,17 @@ export async function updateCategory(
   if (error) {
     if (error.code === 'PGRST116') return null; // Not found
     throw error;
+  }
+
+  // Log balance change if current_balance was updated
+  if (data.current_balance !== undefined && oldBalance !== null) {
+    await logBalanceChange(
+      id,
+      oldBalance,
+      category.current_balance,
+      'manual_edit',
+      {}
+    );
   }
 
   return category as Category;
@@ -1672,6 +1696,7 @@ export async function createTransaction(data: {
         .single();
 
       if (category && !category.is_system) {
+        const oldBalance = Number(category.current_balance);
         // Update category balance based on transaction type
         const balanceChange = finalTransactionType === 'income' 
           ? absSplitAmount  // Income adds to balance
@@ -1680,12 +1705,24 @@ export async function createTransaction(data: {
         const { error: balanceError } = await supabase
           .from('categories')
           .update({
-            current_balance: Number(category.current_balance) + balanceChange,
+            current_balance: oldBalance + balanceChange,
             updated_at: new Date().toISOString(),
           })
           .eq('id', split.category_id);
 
         if (balanceError) throw balanceError;
+
+        // Log balance change
+        await logBalanceChange(
+          split.category_id,
+          oldBalance,
+          oldBalance + balanceChange,
+          'transaction_create',
+          {
+            transaction_id: transaction.id,
+            transaction_description: data.description,
+          }
+        );
       }
     }
   }
@@ -1740,6 +1777,8 @@ export async function updateTransaction(
 
   // Reverse old splits (using old transaction_type)
   const oldTransactionType = existingTransaction.transaction_type || 'expense';
+  const oldBalanceMap = new Map<number, number>(); // categoryId -> oldBalance
+  
   for (const split of existingTransaction.splits) {
     const { data: category } = await supabase
       .from('categories')
@@ -1748,6 +1787,9 @@ export async function updateTransaction(
       .single();
 
     if (category && !category.is_system) {
+      const oldBalance = Number(category.current_balance);
+      oldBalanceMap.set(split.category_id, oldBalance);
+      
       // Reverse the old transaction's impact
       const oldBalanceChange = oldTransactionType === 'income'
         ? -split.amount  // Reverse income: subtract
@@ -1756,7 +1798,7 @@ export async function updateTransaction(
       await supabase
         .from('categories')
         .update({
-          current_balance: Number(category.current_balance) + oldBalanceChange,
+          current_balance: oldBalance + oldBalanceChange,
           updated_at: new Date().toISOString(),
         })
         .eq('id', split.category_id);
@@ -1817,6 +1859,7 @@ export async function updateTransaction(
       .single();
 
     if (category && !category.is_system) {
+      const oldBalance = Number(category.current_balance);
       // Update category balance based on transaction type
       const newBalanceChange = newTransactionType === 'income'
         ? split.amount   // Income adds
@@ -1825,12 +1868,24 @@ export async function updateTransaction(
       const { error: balanceError } = await supabase
         .from('categories')
         .update({
-          current_balance: Number(category.current_balance) + newBalanceChange,
+          current_balance: oldBalance + newBalanceChange,
           updated_at: new Date().toISOString(),
         })
         .eq('id', split.category_id);
 
       if (balanceError) throw balanceError;
+
+      // Log balance change
+      await logBalanceChange(
+        split.category_id,
+        oldBalance,
+        oldBalance + newBalanceChange,
+        'transaction_update',
+        {
+          transaction_id: id,
+          transaction_description: newDescription,
+        }
+      );
     }
   }
 
@@ -1864,6 +1919,7 @@ export async function deleteTransaction(id: number): Promise<void> {
       .single();
 
     if (category && !category.is_system) {
+      const oldBalance = Number(category.current_balance);
       // Reverse the transaction's impact based on transaction type
       const balanceChange = transactionType === 'income'
         ? -split.amount  // Reverse income: subtract
@@ -1872,10 +1928,22 @@ export async function deleteTransaction(id: number): Promise<void> {
       await supabase
         .from('categories')
         .update({
-          current_balance: Number(category.current_balance) + balanceChange,
+          current_balance: oldBalance + balanceChange,
           updated_at: new Date().toISOString(),
         })
         .eq('id', split.category_id);
+
+      // Log balance change
+      await logBalanceChange(
+        split.category_id,
+        oldBalance,
+        oldBalance + balanceChange,
+        'transaction_delete',
+        {
+          transaction_id: id,
+          transaction_description: transaction.description,
+        }
+      );
     }
   }
 
@@ -2222,15 +2290,68 @@ export async function importTransactions(transactions: any[], isHistorical: bool
   // ===== STEP 4: Batch insert transaction splits =====
   const splitsData: any[] = [];
   const categoryBalanceUpdates = new Map<number, number>(); // categoryId -> net change
+  
+  // Get initial category balances before any updates
+  const allCategoryIds = new Set<number>();
+  validTransactions.forEach(txn => {
+    txn.splits?.forEach((split: any) => {
+      allCategoryIds.add(split.categoryId);
+    });
+  });
 
-  validTransactions.forEach((txn, txnIndex) => {
-    const transactionId = createdTransactions[txnIndex].id;
-    const transactionType = transactionsData[txnIndex].transaction_type;
-    // Use per-transaction is_historical if provided, otherwise fall back to global flag
+  const { data: initialCategories } = await supabase
+    .from('categories')
+    .select('id, current_balance, is_system')
+    .in('id', Array.from(allCategoryIds));
+
+  const initialBalanceMap = new Map<number, number>();
+  (initialCategories || [])
+    .filter(cat => !cat.is_system)
+    .forEach(cat => {
+      initialBalanceMap.set(cat.id, Number(cat.current_balance));
+    });
+
+  // Track running balances as we process transactions
+  const runningBalanceMap = new Map<number, number>();
+  initialBalanceMap.forEach((balance, catId) => {
+    runningBalanceMap.set(catId, balance);
+  });
+
+  // Create a map from original transaction index to created transaction ID
+  const transactionIdMap = new Map<number, number>();
+  createdTransactions.forEach((createdTx, idx) => {
+    transactionIdMap.set(idx, createdTx.id);
+  });
+
+  // Sort transactions by date (ascending) for proper audit log ordering
+  const transactionsWithIndices = validTransactions.map((txn, idx) => ({
+    txn,
+    originalIdx: idx,
+    date: txn.date,
+  })).sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    return dateA - dateB; // Ascending order (oldest first)
+  });
+
+  // Track individual transaction changes for audit logging (ordered by date)
+  const transactionAuditLogs: Array<{
+    transactionId: number;
+    transactionDate: string;
+    transactionDescription: string;
+    transactionType: string;
+    categoryId: number;
+    oldBalance: number;
+    balanceChange: number;
+  }> = [];
+
+  // Process transactions in date order (ascending) to build splits and track audit logs
+  for (const { txn, originalIdx } of transactionsWithIndices) {
+    const transactionId = transactionIdMap.get(originalIdx)!;
+    const transactionType = transactionsData[originalIdx].transaction_type;
     const transactionIsHistorical = txn.is_historical !== undefined ? txn.is_historical : isHistorical;
 
     txn.splits.forEach((split: any) => {
-      // CSV parser already normalizes amounts to positive, but add safeguard for edge cases
       const absSplitAmount = Math.abs(split.amount || 0);
       
       splitsData.push({
@@ -2240,16 +2361,31 @@ export async function importTransactions(transactions: any[], isHistorical: bool
       });
 
       // Accumulate balance updates (only for non-historical transactions)
-      if (!transactionIsHistorical) {
+      if (!transactionIsHistorical && !initialCategories?.find(c => c.id === split.categoryId)?.is_system) {
         const balanceChange = transactionType === 'income'
           ? absSplitAmount
           : -absSplitAmount;
         
         const currentTotal = categoryBalanceUpdates.get(split.categoryId) || 0;
         categoryBalanceUpdates.set(split.categoryId, currentTotal + balanceChange);
+
+        // Track individual transaction for audit logging
+        const oldBalance = runningBalanceMap.get(split.categoryId) || initialBalanceMap.get(split.categoryId) || 0;
+        transactionAuditLogs.push({
+          transactionId,
+          transactionDate: txn.date,
+          transactionDescription: txn.description,
+          transactionType,
+          categoryId: split.categoryId,
+          oldBalance,
+          balanceChange,
+        });
+
+        // Update running balance for next transaction
+        runningBalanceMap.set(split.categoryId, oldBalance + balanceChange);
       }
     });
-  });
+  }
 
   const { error: splitsError } = await supabase
     .from('transaction_splits')
@@ -2282,6 +2418,22 @@ export async function importTransactions(transactions: any[], isHistorical: bool
       });
 
     await Promise.all(updatePromises);
+
+    // Log individual balance changes for each transaction (already sorted by date ascending)
+    const auditChanges = transactionAuditLogs.map(log => ({
+      categoryId: log.categoryId,
+      oldBalance: log.oldBalance,
+      newBalance: log.oldBalance + log.balanceChange,
+      changeType: 'transaction_import' as const,
+      metadata: {
+        transaction_id: log.transactionId,
+        transaction_description: log.transactionDescription,
+        transaction_date: log.transactionDate,
+        import_file_name: fileName,
+      },
+    }));
+
+    await logBalanceChanges(auditChanges);
   }
 
   // ===== STEP 6: Batch insert links =====
