@@ -14,9 +14,6 @@ export async function GET() {
     const hasOwnAccount = await userHasOwnAccount();
     const userIsAdmin = await isAdmin();
 
-    // Debug logging (remove in production)
-    console.log('[Budget Accounts API] Admin status:', userIsAdmin);
-
     return NextResponse.json({
       accounts,
       activeAccountId,

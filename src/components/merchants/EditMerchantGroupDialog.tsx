@@ -21,7 +21,7 @@ interface EditMerchantGroupDialogProps {
   group: MerchantGroupWithStats;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: (newDisplayName: string) => void;
+  onSuccess: (updatedGroup: MerchantGroupWithStats) => void;
 }
 
 interface MerchantMapping {
@@ -79,8 +79,9 @@ export default function EditMerchantGroupDialog({
       });
 
       if (response.ok) {
+        const updatedGroup = await response.json();
         toast.success('Merchant group updated successfully');
-        onSuccess(displayName.trim());
+        onSuccess(updatedGroup);
         onOpenChange(false);
       } else {
         toast.error('Failed to update merchant group');

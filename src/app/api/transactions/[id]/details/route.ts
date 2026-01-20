@@ -29,7 +29,13 @@ export async function GET(
       .select(`
         *,
         merchant_groups (
-          display_name
+          display_name,
+          global_merchant_id,
+          global_merchants (
+            logo_url,
+            icon_name,
+            status
+          )
         ),
         accounts (
           name,
@@ -92,6 +98,17 @@ export async function GET(
       console.error('Error fetching import links:', linkError);
     }
 
+    // Extract global merchant info
+    const merchantGroups = (transaction as any).merchant_groups;
+    const globalMerchant = merchantGroups?.global_merchants
+      ? (Array.isArray(merchantGroups.global_merchants)
+          ? merchantGroups.global_merchants[0]
+          : merchantGroups.global_merchants)
+      : null;
+    const globalMerchantInfo = globalMerchant && globalMerchant.status === 'active'
+      ? { logo_url: globalMerchant.logo_url || null, icon_name: globalMerchant.icon_name || null }
+      : null;
+
     // Format the response
     const response = {
       transaction: {
@@ -101,7 +118,9 @@ export async function GET(
         total_amount: transaction.total_amount,
         transaction_type: transaction.transaction_type || 'expense',
         merchant_group_id: transaction.merchant_group_id,
-        merchant_name: (transaction as any).merchant_groups?.display_name || null,
+        merchant_name: merchantGroups?.display_name || null,
+        merchant_logo_url: globalMerchantInfo?.logo_url || null,
+        merchant_icon_name: globalMerchantInfo?.icon_name || null,
         account_id: transaction.account_id,
         account_name: (transaction as any).accounts?.name || null,
         account_type: (transaction as any).accounts?.account_type || null,

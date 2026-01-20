@@ -57,10 +57,6 @@ export function AccountSwitcher() {
   const loadAccounts = async () => {
     try {
       const data = await fetchBudgetAccounts();
-      console.log('[AccountSwitcher] Received data:', { 
-        isAdmin: data.isAdmin, 
-        accountsCount: data.accounts?.length 
-      });
       setAccounts(data.accounts);
       setActiveAccountId(data.activeAccountId);
       setHasOwnAccount(data.hasOwnAccount);

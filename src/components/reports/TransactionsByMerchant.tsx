@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ChevronRight, ExternalLink } from 'lucide-react';
+import { MerchantLogo } from '@/components/admin/MerchantLogo';
 
 interface TransactionsByMerchantProps {
   transactions: TransactionWithSplits[];
@@ -35,6 +36,8 @@ interface MerchantGroupStat {
   total_amount: number;
   average_amount: number;
   patterns: string[];
+  logo_url?: string | null;
+  icon_name?: string | null;
 }
 
 export default function TransactionsByMerchant({
@@ -179,7 +182,17 @@ export default function TransactionsByMerchant({
                   >
                     <TableCell className="font-medium">
                       <div className="flex items-center justify-between">
-                        <span>{group.display_name}</span>
+                        <div className="flex items-center gap-2">
+                          {(group.logo_url || group.icon_name) && (
+                            <MerchantLogo
+                              logoUrl={group.logo_url}
+                              iconName={group.icon_name}
+                              displayName={group.display_name}
+                              size="sm"
+                            />
+                          )}
+                          <span>{group.display_name}</span>
+                        </div>
                         <span className="text-muted-foreground ml-2 font-semibold">
                           {formatCurrency(group.total_amount)}
                         </span>

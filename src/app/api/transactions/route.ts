@@ -128,9 +128,15 @@ async function getAllTransactionsWithDateFilter(startDate?: string, endDate?: st
       .from('transactions')
       .select(`
         *,
-        merchant_groups (
-          display_name
-        ),
+      merchant_groups (
+        display_name,
+        global_merchant_id,
+        global_merchants (
+          logo_url,
+          icon_name,
+          status
+        )
+      ),
         accounts (
           name
         ),
@@ -219,15 +225,33 @@ async function getAllTransactionsWithDateFilter(startDate?: string, endDate?: st
     });
   });
 
+  // Helper function to extract global merchant info
+  const getGlobalMerchantInfo = (merchantGroups: any) => {
+    if (!merchantGroups?.global_merchants) return null;
+    const globalMerchant = Array.isArray(merchantGroups.global_merchants)
+      ? merchantGroups.global_merchants[0]
+      : merchantGroups.global_merchants;
+    if (!globalMerchant || globalMerchant.status !== 'active') return null;
+    return {
+      logo_url: globalMerchant.logo_url || null,
+      icon_name: globalMerchant.icon_name || null,
+    };
+  };
+
   // Build the final result (same format as getAllTransactions)
-  const transactionsWithSplits = allTransactions.map((txn: any) => ({
-    ...txn,
-    splits: splitsByTransaction.get(txn.id) || [],
-    merchant_name: txn.merchant_groups?.display_name || null,
-    account_name: txn.accounts?.name || null,
-    credit_card_name: txn.credit_cards?.name || null,
-    tags: (txn.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
-  }));
+  const transactionsWithSplits = allTransactions.map((txn: any) => {
+    const globalMerchant = getGlobalMerchantInfo(txn.merchant_groups);
+    return {
+      ...txn,
+      splits: splitsByTransaction.get(txn.id) || [],
+      merchant_name: txn.merchant_groups?.display_name || null,
+      merchant_logo_url: globalMerchant?.logo_url || null,
+      merchant_icon_name: globalMerchant?.icon_name || null,
+      account_name: txn.accounts?.name || null,
+      credit_card_name: txn.credit_cards?.name || null,
+      tags: (txn.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
+    };
+  });
 
   return transactionsWithSplits;
 }

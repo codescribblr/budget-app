@@ -27,13 +27,10 @@ export const isAdmin = cache(async (): Promise<boolean> => {
     
     if (!data) {
       // Profile doesn't exist
-      console.log('[isAdmin] No profile found for user:', user.id);
       return false;
     }
     
-    const adminStatus = data.is_admin === true;
-    console.log('[isAdmin] User admin status:', adminStatus, 'for user:', user.id);
-    return adminStatus;
+    return data.is_admin === true;
   } catch (error) {
     // If authentication fails, user is not admin
     console.error('[isAdmin] Exception:', error);
