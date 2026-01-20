@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getUserAccounts, getActiveAccountId, userHasOwnAccount } from '@/lib/account-context';
+import { isAdmin } from '@/lib/admin';
 
 /**
  * GET /api/budget-accounts
@@ -11,11 +12,16 @@ export async function GET() {
     const accounts = await getUserAccounts();
     const activeAccountId = await getActiveAccountId();
     const hasOwnAccount = await userHasOwnAccount();
+    const userIsAdmin = await isAdmin();
+
+    // Debug logging (remove in production)
+    console.log('[Budget Accounts API] Admin status:', userIsAdmin);
 
     return NextResponse.json({
       accounts,
       activeAccountId,
       hasOwnAccount,
+      isAdmin: userIsAdmin,
     });
   } catch (error: any) {
     console.error('Error fetching budget accounts:', error);

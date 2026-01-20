@@ -12,6 +12,7 @@ interface BudgetAccountsData {
   }>;
   activeAccountId: number | null;
   hasOwnAccount: boolean;
+  isAdmin: boolean;
 }
 
 interface CacheEntry {
@@ -64,6 +65,7 @@ export async function fetchBudgetAccounts(): Promise<BudgetAccountsData> {
         accounts: data.accounts || [],
         activeAccountId: data.activeAccountId,
         hasOwnAccount: data.hasOwnAccount || false,
+        isAdmin: data.isAdmin || false,
       };
 
       // Update cache
