@@ -60,7 +60,13 @@ export async function PUT(
     }
 
     const group = await updateMerchantGroup(groupId, display_name);
-    return NextResponse.json(group);
+    
+    // Fetch the updated group with global merchant info for the response
+    const { getMerchantGroupsWithStats } = await import('@/lib/db/merchant-groups');
+    const allGroups = await getMerchantGroupsWithStats();
+    const updatedGroupWithStats = allGroups.find(g => g.id === groupId);
+    
+    return NextResponse.json(updatedGroupWithStats || group);
   } catch (error) {
     console.error('Error updating merchant group:', error);
     return NextResponse.json(
@@ -97,7 +103,13 @@ export async function PATCH(
     }
 
     const group = await updateMerchantGroup(groupId, display_name);
-    return NextResponse.json(group);
+    
+    // Fetch the updated group with global merchant info for the response
+    const { getMerchantGroupsWithStats } = await import('@/lib/db/merchant-groups');
+    const allGroups = await getMerchantGroupsWithStats();
+    const updatedGroupWithStats = allGroups.find(g => g.id === groupId);
+    
+    return NextResponse.json(updatedGroupWithStats || group);
   } catch (error) {
     console.error('Error updating merchant group:', error);
     return NextResponse.json(

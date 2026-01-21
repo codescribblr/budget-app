@@ -30,6 +30,31 @@ export async function middleware(request: NextRequest) {
   // Refresh session if expired - required for Server Components
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Admin routes - require admin privileges
+  const isAdminPath = request.nextUrl.pathname.startsWith('/admin')
+  
+  if (isAdminPath) {
+    // Require authentication
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('redirectTo', request.nextUrl.pathname)
+      return NextResponse.redirect(url)
+    }
+    
+    // Check if user is admin
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('is_admin')
+      .eq('user_id', user.id)
+      .single()
+    
+    // If not admin, return 404 to hide admin routes
+    if (!profile || !profile.is_admin) {
+      return new NextResponse(null, { status: 404 })
+    }
+  }
+
   // Protected routes - require authentication
   const protectedPaths = ['/dashboard', '/categories', '/accounts', '/credit-cards', '/transactions', '/reports', '/import', '/goals', '/loans', '/settings', '/help', '/merchants', '/income', '/income-buffer', '/money-movement', '/category-rules']
   const isProtectedPath = protectedPaths.some(path =>

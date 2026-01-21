@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import Image from "next/image"
 import { useTheme } from "next-themes"
 import {
@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Check, ChevronDown } from "lucide-react"
+import { Plus, Check, ChevronDown, Shield } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,12 +32,14 @@ import { fetchBudgetAccounts, clearBudgetAccountsCache } from '@/lib/budget-acco
 
 export function AccountSwitcher() {
   const router = useRouter()
+  const pathname = usePathname()
   const { resolvedTheme } = useTheme()
   const { state } = useSidebar()
   const [mounted, setMounted] = useState(false)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [activeAccountId, setActiveAccountId] = useState<number | null>(null)
   const [hasOwnAccount, setHasOwnAccount] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [newAccountName, setNewAccountName] = useState("")
@@ -58,6 +60,7 @@ export function AccountSwitcher() {
       setAccounts(data.accounts);
       setActiveAccountId(data.activeAccountId);
       setHasOwnAccount(data.hasOwnAccount);
+      setIsAdmin(data.isAdmin || false);
 
       // Auto-select if only one account and none is currently selected
       if (data.accounts.length === 1 && !data.activeAccountId) {
@@ -70,8 +73,14 @@ export function AccountSwitcher() {
     }
   }
 
-  const handleSwitchAccount = async (accountId: number) => {
+  const handleSwitchAccount = async (accountId: number | 'admin') => {
     try {
+      if (accountId === 'admin') {
+        // Navigate to admin dashboard
+        router.push('/admin')
+        return
+      }
+
       const response = await fetch('/api/budget-accounts/switch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,15 +88,20 @@ export function AccountSwitcher() {
       })
 
       if (response.ok) {
-        // Full page reload to ensure all data, features, permissions, and contexts
-        // are refreshed for the new account. This ensures:
-        // - All server-side data is re-fetched
-        // - All client-side state is reset
-        // - All hooks and contexts re-initialize
-        // - Permissions are re-checked
-        // - Subscription status is re-fetched
-        // - Feature flags are re-evaluated
-        window.location.reload()
+        // If we're currently on an admin page, navigate to dashboard instead of reloading
+        if (pathname?.startsWith('/admin')) {
+          window.location.href = '/dashboard'
+        } else {
+          // Full page reload to ensure all data, features, permissions, and contexts
+          // are refreshed for the new account. This ensures:
+          // - All server-side data is re-fetched
+          // - All client-side state is reset
+          // - All hooks and contexts re-initialize
+          // - Permissions are re-checked
+          // - Subscription status is re-fetched
+          // - Feature flags are re-evaluated
+          window.location.reload()
+        }
       }
     } catch (error) {
       console.error('Error switching budget account:', error)
@@ -181,7 +195,9 @@ export function AccountSwitcher() {
                 <div className="flex flex-col items-start flex-1 min-w-0 gap-1">
                   <span className="text-sm font-semibold leading-none">Budget App</span>
                   <span className="text-xs text-muted-foreground leading-none truncate w-full text-left">
-                    {activeAccount?.accountName || 'Select Account'}
+                    {pathname?.startsWith('/admin')
+                      ? 'Admin'
+                      : activeAccount?.accountName || 'Select Account'}
                   </span>
                 </div>
                 <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -209,6 +225,23 @@ export function AccountSwitcher() {
               )}
             </DropdownMenuItem>
           ))}
+          {isAdmin && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => handleSwitchAccount('admin')}
+                className="flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Shield className="h-4 w-4 text-primary" />
+                  <span className="truncate">Admin</span>
+                </div>
+                {pathname?.startsWith('/admin') && (
+                  <Check className="ml-2 h-4 w-4" />
+                )}
+              </DropdownMenuItem>
+            </>
+          )}
           <DropdownMenuSeparator />
           {!hasOwnAccount && (
             <DropdownMenuItem onClick={() => setShowCreateDialog(true)}>

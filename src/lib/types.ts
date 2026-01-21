@@ -79,6 +79,7 @@ export interface MerchantGroup {
   id: number;
   user_id: string;
   display_name: string;
+  global_merchant_id?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -100,6 +101,8 @@ export interface MerchantGroupWithStats extends MerchantGroup {
   total_amount: number;
   unique_patterns: number;
   has_manual_mappings: boolean;
+  logo_url?: string | null; // From global merchant if linked
+  icon_name?: string | null; // From global merchant if linked
 }
 
 export interface Tag {
@@ -317,6 +320,8 @@ export interface TransactionWithSplits extends Transaction {
   splits: (TransactionSplit & { category_name: string })[];
   tags?: Tag[]; // Tags associated with this transaction
   merchant_name?: string | null;
+  merchant_logo_url?: string | null; // From global merchant if linked
+  merchant_icon_name?: string | null; // From global merchant if linked
   account_name?: string | null;
   credit_card_name?: string | null;
 }

@@ -1035,6 +1035,24 @@ function calculateMonthlyNetIncome(settingsObj: Record<string, string>): number 
 // TRANSACTIONS
 // =====================================================
 
+/**
+ * Helper function to extract global merchant info from nested Supabase query result
+ */
+function getGlobalMerchantInfo(merchantGroups: any): { logo_url: string | null; icon_name: string | null } | null {
+  if (!merchantGroups?.global_merchants) return null;
+  
+  const globalMerchant = Array.isArray(merchantGroups.global_merchants)
+    ? merchantGroups.global_merchants[0]
+    : merchantGroups.global_merchants;
+  
+  if (!globalMerchant || globalMerchant.status !== 'active') return null;
+  
+  return {
+    logo_url: globalMerchant.logo_url || null,
+    icon_name: globalMerchant.icon_name || null,
+  };
+}
+
 export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
   const { supabase } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
@@ -1043,13 +1061,19 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
     return [];
   }
 
-  // Get all transactions with merchant group, account, credit card, and tags info
+  // Get all transactions with merchant group, global merchant, account, credit card, and tags info
   const { data: transactions, error: txError } = await supabase
     .from('transactions')
     .select(`
       *,
       merchant_groups (
-        display_name
+        display_name,
+        global_merchant_id,
+        global_merchants (
+          logo_url,
+          icon_name,
+          status
+        )
       ),
       accounts (
         name
@@ -1138,7 +1162,13 @@ export async function searchTransactions(
     .select(`
       *,
       merchant_groups (
-        display_name
+        display_name,
+        global_merchant_id,
+        global_merchants (
+          logo_url,
+          icon_name,
+          status
+        )
       ),
       accounts (
         name
@@ -1266,7 +1296,13 @@ export async function getTransactionsPaginated(
     .select(`
       *,
       merchant_groups (
-        display_name
+        display_name,
+        global_merchant_id,
+        global_merchants (
+          logo_url,
+          icon_name,
+          status
+        )
       ),
       accounts (
         name
@@ -1394,7 +1430,13 @@ export async function getTransactionsPaginated(
       .select(`
         *,
         merchant_groups (
-          display_name
+          display_name,
+          global_merchant_id,
+          global_merchants (
+            logo_url,
+            icon_name,
+            status
+          )
         ),
         accounts (
           name
@@ -1499,24 +1541,29 @@ export async function getTransactionsPaginated(
   });
 
   // Build the final result
-  let transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => ({
-    id: transaction.id,
-    date: transaction.date,
-    description: transaction.description,
-    total_amount: transaction.total_amount,
-    transaction_type: transaction.transaction_type || 'expense',
-    merchant_group_id: transaction.merchant_group_id,
-    account_id: transaction.account_id,
-    credit_card_id: transaction.credit_card_id,
-    is_historical: transaction.is_historical || false,
-    created_at: transaction.created_at,
-    updated_at: transaction.updated_at,
-    merchant_name: transaction.merchant_groups?.display_name || null,
-    account_name: transaction.accounts?.name || null,
-    credit_card_name: transaction.credit_cards?.name || null,
-    tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
-    splits: splitsByTransaction.get(transaction.id) || [],
-  }));
+  let transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => {
+    const globalMerchant = getGlobalMerchantInfo(transaction.merchant_groups);
+    return {
+      id: transaction.id,
+      date: transaction.date,
+      description: transaction.description,
+      total_amount: transaction.total_amount,
+      transaction_type: transaction.transaction_type || 'expense',
+      merchant_group_id: transaction.merchant_group_id,
+      account_id: transaction.account_id,
+      credit_card_id: transaction.credit_card_id,
+      is_historical: transaction.is_historical || false,
+      created_at: transaction.created_at,
+      updated_at: transaction.updated_at,
+      merchant_name: transaction.merchant_groups?.display_name || null,
+      merchant_logo_url: globalMerchant?.logo_url || null,
+      merchant_icon_name: globalMerchant?.icon_name || null,
+      account_name: transaction.accounts?.name || null,
+      credit_card_name: transaction.credit_cards?.name || null,
+      tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
+      splits: splitsByTransaction.get(transaction.id) || [],
+    };
+  });
 
   // Category and tag filters are already applied before pagination (if they were active)
   // No need to filter again here
@@ -1546,13 +1593,19 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
-  // Get transaction with merchant group, account, credit card, and tags info
+  // Get transaction with merchant group, global merchant, account, credit card, and tags info
   const { data: transaction, error: txError } = await supabase
     .from('transactions')
     .select(`
       *,
       merchant_groups (
-        display_name
+        display_name,
+        global_merchant_id,
+        global_merchants (
+          logo_url,
+          icon_name,
+          status
+        )
       ),
       accounts (
         name
@@ -1592,6 +1645,8 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
     category_name: split.categories?.name || 'Unknown',
   }));
 
+  const globalMerchant = getGlobalMerchantInfo(transaction.merchant_groups);
+
   return {
     id: transaction.id,
     date: transaction.date,
@@ -1605,6 +1660,8 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
     created_at: transaction.created_at,
     updated_at: transaction.updated_at,
     merchant_name: (transaction as any).merchant_groups?.display_name || null,
+    merchant_logo_url: globalMerchant?.logo_url || null,
+    merchant_icon_name: globalMerchant?.icon_name || null,
     account_name: (transaction as any).accounts?.name || null,
     credit_card_name: (transaction as any).credit_cards?.name || null,
     tags: ((transaction as any).transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),

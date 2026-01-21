@@ -22,6 +22,7 @@ import EditMerchantGroupDialog from './EditMerchantGroupDialog';
 import MergeMerchantGroupsDialog from './MergeMerchantGroupsDialog';
 import DeleteMerchantGroupDialog from './DeleteMerchantGroupDialog';
 import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
+import { MerchantLogo } from '@/components/admin/MerchantLogo';
 
 export default function MerchantsPage() {
   const router = useRouter();
@@ -78,10 +79,10 @@ export default function MerchantsPage() {
     setSelectedForMerge(new Set());
   };
 
-  const handleUpdateGroup = (groupId: number, newDisplayName: string) => {
+  const handleUpdateGroup = (updatedGroup: MerchantGroupWithStats) => {
     setMerchantGroups(prevGroups =>
       prevGroups.map(g =>
-        g.id === groupId ? { ...g, display_name: newDisplayName } : g
+        g.id === updatedGroup.id ? updatedGroup : g
       )
     );
   };
@@ -246,7 +247,15 @@ export default function MerchantsPage() {
                         onClick={() => router.push(`/transactions?merchant=${encodeURIComponent(group.display_name)}`)}
                         className="flex items-center gap-2 hover:underline text-left"
                       >
-                        {group.display_name}
+                        {(group.logo_url || group.icon_name) && (
+                          <MerchantLogo
+                            logoUrl={group.logo_url}
+                            iconName={group.icon_name}
+                            displayName={group.display_name}
+                            size="sm"
+                          />
+                        )}
+                        <span>{group.display_name}</span>
                         {group.has_manual_mappings && (
                           <Badge variant="outline" className="text-xs">Manual</Badge>
                         )}
@@ -314,8 +323,8 @@ export default function MerchantsPage() {
             group={selectedGroup}
             open={showEditDialog}
             onOpenChange={setShowEditDialog}
-            onSuccess={(newDisplayName) => {
-              handleUpdateGroup(selectedGroup.id, newDisplayName);
+            onSuccess={(updatedGroup) => {
+              handleUpdateGroup(updatedGroup);
             }}
           />
           <DeleteMerchantGroupDialog

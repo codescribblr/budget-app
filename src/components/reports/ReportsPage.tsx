@@ -25,6 +25,8 @@ interface MerchantGroupStat {
   total_amount: number;
   average_amount: number;
   patterns: string[];
+  logo_url?: string | null;
+  icon_name?: string | null;
 }
 
 export default function ReportsPage() {
