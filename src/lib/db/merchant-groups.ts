@@ -394,16 +394,14 @@ export async function updateMerchantGroup(
     .select('id, display_name, status')
     .eq('status', 'active');
 
-  if (globalError) throw globalError;
+  if (globalError && globalError.code !== 'PGRST116') {
+    throw globalError;
+  }
 
   // Find exact case-insensitive match
   const matchingGlobalMerchant = allActiveGlobalMerchants?.find(
     gm => gm.display_name.toLowerCase().trim() === normalizedName
   );
-
-  if (globalError && globalError.code !== 'PGRST116') {
-    throw globalError;
-  }
 
   // Determine the new global_merchant_id
   let newGlobalMerchantId: number | null = null;

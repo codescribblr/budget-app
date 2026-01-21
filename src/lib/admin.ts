@@ -82,7 +82,7 @@ export async function getUserAdminStatus(userId: string): Promise<boolean> {
  * Set admin status for a user
  * Requires admin privileges
  */
-export async function setUserAdminStatus(userId: string, isAdmin: boolean): Promise<void> {
+export async function setUserAdminStatus(userId: string, shouldBeAdmin: boolean): Promise<void> {
   // First check if current user is admin
   const adminStatus = await isAdmin();
   if (!adminStatus) {
@@ -104,7 +104,7 @@ export async function setUserAdminStatus(userId: string, isAdmin: boolean): Prom
       .from('user_profiles')
       .insert({
         user_id: userId,
-        is_admin: isAdmin,
+        is_admin: shouldBeAdmin,
       });
     
     if (insertError) {
@@ -114,7 +114,7 @@ export async function setUserAdminStatus(userId: string, isAdmin: boolean): Prom
     // Update existing profile
     const { error: updateError } = await supabase
       .from('user_profiles')
-      .update({ is_admin: isAdmin })
+      .update({ is_admin: shouldBeAdmin })
       .eq('user_id', userId);
     
     if (updateError) {

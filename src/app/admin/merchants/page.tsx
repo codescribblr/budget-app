@@ -1,6 +1,8 @@
 import { AdminGlobalMerchantsPage } from "@/components/admin/AdminGlobalMerchantsPage"
 import { isAdmin } from "@/lib/admin"
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminMerchantsPage() {
   const adminStatus = await isAdmin();
   if (!adminStatus) {
