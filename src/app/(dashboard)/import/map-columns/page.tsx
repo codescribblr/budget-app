@@ -975,14 +975,14 @@ export default function MapColumnsPage() {
               <div>
                 <Label htmlFor="status-column">Status Column</Label>
                 <Select
-                  value={statusColumn?.toString() || ''}
-                  onValueChange={(value) => setStatusColumn(value ? parseInt(value) : null)}
+                  value={statusColumn?.toString() || 'none'}
+                  onValueChange={(value) => setStatusColumn(value === 'none' ? null : parseInt(value))}
                 >
                   <SelectTrigger id="status-column">
                     <SelectValue placeholder="Select column (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None (don't filter by status)</SelectItem>
+                    <SelectItem value="none">None (don't filter by status)</SelectItem>
                     {analysis.columns.map((col) => (
                       <SelectItem key={col.columnIndex} value={col.columnIndex.toString()}>
                         {col.headerName}
