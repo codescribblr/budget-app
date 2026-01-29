@@ -25,6 +25,7 @@ import {
   CreditCard,
   Landmark,
   Banknote,
+  Sun,
 } from "lucide-react"
 
 import {
@@ -94,6 +95,7 @@ const navigationSections = [
       { label: "Trends", path: "/reports/trends", icon: TrendingUp, featureKey: "advanced_reporting" },
       { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
       { label: "Tag Reports", path: "/reports/tags", icon: Tag, featureKey: "tags" },
+      { label: "Forecast", path: "/reports/forecast", icon: Sun, featureKey: "advanced_reporting" },
     ],
   },
   {

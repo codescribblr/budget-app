@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { formatCurrency } from '@/lib/utils';
 import type { NonCashAsset } from '@/lib/types';
 import { toast } from 'sonner';
@@ -57,6 +58,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
   const [assetType, setAssetType] = useState<NonCashAsset['asset_type']>('investment');
   const [address, setAddress] = useState('');
   const [vin, setVin] = useState('');
+  const [isRmdQualified, setIsRmdQualified] = useState(false);
+  const [isLiquid, setIsLiquid] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -102,6 +105,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
           asset_type: assetType,
           address: assetType === 'real_estate' ? (address.trim() || null) : null,
           vin: assetType === 'vehicle' ? (vin.trim() || null) : null,
+          is_rmd_qualified: isRmdQualified,
+          is_liquid: isLiquid,
         }),
       });
 
@@ -141,6 +146,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
       estimated_return_percentage: estimatedReturnNum,
       address: addressValue,
       vin: vinValue,
+      is_rmd_qualified: isRmdQualified,
+      is_liquid: isLiquid,
       sort_order: assets.length,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -167,6 +174,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
           estimated_return_percentage: estimatedReturnNum,
           address: addressValue,
           vin: vinValue,
+          is_rmd_qualified: isRmdQualified,
+          is_liquid: isLiquid,
         }),
       });
 
@@ -224,6 +233,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
     setAssetType(asset.asset_type);
     setAddress(asset.address || '');
     setVin(asset.vin || '');
+    setIsRmdQualified(asset.is_rmd_qualified ?? false);
+    setIsLiquid(asset.is_liquid ?? true);
     setIsEditDialogOpen(true);
   };
 
@@ -234,6 +245,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
     setAssetType('investment');
     setAddress('');
     setVin('');
+    setIsRmdQualified(false);
+    setIsLiquid(true);
     setIsAddDialogOpen(true);
   };
 
@@ -539,6 +552,44 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
                 Used for forecasting future value (e.g., 7.5 for 7.5% annual return, or -2.0 for -2% depreciation)
               </p>
             </div>
+            <div className="space-y-3 pt-2 border-t">
+              <div className="flex items-start space-x-2">
+                <Checkbox
+                  id="is-rmd-qualified-edit"
+                  checked={isRmdQualified}
+                  onCheckedChange={(checked) => setIsRmdQualified(checked === true)}
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <Label
+                    htmlFor="is-rmd-qualified-edit"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Subject to Required Minimum Distributions (RMD)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Check if this is an IRA/401(k) type account that requires RMDs starting at age 73. Examples: Traditional IRA, 401(k), 403(b), SEP IRA, SIMPLE IRA.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-2">
+                <Checkbox
+                  id="is-liquid-edit"
+                  checked={isLiquid}
+                  onCheckedChange={(checked) => setIsLiquid(checked === true)}
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <Label
+                    htmlFor="is-liquid-edit"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Liquid Asset
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Check if this asset can be easily converted to cash for distributions. Liquid assets (stocks, bonds, cash accounts) can be distributed immediately. Illiquid assets (real estate, collectibles) may take time to sell.
+                  </p>
+                </div>
+              </div>
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 Cancel
@@ -657,6 +708,44 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
               <p className="text-xs text-muted-foreground mt-1">
                 Used for forecasting future value (e.g., 7.5 for 7.5% annual return, or -2.0 for -2% depreciation)
               </p>
+            </div>
+            <div className="space-y-3 pt-2 border-t">
+              <div className="flex items-start space-x-2">
+                <Checkbox
+                  id="is-rmd-qualified-add"
+                  checked={isRmdQualified}
+                  onCheckedChange={(checked) => setIsRmdQualified(checked === true)}
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <Label
+                    htmlFor="is-rmd-qualified-add"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Subject to Required Minimum Distributions (RMD)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Check if this is an IRA/401(k) type account that requires RMDs starting at age 73. Examples: Traditional IRA, 401(k), 403(b), SEP IRA, SIMPLE IRA.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-2">
+                <Checkbox
+                  id="is-liquid-add"
+                  checked={isLiquid}
+                  onCheckedChange={(checked) => setIsLiquid(checked === true)}
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <Label
+                    htmlFor="is-liquid-add"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Liquid Asset
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Check if this asset can be easily converted to cash for distributions. Liquid assets (stocks, bonds, cash accounts) can be distributed immediately. Illiquid assets (real estate, collectibles) may take time to sell.
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>

@@ -52,6 +52,8 @@ export interface NonCashAsset {
   estimated_return_percentage: number;
   address?: string | null; // For real estate assets
   vin?: string | null; // For vehicle assets
+  is_rmd_qualified: boolean; // Whether this asset is subject to RMDs (IRA/401K type accounts)
+  is_liquid: boolean; // Whether this asset can be easily converted to cash
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -64,6 +66,8 @@ export interface CreateNonCashAssetRequest {
   estimated_return_percentage?: number;
   address?: string | null;
   vin?: string | null;
+  is_rmd_qualified?: boolean;
+  is_liquid?: boolean;
   sort_order?: number;
 }
 
@@ -74,6 +78,8 @@ export interface UpdateNonCashAssetRequest {
   estimated_return_percentage?: number;
   address?: string | null;
   vin?: string | null;
+  is_rmd_qualified?: boolean;
+  is_liquid?: boolean;
   sort_order?: number;
 }
 

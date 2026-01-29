@@ -89,6 +89,12 @@ const settingsNavItems = [
     description: 'Manage account collaborators',
   },
   {
+    title: 'Profile',
+    href: '/settings/profile',
+    icon: User,
+    description: 'Manage your profile information',
+  },
+  {
     title: 'Account',
     href: '/settings/account',
     icon: Trash2,

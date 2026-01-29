@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { NonCashAsset } from '@/lib/types';
 import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
@@ -36,6 +37,8 @@ export default function AssetDialog({ isOpen, onClose, asset, onSuccess }: Asset
   const [assetType, setAssetType] = useState<NonCashAsset['asset_type']>('investment');
   const [address, setAddress] = useState('');
   const [vin, setVin] = useState('');
+  const [isRmdQualified, setIsRmdQualified] = useState(false);
+  const [isLiquid, setIsLiquid] = useState(true);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -48,6 +51,8 @@ export default function AssetDialog({ isOpen, onClose, asset, onSuccess }: Asset
         setAssetType(asset.asset_type);
         setAddress(asset.address || '');
         setVin(asset.vin || '');
+        setIsRmdQualified(asset.is_rmd_qualified ?? false);
+        setIsLiquid(asset.is_liquid ?? true);
       } else {
         // Add mode
         setAssetName('');
@@ -56,6 +61,8 @@ export default function AssetDialog({ isOpen, onClose, asset, onSuccess }: Asset
         setAssetType('investment');
         setAddress('');
         setVin('');
+        setIsRmdQualified(false);
+        setIsLiquid(true);
       }
     }
   }, [isOpen, asset]);
@@ -75,6 +82,8 @@ export default function AssetDialog({ isOpen, onClose, asset, onSuccess }: Asset
         estimated_return_percentage: parseFloat(estimatedReturn) || 0,
         address: assetType === 'real_estate' ? (address.trim() || null) : null,
         vin: assetType === 'vehicle' ? (vin.trim().toUpperCase() || null) : null,
+        is_rmd_qualified: isRmdQualified,
+        is_liquid: isLiquid,
       };
 
       if (asset) {
@@ -227,6 +236,44 @@ export default function AssetDialog({ isOpen, onClose, asset, onSuccess }: Asset
             <p className="text-xs text-muted-foreground mt-1">
               Used for forecasting future value (e.g., 7.5 for 7.5% annual return, or -2.0 for -2% depreciation)
             </p>
+          </div>
+          <div className="space-y-3 pt-2 border-t">
+            <div className="flex items-start space-x-2">
+              <Checkbox
+                id="is-rmd-qualified"
+                checked={isRmdQualified}
+                onCheckedChange={(checked) => setIsRmdQualified(checked === true)}
+              />
+              <div className="grid gap-1.5 leading-none">
+                <Label
+                  htmlFor="is-rmd-qualified"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Subject to Required Minimum Distributions (RMD)
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Check if this is an IRA/401(k) type account that requires RMDs starting at age 73. Examples: Traditional IRA, 401(k), 403(b), SEP IRA, SIMPLE IRA.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start space-x-2">
+              <Checkbox
+                id="is-liquid"
+                checked={isLiquid}
+                onCheckedChange={(checked) => setIsLiquid(checked === true)}
+              />
+              <div className="grid gap-1.5 leading-none">
+                <Label
+                  htmlFor="is-liquid"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Liquid Asset
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Check if this asset can be easily converted to cash for distributions. Liquid assets (stocks, bonds, cash accounts) can be distributed immediately. Illiquid assets (real estate, collectibles) may take time to sell.
+                </p>
+              </div>
+            </div>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose} disabled={loading}>

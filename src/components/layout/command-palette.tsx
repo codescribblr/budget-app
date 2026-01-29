@@ -37,6 +37,7 @@ import {
   UserPlus,
   RefreshCw,
   Bell,
+  Sun,
 } from "lucide-react"
 import { useFeature } from "@/contexts/FeatureContext"
 
@@ -105,6 +106,7 @@ const navigationItems = [
   { label: "Reports", path: "/reports", icon: FileText },
   { label: "Trends", path: "/reports/trends", icon: TrendingUp, featureKey: "advanced_reporting" },
   { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
+  { label: "Forecast", path: "/reports/forecast", icon: Sun, featureKey: "advanced_reporting" },
   { label: "Income", path: "/income", icon: DollarSign },
   { label: "Goals", path: "/goals", icon: Target, featureKey: "goals" },
   { label: "AI Assistant", path: "/dashboard/ai-assistant", icon: Sparkles, featureKey: "ai_chat" },
