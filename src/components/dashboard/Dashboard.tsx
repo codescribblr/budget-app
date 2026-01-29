@@ -11,17 +11,19 @@ import type {
   Account,
   CreditCard,
   Loan,
+  NonCashAsset,
   PendingCheck,
   DashboardSummary,
 } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
-import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, Mail, ChevronUp } from 'lucide-react';
+import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, Mail, ChevronUp, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import CategoryList from './CategoryList';
 import AccountList from './AccountList';
 import CreditCardList from './CreditCardList';
 import LoanList from './LoanList';
 import PendingCheckList from './PendingCheckList';
+import AssetList from './AssetList';
 import SummaryCards from './SummaryCards';
 import GoalsWidget from './GoalsWidget';
 import IncomeBufferCard from './IncomeBufferCard';
@@ -95,6 +97,7 @@ export default function Dashboard() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [assets, setAssets] = useState<NonCashAsset[]>([]);
   const [pendingChecks, setPendingChecks] = useState<PendingCheck[]>([]);
   const [monthlyNetIncome, setMonthlyNetIncome] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -102,6 +105,7 @@ export default function Dashboard() {
   const [isAccountsOpen, setIsAccountsOpen] = useLocalStorage('dashboard-card-accounts', true);
   const [isCreditCardsOpen, setIsCreditCardsOpen] = useLocalStorage('dashboard-card-credit-cards', true);
   const [isLoansOpen, setIsLoansOpen] = useLocalStorage('dashboard-card-loans', true);
+  const [isAssetsOpen, setIsAssetsOpen] = useLocalStorage('dashboard-card-assets', true);
   const [isCategoriesOpen, setIsCategoriesOpen] = useLocalStorage('dashboard-card-categories', true);
   const [bufferStatus, setBufferStatus] = useState<any>(null);
   const [showBufferNotice, setShowBufferNotice] = useState(false);
@@ -125,23 +129,25 @@ export default function Dashboard() {
 
     try {
       setLoading(true);
-      const [categoriesRes, accountsRes, creditCardsRes, loansRes, pendingChecksRes, summaryRes, bufferRes] =
+      const [categoriesRes, accountsRes, creditCardsRes, loansRes, assetsRes, pendingChecksRes, summaryRes, bufferRes] =
         await Promise.all([
           fetch('/api/categories'),
           fetch('/api/accounts'),
           fetch('/api/credit-cards'),
           fetch('/api/loans'),
+          fetch('/api/non-cash-assets'),
           fetch('/api/pending-checks'),
           fetch('/api/dashboard'),
           fetch('/api/income-buffer/status'),
         ]);
 
-      const [categoriesData, accountsData, creditCardsData, loansData, pendingChecksData, summaryData, bufferData] =
+      const [categoriesData, accountsData, creditCardsData, loansData, assetsData, pendingChecksData, summaryData, bufferData] =
         await Promise.all([
           categoriesRes.ok ? categoriesRes.json() : [],
           accountsRes.ok ? accountsRes.json() : [],
           creditCardsRes.ok ? creditCardsRes.json() : [],
           loansRes.ok ? loansRes.json() : [],
+          assetsRes.ok ? assetsRes.json() : [],
           pendingChecksRes.ok ? pendingChecksRes.json() : [],
           summaryRes.ok ? summaryRes.json() : null,
           bufferRes.ok ? bufferRes.json() : null,
@@ -153,6 +159,7 @@ export default function Dashboard() {
       setCreditCards(Array.isArray(creditCardsData) ? creditCardsData : []);
       // Handle 403 (premium required) by setting empty array
       setLoans(loansRes.status === 403 ? [] : (Array.isArray(loansData) ? loansData : []));
+      setAssets(Array.isArray(assetsData) ? assetsData : []);
       setPendingChecks(Array.isArray(pendingChecksData) ? pendingChecksData : []);
       setMonthlyNetIncome(summaryData?.monthly_net_income || 0);
       setBufferStatus(bufferData);
@@ -231,6 +238,18 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Error fetching pending checks:', error);
+    }
+  };
+
+  const updateAssets = async () => {
+    try {
+      const response = await fetch('/api/non-cash-assets');
+      if (response.ok) {
+        const data = await response.json();
+        setAssets(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching assets:', error);
     }
   };
 
@@ -382,6 +401,39 @@ export default function Dashboard() {
                 {isCreditCardsOpen && (
                   <button
                     onClick={() => setIsCreditCardsOpen(false)}
+                    className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                    aria-label="Collapse card"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                )}
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          <Collapsible open={isAssetsOpen} onOpenChange={setIsAssetsOpen}>
+            <Card id="assets-section" className="relative">
+              <CardHeader>
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center gap-2 cursor-pointer">
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5" />
+                      Non-Cash Assets
+                    </CardTitle>
+                  </div>
+                </CollapsibleTrigger>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="pb-8">
+                  <AssetList 
+                    assets={assets} 
+                    onUpdate={(updatedAssets) => setAssets(updatedAssets)}
+                    disabled={!isEditor || permissionsLoading}
+                  />
+                </CardContent>
+                {isAssetsOpen && (
+                  <button
+                    onClick={() => setIsAssetsOpen(false)}
                     className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
                     aria-label="Collapse card"
                   >

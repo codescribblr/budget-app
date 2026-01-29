@@ -44,6 +44,33 @@ export interface CreditCard {
   updated_at: string;
 }
 
+export interface NonCashAsset {
+  id: number;
+  name: string;
+  asset_type: 'investment' | 'real_estate' | 'vehicle' | 'art' | 'insurance' | 'collectibles' | 'cryptocurrency' | 'other';
+  current_value: number;
+  estimated_return_percentage: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateNonCashAssetRequest {
+  name: string;
+  asset_type: NonCashAsset['asset_type'];
+  current_value?: number;
+  estimated_return_percentage?: number;
+  sort_order?: number;
+}
+
+export interface UpdateNonCashAssetRequest {
+  name?: string;
+  asset_type?: NonCashAsset['asset_type'];
+  current_value?: number;
+  estimated_return_percentage?: number;
+  sort_order?: number;
+}
+
 export interface Loan {
   id: number;
   user_id: string;

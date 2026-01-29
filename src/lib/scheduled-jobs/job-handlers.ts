@@ -190,6 +190,116 @@ export async function handleMonthlyRollover(): Promise<JobResult> {
 }
 
 /**
+ * Handler for net_worth_snapshot job
+ * Creates daily snapshots of net worth for all budget accounts
+ * Runs daily to track net worth changes over time
+ */
+export async function handleNetWorthSnapshot(): Promise<JobResult> {
+  try {
+    const supabase = createServiceRoleClient();
+    
+    // Get all active budget accounts
+    const { data: budgetAccounts, error: accountsError } = await supabase
+      .from('budget_accounts')
+      .select('id')
+      .is('deleted_at', null);
+    
+    if (accountsError) {
+      console.error('Error fetching budget accounts:', accountsError);
+      return { success: false, error: accountsError.message };
+    }
+    
+    if (!budgetAccounts || budgetAccounts.length === 0) {
+      return { success: true, message: 'No budget accounts to process' };
+    }
+    
+    let processed = 0;
+    let errors = 0;
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Process each budget account
+    for (const account of budgetAccounts) {
+      try {
+        // Get all accounts (only those included in totals)
+        const { data: accounts } = await supabase
+          .from('accounts')
+          .select('balance, include_in_totals')
+          .eq('account_id', account.id);
+        
+        // Get all credit cards (only those included in totals)
+        const { data: creditCards } = await supabase
+          .from('credit_cards')
+          .select('current_balance, include_in_totals')
+          .eq('account_id', account.id);
+        
+        // Get all loans
+        const { data: loans } = await supabase
+          .from('loans')
+          .select('balance')
+          .eq('account_id', account.id);
+        
+        // Get all assets
+        const { data: assets } = await supabase
+          .from('non_cash_assets')
+          .select('current_value')
+          .eq('account_id', account.id);
+        
+        // Calculate totals
+        const totalAccounts = (accounts || [])
+          .filter(acc => acc.include_in_totals === true)
+          .reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
+        
+        const totalCreditCards = (creditCards || [])
+          .filter(cc => cc.include_in_totals === true)
+          .reduce((sum, cc) => sum + Number(cc.current_balance || 0), 0);
+        
+        const totalLoans = (loans || [])
+          .reduce((sum, loan) => sum + Number(loan.balance || 0), 0);
+        
+        const totalAssets = (assets || [])
+          .reduce((sum, asset) => sum + Number(asset.current_value || 0), 0);
+        
+        // Net worth = accounts + assets - credit cards - loans
+        const netWorth = totalAccounts + totalAssets - totalCreditCards - totalLoans;
+        
+        // Upsert snapshot for today
+        const { error: snapshotError } = await supabase
+          .from('net_worth_snapshots')
+          .upsert({
+            budget_account_id: account.id,
+            snapshot_date: today,
+            total_accounts: totalAccounts,
+            total_credit_cards: totalCreditCards,
+            total_loans: totalLoans,
+            total_assets: totalAssets,
+            net_worth: netWorth,
+          }, {
+            onConflict: 'budget_account_id,snapshot_date'
+          });
+        
+        if (snapshotError) {
+          console.error(`Error creating snapshot for account ${account.id}:`, snapshotError);
+          errors++;
+        } else {
+          processed++;
+        }
+      } catch (error: any) {
+        console.error(`Error processing account ${account.id}:`, error);
+        errors++;
+      }
+    }
+    
+    return {
+      success: errors === 0,
+      message: `Created net worth snapshots for ${processed} accounts${errors > 0 ? `, ${errors} errors` : ''}`,
+    };
+  } catch (error: any) {
+    console.error('Error in net worth snapshot job:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Get handler function for a job type
  */
 export function getJobHandler(jobType: string): (() => Promise<JobResult>) | null {
@@ -200,6 +310,8 @@ export function getJobHandler(jobType: string): (() => Promise<JobResult>) | nul
       return handleSendNotifications;
     case 'monthly_rollover':
       return handleMonthlyRollover;
+    case 'net_worth_snapshot':
+      return handleNetWorthSnapshot;
     default:
       return null;
   }

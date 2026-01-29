@@ -4,6 +4,7 @@ import type {
   Account,
   CreditCard,
   Loan,
+  NonCashAsset,
   Transaction,
   TransactionSplit,
   PendingCheck,
@@ -437,6 +438,17 @@ export async function updateAccount(
 ): Promise<Account | null> {
   const { supabase } = await getAuthenticatedUser();
   
+  // Get old balance if balance is being updated
+  let oldBalance: number | undefined;
+  if (data.balance !== undefined) {
+    const { data: oldAccount } = await supabase
+      .from('accounts')
+      .select('balance')
+      .eq('id', id)
+      .single();
+    oldBalance = oldAccount?.balance;
+  }
+  
   const { data: account, error } = await supabase
     .from('accounts')
     .update(data)
@@ -447,6 +459,21 @@ export async function updateAccount(
   if (error) {
     if (error.code === 'PGRST116') return null;
     throw error;
+  }
+  
+  // Log balance change if balance was updated
+  if (data.balance !== undefined && oldBalance !== undefined && account) {
+    const { logAccountBalanceChange } = await import('./audit/account-balance-audit');
+    await logAccountBalanceChange(
+      id,
+      oldBalance,
+      account.balance,
+      'manual_edit'
+    );
+    
+    // Create net worth snapshot
+    const { createNetWorthSnapshot } = await import('./audit/account-balance-audit');
+    await createNetWorthSnapshot();
   }
   
   return account as Account;
@@ -549,9 +576,9 @@ export async function updateCreditCard(
 ): Promise<CreditCard | null> {
   const { supabase } = await getAuthenticatedUser();
 
-  // If credit_limit or available_credit is being updated, recalculate current_balance
-  if (data.credit_limit !== undefined || data.available_credit !== undefined) {
-    // Get current values if not provided in update
+  // Get old available_credit if it's being updated
+  let oldAvailableCredit: number | undefined;
+  if (data.available_credit !== undefined || data.credit_limit !== undefined) {
     const { data: currentCard } = await supabase
       .from('credit_cards')
       .select('credit_limit, available_credit')
@@ -559,6 +586,9 @@ export async function updateCreditCard(
       .single();
 
     if (currentCard) {
+      oldAvailableCredit = currentCard.available_credit;
+      
+      // If credit_limit or available_credit is being updated, recalculate current_balance
       const creditLimit = data.credit_limit ?? currentCard.credit_limit;
       const availableCredit = data.available_credit ?? currentCard.available_credit;
       data.current_balance = creditLimit - availableCredit;
@@ -577,17 +607,167 @@ export async function updateCreditCard(
     throw error;
   }
 
+  // Log available_credit change if it was updated
+  if (data.available_credit !== undefined && oldAvailableCredit !== undefined && creditCard) {
+    const { logCreditCardBalanceChange } = await import('./audit/account-balance-audit');
+    await logCreditCardBalanceChange(
+      id,
+      oldAvailableCredit,
+      creditCard.available_credit,
+      'manual_edit'
+    );
+    
+    // Create net worth snapshot
+    const { createNetWorthSnapshot } = await import('./audit/account-balance-audit');
+    await createNetWorthSnapshot();
+  }
+
   return creditCard as CreditCard;
 }
 
 export async function deleteCreditCard(id: number): Promise<void> {
   const { supabase } = await getAuthenticatedUser();
-
+  
   const { error } = await supabase
     .from('credit_cards')
     .delete()
     .eq('id', id);
+  
+  if (error) throw error;
+}
 
+// =====================================================
+// NON-CASH ASSETS
+// =====================================================
+
+export async function getAllNonCashAssets(): Promise<NonCashAsset[]> {
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) {
+    console.warn('No active account found for getAllNonCashAssets');
+    return [];
+  }
+
+  const { data: assets, error } = await supabase
+    .from('non_cash_assets')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('sort_order', { ascending: true });
+
+  if (error) throw error;
+  return (assets || []) as NonCashAsset[];
+}
+
+export async function getNonCashAssetById(id: number): Promise<NonCashAsset | null> {
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  const { data: asset, error } = await supabase
+    .from('non_cash_assets')
+    .select('*')
+    .eq('id', id)
+    .eq('account_id', accountId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+
+  return asset as NonCashAsset;
+}
+
+export async function createNonCashAsset(data: {
+  name: string;
+  asset_type: NonCashAsset['asset_type'];
+  current_value?: number;
+  estimated_return_percentage?: number;
+  sort_order?: number;
+}): Promise<NonCashAsset> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  const { data: asset, error } = await supabase
+    .from('non_cash_assets')
+    .insert({
+      account_id: accountId,
+      name: data.name,
+      asset_type: data.asset_type,
+      current_value: data.current_value ?? 0,
+      estimated_return_percentage: data.estimated_return_percentage ?? 0,
+      sort_order: data.sort_order ?? 0,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return asset as NonCashAsset;
+}
+
+export async function updateNonCashAsset(
+  id: number,
+  data: Partial<{
+    name: string;
+    asset_type: NonCashAsset['asset_type'];
+    current_value: number;
+    estimated_return_percentage: number;
+    sort_order: number;
+  }>
+): Promise<NonCashAsset | null> {
+  const { supabase } = await getAuthenticatedUser();
+  
+  // Get old value if current_value is being updated
+  let oldValue: number | undefined;
+  if (data.current_value !== undefined) {
+    const { data: oldAsset } = await supabase
+      .from('non_cash_assets')
+      .select('current_value')
+      .eq('id', id)
+      .single();
+    oldValue = oldAsset?.current_value;
+  }
+  
+  const { data: asset, error } = await supabase
+    .from('non_cash_assets')
+    .update(data)
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+  
+  // Log value change if current_value was updated
+  if (data.current_value !== undefined && oldValue !== undefined && asset) {
+    const { logAssetValueChange } = await import('./audit/account-balance-audit');
+    await logAssetValueChange(
+      id,
+      oldValue,
+      asset.current_value,
+      'manual_edit'
+    );
+    
+    // Create net worth snapshot
+    const { createNetWorthSnapshot } = await import('./audit/account-balance-audit');
+    await createNetWorthSnapshot();
+  }
+  
+  return asset as NonCashAsset;
+}
+
+export async function deleteNonCashAsset(id: number): Promise<void> {
+  const { supabase } = await getAuthenticatedUser();
+  
+  const { error } = await supabase
+    .from('non_cash_assets')
+    .delete()
+    .eq('id', id);
+  
   if (error) throw error;
 }
 
@@ -685,6 +865,17 @@ export async function updateLoan(
 ): Promise<Loan> {
   const { supabase } = await getAuthenticatedUser();
 
+  // Get old balance if balance is being updated
+  let oldBalance: number | undefined;
+  if (updates.balance !== undefined) {
+    const { data: oldLoan } = await supabase
+      .from('loans')
+      .select('balance')
+      .eq('id', id)
+      .single();
+    oldBalance = oldLoan?.balance;
+  }
+
   const { data, error } = await supabase
     .from('loans')
     .update(updates)
@@ -693,6 +884,22 @@ export async function updateLoan(
     .single();
 
   if (error) throw error;
+  
+  // Log balance change if balance was updated
+  if (updates.balance !== undefined && oldBalance !== undefined && data) {
+    const { logLoanBalanceChange } = await import('./audit/account-balance-audit');
+    await logLoanBalanceChange(
+      id,
+      oldBalance,
+      data.balance,
+      'manual_edit'
+    );
+    
+    // Create net worth snapshot
+    const { createNetWorthSnapshot } = await import('./audit/account-balance-audit');
+    await createNetWorthSnapshot();
+  }
+  
   return data;
 }
 
