@@ -25,6 +25,7 @@ import type { CreditCard } from '@/lib/types';
 import { toast } from 'sonner';
 import { Check, X, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
+import Link from 'next/link';
 
 interface CreditCardListProps {
   creditCards: CreditCard[];
@@ -273,7 +274,11 @@ export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary,
         <TableBody>
           {creditCards.map((card) => (
             <TableRow key={card.id}>
-              <TableCell className="font-medium">{card.name}</TableCell>
+              <TableCell>
+                <Link href={`/credit-cards/${card.id}`} className="font-medium hover:underline">
+                  {card.name}
+                </Link>
+              </TableCell>
               <TableCell className="text-right text-muted-foreground">
                 {editingAvailableId === card.id ? (
                   <div className="flex items-center justify-end gap-1">

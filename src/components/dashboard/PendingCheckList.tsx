@@ -26,6 +26,7 @@ import type { PendingCheck } from '@/lib/types';
 import { toast } from 'sonner';
 import { MoreVertical, Trash2, Edit } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
+import Link from 'next/link';
 
 interface PendingCheckListProps {
   pendingChecks: PendingCheck[];
@@ -223,7 +224,6 @@ export default function PendingCheckList({ pendingChecks, onUpdate, onUpdateSumm
             <TableHeader>
               <TableRow>
                 <TableHead>Description</TableHead>
-                <TableHead className="text-right">Type</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -231,15 +231,10 @@ export default function PendingCheckList({ pendingChecks, onUpdate, onUpdateSumm
             <TableBody>
               {pendingChecks.map((check) => (
                 <TableRow key={check.id}>
-                  <TableCell className="font-medium">{check.description}</TableCell>
-                  <TableCell className="text-right">
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      check.type === 'income' 
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                        : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                    }`}>
-                      {check.type === 'income' ? 'Income' : 'Expense'}
-                    </span>
+                  <TableCell>
+                    <Link href={`/pending-checks/${check.id}`} className="font-medium hover:underline">
+                      {check.description}
+                    </Link>
                   </TableCell>
                   <TableCell className={`text-right font-semibold ${
                     check.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'

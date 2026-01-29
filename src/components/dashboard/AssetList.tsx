@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import Link from 'next/link';
 
 interface AssetListProps {
   assets: NonCashAsset[];
@@ -353,7 +354,9 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
                         <p>{getAssetTypeLabel(asset.asset_type)}</p>
                       </TooltipContent>
                     </Tooltip>
-                    <span className="font-medium">{asset.name}</span>
+                    <Link href={`/non-cash-assets/${asset.id}`} className="font-medium hover:underline">
+                      {asset.name}
+                    </Link>
                   </div>
                 </TableCell>
                 <TableCell className="text-right font-semibold">

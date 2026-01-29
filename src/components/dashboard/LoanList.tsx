@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 import { Check, X, MoreVertical, Edit, Trash2, Crown } from 'lucide-react';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import { handleApiError } from '@/lib/api-error-handler';
+import Link from 'next/link';
 
 interface LoanListProps {
   loans: Loan[];
@@ -315,7 +316,11 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
         <TableBody>
           {loans.map((loan) => (
             <TableRow key={loan.id}>
-              <TableCell className="font-medium">{loan.name}</TableCell>
+              <TableCell>
+                <Link href={`/loans/${loan.id}`} className="font-medium hover:underline">
+                  {loan.name}
+                </Link>
+              </TableCell>
               <TableCell className="text-right font-semibold">
                 {editingBalanceId === loan.id ? (
                   <div className="flex items-center justify-end gap-1">

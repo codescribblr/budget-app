@@ -27,6 +27,7 @@ import { handleApiError } from '@/lib/api-error-handler';
 import { Check, X, MoreVertical, Edit, Trash2, Wallet, PiggyBank, Banknote } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import Link from 'next/link';
 
 interface AccountListProps {
   accounts: Account[];
@@ -281,7 +282,9 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
                       <p>{getAccountTypeLabel(account.account_type)}</p>
                     </TooltipContent>
                   </Tooltip>
-                  <span className="font-medium">{account.name}</span>
+                  <Link href={`/accounts/${account.id}`} className="font-medium hover:underline">
+                    {account.name}
+                  </Link>
                 </div>
               </TableCell>
               <TableCell className="text-right font-semibold">

@@ -16,7 +16,7 @@ import type {
   DashboardSummary,
 } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
-import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, Mail, ChevronUp, TrendingUp } from 'lucide-react';
+import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, Mail, ChevronUp, TrendingUp, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import CategoryList from './CategoryList';
 import AccountList from './AccountList';
@@ -346,14 +346,22 @@ export default function Dashboard() {
           <Collapsible open={isAccountsOpen} onOpenChange={setIsAccountsOpen}>
             <Card id="accounts-section" className="relative">
               <CardHeader>
-                <CollapsibleTrigger asChild>
-                  <div className="flex items-center gap-2 cursor-pointer">
-                    <CardTitle className="flex items-center gap-2">
-                      <Wallet className="h-5 w-5" />
-                      Accounts
-                    </CardTitle>
-                  </div>
-                </CollapsibleTrigger>
+                <div className="flex justify-between items-start">
+                  <CollapsibleTrigger asChild>
+                    <div className="flex-1 cursor-pointer">
+                      <CardTitle className="flex items-center gap-2">
+                        <Wallet className="h-5 w-5" />
+                        Accounts
+                      </CardTitle>
+                    </div>
+                  </CollapsibleTrigger>
+                  <Link href="/accounts">
+                    <Button variant="ghost" size="sm">
+                      View All
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
               </CardHeader>
               <CollapsibleContent>
                 <CardContent className="pb-8">
@@ -380,14 +388,22 @@ export default function Dashboard() {
           <Collapsible open={isCreditCardsOpen} onOpenChange={setIsCreditCardsOpen}>
             <Card id="credit-cards-section" className="relative">
               <CardHeader>
-                <CollapsibleTrigger asChild>
-                  <div className="flex items-center gap-2 cursor-pointer">
-                    <CardTitle className="flex items-center gap-2">
-                      <CreditCardIcon className="h-5 w-5" />
-                      Credit Cards
-                    </CardTitle>
-                  </div>
-                </CollapsibleTrigger>
+                <div className="flex justify-between items-start">
+                  <CollapsibleTrigger asChild>
+                    <div className="flex-1 cursor-pointer">
+                      <CardTitle className="flex items-center gap-2">
+                        <CreditCardIcon className="h-5 w-5" />
+                        Credit Cards
+                      </CardTitle>
+                    </div>
+                  </CollapsibleTrigger>
+                  <Link href="/credit-cards">
+                    <Button variant="ghost" size="sm">
+                      View All
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
               </CardHeader>
               <CollapsibleContent>
                 <CardContent className="pb-8">
@@ -414,17 +430,25 @@ export default function Dashboard() {
           <Collapsible open={isPendingChecksOpen} onOpenChange={setIsPendingChecksOpen}>
             <Card className="relative">
               <CardHeader>
-                <CollapsibleTrigger asChild>
-                  <div className="flex items-center gap-2 cursor-pointer">
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
-                      Pending Checks
-                      <span className="text-sm font-normal text-muted-foreground">
-                        ({pendingChecks.length})
-                      </span>
-                    </CardTitle>
-                  </div>
-                </CollapsibleTrigger>
+                <div className="flex justify-between items-start">
+                  <CollapsibleTrigger asChild>
+                    <div className="flex-1 cursor-pointer">
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Pending Checks
+                        <span className="text-sm font-normal text-muted-foreground">
+                          ({pendingChecks.length})
+                        </span>
+                      </CardTitle>
+                    </div>
+                  </CollapsibleTrigger>
+                  <Link href="/pending-checks">
+                    <Button variant="ghost" size="sm">
+                      View All
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
               </CardHeader>
               <CollapsibleContent>
                 <CardContent className="pb-8">
@@ -452,14 +476,22 @@ export default function Dashboard() {
             <Collapsible open={isLoansOpen} onOpenChange={setIsLoansOpen}>
               <Card id="loans-section" className="relative">
                 <CardHeader>
-                  <CollapsibleTrigger asChild>
-                    <div className="flex items-center gap-2 cursor-pointer">
-                      <CardTitle className="flex items-center gap-2">
-                        <Landmark className="h-5 w-5" />
-                        Loans
-                      </CardTitle>
-                    </div>
-                  </CollapsibleTrigger>
+                  <div className="flex justify-between items-start">
+                    <CollapsibleTrigger asChild>
+                      <div className="flex-1 cursor-pointer">
+                        <CardTitle className="flex items-center gap-2">
+                          <Landmark className="h-5 w-5" />
+                          Loans
+                        </CardTitle>
+                      </div>
+                    </CollapsibleTrigger>
+                    <Link href="/loans">
+                      <Button variant="ghost" size="sm">
+                        View All
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </div>
                 </CardHeader>
                 <CollapsibleContent>
                   <CardContent className="pb-8">
@@ -486,14 +518,22 @@ export default function Dashboard() {
           <Collapsible open={isAssetsOpen} onOpenChange={setIsAssetsOpen}>
             <Card id="assets-section" className="relative">
               <CardHeader>
-                <CollapsibleTrigger asChild>
-                  <div className="flex items-center gap-2 cursor-pointer">
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5" />
-                      Non-Cash Assets
-                    </CardTitle>
-                  </div>
-                </CollapsibleTrigger>
+                <div className="flex justify-between items-start">
+                  <CollapsibleTrigger asChild>
+                    <div className="flex-1 cursor-pointer">
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5" />
+                        Non-Cash Assets
+                      </CardTitle>
+                    </div>
+                  </CollapsibleTrigger>
+                  <Link href="/non-cash-assets">
+                    <Button variant="ghost" size="sm">
+                      View All
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
               </CardHeader>
               <CollapsibleContent>
                 <CardContent className="pb-8">
