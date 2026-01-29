@@ -1,0 +1,134 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { Badge } from '@/components/ui/badge';
+import type { Loan } from '@/lib/types';
+import { formatCurrency } from '@/lib/utils';
+import { toast } from 'sonner';
+import { Landmark, Plus } from 'lucide-react';
+import Link from 'next/link';
+import { PremiumFeatureGate } from '@/components/subscription/PremiumFeatureGate';
+import LoanDialog from '@/components/loans/LoanDialog';
+
+export default function LoansPage() {
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const fetchLoans = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/loans');
+      if (response.status === 403) {
+        // Premium required
+        setLoans([]);
+        return;
+      }
+      if (!response.ok) throw new Error('Failed to fetch loans');
+      const data = await response.json();
+      setLoans(data);
+    } catch (error) {
+      console.error('Error fetching loans:', error);
+      toast.error('Failed to load loans');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLoans();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  return (
+    <PremiumFeatureGate
+      featureName="Loans & Debt Tracking"
+      featureDescription="Track your loans and debt balances"
+    >
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">Loans</h1>
+            <p className="text-muted-foreground mt-1">Manage your loan accounts</p>
+          </div>
+          <Button onClick={() => setIsDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Loan
+          </Button>
+        </div>
+
+        {loans.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <Landmark className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No loans yet</h3>
+              <p className="text-muted-foreground">
+                Loans will appear here once you add them from the dashboard
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {loans.map((loan) => (
+              <Link key={loan.id} href={`/loans/${loan.id}`}>
+                <Card className="cursor-pointer hover:shadow-md transition-shadow h-full">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <Landmark className="h-5 w-5" />
+                        <CardTitle className="text-lg">{loan.name}</CardTitle>
+                      </div>
+                      {!loan.include_in_net_worth && (
+                        <Badge variant="outline" className="text-xs">Excluded</Badge>
+                      )}
+                    </div>
+                    {loan.institution && (
+                      <CardDescription>{loan.institution}</CardDescription>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Current Balance</div>
+                        <div className="text-2xl font-bold">{formatCurrency(loan.balance)}</div>
+                      </div>
+                      {loan.minimum_payment && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Minimum Payment</span>
+                          <span className="font-medium">{formatCurrency(loan.minimum_payment)}</span>
+                        </div>
+                      )}
+                      {loan.interest_rate !== null && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Interest Rate</span>
+                          <span className="font-medium">{loan.interest_rate}%</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        <LoanDialog
+          isOpen={isDialogOpen}
+          onClose={() => setIsDialogOpen(false)}
+          loan={null}
+          onSuccess={fetchLoans}
+        />
+      </div>
+    </PremiumFeatureGate>
+  );
+}

@@ -22,6 +22,9 @@ import {
   Inbox,
   Tag,
   Repeat,
+  CreditCard,
+  Landmark,
+  Banknote,
 } from "lucide-react"
 
 import {
@@ -64,6 +67,17 @@ const navigationSections = [
       { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
       { label: "Goals", path: "/goals", icon: Target, featureKey: "goals" },
       { label: "AI Assistant", path: "/dashboard/ai-assistant", icon: Sparkles, featureKey: "ai_chat" },
+    ],
+  },
+  {
+    label: "Assets & Liabilities",
+    collapsible: true,
+    items: [
+      { label: "Cash Accounts", path: "/accounts", icon: Banknote },
+      { label: "Credit Cards", path: "/credit-cards", icon: CreditCard },
+      { label: "Loans", path: "/loans", icon: Landmark },
+      { label: "Non-cash Assets", path: "/non-cash-assets", icon: TrendingUp },
+      { label: "Pending Checks", path: "/pending-checks", icon: FileText },
     ],
   },
   {
@@ -120,6 +134,7 @@ export function AppSidebar() {
   const tagsEnabled = useFeature('tags')
   const recurringTransactionsEnabled = useFeature('recurring_transactions')
   const [openWizards, setOpenWizards] = React.useState(false)
+  const [openAssetsLiabilities, setOpenAssetsLiabilities] = React.useState(false)
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -151,6 +166,17 @@ export function AppSidebar() {
     }
   }, [pathname])
 
+  // Check if any assets & liabilities item is active
+  React.useEffect(() => {
+    const assetsLiabilitiesSection = navigationSections.find(s => s.label === "Assets & Liabilities")
+    if (assetsLiabilitiesSection?.items) {
+      const hasActiveItem = assetsLiabilitiesSection.items.some(item => isActive(item.path))
+      if (hasActiveItem) {
+        setOpenAssetsLiabilities(true)
+      }
+    }
+  }, [pathname])
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="h-16 border-b border-sidebar-border p-0">
@@ -162,13 +188,45 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {navigationSections.map((section) => (
-          <SidebarGroup key={section.label}>
-            <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {section.items
-                  .filter((item) => {
+        {navigationSections.map((section) => {
+          const isAssetsLiabilities = section.label === "Assets & Liabilities"
+          const isCollapsible = 'collapsible' in section && section.collapsible
+          
+          return (
+            <SidebarGroup key={section.label}>
+              {isCollapsible ? (
+                <>
+                  {/* Show icon button in icon-only mode when section is collapsed */}
+                  {state === "collapsed" && !openAssetsLiabilities && (
+                    <SidebarMenu>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          onClick={() => setOpenAssetsLiabilities(true)}
+                          tooltip="Assets & Liabilities"
+                        >
+                          <Banknote />
+                          <span>Assets & Liabilities</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                  )}
+                  {/* Show collapsible label when sidebar is expanded OR when section is open in icon mode */}
+                  {(state === "expanded" || (state === "collapsed" && openAssetsLiabilities)) && (
+                    <Collapsible
+                      open={isAssetsLiabilities ? openAssetsLiabilities : undefined}
+                      onOpenChange={isAssetsLiabilities ? setOpenAssetsLiabilities : undefined}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <SidebarGroupLabel className="cursor-pointer hover:bg-sidebar-accent">
+                          {section.label}
+                          <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                        </SidebarGroupLabel>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarGroupContent>
+                          <SidebarMenu>
+                        {section.items
+                          .filter((item) => {
                     // If item has a featureKey, check if feature is enabled
                     if ('featureKey' in item && item.featureKey) {
                       const featureKey = item.featureKey as string
@@ -199,7 +257,7 @@ export function AppSidebar() {
                   .map((item) => {
                     const Icon = item.icon
                     const active = isActive(item.path)
-                    const hasSubItems = 'subItems' in item && item.subItems && item.subItems.length > 0
+                    const hasSubItems = 'subItems' in item && Array.isArray(item.subItems) && item.subItems.length > 0
                     const isWizards = item.path === "/help/wizards"
                     
                     if (hasSubItems) {
@@ -222,7 +280,7 @@ export function AppSidebar() {
                             </CollapsibleTrigger>
                             <CollapsibleContent>
                               <SidebarMenuSub>
-                                {('subItems' in item && item.subItems ? item.subItems : [])
+                                {(('subItems' in item && Array.isArray(item.subItems) && item.subItems) ? item.subItems : [])
                                   .filter((subItem) => {
                                     // If subItem has a featureKey, check if feature is enabled
                                     if ('featureKey' in subItem && subItem.featureKey) {
@@ -278,10 +336,135 @@ export function AppSidebar() {
                       </SidebarMenuItem>
                     )
                   })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+                          </SidebarMenu>
+                        </SidebarGroupContent>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+                </>
+              ) : (
+                <>
+                  <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {section.items
+                        .filter((item) => {
+                          // If item has a featureKey, check if feature is enabled
+                          if ('featureKey' in item && item.featureKey) {
+                            const featureKey = item.featureKey as string
+                            switch (featureKey) {
+                              case 'income_buffer':
+                                return incomeBufferEnabled
+                              case 'goals':
+                                return goalsEnabled
+                              case 'ai_chat':
+                                return aiChatEnabled
+                              case 'advanced_reporting':
+                                return advancedReportingEnabled
+                              case 'tags':
+                                return tagsEnabled
+                              case 'recurring_transactions':
+                                return recurringTransactionsEnabled
+                              default:
+                                return true
+                            }
+                          }
+                          // Legacy support for featureFlag
+                          if ('featureFlag' in item && item.featureFlag) {
+                            return item.featureFlag === 'income_buffer' && incomeBufferEnabled
+                          }
+                          // No feature requirement, show item
+                          return true
+                        })
+                        .map((item) => {
+                          const Icon = item.icon
+                          const active = isActive(item.path)
+                          const hasSubItems = 'subItems' in item && Array.isArray(item.subItems) && item.subItems.length > 0
+                          const isWizards = item.path === "/help/wizards"
+                          
+                          if (hasSubItems) {
+                            return (
+                              <Collapsible
+                                key={item.path}
+                                open={isWizards ? openWizards : undefined}
+                                onOpenChange={isWizards ? setOpenWizards : undefined}
+                              >
+                                <SidebarMenuItem>
+                                  <CollapsibleTrigger asChild>
+                                    <SidebarMenuButton
+                                      isActive={active || (isWizards && openWizards)}
+                                      tooltip={item.label}
+                                    >
+                                      <Icon />
+                                      <span>{item.label}</span>
+                                      <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                                    </SidebarMenuButton>
+                                  </CollapsibleTrigger>
+                                  <CollapsibleContent>
+                                    <SidebarMenuSub>
+                                      {(('subItems' in item && Array.isArray(item.subItems) && item.subItems) ? item.subItems : [])
+                                        .filter((subItem) => {
+                                          // If subItem has a featureKey, check if feature is enabled
+                                          if ('featureKey' in subItem && subItem.featureKey) {
+                                            const featureKey = subItem.featureKey as string;
+                                            switch (featureKey) {
+                                              case 'income_buffer':
+                                                return incomeBufferEnabled;
+                                              case 'goals':
+                                                return goalsEnabled;
+                                              case 'ai_chat':
+                                                return aiChatEnabled;
+                                              case 'advanced_reporting':
+                                                return advancedReportingEnabled;
+                                              case 'tags':
+                                                return tagsEnabled;
+                                              default:
+                                                return true;
+                                            }
+                                          }
+                                          // No feature requirement, show item
+                                          return true;
+                                        })
+                                        .map((subItem) => {
+                                          const subActive = isActive(subItem.path);
+                                          return (
+                                            <SidebarMenuSubItem key={subItem.path}>
+                                              <SidebarMenuSubButton
+                                                isActive={subActive}
+                                                onClick={() => handleNavigation(subItem.path)}
+                                              >
+                                                {subItem.label}
+                                              </SidebarMenuSubButton>
+                                            </SidebarMenuSubItem>
+                                          );
+                                        })}
+                                    </SidebarMenuSub>
+                                  </CollapsibleContent>
+                                </SidebarMenuItem>
+                              </Collapsible>
+                            )
+                          }
+                          
+                          return (
+                            <SidebarMenuItem key={item.path}>
+                              <SidebarMenuButton
+                                onClick={() => handleNavigation(item.path)}
+                                isActive={active}
+                                tooltip={item.label}
+                              >
+                                <Icon />
+                                <span>{item.label}</span>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          )
+                        })}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </>
+              )}
+            </SidebarGroup>
+          )
+        })}
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
