@@ -207,10 +207,15 @@ export default function PendingCheckList({ pendingChecks, onUpdate, onUpdateSumm
   return (
     <>
       <div className="space-y-4">
-        <div className="mb-3">
+        <div className="mb-3 flex items-center justify-between">
           <Button onClick={() => setIsAddDialogOpen(true)} size="sm" disabled={disabled}>
             Add Pending Check
           </Button>
+          <div className={`text-sm ${
+            totalAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+          }`}>
+            Total: <span className="font-semibold">{formatCurrency(totalAmount)}</span>
+          </div>
         </div>
 
         {pendingChecks.length > 0 ? (
@@ -262,15 +267,6 @@ export default function PendingCheckList({ pendingChecks, onUpdate, onUpdateSumm
                   </TableCell>
                 </TableRow>
               ))}
-              <TableRow className="font-bold bg-muted/50">
-                <TableCell colSpan={2}>Total</TableCell>
-                <TableCell className={`text-right ${
-                  totalAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                }`}>
-                  {formatCurrency(totalAmount)}
-                </TableCell>
-                <TableCell></TableCell>
-              </TableRow>
             </TableBody>
           </Table>
         ) : (

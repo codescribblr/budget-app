@@ -251,16 +251,16 @@ export async function createNetWorthSnapshot(): Promise<void> {
       .select('balance, include_in_totals')
       .eq('account_id', budgetAccountId);
 
-    // Get all credit cards (only those included in totals)
+    // Get all credit cards (all credit cards are liabilities for net worth)
     const { data: creditCards } = await supabase
       .from('credit_cards')
-      .select('current_balance, include_in_totals')
+      .select('current_balance')
       .eq('account_id', budgetAccountId);
 
-    // Get all loans
+    // Get all loans (only those included in net worth)
     const { data: loans } = await supabase
       .from('loans')
-      .select('balance')
+      .select('balance, include_in_net_worth')
       .eq('account_id', budgetAccountId);
 
     // Get all assets
@@ -275,11 +275,11 @@ export async function createNetWorthSnapshot(): Promise<void> {
       .reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
 
     const totalCreditCards = (creditCards || [])
-      .filter(cc => cc.include_in_totals === true)
       .reduce((sum, cc) => sum + Number(cc.current_balance || 0), 0);
 
     const totalLoans = (loans || [])
-      .reduce((sum, loan) => sum + Number(loan.current_balance || 0), 0);
+      .filter(loan => loan.include_in_net_worth === true)
+      .reduce((sum, loan) => sum + Number(loan.balance || 0), 0);
 
     const totalAssets = (assets || [])
       .reduce((sum, asset) => sum + Number(asset.current_value || 0), 0);

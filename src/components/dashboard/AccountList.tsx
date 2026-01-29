@@ -24,7 +24,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { Account } from '@/lib/types';
 import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
-import { Check, X, MoreVertical, Edit, Trash2, Wallet, TrendingUp, Banknote } from 'lucide-react';
+import { Check, X, MoreVertical, Edit, Trash2, Wallet, PiggyBank, Banknote } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -237,7 +237,7 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
       case 'checking':
         return <Wallet className="h-4 w-4" />;
       case 'savings':
-        return <TrendingUp className="h-4 w-4" />;
+        return <PiggyBank className="h-4 w-4" />;
       case 'cash':
         return <Banknote className="h-4 w-4" />;
     }
@@ -249,10 +249,13 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
 
   return (
     <>
-      <div className="mb-3">
+      <div className="mb-3 flex items-center justify-between">
         <Button onClick={openAddDialog} size="sm" disabled={disabled}>
           Add Account
         </Button>
+        <div className="text-sm text-muted-foreground">
+          Total: <span className="font-semibold">{formatCurrency(totalBalance)}</span>
+        </div>
       </div>
 
       <Table>
@@ -346,11 +349,6 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
               </TableCell>
             </TableRow>
           ))}
-          <TableRow className="font-bold bg-muted/50">
-            <TableCell>Total</TableCell>
-            <TableCell className="text-right">{formatCurrency(totalBalance)}</TableCell>
-            <TableCell></TableCell>
-          </TableRow>
         </TableBody>
       </Table>
 

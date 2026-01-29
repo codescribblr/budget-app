@@ -50,6 +50,8 @@ export interface NonCashAsset {
   asset_type: 'investment' | 'real_estate' | 'vehicle' | 'art' | 'insurance' | 'collectibles' | 'cryptocurrency' | 'other';
   current_value: number;
   estimated_return_percentage: number;
+  address?: string | null; // For real estate assets
+  vin?: string | null; // For vehicle assets
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -60,6 +62,8 @@ export interface CreateNonCashAssetRequest {
   asset_type: NonCashAsset['asset_type'];
   current_value?: number;
   estimated_return_percentage?: number;
+  address?: string | null;
+  vin?: string | null;
   sort_order?: number;
 }
 
@@ -68,6 +72,8 @@ export interface UpdateNonCashAssetRequest {
   asset_type?: NonCashAsset['asset_type'];
   current_value?: number;
   estimated_return_percentage?: number;
+  address?: string | null;
+  vin?: string | null;
   sort_order?: number;
 }
 

@@ -54,6 +54,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
   const [currentValue, setCurrentValue] = useState('');
   const [estimatedReturn, setEstimatedReturn] = useState('');
   const [assetType, setAssetType] = useState<NonCashAsset['asset_type']>('investment');
+  const [address, setAddress] = useState('');
+  const [vin, setVin] = useState('');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -72,6 +74,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
       current_value: parseFloat(currentValue) || 0,
       estimated_return_percentage: parseFloat(estimatedReturn) || 0,
       asset_type: assetType,
+      address: assetType === 'real_estate' ? (address.trim() || null) : null,
+      vin: assetType === 'vehicle' ? (vin.trim() || null) : null,
     };
     const updatedAssets = assets.map(asset => 
       asset.id === editingAsset.id ? updatedAsset : asset
@@ -83,6 +87,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
     setCurrentValue('');
     setEstimatedReturn('');
     setAssetType('investment');
+    setAddress('');
+    setVin('');
 
     try {
       const response = await fetch(`/api/non-cash-assets/${editingAsset.id}`, {
@@ -93,17 +99,21 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
           current_value: parseFloat(currentValue) || 0,
           estimated_return_percentage: parseFloat(estimatedReturn) || 0,
           asset_type: assetType,
+          address: assetType === 'real_estate' ? (address.trim() || null) : null,
+          vin: assetType === 'vehicle' ? (vin.trim() || null) : null,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update asset');
+        const errorMessage = await handleApiError(response, 'Failed to update asset');
+        throw new Error(errorMessage || 'Failed to update asset');
       }
 
       toast.success('Asset updated successfully');
     } catch (error) {
       onUpdate(assets);
-      handleApiError(error, 'Failed to update asset');
+      console.error('Error updating asset:', error);
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -118,6 +128,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
     const assetTypeValue = assetType;
     const currentValueNum = parseFloat(currentValue) || 0;
     const estimatedReturnNum = parseFloat(estimatedReturn) || 0;
+    const addressValue = assetTypeValue === 'real_estate' ? (address.trim() || null) : null;
+    const vinValue = assetTypeValue === 'vehicle' ? (vin.trim() || null) : null;
 
     const tempAssetId = Date.now();
     const newAsset: NonCashAsset = {
@@ -126,6 +138,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
       asset_type: assetTypeValue,
       current_value: currentValueNum,
       estimated_return_percentage: estimatedReturnNum,
+      address: addressValue,
+      vin: vinValue,
       sort_order: assets.length,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -138,6 +152,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
     setCurrentValue('');
     setEstimatedReturn('');
     setAssetType('investment');
+    setAddress('');
+    setVin('');
 
     try {
       const response = await fetch('/api/non-cash-assets', {
@@ -148,11 +164,14 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
           asset_type: assetTypeValue,
           current_value: currentValueNum,
           estimated_return_percentage: estimatedReturnNum,
+          address: addressValue,
+          vin: vinValue,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create asset');
+        const errorMessage = await handleApiError(response, 'Failed to add asset');
+        throw new Error(errorMessage || 'Failed to add asset');
       }
 
       const createdAsset = await response.json();
@@ -165,7 +184,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
     } catch (error) {
       // Revert to original assets on error
       onUpdate(assets);
-      handleApiError(error, 'Failed to add asset');
+      console.error('Error adding asset:', error);
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -183,13 +203,15 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete asset');
+        const errorMessage = await handleApiError(response, 'Failed to delete asset');
+        throw new Error(errorMessage || 'Failed to delete asset');
       }
 
       toast.success('Asset deleted successfully');
     } catch (error) {
       onUpdate(assets);
-      handleApiError(error, 'Failed to delete asset');
+      console.error('Error deleting asset:', error);
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -199,6 +221,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
     setCurrentValue(asset.current_value.toString());
     setEstimatedReturn(asset.estimated_return_percentage.toString());
     setAssetType(asset.asset_type);
+    setAddress(asset.address || '');
+    setVin(asset.vin || '');
     setIsEditDialogOpen(true);
   };
 
@@ -207,6 +231,8 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
     setCurrentValue('');
     setEstimatedReturn('');
     setAssetType('investment');
+    setAddress('');
+    setVin('');
     setIsAddDialogOpen(true);
   };
 
@@ -239,13 +265,15 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update asset value');
+        const errorMessage = await handleApiError(response, 'Failed to update asset value');
+        throw new Error(errorMessage || 'Failed to update asset value');
       }
 
       toast.success('Asset value updated');
     } catch (error) {
       onUpdate(assets);
-      handleApiError(error, 'Failed to update asset value');
+      console.error('Error updating asset value:', error);
+      // Error toast already shown by handleApiError
     }
   };
 
@@ -289,7 +317,7 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
         </Button>
         {totalValue > 0 && (
           <div className="text-sm text-muted-foreground">
-            Total Value: <span className="font-semibold">{formatCurrency(totalValue)}</span>
+            Total: <span className="font-semibold">{formatCurrency(totalValue)}</span>
           </div>
         )}
       </div>
@@ -373,7 +401,7 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
                   )}
                 </TableCell>
                 <TableCell className="text-right text-muted-foreground">
-                  {asset.estimated_return_percentage > 0 
+                  {asset.estimated_return_percentage !== 0
                     ? `${asset.estimated_return_percentage.toFixed(2)}%`
                     : '-'}
                 </TableCell>
@@ -431,7 +459,12 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
             </div>
             <div>
               <Label htmlFor="asset-type-edit">Asset Type</Label>
-              <Select value={assetType} onValueChange={(value: NonCashAsset['asset_type']) => setAssetType(value)}>
+              <Select value={assetType} onValueChange={(value: NonCashAsset['asset_type']) => {
+                setAssetType(value);
+                // Clear address/VIN when switching away from relevant types
+                if (value !== 'real_estate') setAddress('');
+                if (value !== 'vehicle') setVin('');
+              }}>
                 <SelectTrigger id="asset-type-edit">
                   <SelectValue />
                 </SelectTrigger>
@@ -447,6 +480,37 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
                 </SelectContent>
               </Select>
             </div>
+            {assetType === 'real_estate' && (
+              <div>
+                <Label htmlFor="address-edit">Address</Label>
+                <Input
+                  id="address-edit"
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="e.g., 123 Main St, City, State ZIP"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Used for potential integration with real estate value APIs
+                </p>
+              </div>
+            )}
+            {assetType === 'vehicle' && (
+              <div>
+                <Label htmlFor="vin-edit">VIN (Vehicle Identification Number)</Label>
+                <Input
+                  id="vin-edit"
+                  type="text"
+                  value={vin}
+                  onChange={(e) => setVin(e.target.value.toUpperCase())}
+                  placeholder="e.g., 1HGBH41JXMN109186"
+                  maxLength={17}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Used for potential integration with auto value APIs
+                </p>
+              </div>
+            )}
             <div>
               <Label htmlFor="current-value-edit">Current Value</Label>
               <Input
@@ -469,7 +533,7 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
                 placeholder="0.00"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Used for forecasting future value (e.g., 7.5 for 7.5% annual return)
+                Used for forecasting future value (e.g., 7.5 for 7.5% annual return, or -2.0 for -2% depreciation)
               </p>
             </div>
             <div className="flex justify-end gap-2">
@@ -514,7 +578,12 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
             </div>
             <div>
               <Label htmlFor="asset-type">Asset Type</Label>
-              <Select value={assetType} onValueChange={(value: NonCashAsset['asset_type']) => setAssetType(value)}>
+              <Select value={assetType} onValueChange={(value: NonCashAsset['asset_type']) => {
+                setAssetType(value);
+                // Clear address/VIN when switching away from relevant types
+                if (value !== 'real_estate') setAddress('');
+                if (value !== 'vehicle') setVin('');
+              }}>
                 <SelectTrigger id="asset-type">
                   <SelectValue />
                 </SelectTrigger>
@@ -530,6 +599,37 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
                 </SelectContent>
               </Select>
             </div>
+            {assetType === 'real_estate' && (
+              <div>
+                <Label htmlFor="address">Address</Label>
+                <Input
+                  id="address"
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="e.g., 123 Main St, City, State ZIP"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Used for potential integration with real estate value APIs
+                </p>
+              </div>
+            )}
+            {assetType === 'vehicle' && (
+              <div>
+                <Label htmlFor="vin">VIN (Vehicle Identification Number)</Label>
+                <Input
+                  id="vin"
+                  type="text"
+                  value={vin}
+                  onChange={(e) => setVin(e.target.value.toUpperCase())}
+                  placeholder="e.g., 1HGBH41JXMN109186"
+                  maxLength={17}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Used for potential integration with auto value APIs
+                </p>
+              </div>
+            )}
             <div>
               <Label htmlFor="current-value">Current Value</Label>
               <Input
@@ -552,7 +652,7 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
                 placeholder="0.00"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Used for forecasting future value (e.g., 7.5 for 7.5% annual return)
+                Used for forecasting future value (e.g., 7.5 for 7.5% annual return, or -2.0 for -2% depreciation)
               </p>
             </div>
             <div className="flex justify-end gap-2">

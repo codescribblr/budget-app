@@ -252,10 +252,13 @@ export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary,
 
   return (
     <>
-      <div className="mb-3">
+      <div className="mb-3 flex items-center justify-between">
         <Button onClick={openAddDialog} size="sm" disabled={disabled}>
           Add Credit Card
         </Button>
+        <div className="text-sm text-muted-foreground">
+          Total: <span className="font-semibold">{formatCurrency(totalBalance)}</span>
+        </div>
       </div>
 
       <Table>
@@ -339,12 +342,6 @@ export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary,
               </TableCell>
             </TableRow>
           ))}
-          <TableRow className="font-bold bg-muted/50">
-            <TableCell>Total Owed</TableCell>
-            <TableCell></TableCell>
-            <TableCell className="text-right">{formatCurrency(totalBalance)}</TableCell>
-            <TableCell></TableCell>
-          </TableRow>
         </TableBody>
       </Table>
 

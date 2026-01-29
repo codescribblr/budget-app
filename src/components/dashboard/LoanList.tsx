@@ -295,10 +295,13 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
 
   return (
     <>
-      <div className="mb-3">
+      <div className="mb-3 flex items-center justify-between">
         <Button onClick={openAddDialog} size="sm" disabled={disabled}>
           Add Loan
         </Button>
+        <div className="text-sm text-muted-foreground">
+          Total: <span className="font-semibold">{formatCurrency(totalBalance)}</span>
+        </div>
       </div>
 
       <Table>
@@ -378,11 +381,6 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
               </TableCell>
             </TableRow>
           ))}
-          <TableRow className="font-bold bg-muted/50">
-            <TableCell>Total</TableCell>
-            <TableCell className="text-right">{formatCurrency(totalBalance)}</TableCell>
-            <TableCell></TableCell>
-          </TableRow>
         </TableBody>
       </Table>
 

@@ -411,39 +411,6 @@ export default function Dashboard() {
             </Card>
           </Collapsible>
 
-          <Collapsible open={isAssetsOpen} onOpenChange={setIsAssetsOpen}>
-            <Card id="assets-section" className="relative">
-              <CardHeader>
-                <CollapsibleTrigger asChild>
-                  <div className="flex items-center gap-2 cursor-pointer">
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5" />
-                      Non-Cash Assets
-                    </CardTitle>
-                  </div>
-                </CollapsibleTrigger>
-              </CardHeader>
-              <CollapsibleContent>
-                <CardContent className="pb-8">
-                  <AssetList 
-                    assets={assets} 
-                    onUpdate={(updatedAssets) => setAssets(updatedAssets)}
-                    disabled={!isEditor || permissionsLoading}
-                  />
-                </CardContent>
-                {isAssetsOpen && (
-                  <button
-                    onClick={() => setIsAssetsOpen(false)}
-                    className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
-                    aria-label="Collapse card"
-                  >
-                    <ChevronUp className="h-4 w-4" />
-                  </button>
-                )}
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
-
           <Collapsible open={isPendingChecksOpen} onOpenChange={setIsPendingChecksOpen}>
             <Card className="relative">
               <CardHeader>
@@ -515,6 +482,39 @@ export default function Dashboard() {
               </Card>
             </Collapsible>
           )}
+
+          <Collapsible open={isAssetsOpen} onOpenChange={setIsAssetsOpen}>
+            <Card id="assets-section" className="relative">
+              <CardHeader>
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center gap-2 cursor-pointer">
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5" />
+                      Non-Cash Assets
+                    </CardTitle>
+                  </div>
+                </CollapsibleTrigger>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="pb-8">
+                  <AssetList 
+                    assets={assets} 
+                    onUpdate={(updatedAssets) => setAssets(updatedAssets)}
+                    disabled={!isEditor || permissionsLoading}
+                  />
+                </CardContent>
+                {isAssetsOpen && (
+                  <button
+                    onClick={() => setIsAssetsOpen(false)}
+                    className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                    aria-label="Collapse card"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                )}
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
           {bufferStatus?.enabled && <IncomeBufferCard />}
 

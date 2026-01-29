@@ -683,6 +683,8 @@ export async function createNonCashAsset(data: {
   asset_type: NonCashAsset['asset_type'];
   current_value?: number;
   estimated_return_percentage?: number;
+  address?: string | null;
+  vin?: string | null;
   sort_order?: number;
 }): Promise<NonCashAsset> {
   const { supabase, user } = await getAuthenticatedUser();
@@ -698,6 +700,8 @@ export async function createNonCashAsset(data: {
       asset_type: data.asset_type,
       current_value: data.current_value ?? 0,
       estimated_return_percentage: data.estimated_return_percentage ?? 0,
+      address: data.address ?? null,
+      vin: data.vin ?? null,
       sort_order: data.sort_order ?? 0,
     })
     .select()
@@ -714,6 +718,8 @@ export async function updateNonCashAsset(
     asset_type: NonCashAsset['asset_type'];
     current_value: number;
     estimated_return_percentage: number;
+    address: string | null;
+    vin: string | null;
     sort_order: number;
   }>
 ): Promise<NonCashAsset | null> {
