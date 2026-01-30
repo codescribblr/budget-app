@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { RichTextEditor } from './RichTextEditor';
 import { SearchableSelect, type SearchableSelectOption } from './SearchableSelect';
@@ -26,6 +27,7 @@ interface AdminNotification {
   pushBody: string | null;
   targetType: 'global' | 'account' | 'user';
   targetId: string | null;
+  sendEmail: boolean;
   status: 'draft' | 'sent';
   sentAt: string | null;
   createdAt: string;
@@ -69,6 +71,7 @@ export function AdminNotificationForm({ notificationId }: { notificationId?: num
   const [pushBody, setPushBody] = useState('');
   const [targetType, setTargetType] = useState<'global' | 'account' | 'user'>('global');
   const [targetId, setTargetId] = useState<string>('');
+  const [sendEmail, setSendEmail] = useState(true);
 
   useEffect(() => {
     if (notificationId) {
@@ -104,6 +107,7 @@ export function AdminNotificationForm({ notificationId }: { notificationId?: num
         setPushBody(notif.pushBody || '');
         setTargetType(notif.targetType);
         setTargetId(notif.targetId || '');
+        setSendEmail(notif.sendEmail !== undefined ? notif.sendEmail : true);
 
         // Load account/user options if target is set
         if (notif.targetType === 'account' && notif.targetId) {
@@ -234,6 +238,7 @@ export function AdminNotificationForm({ notificationId }: { notificationId?: num
           pushBody: pushBody || null,
           targetType,
           targetId: targetId || null,
+          sendEmail,
         }),
       });
 
@@ -376,6 +381,31 @@ export function AdminNotificationForm({ notificationId }: { notificationId?: num
               onChange={(e) => setPushBody(e.target.value)}
               placeholder="Leave empty for default"
               rows={3}
+              disabled={!isDraft}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Email Settings</CardTitle>
+          <CardDescription>
+            Control whether email notifications are sent to users
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="sendEmail">Send Email Notification</Label>
+              <p className="text-sm text-muted-foreground">
+                If enabled, users will receive an email notification (respecting their email preferences)
+              </p>
+            </div>
+            <Switch
+              id="sendEmail"
+              checked={sendEmail}
+              onCheckedChange={setSendEmail}
               disabled={!isDraft}
             />
           </div>

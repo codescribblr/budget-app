@@ -29,6 +29,7 @@ interface AdminNotification {
   pushBody: string | null;
   targetType: 'global' | 'account' | 'user';
   targetId: string | null;
+  sendEmail: boolean;
   status: 'draft' | 'sent';
   sentAt: string | null;
   createdAt: string;

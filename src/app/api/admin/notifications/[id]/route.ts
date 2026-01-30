@@ -78,6 +78,7 @@ export async function PATCH(
     if (body.pushBody !== undefined) updateData.pushBody = body.pushBody;
     if (body.targetType !== undefined) updateData.targetType = body.targetType;
     if (body.targetId !== undefined) updateData.targetId = body.targetId;
+    if (body.sendEmail !== undefined) updateData.sendEmail = body.sendEmail;
 
     // Check if notification exists and is draft
     const existing = await getAdminNotification(notificationId);

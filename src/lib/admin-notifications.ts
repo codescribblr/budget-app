@@ -15,6 +15,7 @@ export interface AdminNotification {
   pushBody: string | null;
   targetType: 'global' | 'account' | 'user';
   targetId: string | null;
+  sendEmail: boolean;
   status: 'draft' | 'sent';
   sentAt: string | null;
   createdAt: string;
@@ -41,6 +42,7 @@ export interface CreateAdminNotificationData {
   pushBody?: string | null;
   targetType: 'global' | 'account' | 'user';
   targetId?: string | null;
+  sendEmail?: boolean;
 }
 
 export interface AdminNotificationStats {
@@ -69,6 +71,7 @@ export async function createAdminNotification(
       push_body: data.pushBody || null,
       target_type: data.targetType,
       target_id: data.targetId || null,
+      send_email: data.sendEmail !== undefined ? data.sendEmail : true,
       status: 'draft',
     })
     .select('id')
@@ -100,6 +103,7 @@ export async function updateAdminNotification(
   if (data.pushBody !== undefined) updateData.push_body = data.pushBody;
   if (data.targetType !== undefined) updateData.target_type = data.targetType;
   if (data.targetId !== undefined) updateData.target_id = data.targetId;
+  if (data.sendEmail !== undefined) updateData.send_email = data.sendEmail;
 
   const { error } = await supabase
     .from('admin_notifications')
@@ -139,6 +143,7 @@ export async function getAdminNotification(id: number): Promise<AdminNotificatio
     pushBody: data.push_body,
     targetType: data.target_type,
     targetId: data.target_id,
+    sendEmail: data.send_email ?? true,
     status: data.status,
     sentAt: data.sent_at,
     createdAt: data.created_at,
@@ -188,6 +193,7 @@ export async function listAdminNotifications(options?: {
     pushBody: n.push_body,
     targetType: n.target_type,
     targetId: n.target_id,
+    sendEmail: n.send_email ?? true,
     status: n.status,
     sentAt: n.sent_at,
     createdAt: n.created_at,
@@ -336,10 +342,10 @@ export async function sendAdminNotification(adminNotificationId: number): Promis
 
   for (const userId of targetUserIds) {
     try {
-      // Check user preferences for system_notification type
+      // Get user preferences for system_notification type (get both email and in_app)
       const { data: userPrefs } = await supabase
         .from('user_notification_preferences')
-        .select('in_app_enabled')
+        .select('email_enabled, in_app_enabled')
         .eq('user_id', userId)
         .eq('notification_type_id', 'system_notification')
         .single();
@@ -377,16 +383,99 @@ export async function sendAdminNotification(adminNotificationId: number): Promis
       const notificationId = notification.id;
       const now = new Date().toISOString();
 
+      // Update action_url to point to the specific notification detail page
+      const notificationDetailUrl = `${baseUrl}/notifications/${notificationId}`;
+
       // Determine budget_account_id if account-targeted
       let budgetAccountId: number | null = null;
       if (adminNotification.targetType === 'account' && adminNotification.targetId) {
         budgetAccountId = parseInt(adminNotification.targetId);
       }
 
+      // Check if email should be sent:
+      // 1. Admin notification has sendEmail enabled
+      // 2. User has email enabled for system notifications
+      const shouldSendEmail = adminNotification.sendEmail && 
+        (userPrefs?.email_enabled ?? true);
+
+      let emailSent = false;
+      let emailSentAt: string | null = null;
+
+      // Send email if enabled
+      if (shouldSendEmail) {
+        try {
+          const emailUtils = await import('./email-utils');
+          const fs = await import('fs');
+          const path = await import('path');
+          
+          // Get user email
+          const { data: { user }, error: userError } = await supabase.auth.admin.getUserById(userId);
+          if (userError || !user?.email) {
+            throw new Error(`User not found or no email: ${userId}`);
+          }
+
+          // Get notification type for template selection
+          const { data: notificationType } = await supabase
+            .from('notification_types')
+            .select('id, category')
+            .eq('id', 'system_notification')
+            .single();
+
+          // Prepare logo URL
+          let logoUrl: string;
+          if (process.env.NODE_ENV === 'development' || baseUrl.includes('localhost')) {
+            try {
+              const logoPath = path.join(process.cwd(), 'public', 'icon-192.png');
+              const logoBuffer = fs.readFileSync(logoPath);
+              const logoBase64 = logoBuffer.toString('base64');
+              logoUrl = `data:image/png;base64,${logoBase64}`;
+            } catch (error) {
+              logoUrl = '';
+            }
+          } else {
+            logoUrl = `${baseUrl}/icon-192.png`;
+          }
+
+          // Render email template
+          let html: string;
+          try {
+            const templateName = notificationType?.id.replace(/_/g, '-') || 'notification-generic';
+            html = emailUtils.renderEmailTemplate(`notifications/${templateName}`, {
+              Title: adminNotification.title,
+              Message: adminNotification.content,
+              ActionURL: notificationDetailUrl,
+              ActionLabel: 'View Notification',
+              UnsubscribeURL: `${baseUrl}/settings/notifications`,
+              LogoURL: logoUrl,
+            });
+          } catch (error) {
+            html = emailUtils.renderEmailTemplate('notifications/notification-generic', {
+              Title: adminNotification.title,
+              Message: adminNotification.content,
+              ActionURL: notificationDetailUrl,
+              ActionLabel: 'View Notification',
+              UnsubscribeURL: `${baseUrl}/settings/notifications`,
+              LogoURL: logoUrl,
+            });
+          }
+
+          await emailUtils.sendEmail(user.email, adminNotification.title, html);
+          emailSent = true;
+          emailSentAt = now;
+        } catch (error: any) {
+          console.error(`Error sending email for notification ${notificationId}:`, error);
+          // Continue even if email fails
+        }
+      }
+
       // Mark notification as created (in-app notification is always created)
+      // Also update action_url to point to the notification detail page
       await supabase
         .from('notifications')
         .update({
+          action_url: notificationDetailUrl,
+          email_sent: emailSent,
+          email_sent_at: emailSentAt,
           in_app_created: true,
           in_app_created_at: now,
           sent_at: now,

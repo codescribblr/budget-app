@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
       pushBody: body.pushBody || null,
       targetType: body.targetType,
       targetId: body.targetId || null,
+      sendEmail: body.sendEmail !== undefined ? body.sendEmail : true,
     };
 
     // Validation
