@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,8 +18,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { formatCurrency } from '@/lib/utils';
 import type { NonCashAsset } from '@/lib/types';
 import { toast } from 'sonner';
@@ -40,9 +37,9 @@ import {
   Coins, 
   Package 
 } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import Link from 'next/link';
+import AssetDialog from '@/components/assets/AssetDialog';
 
 interface AssetListProps {
   assets: NonCashAsset[];
@@ -52,16 +49,7 @@ interface AssetListProps {
 
 export default function AssetList({ assets, onUpdate, disabled = false }: AssetListProps) {
   const [editingAsset, setEditingAsset] = useState<NonCashAsset | null>(null);
-  const [assetName, setAssetName] = useState('');
-  const [currentValue, setCurrentValue] = useState('');
-  const [estimatedReturn, setEstimatedReturn] = useState('');
-  const [assetType, setAssetType] = useState<NonCashAsset['asset_type']>('investment');
-  const [address, setAddress] = useState('');
-  const [vin, setVin] = useState('');
-  const [isRmdQualified, setIsRmdQualified] = useState(false);
-  const [isLiquid, setIsLiquid] = useState(true);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isAssetDialogOpen, setIsAssetDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [assetToDelete, setAssetToDelete] = useState<NonCashAsset | null>(null);
 
@@ -69,133 +57,16 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
   const [editingValueId, setEditingValueId] = useState<number | null>(null);
   const [editingValueAmount, setEditingValueAmount] = useState('');
 
-  const handleUpdateAsset = async () => {
-    if (!editingAsset) return;
-
-    const updatedAsset: NonCashAsset = {
-      ...editingAsset,
-      name: assetName,
-      current_value: parseFloat(currentValue) || 0,
-      estimated_return_percentage: parseFloat(estimatedReturn) || 0,
-      asset_type: assetType,
-      address: assetType === 'real_estate' ? (address.trim() || null) : null,
-      vin: assetType === 'vehicle' ? (vin.trim() || null) : null,
-    };
-    const updatedAssets = assets.map(asset => 
-      asset.id === editingAsset.id ? updatedAsset : asset
-    );
-    onUpdate(updatedAssets);
-    setIsEditDialogOpen(false);
-    setEditingAsset(null);
-    setAssetName('');
-    setCurrentValue('');
-    setEstimatedReturn('');
-    setAssetType('investment');
-    setAddress('');
-    setVin('');
-
+  const handleAssetSuccess = async () => {
+    // Refetch assets after successful add/edit
     try {
-      const response = await fetch(`/api/non-cash-assets/${editingAsset.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: assetName,
-          current_value: parseFloat(currentValue) || 0,
-          estimated_return_percentage: parseFloat(estimatedReturn) || 0,
-          asset_type: assetType,
-          address: assetType === 'real_estate' ? (address.trim() || null) : null,
-          vin: assetType === 'vehicle' ? (vin.trim() || null) : null,
-          is_rmd_qualified: isRmdQualified,
-          is_liquid: isLiquid,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorMessage = await handleApiError(response, 'Failed to update asset');
-        throw new Error(errorMessage || 'Failed to update asset');
+      const response = await fetch('/api/non-cash-assets');
+      if (response.ok) {
+        const updatedAssets = await response.json();
+        onUpdate(updatedAssets);
       }
-
-      toast.success('Asset updated successfully');
     } catch (error) {
-      onUpdate(assets);
-      console.error('Error updating asset:', error);
-      // Error toast already shown by handleApiError
-    }
-  };
-
-  const handleAddAsset = async () => {
-    if (!assetName.trim()) {
-      toast.error('Please enter an asset name');
-      return;
-    }
-
-    // Save values before resetting state
-    const assetNameValue = assetName;
-    const assetTypeValue = assetType;
-    const currentValueNum = parseFloat(currentValue) || 0;
-    const estimatedReturnNum = parseFloat(estimatedReturn) || 0;
-    const addressValue = assetTypeValue === 'real_estate' ? (address.trim() || null) : null;
-    const vinValue = assetTypeValue === 'vehicle' ? (vin.trim() || null) : null;
-
-    const tempAssetId = Date.now();
-    const newAsset: NonCashAsset = {
-      id: tempAssetId, // Temporary ID
-      name: assetNameValue,
-      asset_type: assetTypeValue,
-      current_value: currentValueNum,
-      estimated_return_percentage: estimatedReturnNum,
-      address: addressValue,
-      vin: vinValue,
-      is_rmd_qualified: isRmdQualified,
-      is_liquid: isLiquid,
-      sort_order: assets.length,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    const updatedAssets = [...assets, newAsset];
-    onUpdate(updatedAssets);
-    setIsAddDialogOpen(false);
-    setAssetName('');
-    setCurrentValue('');
-    setEstimatedReturn('');
-    setAssetType('investment');
-    setAddress('');
-    setVin('');
-
-    try {
-      const response = await fetch('/api/non-cash-assets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: assetNameValue,
-          asset_type: assetTypeValue,
-          current_value: currentValueNum,
-          estimated_return_percentage: estimatedReturnNum,
-          address: addressValue,
-          vin: vinValue,
-          is_rmd_qualified: isRmdQualified,
-          is_liquid: isLiquid,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorMessage = await handleApiError(response, 'Failed to add asset');
-        throw new Error(errorMessage || 'Failed to add asset');
-      }
-
-      const createdAsset = await response.json();
-      // Replace the temporary asset with the real one from the server
-      const finalAssets = updatedAssets.map(asset => 
-        asset.id === tempAssetId ? createdAsset : asset
-      );
-      onUpdate(finalAssets);
-      toast.success('Asset added successfully');
-    } catch (error) {
-      // Revert to original assets on error
-      onUpdate(assets);
-      console.error('Error adding asset:', error);
-      // Error toast already shown by handleApiError
+      console.error('Error fetching assets:', error);
     }
   };
 
@@ -227,27 +98,17 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
 
   const openEditDialog = (asset: NonCashAsset) => {
     setEditingAsset(asset);
-    setAssetName(asset.name);
-    setCurrentValue(asset.current_value.toString());
-    setEstimatedReturn(asset.estimated_return_percentage.toString());
-    setAssetType(asset.asset_type);
-    setAddress(asset.address || '');
-    setVin(asset.vin || '');
-    setIsRmdQualified(asset.is_rmd_qualified ?? false);
-    setIsLiquid(asset.is_liquid ?? true);
-    setIsEditDialogOpen(true);
+    setIsAssetDialogOpen(true);
   };
 
   const openAddDialog = () => {
-    setAssetName('');
-    setCurrentValue('');
-    setEstimatedReturn('');
-    setAssetType('investment');
-    setAddress('');
-    setVin('');
-    setIsRmdQualified(false);
-    setIsLiquid(true);
-    setIsAddDialogOpen(true);
+    setEditingAsset(null);
+    setIsAssetDialogOpen(true);
+  };
+
+  const handleCloseAssetDialog = () => {
+    setIsAssetDialogOpen(false);
+    setEditingAsset(null);
   };
 
   const startEditingValue = (asset: NonCashAsset) => {
@@ -453,309 +314,13 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
         </TableBody>
       </Table>
 
-      {/* Edit Asset Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Asset</DialogTitle>
-            <DialogDescription>
-              Update the asset details.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div>
-              <Label htmlFor="asset-name-edit">Asset Name</Label>
-              <Input
-                id="asset-name-edit"
-                type="text"
-                value={assetName}
-                onChange={(e) => setAssetName(e.target.value)}
-                placeholder="e.g., 401(k) Retirement Account"
-              />
-            </div>
-            <div>
-              <Label htmlFor="asset-type-edit">Asset Type</Label>
-              <Select value={assetType} onValueChange={(value: NonCashAsset['asset_type']) => {
-                setAssetType(value);
-                // Clear address/VIN when switching away from relevant types
-                if (value !== 'real_estate') setAddress('');
-                if (value !== 'vehicle') setVin('');
-              }}>
-                <SelectTrigger id="asset-type-edit">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="investment">Investment</SelectItem>
-                  <SelectItem value="real_estate">Real Estate</SelectItem>
-                  <SelectItem value="vehicle">Vehicle</SelectItem>
-                  <SelectItem value="art">Art</SelectItem>
-                  <SelectItem value="insurance">Insurance</SelectItem>
-                  <SelectItem value="collectibles">Collectibles</SelectItem>
-                  <SelectItem value="cryptocurrency">Cryptocurrency</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {assetType === 'real_estate' && (
-              <div>
-                <Label htmlFor="address-edit">Address</Label>
-                <Input
-                  id="address-edit"
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="e.g., 123 Main St, City, State ZIP"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Used for potential integration with real estate value APIs
-                </p>
-              </div>
-            )}
-            {assetType === 'vehicle' && (
-              <div>
-                <Label htmlFor="vin-edit">VIN (Vehicle Identification Number)</Label>
-                <Input
-                  id="vin-edit"
-                  type="text"
-                  value={vin}
-                  onChange={(e) => setVin(e.target.value.toUpperCase())}
-                  placeholder="e.g., 1HGBH41JXMN109186"
-                  maxLength={17}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Used for potential integration with auto value APIs
-                </p>
-              </div>
-            )}
-            <div>
-              <Label htmlFor="current-value-edit">Current Value</Label>
-              <Input
-                id="current-value-edit"
-                type="number"
-                step="0.01"
-                value={currentValue}
-                onChange={(e) => setCurrentValue(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <Label htmlFor="estimated-return-edit">Estimated Return % (Annual)</Label>
-              <Input
-                id="estimated-return-edit"
-                type="number"
-                step="0.01"
-                value={estimatedReturn}
-                onChange={(e) => setEstimatedReturn(e.target.value)}
-                placeholder="0.00"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Used for forecasting future value (e.g., 7.5 for 7.5% annual return, or -2.0 for -2% depreciation)
-              </p>
-            </div>
-            <div className="space-y-3 pt-2 border-t">
-              <div className="flex items-start space-x-2">
-                <Checkbox
-                  id="is-rmd-qualified-edit"
-                  checked={isRmdQualified}
-                  onCheckedChange={(checked) => setIsRmdQualified(checked === true)}
-                />
-                <div className="grid gap-1.5 leading-none">
-                  <Label
-                    htmlFor="is-rmd-qualified-edit"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                  >
-                    Subject to Required Minimum Distributions (RMD)
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Check if this is an IRA/401(k) type account that requires RMDs starting at age 73. Examples: Traditional IRA, 401(k), 403(b), SEP IRA, SIMPLE IRA.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-2">
-                <Checkbox
-                  id="is-liquid-edit"
-                  checked={isLiquid}
-                  onCheckedChange={(checked) => setIsLiquid(checked === true)}
-                />
-                <div className="grid gap-1.5 leading-none">
-                  <Label
-                    htmlFor="is-liquid-edit"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                  >
-                    Liquid Asset
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Check if this asset can be easily converted to cash for distributions. Liquid assets (stocks, bonds, cash accounts) can be distributed immediately. Illiquid assets (real estate, collectibles) may take time to sell.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleUpdateAsset}>Save</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Asset Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add New Asset</DialogTitle>
-            <DialogDescription>
-              Add a non-cash asset to track your net worth.
-            </DialogDescription>
-          </DialogHeader>
-          <div 
-            className="space-y-4 pt-4"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (assetName.trim()) {
-                  handleAddAsset();
-                }
-              }
-            }}
-          >
-            <div>
-              <Label htmlFor="asset-name">Asset Name</Label>
-              <Input
-                id="asset-name"
-                type="text"
-                value={assetName}
-                onChange={(e) => setAssetName(e.target.value)}
-                placeholder="e.g., 401(k) Retirement Account"
-              />
-            </div>
-            <div>
-              <Label htmlFor="asset-type">Asset Type</Label>
-              <Select value={assetType} onValueChange={(value: NonCashAsset['asset_type']) => {
-                setAssetType(value);
-                // Clear address/VIN when switching away from relevant types
-                if (value !== 'real_estate') setAddress('');
-                if (value !== 'vehicle') setVin('');
-              }}>
-                <SelectTrigger id="asset-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="investment">Investment</SelectItem>
-                  <SelectItem value="real_estate">Real Estate</SelectItem>
-                  <SelectItem value="vehicle">Vehicle</SelectItem>
-                  <SelectItem value="art">Art</SelectItem>
-                  <SelectItem value="insurance">Insurance</SelectItem>
-                  <SelectItem value="collectibles">Collectibles</SelectItem>
-                  <SelectItem value="cryptocurrency">Cryptocurrency</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {assetType === 'real_estate' && (
-              <div>
-                <Label htmlFor="address">Address</Label>
-                <Input
-                  id="address"
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="e.g., 123 Main St, City, State ZIP"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Used for potential integration with real estate value APIs
-                </p>
-              </div>
-            )}
-            {assetType === 'vehicle' && (
-              <div>
-                <Label htmlFor="vin">VIN (Vehicle Identification Number)</Label>
-                <Input
-                  id="vin"
-                  type="text"
-                  value={vin}
-                  onChange={(e) => setVin(e.target.value.toUpperCase())}
-                  placeholder="e.g., 1HGBH41JXMN109186"
-                  maxLength={17}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Used for potential integration with auto value APIs
-                </p>
-              </div>
-            )}
-            <div>
-              <Label htmlFor="current-value">Current Value</Label>
-              <Input
-                id="current-value"
-                type="number"
-                step="0.01"
-                value={currentValue}
-                onChange={(e) => setCurrentValue(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <Label htmlFor="estimated-return">Estimated Return % (Annual)</Label>
-              <Input
-                id="estimated-return"
-                type="number"
-                step="0.01"
-                value={estimatedReturn}
-                onChange={(e) => setEstimatedReturn(e.target.value)}
-                placeholder="0.00"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Used for forecasting future value (e.g., 7.5 for 7.5% annual return, or -2.0 for -2% depreciation)
-              </p>
-            </div>
-            <div className="space-y-3 pt-2 border-t">
-              <div className="flex items-start space-x-2">
-                <Checkbox
-                  id="is-rmd-qualified-add"
-                  checked={isRmdQualified}
-                  onCheckedChange={(checked) => setIsRmdQualified(checked === true)}
-                />
-                <div className="grid gap-1.5 leading-none">
-                  <Label
-                    htmlFor="is-rmd-qualified-add"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                  >
-                    Subject to Required Minimum Distributions (RMD)
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Check if this is an IRA/401(k) type account that requires RMDs starting at age 73. Examples: Traditional IRA, 401(k), 403(b), SEP IRA, SIMPLE IRA.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-2">
-                <Checkbox
-                  id="is-liquid-add"
-                  checked={isLiquid}
-                  onCheckedChange={(checked) => setIsLiquid(checked === true)}
-                />
-                <div className="grid gap-1.5 leading-none">
-                  <Label
-                    htmlFor="is-liquid-add"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                  >
-                    Liquid Asset
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Check if this asset can be easily converted to cash for distributions. Liquid assets (stocks, bonds, cash accounts) can be distributed immediately. Illiquid assets (real estate, collectibles) may take time to sell.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddAsset}>Add Asset</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Asset Dialog (used for both add and edit) */}
+      <AssetDialog
+        isOpen={isAssetDialogOpen}
+        onClose={handleCloseAssetDialog}
+        asset={editingAsset}
+        onSuccess={handleAssetSuccess}
+      />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

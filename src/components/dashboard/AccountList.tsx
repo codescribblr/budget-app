@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,15 +18,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Label } from '@/components/ui/label';
 import { formatCurrency } from '@/lib/utils';
 import type { Account } from '@/lib/types';
 import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
 import { Check, X, MoreVertical, Edit, Trash2, Wallet, PiggyBank, Banknote } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import Link from 'next/link';
+import AccountDialog from '@/components/accounts/AccountDialog';
 
 interface AccountListProps {
   accounts: Account[];
@@ -38,12 +36,7 @@ interface AccountListProps {
 
 export default function AccountList({ accounts, onUpdate, onUpdateSummary, disabled = false }: AccountListProps) {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-  const [accountName, setAccountName] = useState('');
-  const [newBalance, setNewBalance] = useState('');
-  const [accountType, setAccountType] = useState<'checking' | 'savings' | 'cash'>('checking');
-  const [includeInTotals, setIncludeInTotals] = useState(true);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
 
@@ -51,86 +44,17 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
   const [editingBalanceId, setEditingBalanceId] = useState<number | null>(null);
   const [editingBalanceValue, setEditingBalanceValue] = useState('');
 
-  const handleUpdateAccount = async () => {
-    if (!editingAccount) return;
-
-    // Optimistic update
-    const updatedAccount: Account = {
-      ...editingAccount,
-      balance: parseFloat(newBalance),
-      account_type: accountType,
-      include_in_totals: includeInTotals,
-    };
-    const updatedAccounts = accounts.map(acc => 
-      acc.id === editingAccount.id ? updatedAccount : acc
-    );
-    onUpdate(updatedAccounts);
-    setIsEditDialogOpen(false);
-    setEditingAccount(null);
-    setAccountName('');
-    setNewBalance('');
-    setAccountType('checking');
-    setIncludeInTotals(true);
-
+  const handleAccountSuccess = async () => {
+    // Refetch accounts after successful add/edit
     try {
-      const response = await fetch(`/api/accounts/${editingAccount.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          balance: parseFloat(newBalance),
-          account_type: accountType,
-          include_in_totals: includeInTotals,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update account');
+      const response = await fetch('/api/accounts');
+      if (response.ok) {
+        const updatedAccounts = await response.json();
+        onUpdate(updatedAccounts);
+        if (onUpdateSummary) onUpdateSummary();
       }
-
-      if (onUpdateSummary) onUpdateSummary();
     } catch (error) {
-      // Revert on error
-      onUpdate(accounts);
-      console.error('Error updating account:', error);
-      toast.error('Failed to update account');
-    }
-  };
-
-  const handleAddAccount = async () => {
-    if (!accountName.trim()) {
-      alert('Please enter an account name');
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: accountName,
-          balance: parseFloat(newBalance) || 0,
-          account_type: accountType,
-          include_in_totals: includeInTotals,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to add account');
-      }
-
-      const newAccount = await response.json();
-      const updatedAccounts = [...accounts, newAccount];
-      onUpdate(updatedAccounts);
-      if (onUpdateSummary) onUpdateSummary();
-
-      setIsAddDialogOpen(false);
-      setAccountName('');
-      setNewBalance('');
-      setAccountType('checking');
-      setIncludeInTotals(true);
-    } catch (error) {
-      console.error('Error adding account:', error);
-      toast.error('Failed to add account');
+      console.error('Error fetching accounts:', error);
     }
   };
 
@@ -168,19 +92,17 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
 
   const openEditDialog = (account: Account) => {
     setEditingAccount(account);
-    setAccountName(account.name);
-    setNewBalance(account.balance.toString());
-    setAccountType(account.account_type);
-    setIncludeInTotals(account.include_in_totals);
-    setIsEditDialogOpen(true);
+    setIsAccountDialogOpen(true);
   };
 
   const openAddDialog = () => {
-    setAccountName('');
-    setNewBalance('0');
-    setAccountType('checking');
-    setIncludeInTotals(true);
-    setIsAddDialogOpen(true);
+    setEditingAccount(null);
+    setIsAccountDialogOpen(true);
+  };
+
+  const handleCloseAccountDialog = () => {
+    setIsAccountDialogOpen(false);
+    setEditingAccount(null);
   };
 
   // Inline balance editing handlers
@@ -355,145 +277,13 @@ export default function AccountList({ accounts, onUpdate, onUpdateSummary, disab
         </TableBody>
       </Table>
 
-      {/* Edit Account Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit {editingAccount?.name}</DialogTitle>
-            <DialogDescription>
-              Update the account balance and settings.
-            </DialogDescription>
-          </DialogHeader>
-          <div 
-            className="space-y-4 pt-4"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleUpdateAccount();
-              }
-            }}
-          >
-            <div>
-              <Label htmlFor="balance">Balance</Label>
-              <Input
-                id="balance"
-                type="number"
-                step="0.01"
-                value={newBalance}
-                onChange={(e) => setNewBalance(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <Label htmlFor="account-type-edit">Account Type</Label>
-              <Select value={accountType} onValueChange={(value: 'checking' | 'savings' | 'cash') => setAccountType(value)}>
-                <SelectTrigger id="account-type-edit">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="checking">Checking</SelectItem>
-                  <SelectItem value="savings">Savings</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="include-in-totals"
-                checked={includeInTotals}
-                onChange={(e) => setIncludeInTotals(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              <Label htmlFor="include-in-totals" className="cursor-pointer">
-                Include in totals calculation
-              </Label>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleUpdateAccount}>Save</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Account Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add New Account</DialogTitle>
-            <DialogDescription>
-              Add a new bank account to track your finances.
-            </DialogDescription>
-          </DialogHeader>
-          <div 
-            className="space-y-4 pt-4"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (accountName.trim()) {
-                  handleAddAccount();
-                }
-              }
-            }}
-          >
-            <div>
-              <Label htmlFor="account-name">Account Name</Label>
-              <Input
-                id="account-name"
-                type="text"
-                value={accountName}
-                onChange={(e) => setAccountName(e.target.value)}
-                placeholder="e.g., Checking Account"
-              />
-            </div>
-            <div>
-              <Label htmlFor="balance-add">Starting Balance</Label>
-              <Input
-                id="balance-add"
-                type="number"
-                step="0.01"
-                value={newBalance}
-                onChange={(e) => setNewBalance(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <Label htmlFor="account-type-add">Account Type</Label>
-              <Select value={accountType} onValueChange={(value: 'checking' | 'savings' | 'cash') => setAccountType(value)}>
-                <SelectTrigger id="account-type-add">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="checking">Checking</SelectItem>
-                  <SelectItem value="savings">Savings</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="include-in-totals-add"
-                checked={includeInTotals}
-                onChange={(e) => setIncludeInTotals(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              <Label htmlFor="include-in-totals-add" className="cursor-pointer">
-                Include in totals calculation
-              </Label>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddAccount}>Add Account</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Account Dialog (used for both add and edit) */}
+      <AccountDialog
+        isOpen={isAccountDialogOpen}
+        onClose={handleCloseAccountDialog}
+        account={editingAccount}
+        onSuccess={handleAccountSuccess}
+      />
 
       {/* Delete Account Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,13 +18,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Label } from '@/components/ui/label';
 import { formatCurrency } from '@/lib/utils';
 import type { CreditCard } from '@/lib/types';
 import { toast } from 'sonner';
 import { Check, X, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
 import Link from 'next/link';
+import CreditCardDialog from '@/components/credit-cards/CreditCardDialog';
 
 interface CreditCardListProps {
   creditCards: CreditCard[];
@@ -36,12 +35,7 @@ interface CreditCardListProps {
 
 export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary, disabled = false }: CreditCardListProps) {
   const [editingCard, setEditingCard] = useState<CreditCard | null>(null);
-  const [cardName, setCardName] = useState('');
-  const [creditLimit, setCreditLimit] = useState('');
-  const [availableCredit, setAvailableCredit] = useState('');
-  const [includeInTotals, setIncludeInTotals] = useState(true);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isCreditCardDialogOpen, setIsCreditCardDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [cardToDelete, setCardToDelete] = useState<CreditCard | null>(null);
 
@@ -49,102 +43,20 @@ export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary,
   const [editingAvailableId, setEditingAvailableId] = useState<number | null>(null);
   const [editingAvailableValue, setEditingAvailableValue] = useState('');
 
-  const handleUpdateCard = async () => {
-    if (!editingCard) return;
-
-    if (!cardName.trim()) {
-      alert('Please enter a card name');
-      return;
-    }
-
-    const newAvailableCredit = parseFloat(availableCredit);
-    const newCreditLimit = parseFloat(creditLimit);
-    const newCurrentBalance = newCreditLimit - newAvailableCredit;
-
-    // Optimistic update
-    const updatedCard: CreditCard = {
-      ...editingCard,
-      name: cardName.trim(),
-      credit_limit: newCreditLimit,
-      available_credit: newAvailableCredit,
-      current_balance: newCurrentBalance,
-      include_in_totals: includeInTotals,
-    };
-    const updatedCreditCards = creditCards.map(card => 
-      card.id === editingCard.id ? updatedCard : card
-    );
-    onUpdate(updatedCreditCards);
-    setIsEditDialogOpen(false);
-    setEditingCard(null);
-    setCardName('');
-    setCreditLimit('');
-    setAvailableCredit('');
-    setIncludeInTotals(true);
-
+  const handleCreditCardSuccess = async () => {
+    // Refetch credit cards after successful add/edit
     try {
-      const response = await fetch(`/api/credit-cards/${editingCard.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: cardName.trim(),
-          credit_limit: newCreditLimit,
-          available_credit: newAvailableCredit,
-          include_in_totals: includeInTotals,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorMessage = await handleApiError(response, 'Failed to update credit card');
-        throw new Error(errorMessage || 'Failed to update credit card');
+      const response = await fetch('/api/credit-cards');
+      if (response.ok) {
+        const updatedCreditCards = await response.json();
+        onUpdate(updatedCreditCards);
+        if (onUpdateSummary) onUpdateSummary();
       }
-
-      if (onUpdateSummary) onUpdateSummary();
     } catch (error) {
-      // Revert on error
-      onUpdate(creditCards);
-      console.error('Error updating credit card:', error);
-      // Error toast already shown by handleApiError
+      console.error('Error fetching credit cards:', error);
     }
   };
 
-  const handleAddCard = async () => {
-    if (!cardName.trim()) {
-      alert('Please enter a card name');
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/credit-cards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: cardName,
-          credit_limit: parseFloat(creditLimit) || 0,
-          available_credit: parseFloat(availableCredit) || 0,
-          include_in_totals: includeInTotals,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorMessage = await handleApiError(response, 'Failed to add credit card');
-        throw new Error(errorMessage || 'Failed to add credit card');
-      }
-
-      const newCard = await response.json();
-      const updatedCreditCards = [...creditCards, newCard];
-      onUpdate(updatedCreditCards);
-      if (onUpdateSummary) onUpdateSummary();
-
-      setIsAddDialogOpen(false);
-      setCardName('');
-      setCreditLimit('');
-      setAvailableCredit('');
-      setIncludeInTotals(true);
-    } catch (error) {
-      console.error('Error adding credit card:', error);
-      // Error toast already shown by handleApiError
-    }
-  };
 
   const handleDeleteCard = (card: CreditCard) => {
     setCardToDelete(card);
@@ -180,19 +92,17 @@ export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary,
 
   const openEditDialog = (card: CreditCard) => {
     setEditingCard(card);
-    setCardName(card.name);
-    setCreditLimit(card.credit_limit.toString());
-    setAvailableCredit(card.available_credit.toString());
-    setIncludeInTotals(card.include_in_totals);
-    setIsEditDialogOpen(true);
+    setIsCreditCardDialogOpen(true);
   };
 
   const openAddDialog = () => {
-    setCardName('');
-    setCreditLimit('0');
-    setAvailableCredit('0');
-    setIncludeInTotals(true);
-    setIsAddDialogOpen(true);
+    setEditingCard(null);
+    setIsCreditCardDialogOpen(true);
+  };
+
+  const handleCloseCreditCardDialog = () => {
+    setIsCreditCardDialogOpen(false);
+    setEditingCard(null);
   };
 
   // Inline available credit editing handlers
@@ -350,163 +260,13 @@ export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary,
         </TableBody>
       </Table>
 
-      {/* Edit Credit Card Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Credit Card</DialogTitle>
-            <DialogDescription>
-              Update the credit card name, limit, and available credit.
-            </DialogDescription>
-          </DialogHeader>
-          <div 
-            className="space-y-4 pt-4"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleUpdateCard();
-              }
-            }}
-          >
-            <div>
-              <Label htmlFor="card-name">Card Name</Label>
-              <Input
-                id="card-name"
-                type="text"
-                value={cardName}
-                onChange={(e) => setCardName(e.target.value)}
-                placeholder="Credit Card Name"
-              />
-            </div>
-            <div>
-              <Label htmlFor="credit-limit">Credit Limit</Label>
-              <Input
-                id="credit-limit"
-                type="number"
-                step="0.01"
-                value={creditLimit}
-                onChange={(e) => setCreditLimit(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <Label htmlFor="available-credit">Available Credit</Label>
-              <Input
-                id="available-credit"
-                type="number"
-                step="0.01"
-                value={availableCredit}
-                onChange={(e) => setAvailableCredit(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="p-3 bg-muted rounded-md">
-              <div className="text-sm text-muted-foreground">Balance Owed (calculated)</div>
-              <div className="text-lg font-semibold">
-                {formatCurrency(parseFloat(creditLimit || '0') - parseFloat(availableCredit || '0'))}
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="include-in-totals"
-                checked={includeInTotals}
-                onChange={(e) => setIncludeInTotals(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              <Label htmlFor="include-in-totals" className="cursor-pointer">
-                Include in totals calculation
-              </Label>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleUpdateCard}>Save</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Credit Card Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add New Credit Card</DialogTitle>
-            <DialogDescription>
-              Add a new credit card to track your balances.
-            </DialogDescription>
-          </DialogHeader>
-          <div 
-            className="space-y-4 pt-4"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (cardName.trim()) {
-                  handleAddCard();
-                }
-              }
-            }}
-          >
-            <div>
-              <Label htmlFor="card-name">Card Name</Label>
-              <Input
-                id="card-name"
-                type="text"
-                value={cardName}
-                onChange={(e) => setCardName(e.target.value)}
-                placeholder="e.g., Visa Rewards"
-              />
-            </div>
-            <div>
-              <Label htmlFor="credit-limit-add">Credit Limit</Label>
-              <Input
-                id="credit-limit-add"
-                type="number"
-                step="0.01"
-                value={creditLimit}
-                onChange={(e) => setCreditLimit(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <Label htmlFor="available-credit-add">Available Credit</Label>
-              <Input
-                id="available-credit-add"
-                type="number"
-                step="0.01"
-                value={availableCredit}
-                onChange={(e) => setAvailableCredit(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="p-3 bg-muted rounded-md">
-              <div className="text-sm text-muted-foreground">Balance Owed (calculated)</div>
-              <div className="text-lg font-semibold">
-                {formatCurrency(parseFloat(creditLimit || '0') - parseFloat(availableCredit || '0'))}
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="include-in-totals-add"
-                checked={includeInTotals}
-                onChange={(e) => setIncludeInTotals(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              <Label htmlFor="include-in-totals-add" className="cursor-pointer">
-                Include in totals calculation
-              </Label>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddCard}>Add Credit Card</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Credit Card Dialog (used for both add and edit) */}
+      <CreditCardDialog
+        isOpen={isCreditCardDialogOpen}
+        onClose={handleCloseCreditCardDialog}
+        creditCard={editingCard}
+        onSuccess={handleCreditCardSuccess}
+      />
 
       {/* Delete Credit Card Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

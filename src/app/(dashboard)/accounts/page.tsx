@@ -9,8 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import type { Account } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Wallet, PiggyBank, Banknote, Plus } from 'lucide-react';
-import Link from 'next/link';
+import { Wallet, PiggyBank, Banknote, Plus, Edit } from 'lucide-react';
 import AccountDialog from '@/components/accounts/AccountDialog';
 
 export default function AccountsPage() {
@@ -18,6 +17,7 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
 
   const fetchAccounts = async () => {
     try {
@@ -79,7 +79,12 @@ export default function AccountsPage() {
           <h1 className="text-2xl md:text-3xl font-bold">Cash Accounts</h1>
           <p className="text-muted-foreground mt-1">Manage your cash accounts</p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)}>
+        <Button
+          onClick={() => {
+            setEditingAccount(null);
+            setIsDialogOpen(true);
+          }}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Add Account
         </Button>
@@ -98,34 +103,57 @@ export default function AccountsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {accounts.map((account) => (
-            <Link key={account.id} href={`/accounts/${account.id}`}>
-              <Card className="cursor-pointer hover:shadow-md transition-shadow h-full">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      {getAccountIcon(account.account_type)}
-                      <CardTitle className="text-lg">{account.name}</CardTitle>
-                    </div>
+            <Card
+              key={account.id}
+              className="cursor-pointer hover:shadow-md transition-shadow h-full"
+              onClick={() => router.push(`/accounts/${account.id}`)}
+            >
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    {getAccountIcon(account.account_type)}
+                    <CardTitle className="text-lg">{account.name}</CardTitle>
+                  </div>
+                  <div className="flex items-center gap-2">
                     {!account.include_in_totals && (
                       <Badge variant="outline" className="text-xs">Excluded</Badge>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingAccount(account);
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <CardDescription>{getAccountTypeLabel(account.account_type)}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{formatCurrency(account.balance)}</div>
-                </CardContent>
-              </Card>
-            </Link>
+                </div>
+                <CardDescription>{getAccountTypeLabel(account.account_type)}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(account.balance)}</div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
 
       <AccountDialog
         isOpen={isDialogOpen}
-        onClose={() => setIsDialogOpen(false)}
-        account={null}
-        onSuccess={fetchAccounts}
+        onClose={() => {
+          setIsDialogOpen(false);
+          setEditingAccount(null);
+        }}
+        account={editingAccount}
+        onSuccess={() => {
+          fetchAccounts();
+          setIsDialogOpen(false);
+          setEditingAccount(null);
+        }}
       />
     </div>
   );

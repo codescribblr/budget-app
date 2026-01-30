@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -8,14 +9,15 @@ import { Badge } from '@/components/ui/badge';
 import type { CreditCard } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
-import { CreditCard as CreditCardIcon, Plus } from 'lucide-react';
-import Link from 'next/link';
+import { CreditCard as CreditCardIcon, Plus, Edit } from 'lucide-react';
 import CreditCardDialog from '@/components/credit-cards/CreditCardDialog';
 
 export default function CreditCardsPage() {
+  const router = useRouter();
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingCreditCard, setEditingCreditCard] = useState<CreditCard | null>(null);
 
   const fetchCreditCards = async () => {
     try {
@@ -51,7 +53,12 @@ export default function CreditCardsPage() {
           <h1 className="text-2xl md:text-3xl font-bold">Credit Cards</h1>
           <p className="text-muted-foreground mt-1">Manage your credit card accounts</p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)}>
+        <Button
+          onClick={() => {
+            setEditingCreditCard(null);
+            setIsDialogOpen(true);
+          }}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Add Credit Card
         </Button>
@@ -70,46 +77,69 @@ export default function CreditCardsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {creditCards.map((creditCard) => (
-            <Link key={creditCard.id} href={`/credit-cards/${creditCard.id}`}>
-              <Card className="cursor-pointer hover:shadow-md transition-shadow h-full">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <CreditCardIcon className="h-5 w-5" />
-                      <CardTitle className="text-lg">{creditCard.name}</CardTitle>
-                    </div>
+            <Card
+              key={creditCard.id}
+              className="cursor-pointer hover:shadow-md transition-shadow h-full"
+              onClick={() => router.push(`/credit-cards/${creditCard.id}`)}
+            >
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <CreditCardIcon className="h-5 w-5" />
+                    <CardTitle className="text-lg">{creditCard.name}</CardTitle>
+                  </div>
+                  <div className="flex items-center gap-2">
                     {!creditCard.include_in_totals && (
                       <Badge variant="outline" className="text-xs">Excluded</Badge>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingCreditCard(creditCard);
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div>
-                      <div className="text-xs text-muted-foreground">Current Balance</div>
-                      <div className="text-2xl font-bold">{formatCurrency(creditCard.current_balance)}</div>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Available Credit</span>
-                      <span className="font-medium">{formatCurrency(creditCard.available_credit)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Credit Limit</span>
-                      <span className="font-medium">{formatCurrency(creditCard.credit_limit)}</span>
-                    </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Current Balance</div>
+                    <div className="text-2xl font-bold">{formatCurrency(creditCard.current_balance)}</div>
                   </div>
-                </CardContent>
-              </Card>
-            </Link>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Available Credit</span>
+                    <span className="font-medium">{formatCurrency(creditCard.available_credit)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Credit Limit</span>
+                    <span className="font-medium">{formatCurrency(creditCard.credit_limit)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
 
       <CreditCardDialog
         isOpen={isDialogOpen}
-        onClose={() => setIsDialogOpen(false)}
-        creditCard={null}
-        onSuccess={fetchCreditCards}
+        onClose={() => {
+          setIsDialogOpen(false);
+          setEditingCreditCard(null);
+        }}
+        creditCard={editingCreditCard}
+        onSuccess={() => {
+          fetchCreditCards();
+          setIsDialogOpen(false);
+          setEditingCreditCard(null);
+        }}
       />
     </div>
   );

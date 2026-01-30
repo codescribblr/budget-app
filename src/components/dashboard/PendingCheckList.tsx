@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,14 +18,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/utils';
 import type { PendingCheck } from '@/lib/types';
 import { toast } from 'sonner';
 import { MoreVertical, Trash2, Edit } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
 import Link from 'next/link';
+import PendingCheckDialog from '@/components/pending-checks/PendingCheckDialog';
 
 interface PendingCheckListProps {
   pendingChecks: PendingCheck[];
@@ -36,15 +34,8 @@ interface PendingCheckListProps {
 }
 
 export default function PendingCheckList({ pendingChecks, onUpdate, onUpdateSummary, disabled = false }: PendingCheckListProps) {
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [newDescription, setNewDescription] = useState('');
-  const [newAmount, setNewAmount] = useState('');
-  const [newType, setNewType] = useState<'expense' | 'income'>('expense');
-  const [editCheck, setEditCheck] = useState<PendingCheck | null>(null);
-  const [editDescription, setEditDescription] = useState('');
-  const [editAmount, setEditAmount] = useState('');
-  const [editType, setEditType] = useState<'expense' | 'income'>('expense');
+  const [editingCheck, setEditingCheck] = useState<PendingCheck | null>(null);
+  const [isPendingCheckDialogOpen, setIsPendingCheckDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [checkToDelete, setCheckToDelete] = useState<PendingCheck | null>(null);
 
@@ -54,11 +45,22 @@ export default function PendingCheckList({ pendingChecks, onUpdate, onUpdateSumm
   };
 
   const handleEdit = (check: PendingCheck) => {
-    setEditCheck(check);
-    setEditDescription(check.description);
-    setEditAmount(Math.abs(check.amount).toString());
-    setEditType(check.type);
-    setIsEditDialogOpen(true);
+    setEditingCheck(check);
+    setIsPendingCheckDialogOpen(true);
+  };
+
+  const handlePendingCheckSuccess = async () => {
+    // Refetch pending checks after successful add/edit
+    try {
+      const response = await fetch('/api/pending-checks');
+      if (response.ok) {
+        const updatedPendingChecks = await response.json();
+        onUpdate(updatedPendingChecks);
+        if (onUpdateSummary) onUpdateSummary();
+      }
+    } catch (error) {
+      console.error('Error fetching pending checks:', error);
+    }
   };
 
   const confirmDeleteCheck = async () => {
@@ -88,109 +90,14 @@ export default function PendingCheckList({ pendingChecks, onUpdate, onUpdateSumm
     }
   };
 
-  const handleAddCheck = async () => {
-    if (!newDescription.trim() || !newAmount.trim()) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-
-    try {
-      const amount = parseFloat(newAmount);
-      if (isNaN(amount) || amount <= 0) {
-        toast.error('Please enter a valid amount');
-        return;
-      }
-
-      const response = await fetch('/api/pending-checks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description: newDescription,
-          amount: amount,
-          type: newType,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorMessage = await handleApiError(response, 'Failed to add pending check');
-        throw new Error(errorMessage || 'Failed to add pending check');
-      }
-
-      const newCheck = await response.json();
-      const updatedPendingChecks = [...pendingChecks, newCheck];
-      onUpdate(updatedPendingChecks);
-      if (onUpdateSummary) onUpdateSummary();
-
-      setIsAddDialogOpen(false);
-      setNewDescription('');
-      setNewAmount('');
-      setNewType('expense');
-    } catch (error) {
-      console.error('Error adding pending check:', error);
-      // Error toast already shown by handleApiError
-    }
+  const openAddDialog = () => {
+    setEditingCheck(null);
+    setIsPendingCheckDialogOpen(true);
   };
 
-  const handleUpdateCheck = async () => {
-    if (!editCheck || !editDescription.trim() || !editAmount.trim()) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-
-    const amount = parseFloat(editAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
-
-    // Save editCheck.id before clearing state
-    const checkId = editCheck.id;
-
-    // Optimistic update
-    const updatedCheck: PendingCheck = {
-      ...editCheck,
-      description: editDescription,
-      amount: amount,
-      type: editType,
-    };
-    const updatedPendingChecks = pendingChecks.map(check => 
-      check.id === editCheck.id ? updatedCheck : check
-    );
-    onUpdate(updatedPendingChecks);
-    setIsEditDialogOpen(false);
-    setEditCheck(null);
-    setEditDescription('');
-    setEditAmount('');
-    setEditType('expense');
-
-    try {
-      const response = await fetch(`/api/pending-checks/${checkId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description: editDescription,
-          amount: amount,
-          type: editType,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorMessage = await handleApiError(response, 'Failed to update pending check');
-        throw new Error(errorMessage || 'Failed to update pending check');
-      }
-
-      if (onUpdateSummary) onUpdateSummary();
-    } catch (error) {
-      // Revert on error
-      onUpdate(pendingChecks);
-      setIsEditDialogOpen(true);
-      setEditCheck(editCheck);
-      setEditDescription(editDescription);
-      setEditAmount(editAmount);
-      setEditType(editType);
-      console.error('Error updating pending check:', error);
-      // Error toast already shown by handleApiError
-    }
+  const handleClosePendingCheckDialog = () => {
+    setIsPendingCheckDialogOpen(false);
+    setEditingCheck(null);
   };
 
   // Calculate total: expenses subtract (negative), income adds (positive)
@@ -209,7 +116,7 @@ export default function PendingCheckList({ pendingChecks, onUpdate, onUpdateSumm
     <>
       <div className="space-y-4">
         <div className="mb-3 flex items-center justify-between">
-          <Button onClick={() => setIsAddDialogOpen(true)} size="sm" disabled={disabled}>
+          <Button onClick={openAddDialog} size="sm" disabled={disabled}>
             Add Pending Check
           </Button>
           <div className={`text-sm ${
@@ -271,144 +178,13 @@ export default function PendingCheckList({ pendingChecks, onUpdate, onUpdateSumm
         )}
       </div>
 
-      {/* Add Pending Check Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Pending Check</DialogTitle>
-            <DialogDescription>
-              Add a pending check or deposit that hasn't cleared yet.
-            </DialogDescription>
-          </DialogHeader>
-          <div 
-            className="space-y-4 pt-4"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (newDescription.trim() && newAmount.trim()) {
-                  handleAddCheck();
-                }
-              }
-            }}
-          >
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Input
-                id="description"
-                type="text"
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-                placeholder="e.g., First paycheck"
-              />
-            </div>
-            <div>
-              <Label htmlFor="type">Type</Label>
-              <Select value={newType} onValueChange={(value) => setNewType(value as 'expense' | 'income')}>
-                <SelectTrigger id="type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="expense">Expense</SelectItem>
-                  <SelectItem value="income">Income</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="amount">Amount</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                min="0"
-                value={newAmount}
-                onChange={(e) => setNewAmount(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => {
-                setIsAddDialogOpen(false);
-                setNewDescription('');
-                setNewAmount('');
-                setNewType('expense');
-              }}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddCheck}>Add</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Pending Check Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Pending Check</DialogTitle>
-            <DialogDescription>
-              Update the pending check details.
-            </DialogDescription>
-          </DialogHeader>
-          <div 
-            className="space-y-4 pt-4"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (editDescription.trim() && editAmount.trim()) {
-                  handleUpdateCheck();
-                }
-              }
-            }}
-          >
-            <div>
-              <Label htmlFor="edit-description">Description</Label>
-              <Input
-                id="edit-description"
-                type="text"
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                placeholder="e.g., First paycheck"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-type">Type</Label>
-              <Select value={editType} onValueChange={(value) => setEditType(value as 'expense' | 'income')}>
-                <SelectTrigger id="edit-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="expense">Expense</SelectItem>
-                  <SelectItem value="income">Income</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="edit-amount">Amount</Label>
-              <Input
-                id="edit-amount"
-                type="number"
-                step="0.01"
-                min="0"
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => {
-                setIsEditDialogOpen(false);
-                setEditCheck(null);
-                setEditDescription('');
-                setEditAmount('');
-                setEditType('expense');
-              }}>
-                Cancel
-              </Button>
-              <Button onClick={handleUpdateCheck}>Save</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Pending Check Dialog (used for both add and edit) */}
+      <PendingCheckDialog
+        isOpen={isPendingCheckDialogOpen}
+        onClose={handleClosePendingCheckDialog}
+        pendingCheck={editingCheck}
+        onSuccess={handlePendingCheckSuccess}
+      />
 
       {/* Delete Pending Check Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
