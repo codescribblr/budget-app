@@ -1,6 +1,6 @@
 import { isAdmin } from "@/lib/admin"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Store, Settings, Shield } from "lucide-react"
+import { Store, Settings, Shield, Bell } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
@@ -19,6 +19,13 @@ export default async function AdminDashboard() {
       icon: Store,
       href: "/admin/merchants",
       color: "text-blue-600",
+    },
+    {
+      title: "Notifications",
+      description: "Create and send notifications to users globally, by account, or individually",
+      icon: Bell,
+      href: "/admin/notifications",
+      color: "text-purple-600",
     },
     {
       title: "Admin Settings",

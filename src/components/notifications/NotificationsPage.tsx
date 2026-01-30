@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Check, X, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
+import { useRouter } from 'next/navigation';
+import { getNotificationPreview } from '@/lib/notification-utils';
 
 interface Notification {
   id: number;
@@ -18,9 +20,11 @@ interface Notification {
   is_read: boolean;
   created_at: string;
   notification_type_id: string;
+  metadata?: Record<string, any>;
 }
 
 export default function NotificationsPage() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
@@ -166,22 +170,20 @@ export default function NotificationsPage() {
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {notification.message}
+                        {getNotificationPreview(notification.message, 150)}
                       </p>
                       <p className="text-xs text-muted-foreground mt-2">
                         {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                       </p>
-                      {notification.action_url && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="mt-3"
-                          onClick={() => window.location.href = notification.action_url!}
-                        >
-                          {notification.action_label || 'View'}
-                          <ExternalLink className="h-3 w-3 ml-1" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => router.push(`/notifications/${notification.id}`)}
+                      >
+                        View Details
+                        <ExternalLink className="h-3 w-3 ml-1" />
+                      </Button>
                     </div>
                     <div className="flex items-center gap-2">
                       {!notification.is_read && (

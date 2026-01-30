@@ -25,6 +25,7 @@ const IMPLEMENTED_NOTIFICATION_TYPES = new Set([
   'recurring_transaction_upcoming',
   'recurring_transaction_insufficient_funds',
   'recurring_transaction_amount_changed',
+  'system_notification',
 ]);
 
 interface NotificationPreference {

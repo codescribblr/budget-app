@@ -15,6 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Bell, Check, X, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
+import { getNotificationPreview } from '@/lib/notification-utils';
 
 interface Notification {
   id: number;
@@ -25,6 +26,7 @@ interface Notification {
   is_read: boolean;
   created_at: string;
   notification_type_id: string;
+  metadata?: Record<string, any>;
 }
 
 export function NotificationCenter() {
@@ -128,10 +130,9 @@ export function NotificationCenter() {
     if (!notification.is_read) {
       handleMarkAsRead(notification.id);
     }
-    if (notification.action_url) {
-      router.push(notification.action_url);
-      setOpen(false);
-    }
+    // Always navigate to notification detail page
+    router.push(`/notifications/${notification.id}`);
+    setOpen(false);
   };
 
   return (
@@ -189,7 +190,7 @@ export function NotificationCenter() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">{notification.title}</p>
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        {notification.message}
+                        {getNotificationPreview(notification.message, 100)}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
@@ -212,22 +213,20 @@ export function NotificationCenter() {
                       </Button>
                     </div>
                   </div>
-                  {notification.action_url && (
-                    <div className="mt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleNotificationClick(notification);
-                        }}
-                      >
-                        {notification.action_label || 'View'}
-                        <ExternalLink className="h-3 w-3 ml-1" />
-                      </Button>
-                    </div>
-                  )}
+                  <div className="mt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleNotificationClick(notification);
+                      }}
+                    >
+                      View Details
+                      <ExternalLink className="h-3 w-3 ml-1" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
