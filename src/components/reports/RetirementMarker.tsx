@@ -38,8 +38,8 @@ export default function RetirementMarker({
     // Top: ~20px padding  
     // Bottom: ~80px for angled X-axis labels
     // Adjust left margin - may need fine-tuning based on actual chart rendering
-    // Increased to 80px to align with ReferenceLine
-    const leftMargin = 80;
+    // Adjusted to 73px to align line and marker properly
+    const leftMargin = 73;
     const rightMargin = 20;
     const topMargin = 20;
     const chartWidth = containerRect.width - leftMargin - rightMargin;
@@ -123,7 +123,7 @@ export default function RetirementMarker({
 
       const container = containerRef.current;
       const containerRect = container.getBoundingClientRect();
-      const leftMargin = 80;
+      const leftMargin = 73; // Adjusted to match line position
       const rightMargin = 20;
       const chartWidth = containerRect.width - leftMargin - rightMargin;
       const chartLeft = leftMargin;
@@ -176,7 +176,7 @@ export default function RetirementMarker({
           left: `${position.x}px`,
           top: `${position.y}px`,
           transform: 'translateX(-50%)',
-          zIndex: 10,
+          zIndex: isDragging ? 20 : 15, // Higher than line (z-index 10) so marker appears on top
         }}
         onMouseDown={handleMouseDown}
       >

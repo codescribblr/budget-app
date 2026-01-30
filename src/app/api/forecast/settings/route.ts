@@ -16,6 +16,14 @@ interface ForecastSettings {
     frequency: 'one_time' | 'annual' | 'monthly';
     description?: string;
   }>;
+  timeline_events?: Array<{
+    id: string;
+    type: 'liquidation' | 'windfall' | 'expense_change';
+    year: number;
+    assetId?: number;
+    amount?: number;
+    description?: string;
+  }>;
   retirement_age?: number;
   social_security_start_age?: number; // Age when Social Security benefits begin (default 67)
   social_security_benefit_level?: 'full' | 'half' | 'none';
@@ -33,6 +41,7 @@ const DEFAULT_SETTINGS: ForecastSettings = {
   savings_rate: 20,
   retirement_savings_rate: 0, // Default 0% savings rate after retirement
   repeatable_events: [],
+  timeline_events: [],
   retirement_age: 67, // Default retirement age
   social_security_start_age: 67, // Default Social Security start age (full retirement age)
   social_security_benefit_level: 'full',

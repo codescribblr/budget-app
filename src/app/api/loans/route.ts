@@ -66,6 +66,7 @@ export async function POST(request: Request) {
       minimum_payment: body.minimum_payment,
       payment_due_date: body.payment_due_date,
       open_date: body.open_date,
+      maturity_date: body.maturity_date,
       starting_balance: body.starting_balance,
       institution: body.institution,
       include_in_net_worth: body.include_in_net_worth ?? true,

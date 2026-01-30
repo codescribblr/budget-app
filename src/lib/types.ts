@@ -94,6 +94,7 @@ export interface Loan {
   open_date: string | null;
   starting_balance: number | null;
   institution: string | null;
+  maturity_date: string | null; // ISO date string - when loan will be fully paid off
   include_in_net_worth: boolean;
   sort_order: number;
   created_at: string;
@@ -331,6 +332,7 @@ export interface UpdatePendingCheckRequest {
 }
 
 export interface CreateLoanRequest {
+  maturity_date?: string | null;
   name: string;
   balance: number;
   interest_rate?: number;
@@ -343,6 +345,7 @@ export interface CreateLoanRequest {
 }
 
 export interface UpdateLoanRequest {
+  maturity_date?: string | null;
   name?: string;
   balance?: number;
   interest_rate?: number;

@@ -32,6 +32,7 @@ export default function LoanDialog({ isOpen, onClose, loan, onSuccess }: LoanDia
   const [minimumPayment, setMinimumPayment] = useState('');
   const [paymentDueDate, setPaymentDueDate] = useState('');
   const [openDate, setOpenDate] = useState<Date | undefined>(undefined);
+  const [maturityDate, setMaturityDate] = useState<Date | undefined>(undefined);
   const [startingBalance, setStartingBalance] = useState('');
   const [institution, setInstitution] = useState('');
   const [includeInNetWorth, setIncludeInNetWorth] = useState(true);
@@ -47,6 +48,7 @@ export default function LoanDialog({ isOpen, onClose, loan, onSuccess }: LoanDia
         setMinimumPayment(loan.minimum_payment?.toString() || '');
         setPaymentDueDate(loan.payment_due_date?.toString() || '');
         setOpenDate(parseLocalDate(loan.open_date));
+        setMaturityDate(parseLocalDate(loan.maturity_date));
         setStartingBalance(loan.starting_balance?.toString() || '');
         setInstitution(loan.institution || '');
         setIncludeInNetWorth(loan.include_in_net_worth);
@@ -58,6 +60,7 @@ export default function LoanDialog({ isOpen, onClose, loan, onSuccess }: LoanDia
         setMinimumPayment('');
         setPaymentDueDate('');
         setOpenDate(undefined);
+        setMaturityDate(undefined);
         setStartingBalance('');
         setInstitution('');
         setIncludeInNetWorth(true);
@@ -80,6 +83,7 @@ export default function LoanDialog({ isOpen, onClose, loan, onSuccess }: LoanDia
         minimum_payment: minimumPayment ? parseFloat(minimumPayment) : null,
         payment_due_date: paymentDueDate ? parseInt(paymentDueDate) : null,
         open_date: openDate ? openDate.toISOString().split('T')[0] : null,
+        maturity_date: maturityDate ? maturityDate.toISOString().split('T')[0] : null,
         starting_balance: startingBalance ? parseFloat(startingBalance) : null,
         institution: institution.trim() || null,
         include_in_net_worth: includeInNetWorth,
@@ -207,6 +211,18 @@ export default function LoanDialog({ isOpen, onClose, loan, onSuccess }: LoanDia
               onDateChange={setOpenDate}
               placeholder="Select open date"
             />
+          </div>
+          <div>
+            <Label htmlFor="maturity-date">Maturity Date (Payoff Date)</Label>
+            <DatePicker
+              id="maturity-date"
+              date={maturityDate}
+              onDateChange={setMaturityDate}
+              placeholder="Select maturity/payoff date"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              The date when this loan will be fully paid off. Used in forecast calculations to remove loan payments from expenses after this date.
+            </p>
           </div>
           <div>
             <Label htmlFor="starting-balance">Starting Balance ($)</Label>

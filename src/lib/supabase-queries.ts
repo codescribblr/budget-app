@@ -828,6 +828,7 @@ export async function createLoan(loan: {
   minimum_payment?: number;
   payment_due_date?: number;
   open_date?: string;
+  maturity_date?: string | null;
   starting_balance?: number;
   institution?: string;
   include_in_net_worth?: boolean;
@@ -870,6 +871,7 @@ export async function updateLoan(
     minimum_payment?: number;
     payment_due_date?: number;
     open_date?: string;
+    maturity_date?: string | null;
     starting_balance?: number;
     institution?: string;
     include_in_net_worth?: boolean;
