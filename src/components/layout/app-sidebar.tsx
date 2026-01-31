@@ -101,7 +101,6 @@ const navigationSections = [
   {
     label: "Other",
     items: [
-      { label: "Merchants", path: "/merchants", icon: Store },
       { label: "Tags", path: "/tags", icon: Tag, featureKey: "tags" },
       { label: "Category Rules", path: "/category-rules", icon: FolderTree },
       { label: "Settings", path: "/settings", icon: Settings },

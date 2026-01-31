@@ -68,7 +68,7 @@ const settingsNavItems = [
     title: 'Merchants',
     href: '/settings/merchants',
     icon: Users,
-    description: 'Manage merchant groups',
+    description: 'View merchant groups (read-only)',
   },
   {
     title: 'Backup',

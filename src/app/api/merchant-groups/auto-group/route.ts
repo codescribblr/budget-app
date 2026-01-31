@@ -5,9 +5,17 @@ import { clusterMerchants, calculateConfidence } from '@/lib/merchant-grouping';
 
 /**
  * Auto-group all transactions by merchant
- * This analyzes all unique transaction descriptions and creates merchant groups
+ * DISABLED: Merchant grouping is now managed by administrators through global merchants
  */
 export async function POST(request: Request) {
+  // Auto-grouping is now disabled for users
+  // All merchant grouping is managed by admins through global merchants
+  return NextResponse.json(
+    { error: 'Auto-grouping is disabled. Merchant grouping is now managed by administrators.' },
+    { status: 403 }
+  );
+  
+  /* DISABLED CODE - Kept for reference
   try {
     const { checkWriteAccess } = await import('@/lib/api-helpers');
     const accessCheck = await checkWriteAccess();
@@ -102,6 +110,7 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+  */
 }
 
 

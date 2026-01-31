@@ -7,17 +7,19 @@ interface MerchantLogoProps {
   logoUrl?: string | null;
   iconName?: string | null;
   displayName: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   className?: string;
 }
 
 const sizeClasses = {
+  xs: 'h-4 w-4',
   sm: 'h-6 w-6',
   md: 'h-8 w-8',
   lg: 'h-12 w-12',
 };
 
 const imageSizes = {
+  xs: 16,
   sm: 24,
   md: 32,
   lg: 48,
@@ -41,7 +43,7 @@ export function MerchantLogo({
   if (iconName) {
     const IconComponent = getIconComponent(iconName);
     if (IconComponent) {
-      const iconSizeClass = size === 'sm' ? 'h-4 w-4' : size === 'md' ? 'h-6 w-6' : 'h-8 w-8';
+      const iconSizeClass = size === 'xs' ? 'h-3 w-3' : size === 'sm' ? 'h-4 w-4' : size === 'md' ? 'h-6 w-6' : 'h-8 w-8';
       return (
         <div className={`${sizeClass} rounded-full bg-muted flex items-center justify-center overflow-hidden border border-border ${className}`}>
           <IconComponent className={iconSizeClass} />

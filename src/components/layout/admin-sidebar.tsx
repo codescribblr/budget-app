@@ -8,6 +8,7 @@ import {
   Settings,
   Shield,
   Bell,
+  MessageSquare,
 } from "lucide-react"
 
 import {
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils"
 const adminNavigationItems = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
   { label: "Global Merchants", path: "/admin/merchants", icon: Store },
+  { label: "Merchant Recommendations", path: "/admin/merchant-recommendations", icon: MessageSquare },
   { label: "Notifications", path: "/admin/notifications", icon: Bell },
   { label: "Settings", path: "/admin/settings", icon: Settings },
 ]

@@ -137,6 +137,13 @@ async function getAllTransactionsWithDateFilter(startDate?: string, endDate?: st
           status
         )
       ),
+      merchant_override:global_merchants!merchant_override_id (
+        id,
+        display_name,
+        logo_url,
+        icon_name,
+        status
+      ),
         accounts (
           name
         ),

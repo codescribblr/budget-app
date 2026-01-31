@@ -165,108 +165,26 @@ export default function MerchantGroupsSettings() {
         <CardHeader>
           <CardTitle>Merchant Grouping</CardTitle>
           <CardDescription>
-            Automatically group similar merchant names to clean up your reports
+            Merchant grouping is managed automatically by administrators to ensure consistent merchant names across all users.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <h4 className="text-sm font-semibold">What is Merchant Grouping?</h4>
-            <p className="text-sm text-muted-foreground">
-              Merchant grouping analyzes your transaction descriptions and automatically groups
-              similar merchants together. For example, transactions like:
-            </p>
-            <ul className="text-sm text-muted-foreground list-disc list-inside ml-4 space-y-1">
-              <li>"PROVIDENT FUNDIN ACH PMT 250801 9133080725"</li>
-              <li>"PROVIDENT FUNDIN ACH PMT 251001 9133080725"</li>
-              <li>"PROVIDENT FUNDIN ACH PMT 250901 9133080725"</li>
-            </ul>
-            <p className="text-sm text-muted-foreground">
-              Will all be grouped under a single merchant: "Provident Fundin"
-            </p>
-          </div>
-
-          <div className="space-y-2">
             <h4 className="text-sm font-semibold">How It Works</h4>
             <ol className="text-sm text-muted-foreground list-decimal list-inside ml-4 space-y-1">
-              <li>Analyzes all unique transaction descriptions</li>
-              <li>Removes dates, transaction IDs, and noise words</li>
-              <li>Groups similar descriptions using fuzzy matching (85% similarity)</li>
-              <li>Creates merchant groups with clean, readable names</li>
-              <li>You can manually adjust any groupings later</li>
+              <li>Administrators manage merchant groupings globally</li>
+              <li>Your transactions are automatically assigned to the correct merchants</li>
+              <li>If you need to override a merchant assignment, you can do so on individual transactions</li>
             </ol>
           </div>
 
-          <div className="space-y-2">
-            <h4 className="text-sm font-semibold">Link Existing Transactions</h4>
+          <div className="rounded-lg bg-muted p-4">
+            <p className="text-sm font-semibold mb-2">Need to add a new merchant?</p>
             <p className="text-sm text-muted-foreground">
-              If you have existing transactions that aren't showing merchant names, use the "Link Transactions"
-              button to connect them to their merchant groups. This is useful after importing old data or if
-              merchant names aren't appearing in your transaction list.
+              When editing a transaction, you can recommend a new merchant name if it doesn't exist yet.
+              Administrators will review and approve your recommendations.
             </p>
           </div>
-
-          <div className="flex gap-2 pt-4 flex-wrap">
-            <Button
-              onClick={handlePreview}
-              disabled={isRunning || isBackfilling || !isEditor || permissionsLoading}
-              variant="outline"
-            >
-              {isRunning ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Eye className="mr-2 h-4 w-4" />
-                  Preview Grouping
-                </>
-              )}
-            </Button>
-            <Button
-              onClick={handleRunAutoGroup}
-              disabled={isRunning || isBackfilling || !isEditor || permissionsLoading}
-            >
-              {isRunning ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Running...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Run Auto-Grouping
-                </>
-              )}
-            </Button>
-            {!isLoadingCount && unlinkedCount !== null && unlinkedCount > 0 && (
-              <Button
-                onClick={handleBackfill}
-                disabled={isRunning || isBackfilling || !isEditor || permissionsLoading}
-                variant="secondary"
-              >
-                {isBackfilling ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Linking...
-                  </>
-                ) : (
-                  <>
-                    <Link className="mr-2 h-4 w-4" />
-                    Link {unlinkedCount} {unlinkedCount === 1 ? 'Transaction' : 'Transactions'}
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
-          {!isEditor && !permissionsLoading && (
-            <p className="text-sm text-muted-foreground">Only editors and owners can manage merchant groups</p>
-          )}
-
-          <p className="text-xs text-muted-foreground">
-            Note: Auto-grouping is safe and reversible. You can always manually adjust or remove
-            groupings later.
-          </p>
         </CardContent>
       </Card>
 

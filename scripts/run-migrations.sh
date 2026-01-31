@@ -91,19 +91,30 @@ for MIGRATION_FILE in $MIGRATION_FILES; do
   
   echo -e "${YELLOW}📝 Running migration: $MIGRATION_NAME${NC}"
 
-  # Execute the migration
-  if psql "$SUPABASE_DB_URL" -f "$MIGRATION_FILE" 2>&1; then
-    # Record the migration as executed
-    if ! psql "$SUPABASE_DB_URL" -c "INSERT INTO $MIGRATIONS_TABLE (migration_name) VALUES ('$MIGRATION_NAME');" 2>&1; then
-      echo -e "${RED}❌ Failed to record migration${NC}"
-      exit 1
-    fi
-    echo -e "${GREEN}✅ Migration completed: $MIGRATION_NAME${NC}\n"
-  else
+  # Execute the migration with error detection
+  # Use ON_ERROR_STOP=1 to ensure psql exits on any error
+  # Capture both stdout and stderr to check for errors
+  MIGRATION_OUTPUT=$(psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "$MIGRATION_FILE" 2>&1)
+  MIGRATION_EXIT_CODE=$?
+
+  # Check for errors in the output (PostgreSQL errors start with "ERROR:")
+  if [ $MIGRATION_EXIT_CODE -ne 0 ] || echo "$MIGRATION_OUTPUT" | grep -qiE "ERROR|FATAL|syntax error"; then
     echo -e "${RED}❌ Migration failed: $MIGRATION_NAME${NC}"
+    echo -e "${RED}   Error output:${NC}"
+    echo "$MIGRATION_OUTPUT" | grep -iE "ERROR|FATAL|syntax error" | head -10
     echo -e "${RED}   Check the SQL syntax and database connection${NC}"
+    echo -e "${RED}   Migration was NOT recorded and will be retried on next run${NC}"
     exit 1
   fi
+
+  # Record the migration as executed (only if execution succeeded)
+  if ! psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO $MIGRATIONS_TABLE (migration_name) VALUES ('$MIGRATION_NAME');" 2>&1 >/dev/null; then
+    echo -e "${RED}❌ Failed to record migration${NC}"
+    echo -e "${RED}   Migration executed successfully but could not be recorded${NC}"
+    exit 1
+  fi
+  
+  echo -e "${GREEN}✅ Migration completed: $MIGRATION_NAME${NC}\n"
 done
 
 # Summary
