@@ -1,6 +1,6 @@
 import { isAdmin } from "@/lib/admin"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Store, Settings, Shield, Bell } from "lucide-react"
+import { Store, Settings, Shield, Bell, TestTube } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
@@ -36,6 +36,21 @@ export default async function AdminDashboard() {
     },
   ]
 
+  const testPages = [
+    {
+      title: "Recurring Transactions Analysis",
+      description: "Test and analyze recurring transaction detection algorithm with real data",
+      href: "/admin/test/recurring-analysis",
+      color: "text-orange-600",
+    },
+    {
+      title: "Notification Testing",
+      description: "Test notification system and email templates",
+      href: "/admin/test/notifications",
+      color: "text-pink-600",
+    },
+  ]
+
   return (
     <div className="space-y-6">
       <div>
@@ -64,6 +79,30 @@ export default async function AdminDashboard() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <div>
+        <h2 className="text-2xl font-bold mb-4">Test Pages</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {testPages.map((page) => (
+            <Card key={page.href} className="hover:shadow-lg transition-shadow border-dashed">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <TestTube className={`h-6 w-6 ${page.color}`} />
+                  <CardTitle>{page.title}</CardTitle>
+                </div>
+                <CardDescription>{page.description}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href={page.href}>
+                  <Button variant="outline" className="w-full">
+                    Open Test Page
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
 
       <Card>

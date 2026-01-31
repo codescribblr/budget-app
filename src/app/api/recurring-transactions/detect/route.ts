@@ -20,7 +20,9 @@ export async function POST(request: NextRequest) {
     const lookbackMonths = body.lookbackMonths || 24;
 
     // Detect patterns
+    console.log(`[Detect API] Starting detection for user ${user.id}, account ${accountId}, lookback ${lookbackMonths} months`);
     const patterns = await detectRecurringTransactions(user.id, accountId, lookbackMonths);
+    console.log(`[Detect API] Found ${patterns.length} patterns`);
 
     if (patterns.length === 0) {
       return NextResponse.json({ 

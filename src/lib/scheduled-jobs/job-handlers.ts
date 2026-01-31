@@ -20,19 +20,144 @@ export interface JobResult {
 export async function handleCheckRecurringTransactions(): Promise<JobResult> {
   try {
     const supabase = createServiceRoleClient();
-
-    // Get all active recurring transactions with next_expected_date within next 7 days
     const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
     const nextWeek = new Date();
     nextWeek.setDate(nextWeek.getDate() + 7);
+    const graceWindowDays = 3; // Conservative: 3 days grace period
 
+    // Step 1: Check for missed recurrences (next_expected_date in the past)
+    const graceDate = new Date();
+    graceDate.setDate(graceDate.getDate() - graceWindowDays);
+    const graceDateStr = graceDate.toISOString().split('T')[0];
+
+    const { data: missedTransactions, error: missedError } = await supabase
+      .from('recurring_transactions')
+      .select('*')
+      .eq('is_active', true)
+      .not('next_expected_date', 'is', null)
+      .lte('next_expected_date', graceDateStr);
+
+    if (missedError) {
+      console.error('Error fetching missed recurring transactions:', missedError);
+    }
+
+    let deactivated = 0;
+    let missedNotificationsSent = 0;
+
+    // Process missed recurrences
+    if (missedTransactions && missedTransactions.length > 0) {
+      for (const rt of missedTransactions) {
+        try {
+          // Check if a matching transaction exists within the expected window
+          const expectedDate = new Date(rt.next_expected_date);
+          const windowStart = new Date(expectedDate);
+          windowStart.setDate(windowStart.getDate() - 3); // ±3 days for monthly
+          const windowEnd = new Date(expectedDate);
+          windowEnd.setDate(windowEnd.getDate() + 3);
+
+          // Determine amount tolerance
+          const expectedAmount = rt.expected_amount || 0;
+          const amountTolerance = Math.max(5, expectedAmount * 0.05);
+
+          // Check for matching transactions
+          const { data: matchingTransactions } = await supabase
+            .from('transactions')
+            .select('id, date')
+            .eq('budget_account_id', rt.budget_account_id)
+            .eq('merchant_group_id', rt.merchant_group_id)
+            .eq('transaction_type', rt.transaction_type)
+            .gte('date', windowStart.toISOString().split('T')[0])
+            .lte('date', windowEnd.toISOString().split('T')[0])
+            .gte('total_amount', expectedAmount - amountTolerance)
+            .lte('total_amount', expectedAmount + amountTolerance)
+            .limit(1);
+
+          if (matchingTransactions && matchingTransactions.length > 0) {
+            // Transaction found - reset missed streak and update last_occurrence_date
+            await supabase
+              .from('recurring_transactions')
+              .update({
+                missed_streak: 0,
+                last_missed_date: null,
+                last_occurrence_date: matchingTransactions[0].date || rt.next_expected_date,
+                occurrence_count: (rt.occurrence_count || 0) + 1,
+              })
+              .eq('id', rt.id);
+
+            // Calculate and update next_expected_date
+            const frequency = rt.frequency;
+            const interval = rt.interval || 1;
+            const nextDate = calculateNextExpectedDate(
+              new Date(matchingTransactions[0].date || rt.next_expected_date),
+              frequency,
+              interval,
+              rt.day_of_month,
+              rt.day_of_week
+            );
+
+            await supabase
+              .from('recurring_transactions')
+              .update({ next_expected_date: nextDate.toISOString().split('T')[0] })
+              .eq('id', rt.id);
+          } else {
+            // No matching transaction found - increment missed streak
+            const currentStreak = rt.missed_streak || 0;
+            const newStreak = currentStreak + 1;
+
+            // Send missed notification only once per streak (on first miss)
+            if (currentStreak === 0) {
+              await createRecurringTransactionNotification(
+                rt.user_id,
+                rt.budget_account_id,
+                rt.id,
+                'missed',
+                {
+                  merchantName: rt.merchant_name,
+                  expectedAmount: expectedAmount,
+                  expectedDate: rt.next_expected_date,
+                }
+              );
+              missedNotificationsSent++;
+            }
+
+            if (newStreak >= 2) {
+              // Deactivate pattern after 2 consecutive misses
+              await supabase
+                .from('recurring_transactions')
+                .update({
+                  is_active: false,
+                  missed_streak: newStreak,
+                  last_missed_date: rt.next_expected_date,
+                  status_reason: 'missed_twice',
+                })
+                .eq('id', rt.id);
+              deactivated++;
+            } else {
+              // Update missed streak but keep active
+              await supabase
+                .from('recurring_transactions')
+                .update({
+                  missed_streak: newStreak,
+                  last_missed_date: rt.next_expected_date,
+                })
+                .eq('id', rt.id);
+            }
+          }
+        } catch (error: any) {
+          console.error(`Error processing missed recurring transaction ${rt.id}:`, error);
+        }
+      }
+    }
+
+    // Step 2: Process upcoming recurring transactions (existing logic)
     const { data: recurringTransactions, error } = await supabase
       .from('recurring_transactions')
       .select('*')
       .eq('is_active', true)
       .eq('reminder_enabled', true)
       .not('next_expected_date', 'is', null)
-      .gte('next_expected_date', today.toISOString().split('T')[0])
+      .gte('next_expected_date', todayStr)
       .lte('next_expected_date', nextWeek.toISOString().split('T')[0]);
 
     if (error) {
@@ -40,116 +165,158 @@ export async function handleCheckRecurringTransactions(): Promise<JobResult> {
       return { success: false, error: error.message };
     }
 
-    if (!recurringTransactions || recurringTransactions.length === 0) {
-      return { success: true, message: 'No recurring transactions to process' };
-    }
-
     let processed = 0;
     let notificationsCreated = 0;
 
     // Process each recurring transaction
-    for (const rt of recurringTransactions) {
-      try {
-        // Get user preferences for reminder_days_before
-        const preferences = await notificationService.getUserPreferences(
-          rt.user_id,
-          'recurring_transaction_upcoming'
-        );
-
-        const reminderDays = preferences.settings?.reminder_days_before || 2;
-        const dueDate = new Date(rt.next_expected_date);
-        const daysUntilDue = Math.ceil(
-          (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-        );
-
-        // Check if we should send a notification
-        if (daysUntilDue === reminderDays) {
-          // Get account balance for insufficient funds check
-          const { data: account } = await supabase
-            .from('accounts')
-            .select('balance')
-            .eq('budget_account_id', rt.budget_account_id)
-            .limit(1)
-            .single();
-
-          const currentBalance = account?.balance || 0;
-          const expectedAmount = rt.expected_amount || 0;
-          const hasSufficientFunds = currentBalance >= expectedAmount;
-
-          // Send upcoming notification
-          await createRecurringTransactionNotification(
+    if (recurringTransactions && recurringTransactions.length > 0) {
+      for (const rt of recurringTransactions) {
+        try {
+          // Get user preferences for reminder_days_before
+          const preferences = await notificationService.getUserPreferences(
             rt.user_id,
-            rt.budget_account_id,
-            rt.id,
-            'upcoming',
-            {
-              merchantName: rt.merchant_name,
-              expectedAmount: expectedAmount,
-              dueDate: rt.next_expected_date,
-              daysUntilDue,
-            }
+            'recurring_transaction_upcoming'
           );
-          notificationsCreated++;
 
-          // Send insufficient funds notification if needed
-          if (!hasSufficientFunds) {
-            const shortfall = expectedAmount - currentBalance;
+          const reminderDays = preferences.settings?.reminder_days_before || 2;
+          const dueDate = new Date(rt.next_expected_date);
+          const daysUntilDue = Math.ceil(
+            (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+          );
+
+          // Check if we should send a notification
+          if (daysUntilDue === reminderDays) {
+            // Get account balance for insufficient funds check
+            const { data: account } = await supabase
+              .from('accounts')
+              .select('balance')
+              .eq('budget_account_id', rt.budget_account_id)
+              .limit(1)
+              .single();
+
+            const currentBalance = account?.balance || 0;
+            const expectedAmount = rt.expected_amount || 0;
+            const hasSufficientFunds = currentBalance >= expectedAmount;
+
+            // Send upcoming notification
             await createRecurringTransactionNotification(
               rt.user_id,
               rt.budget_account_id,
               rt.id,
-              'insufficient_funds',
+              'upcoming',
               {
                 merchantName: rt.merchant_name,
                 expectedAmount: expectedAmount,
-                currentBalance,
-                shortfall: shortfall ?? undefined,
+                dueDate: rt.next_expected_date,
+                daysUntilDue,
               }
             );
             notificationsCreated++;
+
+            // Send insufficient funds notification if needed
+            if (!hasSufficientFunds) {
+              const shortfall = expectedAmount - currentBalance;
+              await createRecurringTransactionNotification(
+                rt.user_id,
+                rt.budget_account_id,
+                rt.id,
+                'insufficient_funds',
+                {
+                  merchantName: rt.merchant_name,
+                  expectedAmount: expectedAmount,
+                  currentBalance,
+                  shortfall: shortfall ?? undefined,
+                }
+              );
+              notificationsCreated++;
+            }
           }
+
+          // Update next_expected_date (calculate next occurrence)
+          const frequency = rt.frequency;
+          const interval = rt.interval || 1;
+          const nextDate = calculateNextExpectedDate(
+            new Date(rt.next_expected_date),
+            frequency,
+            interval,
+            rt.day_of_month,
+            rt.day_of_week
+          );
+
+          await supabase
+            .from('recurring_transactions')
+            .update({ next_expected_date: nextDate.toISOString().split('T')[0] })
+            .eq('id', rt.id);
+
+          processed++;
+        } catch (error: any) {
+          console.error(`Error processing recurring transaction ${rt.id}:`, error);
+          // Continue processing other transactions
         }
-
-        // Update next_expected_date (calculate next occurrence)
-        const frequency = rt.frequency;
-        const interval = rt.frequency_interval || 1;
-        const nextDate = new Date(rt.next_expected_date);
-
-        switch (frequency) {
-          case 'daily':
-            nextDate.setDate(nextDate.getDate() + interval);
-            break;
-          case 'weekly':
-            nextDate.setDate(nextDate.getDate() + interval * 7);
-            break;
-          case 'monthly':
-            nextDate.setMonth(nextDate.getMonth() + interval);
-            break;
-          case 'yearly':
-            nextDate.setFullYear(nextDate.getFullYear() + interval);
-            break;
-        }
-
-        await supabase
-          .from('recurring_transactions')
-          .update({ next_expected_date: nextDate.toISOString().split('T')[0] })
-          .eq('id', rt.id);
-
-        processed++;
-      } catch (error: any) {
-        console.error(`Error processing recurring transaction ${rt.id}:`, error);
-        // Continue processing other transactions
       }
     }
 
+    const messages: string[] = [];
+    if (processed > 0) messages.push(`Processed ${processed} upcoming transactions`);
+    if (notificationsCreated > 0) messages.push(`Created ${notificationsCreated} notifications`);
+    if (deactivated > 0) messages.push(`Deactivated ${deactivated} patterns`);
+    if (missedNotificationsSent > 0) messages.push(`Sent ${missedNotificationsSent} missed notifications`);
+
     return {
       success: true,
-      message: `Processed ${processed} recurring transactions, created ${notificationsCreated} notifications`,
+      message: messages.length > 0 ? messages.join(', ') : 'No recurring transactions to process',
     };
   } catch (error: any) {
     console.error('Error in check recurring transactions job:', error);
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Calculate next expected date based on frequency
+ */
+function calculateNextExpectedDate(
+  lastDate: Date,
+  frequency: string,
+  interval: number,
+  dayOfMonth: number | null,
+  dayOfWeek: number | null
+): Date {
+  const next = new Date(lastDate);
+
+  switch (frequency) {
+    case 'daily':
+      next.setDate(next.getDate() + interval);
+      break;
+    case 'weekly':
+      next.setDate(next.getDate() + interval * 7);
+      break;
+    case 'biweekly':
+      next.setDate(next.getDate() + interval * 14);
+      break;
+    case 'monthly':
+      next.setMonth(next.getMonth() + interval);
+      if (dayOfMonth !== null) {
+        const lastDayOfMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+        next.setDate(Math.min(dayOfMonth, lastDayOfMonth));
+      }
+      break;
+    case 'bimonthly':
+      next.setMonth(next.getMonth() + interval * 2);
+      break;
+    case 'quarterly':
+      next.setMonth(next.getMonth() + interval * 3);
+      break;
+    case 'yearly':
+      next.setFullYear(next.getFullYear() + interval);
+      break;
+    default:
+      // Custom frequency - use interval as days
+      next.setDate(next.getDate() + interval);
+      break;
+  }
+
+  return next;
 }
 
 /**

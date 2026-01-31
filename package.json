@@ -12,7 +12,9 @@
     "backup-db": "tsx scripts/backup-db.ts",
     "restore-db": "tsx scripts/restore-db.ts",
     "reset-db": "tsx scripts/reset-to-seed.ts",
-    "normalize-eof": "./scripts/normalize-eof.sh"
+    "normalize-eof": "./scripts/normalize-eof.sh",
+    "test:recurring": "tsx scripts/test-recurring-detection.ts",
+    "test:detection": "tsx scripts/test-detection-algorithm.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
