@@ -18,13 +18,13 @@ export interface RecurringPattern {
   transactionIds: number[]; // IDs of transactions that make up this pattern
 }
 
-interface TransactionSegment {
+export interface TransactionSegment {
   transactions: any[];
   startDate: Date;
   endDate: Date;
 }
 
-interface CadenceInfo {
+export interface CadenceInfo {
   frequency: RecurringPattern['frequency'];
   medianInterval: number;
   mad: number; // Median Absolute Deviation
@@ -32,12 +32,12 @@ interface CadenceInfo {
   dayOfWeek: number | null;
 }
 
-function isSystemCategorySplit(split: any): boolean {
+export function isSystemCategorySplit(split: any): boolean {
   const category = split?.categories;
   return Boolean(category?.is_system || category?.is_buffer);
 }
 
-function hasNonSystemSplit(transaction: any): boolean {
+export function hasNonSystemSplit(transaction: any): boolean {
   const splits = transaction.transaction_splits;
   if (!Array.isArray(splits) || splits.length === 0) {
     return true;
@@ -45,7 +45,7 @@ function hasNonSystemSplit(transaction: any): boolean {
   return splits.some((split: any) => !isSystemCategorySplit(split));
 }
 
-function getNonSystemCategoryIds(transaction: any): number[] {
+export function getNonSystemCategoryIds(transaction: any): number[] {
   const splits = transaction.transaction_splits;
   if (!Array.isArray(splits) || splits.length === 0) {
     return [];
@@ -72,47 +72,76 @@ export async function detectRecurringTransactions(
   const startDate = new Date();
   startDate.setMonth(startDate.getMonth() - lookbackMonths);
 
-  // Get all transactions for this account
-  const { data: transactions, error } = await supabase
-    .from('transactions')
-    .select(`
-      id,
-      date,
-      total_amount,
-      transaction_type,
-      merchant_group_id,
-      account_id,
-      credit_card_id,
-      merchant_groups (
-        display_name
-      ),
-      transaction_splits (
-        category_id,
-        amount,
-        categories (
-          is_system,
-          is_buffer
-        )
-      )
-    `)
-    .eq('user_id', userId)
-    .eq('budget_account_id', budgetAccountId)
-    .gte('date', startDate.toISOString().split('T')[0])
-    .lte('date', endDate.toISOString().split('T')[0])
-    .order('date', { ascending: true });
+  // Get all transactions for this account (with pagination to handle > 1000 rows)
+  let allTransactions: any[] = [];
+  let from = 0;
+  const pageSize = 1000;
+  let hasMore = true;
 
-  if (error) throw error;
-  if (!transactions || transactions.length === 0) return [];
+  while (hasMore) {
+    const { data: transactions, error } = await supabase
+      .from('transactions')
+      .select(`
+        id,
+        date,
+        total_amount,
+        transaction_type,
+        merchant_group_id,
+        account_id,
+        credit_card_id,
+        merchant_groups (
+          display_name
+        ),
+        transaction_splits (
+          category_id,
+          amount,
+          categories (
+            is_system,
+            is_buffer
+          )
+        )
+      `)
+      .eq('user_id', userId)
+      .eq('budget_account_id', budgetAccountId)
+      .gte('date', startDate.toISOString().split('T')[0])
+      .lte('date', endDate.toISOString().split('T')[0])
+      .order('date', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw error;
+    if (!transactions || transactions.length === 0) {
+      hasMore = false;
+      break;
+    }
+
+    allTransactions = allTransactions.concat(transactions);
+    hasMore = transactions.length === pageSize;
+    from += pageSize;
+  }
+
+  if (allTransactions.length === 0) {
+    console.log(`[Detection] No transactions found for user ${userId}, account ${budgetAccountId}`);
+    return [];
+  }
+
+  console.log(`[Detection] Fetched ${allTransactions.length} total transactions`);
 
   // Filter out transactions with only system category splits
-  const validTransactions = transactions.filter(txn => 
+  const validTransactions = allTransactions.filter(txn => 
     txn.merchant_group_id && hasNonSystemSplit(txn)
   );
 
-  if (validTransactions.length < 3) return [];
+  console.log(`[Detection] ${validTransactions.length} valid transactions (with merchant_group_id and non-system splits)`);
+
+  if (validTransactions.length < 3) {
+    console.log(`[Detection] Not enough valid transactions (need at least 3, got ${validTransactions.length})`);
+    return [];
+  }
 
   // Step 1: Group candidates by merchant_group_id, transaction_type, and account
   const candidateGroups = groupCandidates(validTransactions);
+  
+  console.log(`[Detection] Grouped into ${candidateGroups.length} candidate groups`);
 
   const patterns: RecurringPattern[] = [];
 
@@ -128,57 +157,149 @@ export async function detectRecurringTransactions(
 
     // Only analyze the most recent segment
     const recentSegment = segments[segments.length - 1];
-    if (recentSegment.transactions.length < 3) continue;
+    // Allow segments with 2+ transactions (we'll check >= 3 later for amount groups)
+    if (recentSegment.transactions.length < 2) continue;
 
-    // Step 3: Group by similar amounts (conservative: max($5, 5%))
-    const amountGroups = groupBySimilarAmount(recentSegment.transactions);
+    // Step 3: Group by exact amounts first (to handle multi-subscription merchants)
+    // This handles cases like Protective Life Insurance with 2 different subscription amounts
+    let exactAmountGroups = groupByExactAmount(recentSegment.transactions);
     
-    // Check for variable-amount patterns when no amount groups are found
-    if (amountGroups.length === 0 && recentSegment.transactions.length >= 5) {
-      const variablePattern = analyzeVariableAmountPattern(
-        group.merchantGroupId,
-        merchantName,
-        recentSegment.transactions,
-        group.transactionType
-      );
-      if (variablePattern && variablePattern.confidenceScore >= 0.5) {
-        patterns.push(variablePattern);
+    // Also include 2-transaction groups if we have multiple distinct amounts
+    // This handles cases like Spectrum where the most recent amount has only 2 transactions
+    if (recentSegment.transactions.length >= 4) {
+      const amountMap = new Map<number, any[]>();
+      for (const txn of recentSegment.transactions) {
+        const amount = Math.round(Math.abs(txn.total_amount) * 100) / 100;
+        if (!amountMap.has(amount)) {
+          amountMap.set(amount, []);
+        }
+        amountMap.get(amount)!.push(txn);
+      }
+      const distinctAmounts = Array.from(amountMap.keys()).length;
+      
+      // If we have multiple distinct amounts, include 2-transaction groups too
+      if (distinctAmounts >= 2) {
+        const twoTransactionGroups = Array.from(amountMap.values())
+          .filter(txs => txs.length === 2) // Only get 2-transaction groups
+          .map(txs => {
+            txs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            return txs;
+          });
+        
+        // Add 2-transaction groups that aren't already included
+        const existingAmounts = new Set(exactAmountGroups.map(g => 
+          Math.round(Math.abs(g[0].total_amount) * 100) / 100
+        ));
+        
+        twoTransactionGroups.forEach(group => {
+          const amount = Math.round(Math.abs(group[0].total_amount) * 100) / 100;
+          if (!existingAmounts.has(amount)) {
+            exactAmountGroups.push(group);
+          }
+        });
       }
     }
     
-    for (const amountGroup of amountGroups) {
-      if (amountGroup.length < 3) continue;
+    // Step 4: For each exact amount group, check if it forms a pattern
+    for (const exactAmountGroup of exactAmountGroups) {
+      // For multi-subscription merchants, allow groups with 2+ transactions if recent
+      const minTransactions = exactAmountGroup.length >= 2 && exactAmountGroups.length > 1 ? 2 : 3;
+      if (exactAmountGroup.length < minTransactions) continue;
+      
+      // Transactions are already sorted by date
 
-      // Step 4: Infer cadence using median + MAD
-      const cadence = inferCadence(amountGroup);
+      // Step 5: Infer cadence using median + MAD
+      // For small groups (2 transactions), find all transactions with this exact amount
+      // in the full merchant group to infer cadence
+      let cadence = inferCadence(exactAmountGroup);
+      
+      // If cadence inference fails for small groups, look at all transactions of this amount
+      if (!cadence && exactAmountGroup.length === 2) {
+        const targetAmount = Math.round(Math.abs(exactAmountGroup[0].total_amount) * 100) / 100;
+        const sameAmountTransactions = group.transactions
+          .filter(tx => Math.round(Math.abs(tx.total_amount) * 100) / 100 === targetAmount)
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        if (sameAmountTransactions.length >= 3) {
+          const amountCadence = inferCadence(sameAmountTransactions);
+          if (amountCadence) {
+            cadence = amountCadence;
+          }
+        }
+      }
+      
+      // Fallback: try using the full merchant group pattern
+      if (!cadence && exactAmountGroup.length === 2 && group.transactions.length >= 3) {
+        const groupCadence = inferCadence(group.transactions);
+        if (groupCadence) {
+          cadence = groupCadence;
+        }
+      }
+      
+      // Last resort: try the recent segment
+      if (!cadence && exactAmountGroup.length === 2 && recentSegment.transactions.length >= 3) {
+        const segmentCadence = inferCadence(recentSegment.transactions);
+        if (segmentCadence) {
+          cadence = segmentCadence;
+        }
+      }
+      
       if (!cadence) continue;
 
-      // Step 5: Validate pattern (date anchors, recency, amount consistency)
-      const validation = validatePattern(amountGroup, cadence);
+      // Step 6: Validate pattern (date anchors, recency, amount consistency)
+      const validation = validatePattern(exactAmountGroup, cadence);
       if (!validation.valid) continue;
 
-      // Step 6: Score pattern (conservative thresholds)
-      const score = scorePattern(amountGroup, cadence, validation);
+      // Step 7: Score pattern (conservative thresholds)
+      const score = scorePattern(exactAmountGroup, cadence, validation);
       if (score < 0.5) continue; // Conservative threshold
 
-      // Step 7: Check recency gating (last occurrence within 1.5x interval)
-      const lastDate = new Date(amountGroup[amountGroup.length - 1].date);
+      // Step 8: Check recency gating (last occurrence within 1.5x interval)
+      const lastDate = new Date(exactAmountGroup[exactAmountGroup.length - 1].date);
       const daysSinceLast = (endDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24);
-      const recencyThreshold = cadence.medianInterval * 1.5;
+      
+      // More lenient threshold for biweekly patterns (they can have slight variations)
+      let recencyThreshold = cadence.medianInterval * 1.5;
+      if (cadence.frequency === 'biweekly') {
+        recencyThreshold = Math.max(recencyThreshold, 30); // At least 30 days for biweekly
+      }
       
       if (daysSinceLast > recencyThreshold) {
         continue; // Too old, not actively recurring
       }
 
-      // Build pattern
-      const amounts = amountGroup.map(t => Math.abs(t.total_amount));
+      // Step 8.5: Filter out retail/dining merchants
+      const amounts = exactAmountGroup.map(t => Math.abs(t.total_amount));
       const medianAmount = calculateMedian(amounts);
       const amountVariance = calculateAmountVariance(amounts, medianAmount);
+      
+      const retailScore = calculateRetailScore(merchantName, {
+        expectedAmount: medianAmount,
+        amountVariance,
+        occurrenceCount: exactAmountGroup.length,
+        frequency: cadence.frequency,
+        cadence,
+      });
+      
+      // Filter out if retail score is high, unless it has very strong subscription signals
+      // Strong subscription signals: exact amounts, consistent timing, high occurrence count
+      const hasStrongSubscriptionSignals = 
+        exactAmountGroup.length >= 4 && // At least 4 occurrences
+        cadence.mad / cadence.medianInterval < 0.15 && // Very consistent timing
+        amountVariance < medianAmount * medianAmount * 0.01; // Very consistent amounts (< 1% variance)
+      
+      if (retailScore > 0.6 && !hasStrongSubscriptionSignals) {
+        continue; // Likely retail, skip
+      }
 
-      const categories = amountGroup.flatMap((t) => getNonSystemCategoryIds(t));
+      // Build pattern (amounts already calculated above for retail filtering)
+
+      const categories = exactAmountGroup.flatMap((t) => getNonSystemCategoryIds(t));
       const categoryId = categories.length > 0 ? getMostCommon(categories) : null;
-      const accountId = amountGroup[0].account_id || null;
-      const creditCardId = amountGroup[0].credit_card_id || null;
+      // Use account from the most recent transaction (last in array since they're sorted by date)
+      const mostRecentTransaction = exactAmountGroup[exactAmountGroup.length - 1];
+      const accountId = mostRecentTransaction.account_id || null;
+      const creditCardId = mostRecentTransaction.credit_card_id || null;
 
       const nextExpectedDate = calculateNextDate(
         lastDate,
@@ -199,35 +320,141 @@ export async function detectRecurringTransactions(
         accountId,
         creditCardId,
         confidenceScore: score,
-        occurrenceCount: amountGroup.length,
-        lastOccurrenceDate: amountGroup[amountGroup.length - 1].date,
+        occurrenceCount: exactAmountGroup.length,
+        lastOccurrenceDate: exactAmountGroup[exactAmountGroup.length - 1].date,
         nextExpectedDate: nextExpectedDate.toISOString().split('T')[0],
-        transactionIds: amountGroup.map(t => t.id),
+        transactionIds: exactAmountGroup.map(t => t.id),
       });
     }
 
-    // Also check for variable amount patterns (utilities) as fallback
-    // Only if we found amount groups (already checked when no groups found)
-    if (amountGroups.length > 0 && recentSegment.transactions.length >= 5) {
-      const variablePattern = analyzeVariableAmountPattern(
-        group.merchantGroupId,
-        merchantName,
-        recentSegment.transactions,
-        group.transactionType
-      );
-      if (variablePattern && variablePattern.confidenceScore >= 0.5) {
-        patterns.push(variablePattern);
+    // Step 9: Fallback - Group by similar amounts for variable-amount patterns (utilities)
+    // Only check if we didn't find any exact amount patterns
+    // Also check if exact amount groups exist but some transactions weren't grouped (for utilities)
+    if (exactAmountGroups.length === 0 && recentSegment.transactions.length >= 3) {
+      const amountGroups = groupBySimilarAmount(recentSegment.transactions);
+      
+      // Check for variable-amount patterns when no exact amount groups are found
+      if (amountGroups.length === 0) {
+        const variablePattern = analyzeVariableAmountPattern(
+          group.merchantGroupId,
+          merchantName,
+          recentSegment.transactions,
+          group.transactionType
+        );
+        if (variablePattern && variablePattern.confidenceScore >= 0.5) {
+          // Filter out retail/dining merchants for variable patterns
+          const retailScore = calculateRetailScore(merchantName, {
+            expectedAmount: variablePattern.expectedAmount,
+            amountVariance: variablePattern.amountVariance * variablePattern.amountVariance,
+            occurrenceCount: variablePattern.occurrenceCount,
+            frequency: variablePattern.frequency,
+          });
+          
+          // Variable patterns from utilities are legitimate, but retail should be filtered
+          // Utilities typically have moderate variance (10-30%), retail has high variance (>50%)
+          const coefficientOfVariation = variablePattern.amountVariance / variablePattern.expectedAmount;
+          const isLikelyUtility = coefficientOfVariation > 0.1 && coefficientOfVariation < 0.4;
+          
+          if (retailScore > 0.6 && !isLikelyUtility) {
+            // Skip retail merchants with variable patterns
+            continue;
+          }
+          
+          patterns.push(variablePattern);
+        }
+      } else {
+        // Process similar amount groups (for utilities with small variance)
+        for (const amountGroup of amountGroups) {
+          if (amountGroup.length < 3) continue;
+
+          const cadence = inferCadence(amountGroup);
+          if (!cadence) continue;
+
+          const validation = validatePattern(amountGroup, cadence);
+          if (!validation.valid) continue;
+
+          const score = scorePattern(amountGroup, cadence, validation);
+          if (score < 0.5) continue;
+
+          const lastDate = new Date(amountGroup[amountGroup.length - 1].date);
+          const daysSinceLast = (endDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24);
+          
+          // More lenient threshold for biweekly patterns
+          let recencyThreshold = cadence.medianInterval * 1.5;
+          if (cadence.frequency === 'biweekly') {
+            recencyThreshold = Math.max(recencyThreshold, 30); // At least 30 days for biweekly
+          }
+          
+          if (daysSinceLast > recencyThreshold) {
+            continue;
+          }
+
+          const amounts = amountGroup.map(t => Math.abs(t.total_amount));
+          const medianAmount = calculateMedian(amounts);
+          const amountVariance = calculateAmountVariance(amounts, medianAmount);
+          
+          // Filter out retail/dining merchants
+          const retailScore = calculateRetailScore(merchantName, {
+            expectedAmount: medianAmount,
+            amountVariance,
+            occurrenceCount: amountGroup.length,
+            frequency: cadence.frequency,
+            cadence,
+          });
+          
+          const hasStrongSubscriptionSignals = 
+            amountGroup.length >= 4 &&
+            cadence.mad / cadence.medianInterval < 0.15 &&
+            amountVariance < medianAmount * medianAmount * 0.01;
+          
+          if (retailScore > 0.6 && !hasStrongSubscriptionSignals) {
+            continue; // Likely retail, skip
+          }
+
+          const categories = amountGroup.flatMap((t) => getNonSystemCategoryIds(t));
+          const categoryId = categories.length > 0 ? getMostCommon(categories) : null;
+          // Use account from the most recent transaction (last in array since they're sorted by date)
+          const mostRecentTransaction = amountGroup[amountGroup.length - 1];
+          const accountId = mostRecentTransaction.account_id || null;
+          const creditCardId = mostRecentTransaction.credit_card_id || null;
+
+          const nextExpectedDate = calculateNextDate(
+            lastDate,
+            cadence.frequency,
+            cadence.medianInterval,
+            cadence.dayOfMonth,
+            cadence.dayOfWeek
+          );
+
+          patterns.push({
+            merchantGroupId: group.merchantGroupId,
+            merchantName,
+            frequency: cadence.frequency,
+            expectedAmount: medianAmount,
+            amountVariance,
+            transactionType: group.transactionType,
+            categoryId,
+            accountId,
+            creditCardId,
+            confidenceScore: score,
+            occurrenceCount: amountGroup.length,
+            lastOccurrenceDate: amountGroup[amountGroup.length - 1].date,
+            nextExpectedDate: nextExpectedDate.toISOString().split('T')[0],
+            transactionIds: amountGroup.map(t => t.id),
+          });
+        }
       }
     }
   }
 
+  console.log(`[Detection] Detected ${patterns.length} recurring patterns`);
   return patterns;
 }
 
 /**
  * Step 1: Group candidates by merchant_group_id, transaction_type, and account
  */
-function groupCandidates(transactions: any[]): Array<{
+export function groupCandidates(transactions: any[]): Array<{
   merchantGroupId: number;
   transactionType: 'income' | 'expense';
   accountKey: string; // account_id or credit_card_id
@@ -236,11 +463,9 @@ function groupCandidates(transactions: any[]): Array<{
   const groups = new Map<string, any[]>();
 
   for (const txn of transactions) {
-    const accountKey = txn.account_id 
-      ? `account-${txn.account_id}` 
-      : txn.credit_card_id 
-        ? `card-${txn.credit_card_id}` 
-        : 'none';
+    // Don't split by account for recurring detection - same merchant should be grouped together
+    // regardless of which account it's from (user might have moved accounts)
+    const accountKey = 'all'; // Group all accounts together
     
     const key = `${txn.merchant_group_id}:${txn.transaction_type}:${accountKey}`;
     
@@ -267,7 +492,7 @@ function groupCandidates(transactions: any[]): Array<{
  * Step 2: Segment transactions by gaps
  * Only the most recent segment is eligible to become an active pattern
  */
-function segmentByGap(transactions: any[]): TransactionSegment[] {
+export function segmentByGap(transactions: any[]): TransactionSegment[] {
   if (transactions.length < 2) {
     return transactions.length === 1 
       ? [{
@@ -290,13 +515,14 @@ function segmentByGap(transactions: any[]): TransactionSegment[] {
   const medianInterval = calculateMedian(intervals);
   
   // Determine gap threshold based on frequency
-  // For monthly/quarterly: max(2 * median, 45 days)
-  // For weekly/biweekly: max(2 * median, 21 days)
+  // For monthly/quarterly: max(2.5 * median, 60 days) - more lenient
+  // For weekly/biweekly: max(2.5 * median, 30 days) - more lenient
+  // This prevents splitting on normal variations in transaction timing
   let gapThreshold: number;
   if (medianInterval >= 25) {
-    gapThreshold = Math.max(2 * medianInterval, 45);
+    gapThreshold = Math.max(2.5 * medianInterval, 60);
   } else {
-    gapThreshold = Math.max(2 * medianInterval, 21);
+    gapThreshold = Math.max(2.5 * medianInterval, 30);
   }
 
   // Split into segments at gaps
@@ -321,8 +547,9 @@ function segmentByGap(transactions: any[]): TransactionSegment[] {
     }
   }
 
-  // Add final segment
-  if (currentSegment.length >= 3) {
+  // Add final segment (even if < 3, we'll check later)
+  // This allows us to analyze the most recent segment even if it's small
+  if (currentSegment.length >= 2) {
     segments.push({
       transactions: currentSegment,
       startDate: new Date(currentSegment[0].date),
@@ -334,10 +561,43 @@ function segmentByGap(transactions: any[]): TransactionSegment[] {
 }
 
 /**
- * Step 3: Group transactions by similar amount
- * Conservative: max($5, 5%) variance
+ * Step 3a: Group transactions by exact amount (rounded to cents)
+ * This handles multi-subscription merchants like Protective Life Insurance
  */
-function groupBySimilarAmount(transactions: any[]): any[][] {
+export function groupByExactAmount(transactions: any[]): any[][] {
+  const groups: any[][] = [];
+  const amountMap = new Map<number, any[]>();
+
+  // Group by exact amount (rounded to cents)
+  for (const txn of transactions) {
+    const amount = Math.round(Math.abs(txn.total_amount) * 100) / 100;
+    
+    if (!amountMap.has(amount)) {
+      amountMap.set(amount, []);
+    }
+    amountMap.get(amount)!.push(txn);
+  }
+
+  // Only return groups with at least 3 transactions
+  // Sort by amount for consistent ordering
+  const sortedAmounts = Array.from(amountMap.entries()).sort((a, b) => a[0] - b[0]);
+  for (const [amount, txs] of sortedAmounts) {
+    if (txs.length >= 3) {
+      // Sort transactions by date
+      txs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      groups.push(txs);
+    }
+  }
+
+  return groups;
+}
+
+/**
+ * Step 3b: Group transactions by similar amount
+ * Conservative: max($5, 5%) variance
+ * Used as fallback when exact amounts don't form patterns
+ */
+export function groupBySimilarAmount(transactions: any[]): any[][] {
   const groups: any[][] = [];
   const processed = new Set<number>();
 
@@ -352,15 +612,18 @@ function groupBySimilarAmount(transactions: any[]): any[][] {
 
       const amountDiff = Math.abs(txn.total_amount - otherTxn.total_amount);
       const percentDiff = amountDiff / Math.abs(txn.total_amount);
-      const dollarThreshold = Math.max(5, Math.abs(txn.total_amount) * 0.05);
+      // More lenient for utilities: max($10, 10%) instead of max($5, 5%)
+      const dollarThreshold = Math.max(10, Math.abs(txn.total_amount) * 0.10);
 
-      if (amountDiff <= dollarThreshold || percentDiff <= 0.05) {
+      if (amountDiff <= dollarThreshold || percentDiff <= 0.10) {
         group.push(otherTxn);
         processed.add(otherTxn.id);
       }
     }
 
     if (group.length >= 3) {
+      // Sort transactions by date to ensure most recent is last
+      group.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       groups.push(group);
     }
   }
@@ -371,9 +634,46 @@ function groupBySimilarAmount(transactions: any[]): any[][] {
 /**
  * Step 4: Infer cadence using median interval + MAD (Median Absolute Deviation)
  */
-function inferCadence(transactions: any[]): CadenceInfo | null {
-  if (transactions.length < 3) return null;
+export function inferCadence(transactions: any[]): CadenceInfo | null {
+  if (transactions.length < 2) return null;
+  
+  // For 2 transactions, we can infer basic cadence from the single interval
+  if (transactions.length === 2) {
+    const prevDate = new Date(transactions[0].date);
+    const currDate = new Date(transactions[1].date);
+    const daysDiff = Math.round((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Must be at least 6 days apart to be considered recurring
+    if (daysDiff < 6) return null;
+    
+    // Map to frequency based on interval
+    let frequency: RecurringPattern['frequency'];
+    if (daysDiff >= 6 && daysDiff <= 8) {
+      frequency = 'weekly';
+    } else if (daysDiff >= 12 && daysDiff <= 16) {
+      frequency = 'biweekly';
+    } else if (daysDiff >= 25 && daysDiff <= 35) {
+      frequency = 'monthly';
+    } else if (daysDiff >= 80 && daysDiff <= 100) {
+      frequency = 'quarterly';
+    } else if (daysDiff >= 360 && daysDiff <= 370) {
+      frequency = 'yearly';
+    } else if (daysDiff >= 6) {
+      frequency = 'custom';
+    } else {
+      return null;
+    }
+    
+    return {
+      frequency,
+      medianInterval: daysDiff,
+      mad: 0, // Can't calculate MAD with only 1 interval
+      dayOfMonth: new Date(transactions[0].date).getDate(),
+      dayOfWeek: new Date(transactions[0].date).getDay(),
+    };
+  }
 
+  // For 3+ transactions, use full cadence inference
   // Calculate intervals
   const intervals: number[] = [];
   for (let i = 1; i < transactions.length; i++) {
@@ -438,7 +738,7 @@ function inferCadence(transactions: any[]): CadenceInfo | null {
 /**
  * Step 5: Validate pattern (date anchors, recency, amount consistency)
  */
-function validatePattern(
+export function validatePattern(
   transactions: any[],
   cadence: CadenceInfo
 ): { valid: boolean; dateConsistency: number } {
@@ -486,9 +786,103 @@ function validatePattern(
 }
 
 /**
+ * Check if a merchant name suggests it's a retail/dining establishment
+ */
+export function isLikelyRetailMerchant(merchantName: string): boolean {
+  const name = merchantName.toLowerCase();
+  
+  // Known retail/dining chains
+  const retailChains = [
+    'walmart', 'target', 'costco', 'kroger', 'safeway', 'whole foods',
+    'mcdonald', 'mcdonalds', 'burger king', 'wendy', 'taco bell', 'subway',
+    'starbucks', 'dunkin', 'dollar tree', 'dollar general', 'family dollar',
+    'cvs', 'walgreens', 'rite aid', '7-eleven', 'circle k',
+    'amazon', 'ebay', 'etsy', 'paypal', // Online retail
+    'gas station', 'shell', 'exxon', 'bp', 'chevron', 'mobil',
+    'convenience store', 'pharmacy', 'drug store',
+  ];
+  
+  // Check against known chains
+  if (retailChains.some(chain => name.includes(chain))) {
+    return true;
+  }
+  
+  // Check for retail keywords
+  const retailKeywords = [
+    'store', 'market', 'supermarket', 'grocery', 'mart',
+    'restaurant', 'cafe', 'café', 'diner', 'fast food', 'pizza',
+    'dollar', 'convenience', 'gas', 'fuel', 'pharmacy', 'drug',
+    'retail', 'shop', 'shopping', 'mall',
+  ];
+  
+  return retailKeywords.some(keyword => name.includes(keyword));
+}
+
+/**
+ * Calculate a score indicating how likely a pattern is from a retail/dining merchant
+ * Returns a score from 0 (definitely not retail) to 1 (definitely retail)
+ */
+export function calculateRetailScore(
+  merchantName: string,
+  pattern: {
+    expectedAmount: number;
+    amountVariance: number;
+    occurrenceCount: number;
+    frequency: RecurringPattern['frequency'];
+    cadence?: { mad: number; medianInterval: number };
+  }
+): number {
+  let score = 0;
+  
+  // Merchant name check (strongest signal)
+  if (isLikelyRetailMerchant(merchantName)) {
+    score += 0.4;
+  }
+  
+  // Small amounts are more likely retail
+  if (pattern.expectedAmount < 20) {
+    score += 0.3;
+  } else if (pattern.expectedAmount < 50) {
+    score += 0.15;
+  }
+  
+  // High variance suggests variable purchases (retail)
+  const coefficientOfVariation = Math.sqrt(pattern.amountVariance) / pattern.expectedAmount;
+  if (coefficientOfVariation > 0.5) {
+    score += 0.2;
+  } else if (coefficientOfVariation > 0.3) {
+    score += 0.1;
+  }
+  
+  // Low occurrence count (especially 2) is suspicious for retail
+  if (pattern.occurrenceCount === 2) {
+    score += 0.2;
+  } else if (pattern.occurrenceCount <= 3) {
+    score += 0.1;
+  }
+  
+  // Inconsistent frequency suggests irregular retail purchases
+  if (pattern.cadence) {
+    const consistency = pattern.cadence.mad / pattern.cadence.medianInterval;
+    if (consistency > 0.3) {
+      score += 0.15;
+    } else if (consistency > 0.2) {
+      score += 0.05;
+    }
+  }
+  
+  // Custom frequency is suspicious (not a standard subscription cadence)
+  if (pattern.frequency === 'custom') {
+    score += 0.1;
+  }
+  
+  return Math.min(score, 1.0);
+}
+
+/**
  * Step 6: Score pattern (conservative thresholds)
  */
-function scorePattern(
+export function scorePattern(
   transactions: any[],
   cadence: CadenceInfo,
   validation: { valid: boolean; dateConsistency: number }
@@ -549,13 +943,14 @@ function scorePattern(
  * Analyze pattern for variable amount transactions (e.g., utilities)
  * Very conservative: requires high date consistency and significant amount variance
  */
-function analyzeVariableAmountPattern(
+export function analyzeVariableAmountPattern(
   merchantGroupId: number,
   merchantName: string,
   transactions: any[],
   transactionType: 'income' | 'expense'
 ): RecurringPattern | null {
-  if (transactions.length < 5) return null;
+  // Allow 4+ transactions for utilities (was 5)
+  if (transactions.length < 4) return null;
 
   // Sort by date
   transactions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -572,19 +967,21 @@ function analyzeVariableAmountPattern(
   const medianInterval = calculateMedian(intervals);
 
   // Only detect monthly variable patterns (utilities)
-  if (medianInterval < 25 || medianInterval > 35) return null;
+  // Allow slightly wider range for utilities that might vary
+  if (medianInterval < 20 || medianInterval > 40) return null;
 
   // Check date consistency - utilities come on similar dates each month
   const daysOfMonth = transactions.map(t => new Date(t.date).getDate());
   const medianDay = calculateMedian(daysOfMonth);
   
-  // Very strict: days must be within ±2 of median
+  // More lenient: days must be within ±3 of median (allows for weekends/holidays)
   const validDays = daysOfMonth.filter(day => {
     const diff = Math.abs(day - medianDay);
-    return diff <= 2 || (day >= 28 && medianDay <= 3) || (day <= 3 && medianDay >= 28);
+    return diff <= 3 || (day >= 28 && medianDay <= 3) || (day <= 3 && medianDay >= 28);
   });
 
-  if (validDays.length < daysOfMonth.length * 0.9) {
+  // Require at least 80% of days to be valid (was 90%)
+  if (validDays.length < daysOfMonth.length * 0.8) {
     return null; // Too inconsistent
   }
 
@@ -593,8 +990,9 @@ function analyzeVariableAmountPattern(
   const amountVariance = calculateAmountVariance(amounts, medianAmount);
   const coefficientOfVariation = Math.sqrt(amountVariance) / medianAmount;
 
-  // Require significant amount variance (> 15%)
-  if (coefficientOfVariation <= 0.15) {
+  // Require significant amount variance (> 10% for utilities, was 15%)
+  // Utilities can have smaller variance if usage is relatively stable
+  if (coefficientOfVariation <= 0.10) {
     return null;
   }
 
@@ -620,8 +1018,10 @@ function analyzeVariableAmountPattern(
 
   const categories = transactions.flatMap((t) => getNonSystemCategoryIds(t));
   const categoryId = categories.length > 0 ? getMostCommon(categories) : null;
-  const accountId = transactions[0].account_id || null;
-  const creditCardId = transactions[0].credit_card_id || null;
+  // Use account from the most recent transaction (last in array since they're sorted by date)
+  const mostRecentTransaction = transactions[transactions.length - 1];
+  const accountId = mostRecentTransaction.account_id || null;
+  const creditCardId = mostRecentTransaction.credit_card_id || null;
 
   const lastDate = new Date(transactions[transactions.length - 1].date);
   const nextExpectedDate = calculateNextDate(lastDate, 'monthly', medianInterval, medianDay, null);
@@ -647,7 +1047,7 @@ function analyzeVariableAmountPattern(
 /**
  * Calculate median of an array
  */
-function calculateMedian(values: number[]): number {
+export function calculateMedian(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -659,7 +1059,7 @@ function calculateMedian(values: number[]): number {
 /**
  * Calculate amount variance (using median as base)
  */
-function calculateAmountVariance(amounts: number[], median: number): number {
+export function calculateAmountVariance(amounts: number[], median: number): number {
   if (amounts.length === 0) return 0;
   const squaredDiffs = amounts.map(amount => Math.pow(amount - median, 2));
   return squaredDiffs.reduce((sum, val) => sum + val, 0) / amounts.length;
@@ -668,7 +1068,7 @@ function calculateAmountVariance(amounts: number[], median: number): number {
 /**
  * Calculate variance of an array
  */
-function calculateVariance(values: number[]): number {
+export function calculateVariance(values: number[]): number {
   if (values.length === 0) return 0;
   const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
   const squaredDiffs = values.map(val => Math.pow(val - mean, 2));
@@ -678,7 +1078,7 @@ function calculateVariance(values: number[]): number {
 /**
  * Get most common value in array
  */
-function getMostCommon<T>(arr: T[]): T {
+export function getMostCommon<T>(arr: T[]): T {
   const counts = new Map<T, number>();
   for (const val of arr) {
     counts.set(val, (counts.get(val) || 0) + 1);
@@ -697,7 +1097,7 @@ function getMostCommon<T>(arr: T[]): T {
 /**
  * Calculate next expected date based on frequency
  */
-function calculateNextDate(
+export function calculateNextDate(
   lastDate: Date,
   frequency: RecurringPattern['frequency'],
   medianInterval: number,

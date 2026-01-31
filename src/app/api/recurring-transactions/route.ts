@@ -22,7 +22,17 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('recurring_transactions')
-      .select('*')
+      .select(`
+        *,
+        accounts (
+          id,
+          name
+        ),
+        credit_cards (
+          id,
+          name
+        )
+      `)
       .eq('user_id', user.id)
       .eq('budget_account_id', accountId)
       .order('next_expected_date', { ascending: true });

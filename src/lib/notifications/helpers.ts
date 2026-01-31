@@ -35,11 +35,12 @@ export async function createRecurringTransactionNotification(
   userId: string,
   budgetAccountId: number,
   recurringTransactionId: number,
-  type: 'upcoming' | 'insufficient_funds' | 'amount_changed',
+  type: 'upcoming' | 'insufficient_funds' | 'amount_changed' | 'missed',
   data: {
     merchantName: string;
     expectedAmount: number;
     dueDate?: string;
+    expectedDate?: string;
     daysUntilDue?: number;
     currentBalance?: number;
     shortfall?: number;
@@ -81,6 +82,13 @@ export async function createRecurringTransactionNotification(
       message = `Your ${data.merchantName} payment changed from $${data.oldAmount?.toFixed(2) || '0.00'} to $${data.newAmount?.toFixed(2) || '0.00'}.`;
       metadata.old_amount = data.oldAmount;
       metadata.new_amount = data.newAmount;
+      break;
+
+    case 'missed':
+      notificationTypeId = 'recurring_transaction_missed';
+      title = `Missed: ${data.merchantName} payment`;
+      message = `Your expected ${data.merchantName} payment of $${data.expectedAmount.toFixed(2)} was not received.`;
+      metadata.expected_date = data.expectedDate;
       break;
   }
 

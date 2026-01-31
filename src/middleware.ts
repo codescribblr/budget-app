@@ -30,10 +30,13 @@ export async function middleware(request: NextRequest) {
   // Refresh session if expired - required for Server Components
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Admin routes - require admin privileges
+  // Admin routes - require admin privileges (includes /admin/test/*)
   const isAdminPath = request.nextUrl.pathname.startsWith('/admin')
   
-  if (isAdminPath) {
+  // Legacy test pages at root level - require admin privileges
+  const isTestPath = request.nextUrl.pathname.startsWith('/test')
+  
+  if (isAdminPath || isTestPath) {
     // Require authentication
     if (!user) {
       const url = request.nextUrl.clone()
@@ -49,7 +52,7 @@ export async function middleware(request: NextRequest) {
       .eq('user_id', user.id)
       .single()
     
-    // If not admin, return 404 to hide admin routes
+    // If not admin, return 404 to hide admin/test routes
     if (!profile || !profile.is_admin) {
       return new NextResponse(null, { status: 404 })
     }

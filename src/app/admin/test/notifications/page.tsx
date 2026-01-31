@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -11,37 +10,11 @@ import { toast } from 'sonner';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 export default function TestNotificationsPage() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [notificationType, setNotificationType] = useState<'upcoming' | 'insufficient_funds' | 'amount_changed'>('upcoming');
   const [recurringTransactionId, setRecurringTransactionId] = useState<string>('');
   const [merchantName, setMerchantName] = useState('Test Merchant');
   const [expectedAmount, setExpectedAmount] = useState('100.00');
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-
-  // Check admin status
-  useEffect(() => {
-    fetch('/api/admin/check')
-      .then(res => res.json())
-      .then(data => {
-        if (!data.isAdmin) {
-          router.push('/admin');
-        } else {
-          setIsAdmin(true);
-        }
-      })
-      .catch(() => {
-        router.push('/admin');
-      });
-  }, [router]);
-
-  if (isAdmin === null) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  }
-
-  if (!isAdmin) {
-    return null;
-  }
 
   const handleTest = async () => {
     try {
@@ -230,5 +203,3 @@ export default function TestNotificationsPage() {
     </div>
   );
 }
-
-

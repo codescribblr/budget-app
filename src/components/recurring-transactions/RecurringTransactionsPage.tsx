@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -24,9 +25,9 @@ import {
   CheckCircle2,
   XCircle,
   Calendar,
-  CheckSquare,
-  Square,
-  Loader2
+  Loader2,
+  Info,
+  AlertCircle
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -54,6 +55,10 @@ interface RecurringTransaction {
   occurrence_count: number;
   reminder_enabled: boolean;
   reminder_days_before: number;
+  account_id: number | null;
+  credit_card_id: number | null;
+  accounts: { id: number; name: string } | null;
+  credit_cards: { id: number; name: string } | null;
 }
 
 export default function RecurringTransactionsPage() {
@@ -71,7 +76,6 @@ export default function RecurringTransactionsPage() {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [bulkMode, setBulkMode] = useState(false);
 
   // Filters from URL
   const isActiveParam = searchParams.get('isActive');
@@ -260,7 +264,6 @@ export default function RecurringTransactionsPage() {
         setShowDeleteDialog(false);
         setSelectedTransaction(null);
         setSelectedIds(new Set());
-        setBulkMode(false);
         await fetchRecurringTransactions();
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -292,7 +295,6 @@ export default function RecurringTransactionsPage() {
       if (successCount === selectedIds.size) {
         toast.success(`Confirmed ${successCount} recurring transaction${successCount === 1 ? '' : 's'}`);
         setSelectedIds(new Set());
-        setBulkMode(false);
         await fetchRecurringTransactions();
       } else {
         toast.error(`Failed to confirm some transactions. ${successCount} of ${selectedIds.size} confirmed.`);
@@ -302,9 +304,6 @@ export default function RecurringTransactionsPage() {
       toast.error('Failed to confirm recurring transactions');
     }
   };
-
-
-  const unconfirmedCount = recurringTransactions.filter(rt => !rt.is_confirmed).length;
 
   const filteredTransactions = useMemo(() => {
     let filtered = [...recurringTransactions];
@@ -379,6 +378,8 @@ export default function RecurringTransactionsPage() {
     return <Badge variant="default" className="bg-gray-500">Low</Badge>;
   };
 
+  const unconfirmedCount = recurringTransactions.filter(rt => !rt.is_confirmed).length;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -398,56 +399,57 @@ export default function RecurringTransactionsPage() {
         </Button>
       </div>
 
-      {/* Unconfirmed Banner */}
-      {unconfirmedCount > 0 && (
-        <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
-          <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-yellow-900 dark:text-yellow-100">
-                  {unconfirmedCount} Unconfirmed Recurring Transaction{unconfirmedCount === 1 ? '' : 's'}
-                </h3>
-                <p className="text-sm text-yellow-800 dark:text-yellow-200 mt-1">
-                  Please review and confirm these detected patterns. Delete any that aren't actually recurring.
+      {/* Informational Alert */}
+      <Alert className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/50">
+        <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+        <AlertTitle className="text-blue-900 dark:text-blue-100">
+          How Recurring Transactions Help You
+        </AlertTitle>
+        <AlertDescription className="text-blue-800 dark:text-blue-200 mt-2">
+          <p className="mb-2">
+            We automatically detect recurring transactions from your account history to help you stay on top of your finances:
+          </p>
+          <ul className="list-disc list-inside space-y-1 ml-2">
+            <li><strong>Upcoming bills:</strong> We'll alert you if you might not have enough funds in your account for an upcoming recurring bill</li>
+            <li><strong>Bill changes:</strong> We'll notify you if a consistent bill amount changes unexpectedly</li>
+            <li><strong>Missing income:</strong> We'll let you know if an expected paycheck or other recurring income hasn't arrived</li>
+          </ul>
+        </AlertDescription>
+      </Alert>
+
+      {/* Unconfirmed Transactions Alert */}
+      {unconfirmedCount > 0 && isConfirmedParam !== 'false' && (
+        <Alert className="border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/50">
+          <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex-1">
+              <AlertTitle className="text-yellow-900 dark:text-yellow-100">
+                Review {unconfirmedCount} Unconfirmed Pattern{unconfirmedCount === 1 ? '' : 's'}
+              </AlertTitle>
+              <AlertDescription className="text-yellow-800 dark:text-yellow-200 mt-2">
+                <p>
+                  We've detected {unconfirmedCount} recurring transaction pattern{unconfirmedCount === 1 ? '' : 's'} that need your review. 
+                  Please review each one and confirm if it's a valid recurring transaction. 
+                  You can select multiple and confirm them all at once, or review them individually by clicking on each row.
                 </p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => updateFilters({ isConfirmed: 'false' })}
-                >
-                  Review Unconfirmed
-                </Button>
-                {!bulkMode ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setBulkMode(true)}
-                  >
-                    <CheckSquare className="h-4 w-4 mr-2" />
-                    Select Multiple
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setBulkMode(false);
-                      setSelectedIds(new Set());
-                    }}
-                  >
-                    Done
-                  </Button>
-                )}
-              </div>
+              </AlertDescription>
             </div>
-          </CardContent>
-        </Card>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateFilters({ isConfirmed: 'false' })}
+              className="shrink-0"
+            >
+              Show Only Unconfirmed
+            </Button>
+          </div>
+        </Alert>
       )}
 
+      {/* Filters and Search */}
+
       {/* Bulk Actions Bar */}
-      {bulkMode && selectedIds.size > 0 && (
+      {selectedIds.size > 0 && (
         <Card className="border-primary">
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -481,6 +483,13 @@ export default function RecurringTransactionsPage() {
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Delete Selected ({selectedIds.size})
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Clear Selection
                 </Button>
               </div>
             </div>
@@ -550,24 +559,23 @@ export default function RecurringTransactionsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  {bulkMode && (
-                    <TableHead className="w-12">
-                      <Checkbox
-                        checked={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedIds(new Set(filteredTransactions.map(rt => rt.id)));
-                          } else {
-                            setSelectedIds(new Set());
-                          }
-                        }}
-                      />
-                    </TableHead>
-                  )}
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedIds(new Set(filteredTransactions.map(rt => rt.id)));
+                        } else {
+                          setSelectedIds(new Set());
+                        }
+                      }}
+                    />
+                  </TableHead>
                   <TableHead>Merchant</TableHead>
                   <TableHead>Frequency</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Next Due</TableHead>
+                  <TableHead>Account</TableHead>
                   <TableHead>Confidence</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -577,21 +585,19 @@ export default function RecurringTransactionsPage() {
                 {filteredTransactions.map((rt) => (
                   <TableRow 
                     key={rt.id} 
-                    className={`${!rt.is_confirmed ? 'bg-yellow-50 dark:bg-yellow-950/20' : ''} ${!bulkMode ? 'cursor-pointer hover:bg-muted/50' : ''}`}
-                    onClick={() => !bulkMode && handleViewTransactions(rt)}
+                    className={`${!rt.is_confirmed ? 'bg-yellow-50 dark:bg-yellow-950/20' : ''} ${selectedIds.size === 0 ? 'cursor-pointer hover:bg-muted/50' : ''}`}
+                    onClick={() => selectedIds.size === 0 && handleViewTransactions(rt)}
                   >
-                    {bulkMode && (
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedIds.has(rt.id)}
-                          onClick={(e) => {
-                            const checked = !selectedIds.has(rt.id);
-                            handleCheckboxClick(rt.id, e, checked);
-                          }}
-                          onCheckedChange={() => {}} // Required for controlled checkbox
-                        />
-                      </TableCell>
-                    )}
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.has(rt.id)}
+                        onClick={(e) => {
+                          const checked = !selectedIds.has(rt.id);
+                          handleCheckboxClick(rt.id, e, checked);
+                        }}
+                        onCheckedChange={() => {}} // Required for controlled checkbox
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{rt.merchant_name}</TableCell>
                     <TableCell>{getFrequencyLabel(rt.frequency)}</TableCell>
                     <TableCell className="text-right">
@@ -609,6 +615,9 @@ export default function RecurringTransactionsPage() {
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {rt.accounts?.name || rt.credit_cards?.name || '—'}
                     </TableCell>
                     <TableCell>{getConfidenceBadge(rt.confidence_score)}</TableCell>
                     <TableCell>
@@ -714,7 +723,6 @@ export default function RecurringTransactionsPage() {
                     setSelectedTransaction(null);
                     if (selectedIds.size > 1) {
                       setSelectedIds(new Set());
-                      setBulkMode(false);
                     }
                   }}
                   disabled={isDeleting}
@@ -751,7 +759,7 @@ export default function RecurringTransactionsPage() {
 
       {/* Dialog to show matching transactions */}
       <Dialog open={showTransactionsDialog} onOpenChange={setShowTransactionsDialog}>
-        <DialogContent className="max-w-[95vw] sm:max-w-[95vw] md:max-w-[95vw] lg:max-w-[1400px] xl:max-w-[1600px] 2xl:max-w-[1800px] max-h-[80vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:w-[95vw] md:max-w-[90vw] lg:max-w-[90vw] xl:max-w-[90vw] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               Matching Transactions - {selectedTransaction?.merchant_name}

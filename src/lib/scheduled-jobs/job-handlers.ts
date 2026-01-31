@@ -63,7 +63,7 @@ export async function handleCheckRecurringTransactions(): Promise<JobResult> {
           // Check for matching transactions
           const { data: matchingTransactions } = await supabase
             .from('transactions')
-            .select('id')
+            .select('id, date')
             .eq('budget_account_id', rt.budget_account_id)
             .eq('merchant_group_id', rt.merchant_group_id)
             .eq('transaction_type', rt.transaction_type)
