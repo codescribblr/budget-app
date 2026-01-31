@@ -1,6 +1,6 @@
 import { isAdmin } from "@/lib/admin"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Store, Settings, Shield, Bell, TestTube } from "lucide-react"
+import { Store, Settings, Shield, Bell, TestTube, MessageSquare } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
@@ -19,6 +19,13 @@ export default async function AdminDashboard() {
       icon: Store,
       href: "/admin/merchants",
       color: "text-blue-600",
+    },
+    {
+      title: "Merchant Recommendations",
+      description: "Review and approve user recommendations for new merchants",
+      icon: MessageSquare,
+      href: "/admin/merchant-recommendations",
+      color: "text-orange-600",
     },
     {
       title: "Notifications",
@@ -60,7 +67,7 @@ export default async function AdminDashboard() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         {adminSections.map((section) => (
           <Card key={section.href} className="hover:shadow-lg transition-shadow">
             <CardHeader>
@@ -83,7 +90,7 @@ export default async function AdminDashboard() {
 
       <div>
         <h2 className="text-2xl font-bold mb-4">Test Pages</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {testPages.map((page) => (
             <Card key={page.href} className="hover:shadow-lg transition-shadow border-dashed">
               <CardHeader>

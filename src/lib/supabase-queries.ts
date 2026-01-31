@@ -1282,7 +1282,7 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
     return [];
   }
 
-  // Get all transactions with merchant group, global merchant, account, credit card, and tags info
+  // Get all transactions with merchant group, merchant override, global merchant, account, credit card, and tags info
   const { data: transactions, error: txError } = await supabase
     .from('transactions')
     .select(`
@@ -1295,6 +1295,13 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
           icon_name,
           status
         )
+      ),
+      merchant_override:global_merchants!merchant_override_id (
+        id,
+        display_name,
+        logo_url,
+        icon_name,
+        status
       ),
       accounts (
         name
@@ -1357,7 +1364,7 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
     is_historical: transaction.is_historical || false,
     created_at: transaction.created_at,
     updated_at: transaction.updated_at,
-    merchant_name: transaction.merchant_groups?.display_name || null,
+    merchant_name: transaction.merchant_override?.display_name || transaction.merchant_groups?.display_name || null,
     account_name: transaction.accounts?.name || null,
     credit_card_name: transaction.credit_cards?.name || null,
     tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
@@ -1454,7 +1461,7 @@ export async function searchTransactions(
     is_historical: transaction.is_historical || false,
     created_at: transaction.created_at,
     updated_at: transaction.updated_at,
-    merchant_name: transaction.merchant_groups?.display_name || null,
+    merchant_name: transaction.merchant_override?.display_name || transaction.merchant_groups?.display_name || null,
     account_name: transaction.accounts?.name || null,
     credit_card_name: transaction.credit_cards?.name || null,
     tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
@@ -1524,6 +1531,13 @@ export async function getTransactionsPaginated(
           icon_name,
           status
         )
+      ),
+      merchant_override:global_merchants!merchant_override_id (
+        id,
+        display_name,
+        logo_url,
+        icon_name,
+        status
       ),
       accounts (
         name
@@ -1659,6 +1673,13 @@ export async function getTransactionsPaginated(
             status
           )
         ),
+        merchant_override:global_merchants!merchant_override_id (
+          id,
+          display_name,
+          logo_url,
+          icon_name,
+          status
+        ),
         accounts (
           name
         ),
@@ -1763,7 +1784,12 @@ export async function getTransactionsPaginated(
 
   // Build the final result
   let transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => {
-    const globalMerchant = getGlobalMerchantInfo(transaction.merchant_groups);
+    // Prefer merchant override over merchant_group
+    const overrideMerchant = transaction.merchant_override;
+    const merchantGroup = transaction.merchant_groups;
+    const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
+    const merchantName = overrideMerchant?.display_name || merchantGroup?.display_name || null;
+    
     return {
       id: transaction.id,
       date: transaction.date,
@@ -1771,12 +1797,13 @@ export async function getTransactionsPaginated(
       total_amount: transaction.total_amount,
       transaction_type: transaction.transaction_type || 'expense',
       merchant_group_id: transaction.merchant_group_id,
+      merchant_override_id: transaction.merchant_override_id,
       account_id: transaction.account_id,
       credit_card_id: transaction.credit_card_id,
       is_historical: transaction.is_historical || false,
       created_at: transaction.created_at,
       updated_at: transaction.updated_at,
-      merchant_name: transaction.merchant_groups?.display_name || null,
+      merchant_name: merchantName,
       merchant_logo_url: globalMerchant?.logo_url || null,
       merchant_icon_name: globalMerchant?.icon_name || null,
       account_name: transaction.accounts?.name || null,
@@ -1814,7 +1841,7 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
-  // Get transaction with merchant group, global merchant, account, credit card, and tags info
+  // Get transaction with merchant group, merchant override, global merchant, account, credit card, and tags info
   const { data: transaction, error: txError } = await supabase
     .from('transactions')
     .select(`
@@ -1827,6 +1854,13 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
           icon_name,
           status
         )
+      ),
+      merchant_override:global_merchants!merchant_override_id (
+        id,
+        display_name,
+        logo_url,
+        icon_name,
+        status
       ),
       accounts (
         name
@@ -1866,7 +1900,11 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
     category_name: split.categories?.name || 'Unknown',
   }));
 
-  const globalMerchant = getGlobalMerchantInfo(transaction.merchant_groups);
+  // Prefer merchant override over merchant_group
+  const overrideMerchant = transaction.merchant_override;
+  const merchantGroup = transaction.merchant_groups;
+  const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
+  const merchantName = overrideMerchant?.display_name || merchantGroup?.display_name || null;
 
   return {
     id: transaction.id,
@@ -1875,12 +1913,13 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
     total_amount: transaction.total_amount,
     transaction_type: transaction.transaction_type || 'expense',
     merchant_group_id: transaction.merchant_group_id,
+    merchant_override_id: transaction.merchant_override_id,
     account_id: transaction.account_id,
     credit_card_id: transaction.credit_card_id,
     is_historical: transaction.is_historical || false,
     created_at: transaction.created_at,
     updated_at: transaction.updated_at,
-    merchant_name: (transaction as any).merchant_groups?.display_name || null,
+    merchant_name: merchantName,
     merchant_logo_url: globalMerchant?.logo_url || null,
     merchant_icon_name: globalMerchant?.icon_name || null,
     account_name: (transaction as any).accounts?.name || null,
@@ -2032,6 +2071,7 @@ export async function updateTransaction(
     description?: string;
     transaction_type?: 'income' | 'expense';
     merchant_group_id?: number | null;
+    merchant_override_id?: number | null;
     account_id?: number | null;
     credit_card_id?: number | null;
     tag_ids?: number[];
@@ -2087,6 +2127,7 @@ export async function updateTransaction(
   const newDate = data.date ?? existingTransaction.date;
   const newDescription = data.description ?? existingTransaction.description;
   const newMerchantGroupId = data.merchant_group_id !== undefined ? data.merchant_group_id : existingTransaction.merchant_group_id;
+  const newMerchantOverrideId = data.merchant_override_id !== undefined ? data.merchant_override_id : existingTransaction.merchant_override_id;
   const newTransactionType = data.transaction_type ?? oldTransactionType;
   const newSplits = data.splits ?? existingTransaction.splits;
   const newTotalAmount = newSplits.reduce((sum, split) => sum + split.amount, 0);
@@ -2099,6 +2140,7 @@ export async function updateTransaction(
       description: newDescription,
       transaction_type: newTransactionType,
       merchant_group_id: newMerchantGroupId,
+      merchant_override_id: newMerchantOverrideId,
       account_id: newAccountId || null,
       credit_card_id: newCreditCardId || null,
       total_amount: newTotalAmount,

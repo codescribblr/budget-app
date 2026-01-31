@@ -15,30 +15,12 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  try {
-    const { checkWriteAccess } = await import('@/lib/api-helpers');
-    const accessCheck = await checkWriteAccess();
-    if (accessCheck) return accessCheck;
-
-    const body = await request.json();
-    const { display_name } = body;
-
-    if (!display_name) {
-      return NextResponse.json(
-        { error: 'display_name is required' },
-        { status: 400 }
-      );
-    }
-
-    const group = await createMerchantGroup(display_name);
-    return NextResponse.json(group, { status: 201 });
-  } catch (error) {
-    console.error('Error creating merchant group:', error);
-    return NextResponse.json(
-      { error: 'Failed to create merchant group' },
-      { status: 500 }
-    );
-  }
+  // Merchant group creation is now disabled for users
+  // All merchant grouping is managed by admins through global merchants
+  return NextResponse.json(
+    { error: 'Merchant group creation is disabled. Merchant grouping is now managed by administrators. Please contact support if you need to add a new merchant.' },
+    { status: 403 }
+  );
 }
 
 

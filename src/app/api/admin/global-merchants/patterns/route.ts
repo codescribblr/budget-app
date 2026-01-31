@@ -13,21 +13,41 @@ export async function GET(request: NextRequest) {
     
     const { searchParams } = new URL(request.url);
     const merchantId = searchParams.get('merchant_id');
-    const ungrouped = searchParams.get('ungrouped') === 'true';
+    const filter = searchParams.get('filter'); // 'all', 'ungrouped', 'grouped'
+    const ungrouped = searchParams.get('ungrouped') === 'true'; // Legacy support
     const limit = searchParams.get('limit');
     
     let query = supabase
       .from('global_merchant_patterns')
-      .select('*')
+      .select(`
+        *,
+        global_merchants (
+          id,
+          display_name,
+          status
+        )
+      `)
       .order('usage_count', { ascending: false });
     
+    // Handle merchant_id filter (takes precedence)
     if (merchantId) {
       const id = parseInt(merchantId);
       if (!isNaN(id)) {
         query = query.eq('global_merchant_id', id);
       }
-    } else if (ungrouped) {
-      query = query.is('global_merchant_id', null);
+    } else {
+      // Handle filter parameter (new way)
+      if (filter === 'ungrouped') {
+        query = query.is('global_merchant_id', null);
+      } else if (filter === 'grouped') {
+        query = query.not('global_merchant_id', 'is', null);
+      }
+      // 'all' or no filter shows everything (default behavior)
+      
+      // Legacy support for ungrouped parameter
+      if (!filter && ungrouped) {
+        query = query.is('global_merchant_id', null);
+      }
     }
     
     if (limit) {
@@ -35,6 +55,10 @@ export async function GET(request: NextRequest) {
       if (!isNaN(limitNum) && limitNum > 0) {
         query = query.limit(limitNum);
       }
+    } else {
+      // Set a high default limit to avoid Supabase's default 1000 row limit
+      // This allows admins to see all patterns without pagination
+      query = query.limit(50000);
     }
     
     const { data, error } = await query;

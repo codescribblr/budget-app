@@ -108,6 +108,7 @@ export interface Transaction {
   total_amount: number; // Always positive
   transaction_type: 'income' | 'expense'; // NEW FIELD
   merchant_group_id?: number | null;
+  merchant_override_id?: number | null; // User override for merchant assignment
   account_id?: number | null;
   credit_card_id?: number | null;
   is_historical: boolean;
@@ -310,6 +311,7 @@ export interface UpdateTransactionRequest {
   description?: string;
   transaction_type?: 'income' | 'expense'; // NEW FIELD
   merchant_group_id?: number | null;
+  merchant_override_id?: number | null; // User override for merchant assignment
   account_id?: number | null;
   credit_card_id?: number | null;
   tag_ids?: number[]; // Optional tag IDs to assign to transaction
@@ -362,6 +364,7 @@ export interface TransactionWithSplits extends Transaction {
   splits: (TransactionSplit & { category_name: string })[];
   tags?: Tag[]; // Tags associated with this transaction
   merchant_name?: string | null;
+  merchant_override_id?: number | null; // User override for merchant assignment
   merchant_logo_url?: string | null; // From global merchant if linked
   merchant_icon_name?: string | null; // From global merchant if linked
   account_name?: string | null;

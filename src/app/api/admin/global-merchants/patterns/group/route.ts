@@ -49,7 +49,26 @@ export async function POST(request: NextRequest) {
     
     if (updateError) throw updateError;
     
-    return NextResponse.json({ success: true });
+    // Sync transactions for the grouped patterns
+    try {
+      const { syncTransactionsForPatterns } = await import('@/lib/db/sync-merchant-groups');
+      const syncResult = await syncTransactionsForPatterns(pattern_ids, merchant_id);
+      
+      return NextResponse.json({ 
+        success: true,
+        transactions_updated: syncResult.transactionsUpdated,
+        groups_created: syncResult.groupsCreated,
+      });
+    } catch (syncError: any) {
+      console.error('Error syncing transactions:', syncError);
+      // Don't fail the request if sync fails - patterns are still grouped
+      return NextResponse.json({ 
+        success: true,
+        warning: 'Patterns grouped but transaction sync had errors',
+        transactions_updated: 0,
+        groups_created: 0,
+      });
+    }
   } catch (error: any) {
     console.error('Error grouping patterns:', error);
     if (error.message === 'Unauthorized: Admin access required') {

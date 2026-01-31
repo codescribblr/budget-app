@@ -12,6 +12,8 @@ import { parseLocalDate, formatLocalDate, getTodayLocal } from '@/lib/date-utils
 import { handleApiError } from '@/lib/api-error-handler';
 import TagSelector from '@/components/tags/TagSelector';
 import { useFeature } from '@/contexts/FeatureContext';
+import { MerchantLogo } from '@/components/admin/MerchantLogo';
+import { toast } from 'sonner';
 
 interface EditTransactionDialogProps {
   isOpen: boolean;
@@ -38,7 +40,9 @@ export default function EditTransactionDialog({
   const [date, setDate] = useState<Date>(getTodayLocal());
   const [description, setDescription] = useState('');
   const [merchantGroupId, setMerchantGroupId] = useState<number | null>(null);
+  const [merchantOverrideId, setMerchantOverrideId] = useState<number | null>(null);
   const [merchantGroups, setMerchantGroups] = useState<MerchantGroup[]>([]);
+  const [globalMerchants, setGlobalMerchants] = useState<Array<{ id: number; display_name: string; logo_url?: string | null; icon_name?: string | null }>>([]);
   const [splits, setSplits] = useState<Split[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
@@ -49,6 +53,9 @@ export default function EditTransactionDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchivedCategories, setShowArchivedCategories] = useState(false);
   const [availableCategories, setAvailableCategories] = useState<Category[]>(categories);
+  const [showRecommendDialog, setShowRecommendDialog] = useState(false);
+  const [recommendedMerchantName, setRecommendedMerchantName] = useState('');
+  const [isRecommending, setIsRecommending] = useState(false);
   const tagsEnabled = useFeature('tags');
 
   useEffect(() => {
@@ -56,6 +63,7 @@ export default function EditTransactionDialog({
       setDate(parseLocalDate(transaction.date) || getTodayLocal());
       setDescription(transaction.description);
       setMerchantGroupId(transaction.merchant_group_id || null);
+      setMerchantOverrideId(transaction.merchant_override_id || null);
       setSelectedAccountId(transaction.account_id || null);
       setSelectedCreditCardId(transaction.credit_card_id || null);
       setTransactionType(transaction.transaction_type || 'expense');
@@ -149,8 +157,21 @@ export default function EditTransactionDialog({
       }
       fetchAccounts();
       fetchCreditCards();
+      fetchGlobalMerchants();
     }
   }, [isOpen, parentMerchantGroups]);
+
+  const fetchGlobalMerchants = async () => {
+    try {
+      const response = await fetch('/api/global-merchants/active');
+      if (response.ok) {
+        const data = await response.json();
+        setGlobalMerchants(data.merchants || []);
+      }
+    } catch (error) {
+      console.error('Error fetching global merchants:', error);
+    }
+  };
 
   const fetchAccounts = async () => {
     const response = await fetch('/api/accounts');
@@ -231,6 +252,7 @@ export default function EditTransactionDialog({
           description,
           transaction_type: transactionType,
           merchant_group_id: merchantGroupId,
+          merchant_override_id: merchantOverrideId,
           account_id: selectedAccountId || null,
           credit_card_id: selectedCreditCardId || null,
           tag_ids: selectedTagIds,
@@ -254,6 +276,45 @@ export default function EditTransactionDialog({
       setIsSubmitting(false);
       // Error toast already shown by handleApiError
       // Button will be re-enabled so user can try again
+    }
+  };
+
+  const handleRecommendMerchant = () => {
+    setShowRecommendDialog(true);
+    setRecommendedMerchantName('');
+  };
+
+  const handleSubmitRecommendation = async () => {
+    if (!recommendedMerchantName.trim()) {
+      toast.error('Please enter a merchant name');
+      return;
+    }
+
+    setIsRecommending(true);
+    try {
+      const response = await fetch('/api/merchant-recommendations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pattern: description,
+          suggested_merchant_name: recommendedMerchantName.trim(),
+          transaction_id: transaction.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create recommendation');
+      }
+
+      setShowRecommendDialog(false);
+      setRecommendedMerchantName('');
+      toast.success('Merchant recommendation submitted! An administrator will review it.');
+    } catch (error: any) {
+      console.error('Error creating recommendation:', error);
+      toast.error(error.message || 'Failed to submit recommendation');
+    } finally {
+      setIsRecommending(false);
     }
   };
 
@@ -302,23 +363,61 @@ export default function EditTransactionDialog({
           </div>
 
           <div>
-            <Label htmlFor="merchant">Merchant (Optional)</Label>
-            <Select
-              value={merchantGroupId?.toString() || 'none'}
-              onValueChange={(value) => setMerchantGroupId(value === 'none' ? null : parseInt(value))}
-            >
-              <SelectTrigger id="merchant">
-                <SelectValue placeholder="Select merchant" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No merchant</SelectItem>
-                {merchantGroups.map((group) => (
-                  <SelectItem key={group.id} value={group.id.toString()}>
-                    {group.display_name}
+            <Label htmlFor="merchant">Merchant Override (Optional)</Label>
+            <div className="space-y-2">
+              <Select
+                value={merchantOverrideId?.toString() || 'auto'}
+                onValueChange={(value) => {
+                  if (value === 'auto') {
+                    setMerchantOverrideId(null);
+                  } else {
+                    setMerchantOverrideId(parseInt(value));
+                  }
+                }}
+              >
+                <SelectTrigger id="merchant">
+                  <SelectValue placeholder="Select merchant override" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">
+                    Use automatic assignment (from global merchants)
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  {globalMerchants.map((merchant) => (
+                    <SelectItem key={merchant.id} value={merchant.id.toString()}>
+                      <div className="flex items-center gap-2">
+                        {(merchant.logo_url || merchant.icon_name) && (
+                          <MerchantLogo
+                            logoUrl={merchant.logo_url}
+                            iconName={merchant.icon_name}
+                            displayName={merchant.display_name}
+                            size="xs"
+                          />
+                        )}
+                        <span>{merchant.display_name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  {merchantOverrideId 
+                    ? 'This transaction will use the selected merchant instead of the automatic assignment.'
+                    : 'Merchant will be automatically assigned based on transaction description.'}
+                </p>
+                {!merchantOverrideId && globalMerchants.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRecommendMerchant}
+                    className="text-xs"
+                  >
+                    Recommend New Merchant
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div>
@@ -458,6 +557,49 @@ export default function EditTransactionDialog({
           </div>
         </div>
       </DialogContent>
+
+      {/* Recommend Merchant Dialog */}
+      <Dialog open={showRecommendDialog} onOpenChange={setShowRecommendDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Recommend New Merchant</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="recommended-merchant-name">Merchant Name</Label>
+              <Input
+                id="recommended-merchant-name"
+                placeholder="e.g., QuikTrip"
+                value={recommendedMerchantName}
+                onChange={(e) => setRecommendedMerchantName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSubmitRecommendation();
+                  }
+                }}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Suggest a merchant name for: &quot;{description}&quot;
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowRecommendDialog(false)}
+              disabled={isRecommending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmitRecommendation}
+              disabled={!recommendedMerchantName.trim() || isRecommending}
+            >
+              {isRecommending ? 'Submitting...' : 'Submit Recommendation'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

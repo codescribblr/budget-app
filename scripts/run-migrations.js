@@ -113,6 +113,9 @@ function getMigrationFiles() {
 
 /**
  * Execute a SQL migration file
+ * 
+ * Note: This implementation uses Supabase RPC which may not be available.
+ * For complex migrations with BEGIN/COMMIT blocks, use run-migrations.sh instead.
  */
 async function executeMigration(filename) {
   const filepath = path.join(MIGRATIONS_DIR, filename);
@@ -120,8 +123,17 @@ async function executeMigration(filename) {
 
   console.log(`📝 Running migration: ${filename}`);
 
+  // Check if migration uses transaction blocks (BEGIN/COMMIT)
+  // These require special handling and should use the bash script instead
+  if (sql.match(/^\s*BEGIN\s*;/i) || sql.match(/BEGIN\s*;/i)) {
+    console.warn(`⚠️  Warning: Migration ${filename} uses BEGIN/COMMIT blocks`);
+    console.warn('   For best results, use run-migrations.sh instead');
+    console.warn('   The JavaScript runner may not handle transaction blocks correctly');
+  }
+
   // Split SQL into individual statements (simple split on semicolon)
   // Note: This is a basic implementation and may not handle all edge cases
+  // For migrations with DO $$ blocks or complex transactions, use run-migrations.sh
   const statements = sql
     .split(';')
     .map(s => s.trim())
@@ -146,13 +158,23 @@ async function executeMigration(filename) {
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`SQL execution failed: ${error}`);
+        const errorText = await response.text();
+        // Check for error patterns in response
+        if (errorText.match(/ERROR|FATAL|syntax error/i)) {
+          throw new Error(`SQL execution failed: ${errorText}`);
+        }
+        throw new Error(`SQL execution failed with status ${response.status}: ${errorText}`);
+      }
+
+      // Check response body for errors
+      const responseData = await response.json();
+      if (responseData && responseData.error) {
+        throw new Error(`SQL execution error: ${JSON.stringify(responseData.error)}`);
       }
     } catch (error) {
       console.error(`❌ Error executing statement ${i + 1}:`, error.message);
       console.error(`   Statement: ${statement.substring(0, 100)}...`);
-      throw error;
+      throw error; // Re-throw to stop execution and prevent recording
     }
   }
 
@@ -191,8 +213,15 @@ async function runMigrations() {
 
     // Execute each pending migration
     for (const migration of pendingMigrations) {
-      await executeMigration(migration);
-      await recordMigration(migration);
+      try {
+        await executeMigration(migration);
+        // Only record migration if execution succeeded
+        await recordMigration(migration);
+      } catch (error) {
+        console.error(`\n❌ Migration ${migration} failed and was NOT recorded`);
+        console.error('   The migration will be retried on the next run');
+        throw error; // Re-throw to stop execution
+      }
     }
 
     console.log('\n✅ All migrations completed successfully!');

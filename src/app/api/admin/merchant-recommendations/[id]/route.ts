@@ -1,0 +1,313 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin } from '@/lib/admin';
+import { createClient } from '@/lib/supabase/server';
+
+/**
+ * PATCH /api/admin/merchant-recommendations/[id]
+ * Review a merchant recommendation (admin only)
+ * Actions: approve, approve_rename, deny, merge
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { user } = await requireAdmin();
+    const supabase = await createClient();
+    const { id } = await params;
+    const recommendationId = parseInt(id);
+    
+    if (isNaN(recommendationId)) {
+      return NextResponse.json({ error: 'Invalid recommendation ID' }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const { action, merchant_name, merchant_id, admin_notes } = body;
+
+    if (!action || !['approve', 'approve_rename', 'deny', 'merge'].includes(action)) {
+      return NextResponse.json(
+        { error: 'Valid action is required (approve, approve_rename, deny, merge)' },
+        { status: 400 }
+      );
+    }
+
+    // Get the recommendation with patterns
+    const { data: recommendation, error: fetchError } = await supabase
+      .from('merchant_recommendations')
+      .select(`
+        *,
+        merchant_recommendation_patterns (
+          pattern
+        )
+      `)
+      .eq('id', recommendationId)
+      .single();
+
+    if (fetchError || !recommendation) {
+      return NextResponse.json(
+        { error: 'Recommendation not found' },
+        { status: 404 }
+      );
+    }
+
+    if (recommendation.status !== 'pending') {
+      return NextResponse.json(
+        { error: 'Recommendation has already been reviewed' },
+        { status: 400 }
+      );
+    }
+
+    const patterns = (recommendation.merchant_recommendation_patterns || []).map((p: any) => p.pattern);
+    const allPatterns = patterns.length > 0 ? patterns : [recommendation.pattern];
+
+    if (action === 'approve' || action === 'approve_rename') {
+      // Check for duplicate merchant name
+      const merchantDisplayName = action === 'approve_rename' && merchant_name 
+        ? merchant_name.trim() 
+        : recommendation.suggested_merchant_name.trim();
+
+      const { data: existingMerchant } = await supabase
+        .from('global_merchants')
+        .select('id')
+        .eq('display_name', merchantDisplayName)
+        .maybeSingle();
+
+      if (existingMerchant) {
+        return NextResponse.json(
+          { error: `Merchant "${merchantDisplayName}" already exists. Use "merge" action instead.` },
+          { status: 400 }
+        );
+      }
+
+      // Create new global merchant
+      const { data: newMerchant, error: createError } = await supabase
+        .from('global_merchants')
+        .insert({
+          display_name: merchantDisplayName,
+          status: 'active',
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (createError) throw createError;
+
+      // Group all patterns under the new merchant and collect pattern IDs
+      const patternIds: number[] = [];
+      for (const pattern of allPatterns) {
+        // Find or create pattern in global_merchant_patterns
+        const { data: existingPattern } = await supabase
+          .from('global_merchant_patterns')
+          .select('id')
+          .eq('pattern', pattern)
+          .maybeSingle();
+
+        let patternId: number | null = null;
+        if (existingPattern) {
+          patternId = existingPattern.id;
+          await supabase
+            .from('global_merchant_patterns')
+            .update({ global_merchant_id: newMerchant.id })
+            .eq('id', existingPattern.id);
+        } else {
+          // Pattern should exist (created by trigger), but handle gracefully
+          const normalized = pattern.toLowerCase().trim().replace(/\s+/g, ' ');
+          // Try insert first, handle conflict if pattern already exists
+          const { data: insertedPattern, error: insertError } = await supabase
+            .from('global_merchant_patterns')
+            .insert({
+              pattern,
+              normalized_pattern: normalized,
+              global_merchant_id: newMerchant.id,
+            })
+            .select('id')
+            .maybeSingle();
+
+          if (insertError) {
+            // Pattern might already exist - try to get it and update
+            const { data: existingPatternAfterConflict } = await supabase
+              .from('global_merchant_patterns')
+              .select('id')
+              .eq('pattern', pattern)
+              .maybeSingle();
+            
+            if (existingPatternAfterConflict) {
+              patternId = existingPatternAfterConflict.id;
+              await supabase
+                .from('global_merchant_patterns')
+                .update({ global_merchant_id: newMerchant.id })
+                .eq('id', patternId);
+            }
+          } else {
+            patternId = insertedPattern?.id || null;
+          }
+        }
+        if (patternId) patternIds.push(patternId);
+      }
+
+      // Sync transactions for the grouped patterns
+      if (patternIds.length > 0) {
+        try {
+          const { syncTransactionsForPatterns } = await import('@/lib/db/sync-merchant-groups');
+          await syncTransactionsForPatterns(patternIds, newMerchant.id);
+        } catch (syncError) {
+          console.error('Error syncing transactions after approval:', syncError);
+          // Don't fail the request - merchant is created and patterns are grouped
+        }
+      }
+
+      // Update recommendation status
+      await supabase
+        .from('merchant_recommendations')
+        .update({
+          status: 'approved',
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+          admin_notes: admin_notes || null,
+        })
+        .eq('id', recommendationId);
+
+      return NextResponse.json({ 
+        success: true, 
+        merchant: newMerchant,
+        patterns_grouped: allPatterns.length 
+      });
+
+    } else if (action === 'merge') {
+      if (!merchant_id) {
+        return NextResponse.json(
+          { error: 'merchant_id is required for merge action' },
+          { status: 400 }
+        );
+      }
+
+      // Verify merchant exists
+      const { data: existingMerchant } = await supabase
+        .from('global_merchants')
+        .select('id, display_name')
+        .eq('id', merchant_id)
+        .single();
+
+      if (!existingMerchant) {
+        return NextResponse.json(
+          { error: 'Merchant not found' },
+          { status: 404 }
+        );
+      }
+
+      // Merge all patterns into the existing merchant
+      const patternIds: number[] = [];
+      for (const pattern of allPatterns) {
+        const { data: existingPattern } = await supabase
+          .from('global_merchant_patterns')
+          .select('id, global_merchant_id')
+          .eq('pattern', pattern)
+          .maybeSingle();
+
+        let patternId: number | null = null;
+        if (existingPattern) {
+          patternId = existingPattern.id;
+          // If pattern is already grouped to a different merchant, admin can choose to move it
+          if (existingPattern.global_merchant_id && existingPattern.global_merchant_id !== merchant_id) {
+            // Move pattern to the selected merchant
+            await supabase
+              .from('global_merchant_patterns')
+              .update({ global_merchant_id: merchant_id })
+              .eq('id', existingPattern.id);
+          } else {
+            // Update to selected merchant
+            await supabase
+              .from('global_merchant_patterns')
+              .update({ global_merchant_id: merchant_id })
+              .eq('id', existingPattern.id);
+          }
+        } else {
+          // Create pattern and link to merchant
+          const normalized = pattern.toLowerCase().trim().replace(/\s+/g, ' ');
+          const { data: insertedPattern, error: insertError } = await supabase
+            .from('global_merchant_patterns')
+            .insert({
+              pattern,
+              normalized_pattern: normalized,
+              global_merchant_id: merchant_id,
+            })
+            .select('id')
+            .maybeSingle();
+
+          if (insertError) {
+            // Pattern might already exist - try to get it and update
+            const { data: existingPatternAfterConflict } = await supabase
+              .from('global_merchant_patterns')
+              .select('id')
+              .eq('pattern', pattern)
+              .maybeSingle();
+            
+            if (existingPatternAfterConflict) {
+              patternId = existingPatternAfterConflict.id;
+              await supabase
+                .from('global_merchant_patterns')
+                .update({ global_merchant_id: merchant_id })
+                .eq('id', patternId);
+            }
+          } else {
+            patternId = insertedPattern?.id || null;
+          }
+        }
+        if (patternId) patternIds.push(patternId);
+      }
+
+      // Sync transactions for the merged patterns
+      if (patternIds.length > 0) {
+        try {
+          const { syncTransactionsForPatterns } = await import('@/lib/db/sync-merchant-groups');
+          await syncTransactionsForPatterns(patternIds, merchant_id);
+        } catch (syncError) {
+          console.error('Error syncing transactions after merge:', syncError);
+          // Don't fail the request - patterns are merged
+        }
+      }
+
+      // Update recommendation status
+      await supabase
+        .from('merchant_recommendations')
+        .update({
+          status: 'merged',
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+          admin_notes: admin_notes || null,
+        })
+        .eq('id', recommendationId);
+
+      return NextResponse.json({ 
+        success: true, 
+        merchant: existingMerchant,
+        patterns_merged: allPatterns.length 
+      });
+
+    } else if (action === 'deny') {
+      // Update recommendation status
+      await supabase
+        .from('merchant_recommendations')
+        .update({
+          status: 'denied',
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+          admin_notes: admin_notes || null,
+        })
+        .eq('id', recommendationId);
+
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+  } catch (error: any) {
+    console.error('Error reviewing recommendation:', error);
+    if (error.message === 'Unauthorized: Admin access required') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json(
+      { error: 'Failed to review recommendation' },
+      { status: 500 }
+    );
+  }
+}

@@ -49,6 +49,11 @@ interface GlobalMerchantPattern {
   usage_count: number;
   first_seen_at: string;
   last_seen_at: string;
+  global_merchants?: {
+    id: number;
+    display_name: string;
+    status: string;
+  } | null;
 }
 
 export function AdminGlobalMerchantsPage() {
@@ -58,12 +63,18 @@ export function AdminGlobalMerchantsPage() {
   const [patternSearchQuery, setPatternSearchQuery] = useState('');
   const [merchantSearchQuery, setMerchantSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'draft'>('all');
+  const [patternFilter, setPatternFilter] = useState<'all' | 'ungrouped' | 'grouped'>('all');
   const [selectedMerchant, setSelectedMerchant] = useState<GlobalMerchant | null>(null);
   const [selectedPatterns, setSelectedPatterns] = useState<Set<number>>(new Set());
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [showGroupDialog, setShowGroupDialog] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [targetMerchantId, setTargetMerchantId] = useState<number | null>(null);
+  const [mergeMerchantSearchQuery, setMergeMerchantSearchQuery] = useState('');
+  const [mergePopoverOpen, setMergePopoverOpen] = useState(false);
   const [newMerchantName, setNewMerchantName] = useState('');
   const [newMerchantStatus, setNewMerchantStatus] = useState<'active' | 'draft'>('draft');
   const [editMerchantName, setEditMerchantName] = useState('');
@@ -98,9 +109,10 @@ export function AdminGlobalMerchantsPage() {
     }
   };
 
-  const fetchPatterns = async () => {
+  const fetchPatterns = async (filter: 'all' | 'ungrouped' | 'grouped' = patternFilter) => {
     try {
-      const response = await fetch('/api/admin/global-merchants/patterns?ungrouped=true');
+      const filterParam = filter === 'all' ? '' : `?filter=${filter}`;
+      const response = await fetch(`/api/admin/global-merchants/patterns${filterParam}`);
       if (response.ok) {
         const data = await response.json();
         setPatterns(data.patterns || []);
@@ -116,11 +128,11 @@ export function AdminGlobalMerchantsPage() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchMerchants(), fetchPatterns()]);
+      await Promise.all([fetchMerchants(), fetchPatterns(patternFilter)]);
       setLoading(false);
     };
     loadData();
-  }, [statusFilter]);
+  }, [statusFilter, patternFilter]);
 
   const handleCreate = async () => {
     if (!newMerchantName.trim()) {
@@ -391,9 +403,56 @@ export function AdminGlobalMerchantsPage() {
     }
   };
 
+  const handleMerge = (merchant: GlobalMerchant) => {
+    setSelectedMerchant(merchant);
+    setTargetMerchantId(null);
+    setMergeMerchantSearchQuery('');
+    setMergePopoverOpen(false);
+    setShowMergeDialog(true);
+  };
+
   const handleDelete = (merchant: GlobalMerchant) => {
     setSelectedMerchant(merchant);
     setShowDeleteDialog(true);
+  };
+
+  const confirmMerge = async () => {
+    if (!selectedMerchant || !targetMerchantId) return;
+
+    if (selectedMerchant.id === targetMerchantId) {
+      toast.error('Cannot merge a merchant into itself');
+      return;
+    }
+
+    setMerging(true);
+    try {
+      const response = await fetch(`/api/admin/global-merchants/${selectedMerchant.id}/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_merchant_id: targetMerchantId,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(`Merged "${selectedMerchant.display_name}" into "${data.target_merchant.display_name}"`);
+        setShowMergeDialog(false);
+        setSelectedMerchant(null);
+        setTargetMerchantId(null);
+        setMergeMerchantSearchQuery('');
+        fetchMerchants();
+        fetchPatterns();
+      } else {
+        const errorData = await response.json();
+        toast.error(errorData.error || 'Failed to merge merchants');
+      }
+    } catch (error) {
+      console.error('Error merging merchants:', error);
+      toast.error('Failed to merge merchants');
+    } finally {
+      setMerging(false);
+    }
   };
 
   const confirmDelete = async () => {
@@ -486,7 +545,8 @@ export function AdminGlobalMerchantsPage() {
         setSelectedMerchant(null);
         setMerchantSearchQuery('');
         fetchMerchants();
-        fetchPatterns();
+        // Refresh patterns with current filter - grouped patterns will disappear from ungrouped view
+        fetchPatterns(patternFilter);
       } else {
         const data = await response.json();
         toast.error(data.error || 'Failed to group patterns');
@@ -510,7 +570,8 @@ export function AdminGlobalMerchantsPage() {
       if (response.ok) {
         toast.success('Patterns ungrouped successfully');
         fetchMerchants();
-        fetchPatterns();
+        // Refresh patterns with current filter - ungrouped patterns will appear in ungrouped view
+        fetchPatterns(patternFilter);
       } else {
         const data = await response.json();
         toast.error(data.error || 'Failed to ungroup patterns');
@@ -537,8 +598,8 @@ export function AdminGlobalMerchantsPage() {
     merchant.display_name.toLowerCase().includes(merchantSearchQuery.toLowerCase())
   );
 
-  const ungroupedPatterns = patterns.filter(p => p.global_merchant_id === null);
-  const filteredPatterns = ungroupedPatterns.filter(pattern =>
+  // Filter patterns based on search query (filter by patternFilter is already done in API)
+  const filteredPatterns = patterns.filter(pattern =>
     pattern.pattern.toLowerCase().includes(patternSearchQuery.toLowerCase())
   );
 
@@ -600,8 +661,8 @@ export function AdminGlobalMerchantsPage() {
           <TabsTrigger value="merchants">
             Merchants ({merchants.length})
           </TabsTrigger>
-          <TabsTrigger value="ungrouped">
-            Ungrouped Patterns ({ungroupedPatterns.length})
+          <TabsTrigger value="patterns">
+            Patterns ({patterns.length})
           </TabsTrigger>
         </TabsList>
 
@@ -728,6 +789,10 @@ export function AdminGlobalMerchantsPage() {
                             <Edit className="mr-2 h-4 w-4" />
                             Edit
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleMerge(merchant)}>
+                            <Link2 className="mr-2 h-4 w-4" />
+                            Merge
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleDelete(merchant)}
                             className="text-destructive"
@@ -747,15 +812,17 @@ export function AdminGlobalMerchantsPage() {
           </Card>
         </TabsContent>
 
-        {/* Ungrouped Patterns Tab */}
-        <TabsContent value="ungrouped" className="space-y-6">
+        {/* Patterns Tab */}
+        <TabsContent value="patterns" className="space-y-6">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Ungrouped Patterns ({ungroupedPatterns.length})</CardTitle>
+                  <CardTitle>
+                    Patterns ({patternFilter === 'all' ? patterns.length : patternFilter === 'ungrouped' ? patterns.filter(p => !p.global_merchant_id).length : patterns.filter(p => p.global_merchant_id).length})
+                  </CardTitle>
                   <CardDescription>
-                    Transaction patterns that haven&apos;t been grouped into merchants yet. Select patterns and group them into merchants.
+                    Transaction patterns. Select patterns and group them into merchants.
                   </CardDescription>
                 </div>
                 {selectedPatterns.size > 0 && (
@@ -770,6 +837,40 @@ export function AdminGlobalMerchantsPage() {
               </div>
             </CardHeader>
             <CardContent>
+              {/* Pattern Filter Buttons */}
+              <div className="mb-4 flex gap-2">
+                <Button
+                  variant={patternFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    setPatternFilter('all');
+                    fetchPatterns('all');
+                  }}
+                >
+                  All Patterns
+                </Button>
+                <Button
+                  variant={patternFilter === 'ungrouped' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    setPatternFilter('ungrouped');
+                    fetchPatterns('ungrouped');
+                  }}
+                >
+                  Ungrouped
+                </Button>
+                <Button
+                  variant={patternFilter === 'grouped' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    setPatternFilter('grouped');
+                    fetchPatterns('grouped');
+                  }}
+                >
+                  Grouped
+                </Button>
+              </div>
+              
               <div className="relative mb-4">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -790,16 +891,22 @@ export function AdminGlobalMerchantsPage() {
                       />
                     </TableHead>
                     <TableHead>Pattern</TableHead>
+                    <TableHead>Merchant</TableHead>
                     <TableHead>Usage Count</TableHead>
                     <TableHead>First Seen</TableHead>
                     <TableHead>Last Seen</TableHead>
+                    {patternFilter === 'grouped' && (
+                      <TableHead>Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredPatterns.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        No ungrouped patterns found
+                      <TableCell colSpan={patternFilter === 'grouped' ? 7 : 6} className="text-center text-muted-foreground">
+                        {patternFilter === 'all' && 'No patterns found'}
+                        {patternFilter === 'ungrouped' && 'No ungrouped patterns found'}
+                        {patternFilter === 'grouped' && 'No grouped patterns found'}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -813,6 +920,13 @@ export function AdminGlobalMerchantsPage() {
                         </TableCell>
                         <TableCell className="font-mono text-sm">{pattern.pattern}</TableCell>
                         <TableCell>
+                          {pattern.global_merchant_id && pattern.global_merchants ? (
+                            <Badge variant="default">{pattern.global_merchants.display_name}</Badge>
+                          ) : (
+                            <Badge variant="outline">Ungrouped</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           <Badge variant="secondary">{pattern.usage_count}</Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
@@ -821,6 +935,17 @@ export function AdminGlobalMerchantsPage() {
                         <TableCell className="text-sm text-muted-foreground">
                           {new Date(pattern.last_seen_at).toLocaleDateString()}
                         </TableCell>
+                        {patternFilter === 'grouped' && pattern.global_merchant_id && (
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleUngroupPatterns([pattern.id])}
+                            >
+                              Ungroup
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))
                   )}
@@ -1108,6 +1233,129 @@ export function AdminGlobalMerchantsPage() {
               disabled={!selectedMerchant || selectedPatterns.size === 0 || grouping}
             >
               {grouping ? 'Grouping...' : 'Group Patterns'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Merge Dialog */}
+      <Dialog open={showMergeDialog} onOpenChange={(open) => {
+        setShowMergeDialog(open);
+        if (!open) {
+          setMergeMerchantSearchQuery('');
+          setTargetMerchantId(null);
+          setMergePopoverOpen(false);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Merge Global Merchant</DialogTitle>
+            <DialogDescription>
+              Merge &quot;{selectedMerchant?.display_name}&quot; into another merchant. 
+              All patterns, user groups, and transactions will be moved to the target merchant, 
+              and the source merchant will be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="merge-target">Target Merchant</Label>
+              <Popover open={mergePopoverOpen} onOpenChange={setMergePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                  >
+                    {targetMerchantId 
+                      ? merchants.find(m => m.id === targetMerchantId)?.display_name 
+                      : 'Select target merchant...'}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <div className="p-2 border-b">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search merchants..."
+                        value={mergeMerchantSearchQuery}
+                        onChange={(e) => setMergeMerchantSearchQuery(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto p-1">
+                    {merchants
+                      .filter(merchant => 
+                        merchant.id !== selectedMerchant?.id && // Exclude source merchant
+                        merchant.display_name.toLowerCase().includes(mergeMerchantSearchQuery.toLowerCase())
+                      )
+                      .map((merchant) => (
+                        <div
+                          key={merchant.id}
+                          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent cursor-pointer"
+                          onClick={() => {
+                            setTargetMerchantId(merchant.id);
+                            setMergeMerchantSearchQuery('');
+                            setMergePopoverOpen(false);
+                          }}
+                        >
+                          <CheckCircle
+                            className={`h-4 w-4 ${
+                              targetMerchantId === merchant.id ? 'opacity-100' : 'opacity-0'
+                            }`}
+                          />
+                          {merchant.display_name}
+                          <Badge variant={merchant.status === 'active' ? 'default' : 'secondary'} className="ml-auto text-xs">
+                            {merchant.status}
+                          </Badge>
+                        </div>
+                      ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+            {targetMerchantId && (
+              <div className="p-3 border rounded-md bg-muted/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">
+                      {merchants.find(m => m.id === targetMerchantId)?.display_name}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Status: <Badge variant={merchants.find(m => m.id === targetMerchantId)?.status === 'active' ? 'default' : 'secondary'} className="text-xs">
+                        {merchants.find(m => m.id === targetMerchantId)?.status}
+                      </Badge>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setTargetMerchantId(null);
+                      setMergeMerchantSearchQuery('');
+                    }}
+                  >
+                    Change
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowMergeDialog(false);
+              setMergeMerchantSearchQuery('');
+              setTargetMerchantId(null);
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmMerge}
+              disabled={!targetMerchantId || merging}
+              variant="destructive"
+            >
+              {merging ? 'Merging...' : 'Merge Merchants'}
             </Button>
           </DialogFooter>
         </DialogContent>
