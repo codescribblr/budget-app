@@ -1767,6 +1767,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   }
 
   // Insert net_worth_snapshots (no foreign key dependencies except budget_account_id)
+  // Note: net_worth_snapshots has UNIQUE(budget_account_id, snapshot_date) constraint, so duplicates will fail
   if (backupData.net_worth_snapshots && backupData.net_worth_snapshots.length > 0) {
     const netWorthSnapshotsToInsert = backupData.net_worth_snapshots.map(({ 
       id, 
@@ -1777,15 +1778,51 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       budget_account_id: accountId,
     }));
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from('net_worth_snapshots')
       .insert(netWorthSnapshotsToInsert);
 
-    if (error) {
+    // Handle duplicate (budget_account_id, snapshot_date) constraint violations
+    if (error && error.code === '23505') {
+      console.warn('[Import] Duplicate snapshots detected in net_worth_snapshots, filtering duplicates...');
+      
+      // Get existing snapshots for this account
+      const snapshotDates = backupData.net_worth_snapshots.map(s => s.snapshot_date).filter(d => d);
+      const { data: existingSnapshots } = await supabase
+        .from('net_worth_snapshots')
+        .select('budget_account_id, snapshot_date')
+        .eq('budget_account_id', accountId)
+        .in('snapshot_date', snapshotDates);
+
+      const existingSnapshotSet = new Set(
+        existingSnapshots?.map(s => `${s.budget_account_id}-${s.snapshot_date}`) || []
+      );
+
+      // Filter out duplicates and retry
+      const nonDuplicates = netWorthSnapshotsToInsert.filter((snapshot) => {
+        const key = `${snapshot.budget_account_id}-${snapshot.snapshot_date}`;
+        return !existingSnapshotSet.has(key);
+      });
+
+      if (nonDuplicates.length > 0) {
+        const { error: retryError } = await supabase
+          .from('net_worth_snapshots')
+          .insert(nonDuplicates);
+
+        if (retryError) {
+          console.error('[Import] Error inserting non-duplicate net worth snapshots:', retryError);
+          throw retryError;
+        }
+        console.log('[Import] Inserted', nonDuplicates.length, 'net worth snapshots (skipped', netWorthSnapshotsToInsert.length - nonDuplicates.length, 'duplicates)');
+      } else {
+        console.log('[Import] All net worth snapshots were duplicates, skipped insertion');
+      }
+    } else if (error) {
       console.error('[Import] Error inserting net_worth_snapshots:', error);
       throw error;
+    } else {
+      console.log('[Import] Inserted', netWorthSnapshotsToInsert.length, 'net worth snapshots');
     }
-    console.log('[Import] Inserted', netWorthSnapshotsToInsert.length, 'net worth snapshots');
   }
 
   console.log('[Import] Import completed successfully');
