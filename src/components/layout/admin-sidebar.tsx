@@ -9,6 +9,7 @@ import {
   Shield,
   Bell,
   MessageSquare,
+  Link2,
 } from "lucide-react"
 
 import {
@@ -30,10 +31,14 @@ import { cn } from "@/lib/utils"
 
 const adminNavigationItems = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
-  { label: "Global Merchants", path: "/admin/merchants", icon: Store },
-  { label: "Merchant Recommendations", path: "/admin/merchant-recommendations", icon: MessageSquare },
   { label: "Notifications", path: "/admin/notifications", icon: Bell },
   { label: "Settings", path: "/admin/settings", icon: Settings },
+]
+
+const merchantNavigationItems = [
+  { label: "Global Merchants", path: "/admin/merchants", icon: Store },
+  { label: "Merchant Recommendations", path: "/admin/merchant-recommendations", icon: MessageSquare },
+  { label: "Merchant Patterns", path: "/admin/merchant-patterns", icon: Link2 },
 ]
 
 export function AdminSidebar() {
@@ -66,6 +71,25 @@ export function AdminSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {adminNavigationItems.map((item) => (
+                <SidebarMenuItem key={item.path}>
+                  <SidebarMenuButton
+                    onClick={() => handleNavigation(item.path)}
+                    isActive={isActive(item.path)}
+                    tooltip={item.label}
+                  >
+                    <item.icon />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Merchants</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {merchantNavigationItems.map((item) => (
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
                     onClick={() => handleNavigation(item.path)}

@@ -16,6 +16,8 @@ export async function GET(request: NextRequest) {
     const filter = searchParams.get('filter'); // 'all', 'ungrouped', 'grouped'
     const ungrouped = searchParams.get('ungrouped') === 'true'; // Legacy support
     const limit = searchParams.get('limit');
+    const page = searchParams.get('page');
+    const search = searchParams.get('search') || searchParams.get('q'); // Support both 'search' and 'q'
     
     let query = supabase
       .from('global_merchant_patterns')
@@ -26,7 +28,7 @@ export async function GET(request: NextRequest) {
           display_name,
           status
         )
-      `)
+      `, { count: 'exact' })
       .order('usage_count', { ascending: false });
     
     // Handle merchant_id filter (takes precedence)
@@ -50,7 +52,21 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    if (limit) {
+    // Handle search query - filter by pattern text
+    if (search && search.trim()) {
+      query = query.ilike('pattern', `%${search.trim()}%`);
+    }
+    
+    // Handle pagination
+    if (page && limit) {
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      if (!isNaN(pageNum) && pageNum > 0 && !isNaN(limitNum) && limitNum > 0) {
+        const from = (pageNum - 1) * limitNum;
+        const to = from + limitNum - 1;
+        query = query.range(from, to);
+      }
+    } else if (limit) {
       const limitNum = parseInt(limit);
       if (!isNaN(limitNum) && limitNum > 0) {
         query = query.limit(limitNum);
@@ -61,11 +77,16 @@ export async function GET(request: NextRequest) {
       query = query.limit(50000);
     }
     
-    const { data, error } = await query;
+    const { data, error, count } = await query;
     
     if (error) throw error;
     
-    return NextResponse.json({ patterns: data || [] });
+    return NextResponse.json({ 
+      patterns: data || [],
+      total: count || 0,
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : (data?.length || 0)
+    });
   } catch (error: any) {
     console.error('Error fetching global merchant patterns:', error);
     if (error.message === 'Unauthorized: Admin access required') {

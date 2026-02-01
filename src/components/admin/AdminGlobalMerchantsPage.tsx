@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, Plus, Edit, Trash2, MoreVertical, CheckCircle, FileText, Link2, Unlink, ChevronDown, Upload, X, Loader2 } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, MoreVertical, CheckCircle, FileText, Link2, ChevronDown, Upload, X, Loader2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -58,30 +58,24 @@ interface GlobalMerchantPattern {
 
 export function AdminGlobalMerchantsPage() {
   const [merchants, setMerchants] = useState<GlobalMerchant[]>([]);
-  const [patterns, setPatterns] = useState<GlobalMerchantPattern[]>([]);
   const [loading, setLoading] = useState(true);
-  const [patternSearchQuery, setPatternSearchQuery] = useState('');
   const [merchantSearchQuery, setMerchantSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'draft'>('all');
-  const [patternFilter, setPatternFilter] = useState<'all' | 'ungrouped' | 'grouped'>('all');
   const [selectedMerchant, setSelectedMerchant] = useState<GlobalMerchant | null>(null);
-  const [selectedPatterns, setSelectedPatterns] = useState<Set<number>>(new Set());
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
-  const [showGroupDialog, setShowGroupDialog] = useState(false);
   const [merging, setMerging] = useState(false);
   const [targetMerchantId, setTargetMerchantId] = useState<number | null>(null);
   const [mergeMerchantSearchQuery, setMergeMerchantSearchQuery] = useState('');
   const [mergePopoverOpen, setMergePopoverOpen] = useState(false);
   const [newMerchantName, setNewMerchantName] = useState('');
-  const [newMerchantStatus, setNewMerchantStatus] = useState<'active' | 'draft'>('draft');
+  const [newMerchantStatus, setNewMerchantStatus] = useState<'active' | 'draft'>('active');
   const [editMerchantName, setEditMerchantName] = useState('');
   const [editMerchantStatus, setEditMerchantStatus] = useState<'active' | 'draft'>('draft');
   const [creating, setCreating] = useState(false);
   const [updating, setUpdating] = useState(false);
-  const [grouping, setGrouping] = useState(false);
   const [showCreateMerchantInline, setShowCreateMerchantInline] = useState(false);
   const [newMerchantNameInline, setNewMerchantNameInline] = useState('');
   const [creatingInline, setCreatingInline] = useState(false);
@@ -113,21 +107,6 @@ export function AdminGlobalMerchantsPage() {
     }
   };
 
-  const fetchPatterns = async (filter: 'all' | 'ungrouped' | 'grouped' = patternFilter) => {
-    try {
-      const filterParam = filter === 'all' ? '' : `?filter=${filter}`;
-      const response = await fetch(`/api/admin/global-merchants/patterns${filterParam}`);
-      if (response.ok) {
-        const data = await response.json();
-        setPatterns(data.patterns || []);
-      } else {
-        toast.error('Failed to fetch patterns');
-      }
-    } catch (error) {
-      console.error('Error fetching patterns:', error);
-      toast.error('Failed to fetch patterns');
-    }
-  };
 
   const fetchMerchantPatterns = async (merchantId: number) => {
     setLoadingPatterns(true);
@@ -166,9 +145,8 @@ export function AdminGlobalMerchantsPage() {
 
       if (response.ok) {
         toast.success('Pattern removed from merchant');
-        // Refresh merchant patterns and main patterns list
+        // Refresh merchant patterns
         await fetchMerchantPatterns(selectedMerchant.id);
-        await fetchPatterns(patternFilter);
       } else {
         const error = await response.json();
         toast.error(error.error || 'Failed to remove pattern');
@@ -184,11 +162,11 @@ export function AdminGlobalMerchantsPage() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchMerchants(), fetchPatterns(patternFilter)]);
+      await fetchMerchants();
       setLoading(false);
     };
     loadData();
-  }, [statusFilter, patternFilter]);
+  }, [statusFilter]);
 
   const handleCreate = async () => {
     if (!newMerchantName.trim()) {
@@ -211,7 +189,7 @@ export function AdminGlobalMerchantsPage() {
         toast.success('Merchant created successfully');
         setShowCreateDialog(false);
         setNewMerchantName('');
-        setNewMerchantStatus('draft');
+        setNewMerchantStatus('active');
         fetchMerchants();
       } else {
         const data = await response.json();
@@ -256,7 +234,6 @@ export function AdminGlobalMerchantsPage() {
         setShowEditDialog(false);
         setSelectedMerchant(null);
         fetchMerchants();
-        fetchPatterns();
       } else {
         const data = await response.json();
         toast.error(data.error || 'Failed to update merchant');
@@ -498,7 +475,6 @@ export function AdminGlobalMerchantsPage() {
         setTargetMerchantId(null);
         setMergeMerchantSearchQuery('');
         fetchMerchants();
-        fetchPatterns();
       } else {
         const errorData = await response.json();
         toast.error(errorData.error || 'Failed to merge merchants');
@@ -524,7 +500,6 @@ export function AdminGlobalMerchantsPage() {
         setShowDeleteDialog(false);
         setSelectedMerchant(null);
         fetchMerchants();
-        fetchPatterns();
       } else {
         const data = await response.json();
         toast.error(data.error || 'Failed to delete merchant');
@@ -548,7 +523,7 @@ export function AdminGlobalMerchantsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           display_name: newMerchantNameInline.trim(),
-          status: 'draft',
+          status: 'active',
         }),
       });
 
@@ -572,49 +547,6 @@ export function AdminGlobalMerchantsPage() {
     }
   };
 
-  const handleGroupPatterns = async () => {
-    if (selectedPatterns.size === 0) {
-      toast.error('Please select at least one pattern');
-      return;
-    }
-
-    if (!selectedMerchant) {
-      toast.error('Please select a merchant');
-      return;
-    }
-
-    setGrouping(true);
-    try {
-      const response = await fetch('/api/admin/global-merchants/patterns/group', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          merchant_id: selectedMerchant.id,
-          pattern_ids: Array.from(selectedPatterns),
-        }),
-      });
-
-      if (response.ok) {
-        toast.success(`Grouped ${selectedPatterns.size} pattern(s) to ${selectedMerchant.display_name}`);
-        setShowGroupDialog(false);
-        setSelectedPatterns(new Set());
-        setSelectedMerchant(null);
-        setMerchantSearchQuery('');
-        fetchMerchants();
-        // Refresh patterns with current filter - grouped patterns will disappear from ungrouped view
-        fetchPatterns(patternFilter);
-      } else {
-        const data = await response.json();
-        toast.error(data.error || 'Failed to group patterns');
-      }
-    } catch (error) {
-      console.error('Error grouping patterns:', error);
-      toast.error('Failed to group patterns');
-    } finally {
-      setGrouping(false);
-    }
-  };
-
   const handleUngroupPatterns = async (patternIds: number[]) => {
     try {
       const response = await fetch('/api/admin/global-merchants/patterns/ungroup', {
@@ -626,8 +558,6 @@ export function AdminGlobalMerchantsPage() {
       if (response.ok) {
         toast.success('Patterns ungrouped successfully');
         fetchMerchants();
-        // Refresh patterns with current filter - ungrouped patterns will appear in ungrouped view
-        fetchPatterns(patternFilter);
       } else {
         const data = await response.json();
         toast.error(data.error || 'Failed to ungroup patterns');
@@ -638,56 +568,14 @@ export function AdminGlobalMerchantsPage() {
     }
   };
 
-  const togglePatternSelection = (patternId: number) => {
-    setSelectedPatterns(prev => {
-      const next = new Set(prev);
-      if (next.has(patternId)) {
-        next.delete(patternId);
-      } else {
-        next.add(patternId);
-      }
-      return next;
-    });
-  };
-
   const filteredMerchants = merchants.filter(merchant =>
     merchant.display_name.toLowerCase().includes(merchantSearchQuery.toLowerCase())
-  );
-
-  // Filter patterns based on search query (filter by patternFilter is already done in API)
-  const filteredPatterns = patterns.filter(pattern =>
-    pattern.pattern.toLowerCase().includes(patternSearchQuery.toLowerCase())
   );
 
   // Memoize filtered icons for performance
   const filteredIcons = useMemo(() => searchIcons(iconSearchQuery), [iconSearchQuery]);
   const displayIcons = useMemo(() => filteredIcons.slice(0, 200), [filteredIcons]);
   const hasMoreIcons = filteredIcons.length > 200;
-
-  const toggleSelectAll = () => {
-    if (selectedPatterns.size === filteredPatterns.length && filteredPatterns.length > 0) {
-      // Deselect all
-      setSelectedPatterns(new Set());
-    } else {
-      // Select all filtered patterns
-      setSelectedPatterns(new Set(filteredPatterns.map(p => p.id)));
-    }
-  };
-
-  const allSelected = filteredPatterns.length > 0 && selectedPatterns.size === filteredPatterns.length;
-  const someSelected = selectedPatterns.size > 0 && selectedPatterns.size < filteredPatterns.length;
-  const selectAllCheckboxRef = useRef<HTMLButtonElement>(null);
-
-  // Set indeterminate state on checkbox (Radix UI checkbox doesn't support indeterminate prop directly)
-  useEffect(() => {
-    if (selectAllCheckboxRef.current) {
-      // Access the underlying input element if available, or set on the button element
-      const input = selectAllCheckboxRef.current.querySelector('input');
-      if (input) {
-        input.indeterminate = someSelected;
-      }
-    }
-  }, [someSelected, allSelected]);
 
   if (loading) {
     return (
@@ -712,18 +600,7 @@ export function AdminGlobalMerchantsPage() {
         </Button>
       </div>
 
-      <Tabs defaultValue="merchants" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="merchants">
-            Merchants ({merchants.length})
-          </TabsTrigger>
-          <TabsTrigger value="patterns">
-            Patterns ({patterns.length})
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Merchants Tab */}
-        <TabsContent value="merchants" className="space-y-6">
+      <div className="space-y-6">
           <Card>
         <CardHeader>
           <div className="flex items-center gap-4">
@@ -873,151 +750,7 @@ export function AdminGlobalMerchantsPage() {
           </Table>
         </CardContent>
           </Card>
-        </TabsContent>
-
-        {/* Patterns Tab */}
-        <TabsContent value="patterns" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>
-                    Patterns ({patternFilter === 'all' ? patterns.length : patternFilter === 'ungrouped' ? patterns.filter(p => !p.global_merchant_id).length : patterns.filter(p => p.global_merchant_id).length})
-                  </CardTitle>
-                  <CardDescription>
-                    Transaction patterns. Select patterns and group them into merchants.
-                  </CardDescription>
-                </div>
-                {selectedPatterns.size > 0 && (
-                  <Button
-                    onClick={() => setShowGroupDialog(true)}
-                    disabled={selectedPatterns.size === 0}
-                  >
-                    <Link2 className="mr-2 h-4 w-4" />
-                    Group Selected ({selectedPatterns.size})
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {/* Pattern Filter Buttons */}
-              <div className="mb-4 flex gap-2">
-                <Button
-                  variant={patternFilter === 'all' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => {
-                    setPatternFilter('all');
-                    fetchPatterns('all');
-                  }}
-                >
-                  All Patterns
-                </Button>
-                <Button
-                  variant={patternFilter === 'ungrouped' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => {
-                    setPatternFilter('ungrouped');
-                    fetchPatterns('ungrouped');
-                  }}
-                >
-                  Ungrouped
-                </Button>
-                <Button
-                  variant={patternFilter === 'grouped' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => {
-                    setPatternFilter('grouped');
-                    fetchPatterns('grouped');
-                  }}
-                >
-                  Grouped
-                </Button>
-              </div>
-              
-              <div className="relative mb-4">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search patterns..."
-                  value={patternSearchQuery}
-                  onChange={(e) => setPatternSearchQuery(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">
-                      <Checkbox
-                        ref={selectAllCheckboxRef}
-                        checked={allSelected}
-                        onCheckedChange={toggleSelectAll}
-                      />
-                    </TableHead>
-                    <TableHead>Pattern</TableHead>
-                    <TableHead>Merchant</TableHead>
-                    <TableHead>Usage Count</TableHead>
-                    <TableHead>First Seen</TableHead>
-                    <TableHead>Last Seen</TableHead>
-                    {patternFilter === 'grouped' && (
-                      <TableHead>Actions</TableHead>
-                    )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredPatterns.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={patternFilter === 'grouped' ? 7 : 6} className="text-center text-muted-foreground">
-                        {patternFilter === 'all' && 'No patterns found'}
-                        {patternFilter === 'ungrouped' && 'No ungrouped patterns found'}
-                        {patternFilter === 'grouped' && 'No grouped patterns found'}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredPatterns.map((pattern) => (
-                      <TableRow key={pattern.id}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedPatterns.has(pattern.id)}
-                            onCheckedChange={() => togglePatternSelection(pattern.id)}
-                          />
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">{pattern.pattern}</TableCell>
-                        <TableCell>
-                          {pattern.global_merchant_id && pattern.global_merchants ? (
-                            <Badge variant="default">{pattern.global_merchants.display_name}</Badge>
-                          ) : (
-                            <Badge variant="outline">Ungrouped</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{pattern.usage_count}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {new Date(pattern.first_seen_at).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {new Date(pattern.last_seen_at).toLocaleDateString()}
-                        </TableCell>
-                        {patternFilter === 'grouped' && pattern.global_merchant_id && (
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleUngroupPatterns([pattern.id])}
-                            >
-                              Ungroup
-                            </Button>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      </div>
 
       {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -1117,185 +850,6 @@ export function AdminGlobalMerchantsPage() {
             </Button>
             <Button onClick={handleUpdate} disabled={!editMerchantName.trim() || updating}>
               {updating ? 'Updating...' : 'Update'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Group Patterns Dialog */}
-      <Dialog open={showGroupDialog} onOpenChange={(open) => {
-        setShowGroupDialog(open);
-        if (!open) {
-          setMerchantSearchQuery('');
-          setShowCreateMerchantInline(false);
-          setNewMerchantNameInline('');
-        }
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Group Patterns to Merchant</DialogTitle>
-            <DialogDescription>
-              Select a merchant to group {selectedPatterns.size} selected pattern(s) into, or create a new one
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="group-merchant">Merchant</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    className="w-full justify-between"
-                  >
-                    {selectedMerchant ? selectedMerchant.display_name : 'Select or create merchant...'}
-                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[400px] p-0" align="start">
-                  <div className="p-2 border-b">
-                    <div className="relative">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search merchants..."
-                        value={merchantSearchQuery}
-                        onChange={(e) => {
-                          setMerchantSearchQuery(e.target.value);
-                          setShowCreateMerchantInline(false);
-                        }}
-                        className="pl-8"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && merchantSearchQuery.trim() && !merchants.find(m => m.display_name.toLowerCase() === merchantSearchQuery.toLowerCase())) {
-                            setShowCreateMerchantInline(true);
-                            setNewMerchantNameInline(merchantSearchQuery);
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="max-h-[300px] overflow-y-auto p-1">
-                    {merchants
-                      .filter(merchant =>
-                        merchant.display_name.toLowerCase().includes(merchantSearchQuery.toLowerCase())
-                      )
-                      .map((merchant) => (
-                        <div
-                          key={merchant.id}
-                          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent cursor-pointer"
-                          onClick={() => {
-                            setSelectedMerchant(merchant);
-                            setMerchantSearchQuery('');
-                            setShowCreateMerchantInline(false);
-                          }}
-                        >
-                          <CheckCircle
-                            className={`h-4 w-4 ${
-                              selectedMerchant?.id === merchant.id ? 'opacity-100' : 'opacity-0'
-                            }`}
-                          />
-                          {merchant.display_name}
-                          <Badge variant={merchant.status === 'active' ? 'default' : 'secondary'} className="ml-auto text-xs">
-                            {merchant.status}
-                          </Badge>
-                        </div>
-                      ))}
-                    {merchantSearchQuery.trim() &&
-                      !merchants.find(m =>
-                        m.display_name.toLowerCase() === merchantSearchQuery.toLowerCase()
-                      ) && (
-                        <div className="border-t mt-1 pt-1">
-                          <div
-                            className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent cursor-pointer"
-                            onClick={() => {
-                              setShowCreateMerchantInline(true);
-                              setNewMerchantNameInline(merchantSearchQuery);
-                            }}
-                          >
-                            <Plus className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-muted-foreground">
-                              Create &quot;{merchantSearchQuery}&quot;
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-            {showCreateMerchantInline && (
-              <div className="space-y-2 p-3 border rounded-md bg-muted/50">
-                <Label htmlFor="new-merchant-name">New Merchant Name</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="new-merchant-name"
-                    value={newMerchantNameInline}
-                    onChange={(e) => setNewMerchantNameInline(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleCreateMerchantInline();
-                      }
-                    }}
-                    autoFocus
-                  />
-                  <Button
-                    onClick={handleCreateMerchantInline}
-                    disabled={!newMerchantNameInline.trim() || creatingInline}
-                    size="sm"
-                  >
-                    {creatingInline ? 'Creating...' : 'Create'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowCreateMerchantInline(false);
-                      setNewMerchantNameInline('');
-                    }}
-                    size="sm"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-            {selectedMerchant && (
-              <div className="p-3 border rounded-md bg-muted/50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">{selectedMerchant.display_name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      Status: <Badge variant={selectedMerchant.status === 'active' ? 'default' : 'secondary'} className="text-xs">
-                        {selectedMerchant.status}
-                      </Badge>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedMerchant(null);
-                      setMerchantSearchQuery('');
-                    }}
-                  >
-                    Change
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setShowGroupDialog(false);
-              setMerchantSearchQuery('');
-              setShowCreateMerchantInline(false);
-              setNewMerchantNameInline('');
-            }}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleGroupPatterns}
-              disabled={!selectedMerchant || selectedPatterns.size === 0 || grouping}
-            >
-              {grouping ? 'Grouping...' : 'Group Patterns'}
             </Button>
           </DialogFooter>
         </DialogContent>
