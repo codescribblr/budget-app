@@ -73,6 +73,7 @@ export function AdminMerchantRecommendationsPage() {
   // Track which patterns are included for each recommendation (key: recommendationId, value: Set of pattern strings)
   const [includedPatterns, setIncludedPatterns] = useState<Map<number, Set<string>>>(new Map());
   const [merchantExistsError, setMerchantExistsError] = useState<string | null>(null);
+  const [selectedMerchantData, setSelectedMerchantData] = useState<GlobalMerchant | null>(null);
 
   const fetchRecommendations = async () => {
     try {
@@ -114,6 +115,18 @@ export function AdminMerchantRecommendationsPage() {
     }
   }, [reviewAction, merchantSearchQuery, showReviewDialog]);
 
+  // Keep selected merchant in the list even after search clears
+  useEffect(() => {
+    if (selectedMerchantId) {
+      const merchant = availableMerchants.find(m => m.id === selectedMerchantId);
+      if (merchant) {
+        setSelectedMerchantData(merchant);
+      }
+    } else {
+      setSelectedMerchantData(null);
+    }
+  }, [selectedMerchantId, availableMerchants]);
+
   // Auto-select merchant when merchantExistsError is set
   useEffect(() => {
     if (merchantExistsError && reviewAction === 'merge' && availableMerchants.length > 0) {
@@ -150,6 +163,7 @@ export function AdminMerchantRecommendationsPage() {
     setReviewAction(action);
     setNewMerchantName(recommendation.suggested_merchant_name);
     setSelectedMerchantId(null);
+    setSelectedMerchantData(null);
     setMerchantSearchQuery('');
     setAdminNotes('');
     setMerchantPopoverOpen(false);
@@ -172,6 +186,7 @@ export function AdminMerchantRecommendationsPage() {
     // Use the first recommendation's suggested name as default
     setNewMerchantName(selected[0]?.suggested_merchant_name || '');
     setSelectedMerchantId(null);
+    setSelectedMerchantData(null);
     setMerchantSearchQuery('');
     setAdminNotes('');
     setMerchantPopoverOpen(false);
@@ -577,12 +592,16 @@ export function AdminMerchantRecommendationsPage() {
       <Dialog open={showReviewDialog} onOpenChange={(open) => {
         setShowReviewDialog(open);
         if (!open) {
-          setMerchantSearchQuery('');
-          setSelectedMerchantId(null);
-          setMerchantPopoverOpen(false);
-          setIncludedPatterns(new Map()); // Clear pattern selections
-          setMerchantExistsError(null); // Clear merchant exists error
-          // Don't clear selectedRecommendationIds here - let user keep selection after dialog closes
+          // Only clear if we're not in the middle of processing
+          if (!isProcessing) {
+            setMerchantSearchQuery('');
+            setSelectedMerchantId(null);
+            setSelectedMerchantData(null);
+            setMerchantPopoverOpen(false);
+            setIncludedPatterns(new Map()); // Clear pattern selections
+            setMerchantExistsError(null); // Clear merchant exists error
+            // Don't clear selectedRecommendationIds here - let user keep selection after dialog closes
+          }
         }
       }}>
         <DialogContent className="max-w-2xl">
@@ -788,8 +807,8 @@ export function AdminMerchantRecommendationsPage() {
                       variant="outline"
                       className="w-full justify-between"
                     >
-                      {selectedMerchantId
-                        ? availableMerchants.find(m => m.id === selectedMerchantId)?.display_name || 'Select merchant...'
+                      {selectedMerchantData
+                        ? selectedMerchantData.display_name
                         : 'Select merchant...'}
                       <ChevronDown className="ml-2 h-4 w-4" />
                     </Button>
@@ -803,18 +822,45 @@ export function AdminMerchantRecommendationsPage() {
                           setMerchantSearchQuery(e.target.value);
                           fetchMerchants(e.target.value);
                         }}
+                        onKeyDown={(e) => {
+                          // Prevent popover from closing on Escape when typing
+                          if (e.key === 'Escape') {
+                            e.stopPropagation();
+                          }
+                        }}
                       />
                     </div>
-                    <div className="max-h-[300px] overflow-y-auto p-1">
-                      {availableMerchants
-                        .filter(m => m.display_name.toLowerCase().includes(merchantSearchQuery.toLowerCase()))
-                        .map((merchant) => (
+                    <div 
+                      className="max-h-[300px] overflow-y-auto p-1"
+                      onWheel={(e) => {
+                        // Ensure wheel events are handled by this element
+                        e.stopPropagation();
+                      }}
+                      onMouseDown={(e) => {
+                        // Prevent popover from closing when clicking inside
+                        e.stopPropagation();
+                      }}
+                      style={{ overscrollBehavior: 'contain' }}
+                    >
+                      {availableMerchants.length === 0 ? (
+                        <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                          No merchants found
+                        </div>
+                      ) : (
+                        availableMerchants.map((merchant) => (
                           <div
                             key={merchant.id}
                             className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent cursor-pointer"
-                            onClick={() => {
+                            onMouseDown={(e) => {
+                              // Prevent popover from closing
+                              e.stopPropagation();
+                            }}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
                               setSelectedMerchantId(merchant.id);
-                              setMerchantSearchQuery('');
+                              // Don't clear search query immediately - let user see their selection
+                              // It will be cleared when dialog closes
                               setMerchantPopoverOpen(false);
                             }}
                           >
@@ -826,9 +872,13 @@ export function AdminMerchantRecommendationsPage() {
                                 size="xs"
                               />
                             )}
-                            <span>{merchant.display_name}</span>
+                            <span className="flex-1">{merchant.display_name}</span>
+                            {selectedMerchantId === merchant.id && (
+                              <CheckCircle className="h-4 w-4 text-primary" />
+                            )}
                           </div>
-                        ))}
+                        ))
+                      )}
                     </div>
                   </PopoverContent>
                 </Popover>
