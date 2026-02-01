@@ -37,7 +37,7 @@ import {
   UserPlus,
   RefreshCw,
   Bell,
-  Sun,
+  Palmtree,
 } from "lucide-react"
 import { useFeature } from "@/contexts/FeatureContext"
 
@@ -101,12 +101,12 @@ const navigationItems = [
   { label: "Cash Accounts", path: "/accounts", icon: Banknote },
   { label: "Credit Cards", path: "/credit-cards", icon: CreditCardIcon },
   { label: "Loans", path: "/loans", icon: Landmark },
-  { label: "Non-cash Assets", path: "/non-cash-assets", icon: TrendingUp },
+  { label: "Non-cash Assets", path: "/non-cash-assets", icon: TrendingUp, featureKey: "non_cash_assets" },
   { label: "Pending Checks", path: "/pending-checks", icon: FileText },
   { label: "Reports", path: "/reports", icon: FileText },
   { label: "Trends", path: "/reports/trends", icon: TrendingUp, featureKey: "advanced_reporting" },
   { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
-  { label: "Forecast", path: "/reports/forecast", icon: Sun, featureKey: "advanced_reporting" },
+  { label: "Retirement Planning", path: "/reports/retirement-planning", icon: Palmtree, featureKey: "retirement_planning" },
   { label: "Income", path: "/income", icon: DollarSign },
   { label: "Goals", path: "/goals", icon: Target, featureKey: "goals" },
   { label: "AI Assistant", path: "/dashboard/ai-assistant", icon: Sparkles, featureKey: "ai_chat" },
@@ -138,6 +138,8 @@ export function CommandPalette() {
   const tagsEnabled = useFeature('tags')
   const recurringTransactionsEnabled = useFeature('recurring_transactions')
   const automaticImportsEnabled = useFeature('automatic_imports')
+  const retirementPlanningEnabled = useFeature('retirement_planning')
+  const nonCashAssetsEnabled = useFeature('non_cash_assets')
   const scrollTimeoutsRef = React.useRef<NodeJS.Timeout[]>([])
 
   React.useEffect(() => {
@@ -282,6 +284,10 @@ export function CommandPalette() {
                       return tagsEnabled
                     case 'recurring_transactions':
                       return recurringTransactionsEnabled
+                    case 'retirement_planning':
+                      return retirementPlanningEnabled
+                    case 'non_cash_assets':
+                      return nonCashAssetsEnabled
                     default:
                       return true
                   }

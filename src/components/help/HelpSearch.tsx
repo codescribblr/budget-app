@@ -17,15 +17,18 @@ const allHelpPages = [
   // Features
   { title: 'Dashboard Overview', href: '/help/features/dashboard', category: 'Features', keywords: ['dashboard', 'home', 'overview', 'summary'] },
   { title: 'Accounts & Credit Cards', href: '/help/features/accounts', category: 'Features', keywords: ['accounts', 'credit', 'cards', 'bank', 'balance'] },
+  { title: 'Non-Cash Assets', href: '/help/features/non-cash-assets', category: 'Features', keywords: ['assets', 'investments', 'retirement', '401k', 'ira', 'real estate', 'vehicles', 'net worth'] },
   { title: 'Budget Categories (Envelopes)', href: '/help/features/categories', category: 'Features', keywords: ['categories', 'envelopes', 'budget', 'organize'] },
   { title: 'Transactions', href: '/help/features/transactions', category: 'Features', keywords: ['transactions', 'spending', 'expenses', 'record'] },
   { title: 'Money Movement', href: '/help/features/money-movement', category: 'Features', keywords: ['money', 'movement', 'allocate', 'assign', 'distribute'] },
   { title: 'CSV Import', href: '/help/features/csv-import', category: 'Features', keywords: ['csv', 'import', 'upload', 'bank', 'download'] },
+  { title: 'Import Queue', href: '/help/features/import-queue', category: 'Features', keywords: ['import', 'queue', 'review', 'approve', 'batch', 'automatic', 'teller', 'plaid'] },
   { title: 'Financial Goals', href: '/help/features/goals', category: 'Features', keywords: ['goals', 'savings', 'targets', 'objectives'] },
   { title: 'Merchants & Auto-Categorization', href: '/help/features/merchants', category: 'Features', keywords: ['merchants', 'auto', 'categorization', 'automatic', 'groups'] },
   { title: 'Loans', href: '/help/features/loans', category: 'Features', keywords: ['loans', 'debt', 'payoff', 'mortgage', 'car'] },
   { title: 'Pending Checks', href: '/help/features/pending-checks', category: 'Features', keywords: ['checks', 'pending', 'outstanding', 'uncleared'] },
   { title: 'Income Buffer', href: '/help/features/income-buffer', category: 'Features', keywords: ['income', 'buffer', 'irregular', 'variable', 'freelance'] },
+  { title: 'Retirement Planning', href: '/help/features/retirement-planning', category: 'Features', keywords: ['retirement', 'planning', 'forecast', 'net worth', 'rmd', 'social security', 'distribution'] },
   { title: 'Reports & Analytics', href: '/help/features/reports', category: 'Features', keywords: ['reports', 'analytics', 'charts', 'graphs', 'trends'] },
   
   // Tutorials

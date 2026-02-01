@@ -22,18 +22,25 @@ export default function AccountsFeaturePage() {
       <div>
         <h1 className="text-3xl font-bold mb-2">Accounts & Credit Cards</h1>
         <p className="text-lg text-muted-foreground">
-          Track all your bank accounts and credit cards in one place
+          Track your cash-based accounts (bank accounts) and credit cards in one place
         </p>
       </div>
 
       {/* Bank Accounts Section */}
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-bold mb-4">Bank Accounts</h2>
+          <h2 className="text-2xl font-bold mb-4">Bank Accounts (Cash-Based Accounts)</h2>
           <p className="text-muted-foreground">
-            Accounts represent where your money physically lives - checking accounts, savings accounts,
-            cash on hand, etc. They track the actual balance in each location.
+            Accounts represent your cash-based accounts - checking accounts, savings accounts,
+            cash on hand, etc. They track the actual cash balance in each location. These are
+            accounts where you can easily access and spend money for your budget.
           </p>
+          <Callout type="info" title="What about investments and retirement accounts?">
+            Investment accounts, retirement accounts (401(k), IRA, etc.), and other non-cash assets
+            should be tracked using our <Link href="/help/features/non-cash-assets" className="text-primary hover:underline font-medium">Non-Cash Assets</Link> feature,
+            not as cash accounts. This keeps your budget focused on spendable cash while still tracking
+            your complete net worth.
+          </Callout>
         </div>
 
         {/* Adding an Account */}
@@ -110,7 +117,17 @@ export default function AccountsFeaturePage() {
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-red-600 dark:bg-red-400 mt-1.5 flex-shrink-0" />
-                    <span>Investment accounts (stocks, retirement accounts)</span>
+                    <span>
+                      Investment accounts (stocks, bonds, mutual funds) - use{' '}
+                      <Link href="/help/features/non-cash-assets" className="text-primary hover:underline">Non-Cash Assets</Link> instead
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-red-600 dark:bg-red-400 mt-1.5 flex-shrink-0" />
+                    <span>
+                      Retirement accounts (401(k), IRA, 403(b), etc.) - use{' '}
+                      <Link href="/help/features/non-cash-assets" className="text-primary hover:underline">Non-Cash Assets</Link> instead
+                    </span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-red-600 dark:bg-red-400 mt-1.5 flex-shrink-0" />
@@ -126,8 +143,14 @@ export default function AccountsFeaturePage() {
 
             <Callout type="tip" title="Why exclude accounts?">
               Excluding accounts lets you track them without affecting your budget. For example, you might
-              want to see your retirement account balance on the dashboard, but you don't want that money
-              included in your "Available to Save" since you can't spend it.
+              want to see a child's savings account balance on the dashboard, but you don't want that money
+              included in your "Available to Save" since it's not part of your budget.
+            </Callout>
+            <Callout type="info" title="Investment and retirement accounts">
+              Investment and retirement accounts should not be added as cash accounts at all. Instead, use
+              the <Link href="/help/features/non-cash-assets" className="text-primary hover:underline font-medium">Non-Cash Assets</Link> feature
+              to track them. This keeps your budget focused on spendable cash while still including these
+              assets in your net worth calculations.
             </Callout>
           </CardContent>
         </Card>

@@ -186,12 +186,12 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
 
   return (
     <>
-      <div className="mb-3 flex items-center justify-between">
-        <Button onClick={openAddDialog} size="sm" disabled={disabled}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <Button onClick={openAddDialog} size="sm" disabled={disabled} className="shrink-0">
           Add Asset
         </Button>
         {totalValue > 0 && (
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-muted-foreground shrink-0">
             Total: <span className="font-semibold">{formatCurrency(totalValue)}</span>
           </div>
         )}

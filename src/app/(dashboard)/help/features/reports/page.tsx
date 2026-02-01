@@ -13,8 +13,11 @@ import {
   Lightbulb,
   Download,
   Target,
-  CheckCircle2
+  CheckCircle2,
+  Palmtree,
+  Tag
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 export default function ReportsFeaturePage() {
   return (
@@ -40,12 +43,14 @@ export default function ReportsFeaturePage() {
         <CardContent className="pt-6">
           <p className="text-base leading-relaxed">
             The Reports feature helps you understand where your money goes and how your spending
-            changes over time. Use it to find opportunities to save and track your progress.
+            changes over time. Use it to find opportunities to save and track your progress. The
+            app offers several types of reports, from basic spending analysis to advanced forecasting
+            and retirement planning.
           </p>
         </CardContent>
       </Card>
 
-      {/* Accessing Reports */}
+      {/* Available Reports */}
       <Card>
         <CardHeader>
           <div className="flex items-start gap-4">
@@ -53,38 +58,78 @@ export default function ReportsFeaturePage() {
               <BarChart3 className="h-6 w-6 text-primary" />
             </div>
             <div className="flex-1">
-              <CardTitle className="text-xl mb-2">Accessing Reports</CardTitle>
+              <CardTitle className="text-xl mb-2">Available Reports</CardTitle>
               <CardDescription className="text-base">
-                Two main reports to analyze your spending
+                All reports available in the app
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3">
-            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-              <div className="font-medium text-sm min-w-[160px]">
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border">
+              <div className="font-medium text-sm min-w-[200px]">
                 <Link href="/reports" className="text-primary hover:underline">Spending by Category</Link>
               </div>
-              <div className="text-sm text-muted-foreground">
-                See how much you spent in each category for a specific time period
+              <div className="flex-1 text-sm text-muted-foreground">
+                See how much you spent in each category for a specific time period. Includes pie chart,
+                category breakdown, and merchant statistics.
               </div>
             </div>
-            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-              <div className="font-medium text-sm min-w-[160px]">
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border border-yellow-500/30">
+              <div className="font-medium text-sm min-w-[200px]">
                 <Link href="/reports/trends" className="text-primary hover:underline">Spending Trends</Link>
+                <Badge variant="secondary" className="ml-2 text-xs">Premium</Badge>
               </div>
-              <div className="text-sm text-muted-foreground">
-                Track how your spending changes over time
+              <div className="flex-1 text-sm text-muted-foreground">
+                Track how your spending changes over time with detailed trend analysis, monthly spending
+                patterns, budget vs. actual comparisons, and merchant spending trends.
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border border-yellow-500/30">
+              <div className="font-medium text-sm min-w-[200px]">
+                <Link href="/reports/retirement-planning" className="text-primary hover:underline">Retirement Planning</Link>
+                <Badge variant="secondary" className="ml-2 text-xs">Premium</Badge>
+              </div>
+              <div className="flex-1 text-sm text-muted-foreground">
+                Project your future net worth and plan for retirement. Includes retirement age planning,
+                Social Security calculations, Required Minimum Distributions (RMDs), and distribution planning.
+                See <Link href="/help/features/retirement-planning" className="text-primary hover:underline">Retirement Planning</Link> for detailed information.
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border border-yellow-500/30">
+              <div className="font-medium text-sm min-w-[200px]">
+                <Link href="/reports/categories" className="text-primary hover:underline">Advanced Category Reports</Link>
+                <Badge variant="secondary" className="ml-2 text-xs">Premium</Badge>
+              </div>
+              <div className="flex-1 text-sm text-muted-foreground">
+                Detailed analytics for each category including spending statistics, trends, transaction
+                history, and year-to-date comparisons. Click on any category to see its detailed report.
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border">
+              <div className="font-medium text-sm min-w-[200px]">
+                <Link href="/reports/tags" className="text-primary hover:underline">Tag Reports</Link>
+              </div>
+              <div className="flex-1 text-sm text-muted-foreground">
+                Analyze spending by tags. Requires the Tags feature to be enabled. Shows spending breakdown
+                by tag with transaction details.
               </div>
             </div>
           </div>
+          <Callout type="info" title="Premium Features">
+            Reports marked with "Premium" require a premium subscription. If you don't have premium,
+            you'll see an upgrade prompt when accessing these reports.
+          </Callout>
         </CardContent>
       </Card>
 
       {/* Spending by Category Report */}
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold">Spending by Category Report</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-bold">Spending by Category Report</h2>
+          <Badge variant="outline" className="text-xs">Free</Badge>
+        </div>
 
         <Card>
           <CardHeader>
@@ -108,7 +153,11 @@ export default function ReportsFeaturePage() {
               </li>
               <li className="flex items-start gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-                <span><strong>Category list:</strong> Detailed list with amounts and percentages</span>
+                <span><strong>Category list:</strong> Detailed list with amounts, percentages, and budget comparisons</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Merchant statistics:</strong> See which merchants you spend the most with</span>
               </li>
               <li className="flex items-start gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
@@ -117,6 +166,10 @@ export default function ReportsFeaturePage() {
               <li className="flex items-start gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
                 <span><strong>Date range selector:</strong> Choose the time period to analyze</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Category filter:</strong> Click on a category to see all transactions in that category</span>
               </li>
             </ul>
           </CardContent>
@@ -192,7 +245,10 @@ export default function ReportsFeaturePage() {
 
       {/* Spending Trends Report */}
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold">Spending Trends Report</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-bold">Spending Trends Report</h2>
+          <Badge variant="secondary" className="text-xs">Premium</Badge>
+        </div>
 
         <Card>
           <CardHeader>
@@ -215,19 +271,27 @@ export default function ReportsFeaturePage() {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li className="flex items-start gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-                <span><strong>Line chart:</strong> Shows spending over time (by month or week)</span>
+                <span><strong>Monthly spending trend:</strong> Line chart showing spending over time by month</span>
               </li>
               <li className="flex items-start gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-                <span><strong>Category comparison:</strong> Compare multiple categories side-by-side</span>
+                <span><strong>Budget vs. actual:</strong> Compare your budgeted amounts to actual spending over time</span>
               </li>
               <li className="flex items-start gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-                <span><strong>Total spending trend:</strong> See if your overall spending is increasing or decreasing</span>
+                <span><strong>Category spending trends:</strong> See how individual categories change over time</span>
               </li>
               <li className="flex items-start gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-                <span><strong>Date range selector:</strong> Choose how far back to look</span>
+                <span><strong>Spending velocity:</strong> Track how quickly you're spending throughout the month</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Merchant spending trends:</strong> See which merchants you're spending more or less with over time</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Time range selector:</strong> Choose from 3, 6, 12, 24, or 36 months</span>
               </li>
             </ul>
           </CardContent>
@@ -300,6 +364,170 @@ export default function ReportsFeaturePage() {
             <Callout type="info" title="Plan for seasonal expenses">
               If you notice seasonal patterns (like higher spending in December), use this information
               to plan ahead. Create sinking funds for these predictable expenses!
+            </Callout>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Net Worth Forecast Report */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-bold">Net Worth Forecast</h2>
+          <Badge variant="secondary" className="text-xs">Premium</Badge>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Palmtree className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl mb-2">Features</CardTitle>
+                <CardDescription className="text-base">
+                  Project your financial future and plan for retirement
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              The Net Worth Forecast helps you visualize your financial future by projecting your net worth over time.
+              It considers your current assets, loans, income growth, savings rate, retirement age, Social Security
+              benefits, Required Minimum Distributions (RMDs), and more.
+            </p>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Net worth projection:</strong> See how your net worth changes over time</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Retirement planning:</strong> Configure retirement age, Social Security, and RMDs</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Distribution planning:</strong> See when you'll need to start taking distributions from assets</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Timeline events:</strong> Model major financial events like asset sales or windfalls</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Component breakdown:</strong> See how cash, assets, credit cards, and loans contribute to net worth</span>
+              </li>
+            </ul>
+            <Callout type="info" title="Learn More">
+              For detailed information about using the Net Worth Forecast, see{' '}
+              <Link href="/help/features/retirement-planning" className="text-primary hover:underline">Retirement Planning</Link>.
+            </Callout>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Advanced Category Reports */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-bold">Advanced Category Reports</h2>
+          <Badge variant="secondary" className="text-xs">Premium</Badge>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <BarChart3 className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl mb-2">Features</CardTitle>
+                <CardDescription className="text-base">
+                  Detailed analytics for each budget category
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Advanced Category Reports provide in-depth analysis for each of your budget categories, helping you
+              understand spending patterns, trends, and opportunities for improvement.
+            </p>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Category overview:</strong> See all categories with key statistics at a glance</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Detailed category report:</strong> Click any category to see its detailed analytics</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Spending statistics:</strong> Total spent, transaction count, average amount, last transaction date</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Budget comparison:</strong> Compare actual spending to budgeted amounts</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Year-to-date analysis:</strong> See YTD spending and progress toward annual goals</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Trends and charts:</strong> Visualize spending patterns over time</span>
+              </li>
+            </ul>
+            <Callout type="tip" title="How to use">
+              Navigate to <Link href="/reports/categories" className="text-primary hover:underline">Advanced Category Reports</Link> to
+              see a list of all your categories. Click on any category to view its detailed report with charts, trends, and statistics.
+            </Callout>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tag Reports */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-bold">Tag Reports</h2>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Tag className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xl mb-2">Features</CardTitle>
+                <CardDescription className="text-base">
+                  Analyze spending by tags
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Tag Reports allow you to analyze your spending by tags, providing an additional way to categorize and
+              understand your transactions beyond categories.
+            </p>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Tag spending breakdown:</strong> See total spending for each tag</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Transaction details:</strong> View all transactions associated with a specific tag</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span><strong>Date filtering:</strong> Filter tag reports by date range</span>
+              </li>
+            </ul>
+            <Callout type="info" title="Requires Tags Feature">
+              Tag Reports require the Tags feature to be enabled. If tags are not enabled, you'll see a message
+              directing you to enable the feature in settings.
             </Callout>
           </CardContent>
         </Card>

@@ -66,8 +66,9 @@ export default function FirstBudgetTutorialPage() {
                     <li>Repeat for any savings accounts</li>
                   </ol>
                   <Callout type="tip" title="Tip">
-                    Only add accounts you actively use for budgeting. Don't include retirement
-                    accounts or investment accounts.
+                    Only add cash-based accounts you actively use for budgeting (checking, savings).
+                    Investment and retirement accounts should be tracked using{' '}
+                    <Link href="/help/features/non-cash-assets" className="text-primary hover:underline">Non-Cash Assets</Link> instead.
                   </Callout>
                 </>
               ),

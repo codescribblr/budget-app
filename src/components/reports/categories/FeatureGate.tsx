@@ -30,7 +30,7 @@ export function FeatureGate({ children, featureName }: FeatureGateProps) {
             <p className="text-sm text-muted-foreground mb-4">
               To access Category Reports, please enable the Advanced Reporting feature in your settings.
             </p>
-            <Button onClick={() => router.push('/settings/features')}>
+            <Button onClick={() => router.push('/settings')}>
               Go to Feature Settings
             </Button>
           </CardContent>

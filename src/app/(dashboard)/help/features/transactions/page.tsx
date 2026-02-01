@@ -75,7 +75,7 @@ export default function TransactionsFeaturePage() {
               { title: 'Click "Add Transaction"', content: 'Find and click the "Add Transaction" button' },
               {
                 title: 'Enter transaction details',
-                content: 'Fill in the date, description, amount, category, and optionally the merchant'
+                content: 'Fill in the date, description, amount, category, and optionally override the merchant assignment'
               },
               { title: 'Save', content: 'Click "Add Transaction" to save the transaction' },
             ]}
@@ -102,7 +102,7 @@ export default function TransactionsFeaturePage() {
               </li>
               <li className="flex items-start gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-                <span><strong>Merchant:</strong> (Optional) The store or company</span>
+                <span><strong>Merchant Override:</strong> (Optional) Override the automatic merchant assignment by selecting a merchant from the global list</span>
               </li>
             </ul>
           </div>
@@ -575,6 +575,84 @@ export default function TransactionsFeaturePage() {
         </CardContent>
       </Card>
 
+      {/* Merchant Assignment and Override */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Zap className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Merchant Assignment and Override</CardTitle>
+              <CardDescription className="text-base">
+                How merchants are assigned and how to override them
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Merchants are automatically assigned to transactions based on transaction descriptions and global
+            merchant patterns managed by administrators. However, you can override this assignment for individual
+            transactions if needed.
+          </p>
+          <div className="space-y-3">
+            <div className="p-4 bg-muted/50 rounded-lg border">
+              <h4 className="font-semibold mb-2">Automatic Assignment</h4>
+              <p className="text-sm text-muted-foreground">
+                By default, transactions are automatically assigned to merchants based on patterns in the transaction
+                description. This is managed globally by administrators to ensure consistent merchant names across
+                all users.
+              </p>
+            </div>
+            <div className="p-4 bg-muted/50 rounded-lg border">
+              <h4 className="font-semibold mb-2">Merchant Override</h4>
+              <p className="text-sm text-muted-foreground mb-2">
+                If a transaction is assigned to the wrong merchant, you can override it:
+              </p>
+              <StepList
+                steps={[
+                  { title: 'Edit transaction', content: 'Click on a transaction to edit it' },
+                  { title: 'Find Merchant Override', content: 'Scroll to the "Merchant Override" field' },
+                  { title: 'Select merchant', content: 'Choose a different merchant from the dropdown list of global merchants' },
+                  { title: 'Or use automatic', content: 'Select "Use automatic assignment" to remove the override and use the global assignment' },
+                  { title: 'Save', content: 'Save the transaction with your override' },
+                ]}
+              />
+            </div>
+            <div className="p-4 bg-muted/50 rounded-lg border">
+              <h4 className="font-semibold mb-2">Recommend New Merchant</h4>
+              <p className="text-sm text-muted-foreground mb-2">
+                If the merchant you need isn't in the global merchants list, you can recommend it:
+              </p>
+              <StepList
+                steps={[
+                  { title: 'Edit transaction', content: 'Click on a transaction to edit it' },
+                  { title: 'Click "Recommend New Merchant"', content: 'This button appears when no merchant override is set' },
+                  { title: 'Enter merchant name', content: 'Type the name of the merchant you want to recommend' },
+                  { title: 'Submit recommendation', content: 'Submit the recommendation for administrator review' },
+                ]}
+              />
+              <Callout type="info" title="Merchant Recommendations">
+                When you recommend a new merchant, administrators will review and approve it. Once approved,
+                it becomes available in the global merchants list for all users, and future transactions matching
+                the pattern will be automatically assigned to it. See{' '}
+                <Link href="/help/features/merchants" className="text-primary hover:underline">Merchants</Link> for
+                more information about merchant recommendations.
+              </Callout>
+            </div>
+          </div>
+          <Callout type="tip" title="When to override">
+            Use merchant overrides when:
+            <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
+              <li>A transaction is assigned to the wrong merchant</li>
+              <li>You want to use a different merchant name for a specific transaction</li>
+              <li>The automatic assignment doesn't match your preference</li>
+            </ul>
+          </Callout>
+        </CardContent>
+      </Card>
+
       {/* Auto-Categorization */}
       <Card>
         <CardHeader>
@@ -591,23 +669,27 @@ export default function TransactionsFeaturePage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Transactions are automatically categorized based on the merchant they're assigned to. This happens
+            through global merchant groups managed by administrators.
+          </p>
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li className="flex items-start gap-2">
               <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-              <span>When you categorize a transaction from a specific merchant, the app remembers it</span>
+              <span>When a merchant is assigned to a transaction, it uses the merchant's default category</span>
             </li>
             <li className="flex items-start gap-2">
               <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-              <span>Future transactions from that merchant are automatically categorized</span>
+              <span>You can always change the category when editing a transaction</span>
             </li>
             <li className="flex items-start gap-2">
               <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-              <span>You can set up merchant groups for more control</span>
+              <span>Merchant overrides don't affect categorization - you still control the category</span>
             </li>
           </ul>
           <p className="text-sm text-muted-foreground">
             See the <Link href="/help/features/merchants" className="text-primary hover:underline">Merchants guide</Link> for
-            more information.
+            more information about how merchant grouping works.
           </p>
         </CardContent>
       </Card>

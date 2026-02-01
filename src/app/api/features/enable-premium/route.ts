@@ -52,6 +52,8 @@ export async function POST() {
       'advanced_reporting',
       'ai_chat',
       'automatic_imports',
+      'retirement_planning',
+      'recurring_transactions',
     ];
 
     const now = new Date().toISOString();

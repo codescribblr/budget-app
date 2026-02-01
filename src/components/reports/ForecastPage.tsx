@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatCurrencyAbbreviated } from '@/lib/utils';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart, ReferenceLine, ComposedChart, Scatter } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Calendar, Info, Sun } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Calendar, Info, Palmtree } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { HelpPanel, HelpSection } from '@/components/ui/help-panel';
@@ -1477,11 +1477,11 @@ export default function ForecastPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
-          <Sun className="h-8 w-8 text-primary" />
-          Net Worth Forecast
+          <Palmtree className="h-8 w-8 text-primary" />
+          Retirement Planning
         </h1>
         <p className="text-muted-foreground mt-1">
-          Project your financial future based on your assets, loans, and income growth
+          Project your financial future and plan for retirement based on your assets, loans, and income growth
         </p>
       </div>
 
@@ -2309,7 +2309,7 @@ export default function ForecastPage() {
       {/* Main Forecast Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Net Worth Forecast</CardTitle>
+          <CardTitle>Retirement Planning Forecast</CardTitle>
           <CardDescription>
             Projected future net worth based on your current financial situation, starting from this year. Timeline events are shown as white vertical lines on the chart.
           </CardDescription>

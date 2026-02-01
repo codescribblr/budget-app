@@ -8,6 +8,22 @@ import { getActiveAccountId } from '@/lib/account-context';
  * Feature definitions with metadata
  */
 const FEATURES = {
+  tags: {
+    name: 'Tags',
+    description: 'Assign custom tags to transactions for flexible categorization, filtering, and reporting beyond categories and merchants.',
+    level: 'basic',
+    dependencies: [],
+    dataLossWarning: false,
+    requiresPremium: false,
+  },
+  non_cash_assets: {
+    name: 'Non-Cash Assets',
+    description: 'Track investment accounts, retirement accounts, real estate, vehicles, and other non-cash assets. These assets are included in net worth calculations and retirement planning forecasts.',
+    level: 'basic',
+    dependencies: [],
+    dataLossWarning: false,
+    requiresPremium: false,
+  },
   monthly_funding_tracking: {
     name: 'Monthly Funding Tracking',
     description: 'Track how much you\'ve funded to each category this month, separate from the current balance. Prevents refunding already-paid bills.',
@@ -88,13 +104,13 @@ const FEATURES = {
     dataLossWarning: false,
     requiresPremium: true,
   },
-  tags: {
-    name: 'Tags',
-    description: 'Assign custom tags to transactions for flexible categorization, filtering, and reporting beyond categories and merchants.',
-    level: 'intermediate',
+  retirement_planning: {
+    name: 'Retirement Planning',
+    description: 'Project your future net worth and plan for retirement based on your assets, loans, income growth, Social Security, RMDs, and historical trends.',
+    level: 'power',
     dependencies: [],
     dataLossWarning: false,
-    requiresPremium: false,
+    requiresPremium: true,
   },
   recurring_transactions: {
     name: 'Recurring Transactions',
@@ -102,7 +118,7 @@ const FEATURES = {
     level: 'intermediate',
     dependencies: [],
     dataLossWarning: false,
-    requiresPremium: false,
+    requiresPremium: true,
   },
 } as const;
 

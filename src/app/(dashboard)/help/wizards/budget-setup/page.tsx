@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Breadcrumbs } from '@/components/help/Breadcrumbs';
 import { Wizard } from '@/components/wizards/Wizard';
 import { WizardStep } from '@/components/wizards/WizardStep';
@@ -230,9 +231,10 @@ export default function BudgetSetupWizardPage() {
                 </p>
               </div>
 
-              <Callout type="tip" title="Don't include retirement accounts">
-                Only include accounts you actively use for budgeting. Don't include 401(k),
-                IRA, or other retirement accounts.
+              <Callout type="tip" title="Cash-based accounts only">
+                Only include cash-based accounts you actively use for budgeting (checking, savings).
+                Investment and retirement accounts should be tracked using{' '}
+                <Link href="/help/features/non-cash-assets" className="text-primary hover:underline">Non-Cash Assets</Link> instead.
               </Callout>
             </div>
           </WizardStep>

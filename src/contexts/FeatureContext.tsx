@@ -13,8 +13,10 @@ export type FeatureName =
   | 'advanced_reporting'
   | 'ai_chat'
   | 'automatic_imports'
+  | 'retirement_planning'
   | 'tags'
-  | 'recurring_transactions';
+  | 'recurring_transactions'
+  | 'non_cash_assets';
 
 export interface Feature {
   key: FeatureName;

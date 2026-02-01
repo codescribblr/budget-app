@@ -25,7 +25,7 @@ import {
   CreditCard,
   Landmark,
   Banknote,
-  Sun,
+  Palmtree,
 } from "lucide-react"
 
 import {
@@ -77,7 +77,7 @@ const navigationSections = [
       { label: "Cash Accounts", path: "/accounts", icon: Banknote },
       { label: "Credit Cards", path: "/credit-cards", icon: CreditCard },
       { label: "Loans", path: "/loans", icon: Landmark },
-      { label: "Non-cash Assets", path: "/non-cash-assets", icon: TrendingUp },
+      { label: "Non-cash Assets", path: "/non-cash-assets", icon: TrendingUp, featureKey: "non_cash_assets" },
       { label: "Pending Checks", path: "/pending-checks", icon: FileText },
     ],
   },
@@ -95,7 +95,7 @@ const navigationSections = [
       { label: "Trends", path: "/reports/trends", icon: TrendingUp, featureKey: "advanced_reporting" },
       { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
       { label: "Tag Reports", path: "/reports/tags", icon: Tag, featureKey: "tags" },
-      { label: "Forecast", path: "/reports/forecast", icon: Sun, featureKey: "advanced_reporting" },
+      { label: "Retirement Planning", path: "/reports/retirement-planning", icon: Palmtree, featureKey: "retirement_planning" },
     ],
   },
   {
@@ -134,6 +134,8 @@ export function AppSidebar() {
   const advancedReportingEnabled = useFeature('advanced_reporting')
   const tagsEnabled = useFeature('tags')
   const recurringTransactionsEnabled = useFeature('recurring_transactions')
+  const retirementPlanningEnabled = useFeature('retirement_planning')
+  const nonCashAssetsEnabled = useFeature('non_cash_assets')
   const [openWizards, setOpenWizards] = React.useState(false)
   const [openAssetsLiabilities, setOpenAssetsLiabilities] = React.useState(false)
 
@@ -244,6 +246,10 @@ export function AppSidebar() {
                           return tagsEnabled
                         case 'recurring_transactions':
                           return recurringTransactionsEnabled
+                        case 'retirement_planning':
+                          return retirementPlanningEnabled
+                        case 'non_cash_assets':
+                          return nonCashAssetsEnabled
                         default:
                           return true
                       }
@@ -366,6 +372,10 @@ export function AppSidebar() {
                                 return tagsEnabled
                               case 'recurring_transactions':
                                 return recurringTransactionsEnabled
+                              case 'retirement_planning':
+                                return retirementPlanningEnabled
+                              case 'non_cash_assets':
+                                return nonCashAssetsEnabled
                               default:
                                 return true
                             }

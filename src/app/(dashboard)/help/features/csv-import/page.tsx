@@ -13,7 +13,8 @@ import {
   Lightbulb,
   Settings,
   Zap,
-  Copy
+  Copy,
+  Inbox
 } from 'lucide-react';
 
 export default function CSVImportFeaturePage() {
@@ -40,7 +41,9 @@ export default function CSVImportFeaturePage() {
         <CardContent className="pt-6">
           <p className="text-base leading-relaxed">
             Instead of manually entering every transaction, you can import them from your bank's
-            CSV export. This saves hours of data entry!
+            CSV export. This saves hours of data entry! When you upload a CSV file, transactions
+            are added to the <Link href="/help/features/import-queue" className="text-primary hover:underline">Import Queue</Link> where you can review,
+            categorize, and approve them before they're added to your budget.
           </p>
         </CardContent>
       </Card>
@@ -98,14 +101,19 @@ export default function CSVImportFeaturePage() {
                 title: 'Review and categorize',
                 content: (
                   <>
-                    Review the transactions, categorize them, and exclude any you don't want to import
-                    (like transfers or duplicates)
+                    Transactions are added to the <Link href="/help/features/import-queue" className="text-primary hover:underline">Import Queue</Link> for review.
+                    Categorize transactions and exclude any you don't want to import (like transfers or duplicates)
                   </>
                 ),
               },
               {
-                title: 'Import',
-                content: 'Click "Import Transactions" to add them to your budget',
+                title: 'Approve and import',
+                content: (
+                  <>
+                    Once reviewed, click "Import Transactions" in the <Link href="/help/features/import-queue" className="text-primary hover:underline">Import Queue</Link> to
+                    add them to your budget
+                  </>
+                ),
               },
             ]}
           />
@@ -258,6 +266,60 @@ export default function CSVImportFeaturePage() {
         </CardContent>
       </Card>
 
+      {/* Import Queue */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Inbox className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Import Queue Review</CardTitle>
+              <CardDescription className="text-base">
+                Transactions are queued for review before importing
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            After uploading your CSV file and mapping columns, transactions are added to the{' '}
+            <Link href="/help/features/import-queue" className="text-primary hover:underline">Import Queue</Link>.
+            This allows you to review and categorize transactions before they're added to your budget.
+          </p>
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm min-w-[180px]">Review in Queue</div>
+              <div className="text-sm text-muted-foreground">
+                Navigate to the Import Queue to see your uploaded transactions grouped in a batch
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm min-w-[180px]">Categorize Transactions</div>
+              <div className="text-sm text-muted-foreground">
+                Assign categories to each transaction. Uncategorized transactions are excluded from import by default.
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm min-w-[180px]">Handle Duplicates</div>
+              <div className="text-sm text-muted-foreground">
+                Review and exclude duplicate transactions that already exist in your budget
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm min-w-[180px]">Approve and Import</div>
+              <div className="text-sm text-muted-foreground">
+                Once all transactions are categorized, approve the batch to import them into your budget
+              </div>
+            </div>
+          </div>
+          <Callout type="info" title="Learn More">
+            For detailed information about using the Import Queue, see{' '}
+            <Link href="/help/features/import-queue" className="text-primary hover:underline">Import Queue</Link>.
+          </Callout>
+        </CardContent>
+      </Card>
+
       {/* Handling Uncategorized Transactions */}
       <Card>
         <CardHeader>
@@ -275,25 +337,13 @@ export default function CSVImportFeaturePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Transactions that can't be auto-categorized will be marked as "Uncategorized". You have two options:
+            Transactions that can't be auto-categorized will be marked as "Uncategorized" in the{' '}
+            <Link href="/help/features/import-queue" className="text-primary hover:underline">Import Queue</Link>.
+            These transactions are excluded from import by default until you assign them a category.
           </p>
-          <div className="space-y-3">
-            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-              <div className="font-medium text-sm min-w-[180px]">Categorize during import</div>
-              <div className="text-sm text-muted-foreground">
-                Manually select a category for each uncategorized transaction before importing
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-              <div className="font-medium text-sm min-w-[180px]">Auto-exclude uncategorized</div>
-              <div className="text-sm text-muted-foreground">
-                Enable this option to automatically exclude uncategorized transactions. You can import them later after setting up merchant groups.
-              </div>
-            </div>
-          </div>
           <Callout type="warning" title="Uncategorized transactions">
-            Uncategorized transactions won't affect your budget. They're imported but don't reduce
-            any category balances. Make sure to categorize them eventually!
+            Uncategorized transactions won't be imported and won't affect your budget. Make sure to categorize
+            them in the Import Queue before approving the batch if you want them included.
           </Callout>
         </CardContent>
       </Card>
@@ -455,7 +505,7 @@ export default function CSVImportFeaturePage() {
                 <span className="text-xs font-bold text-primary">6</span>
               </div>
               <p className="text-sm text-muted-foreground pt-0.5">
-                Use the "Auto-exclude uncategorized" option if you have many uncategorized transactions
+                Review transactions in the <Link href="/help/features/import-queue" className="text-primary hover:underline">Import Queue</Link> before importing
               </p>
             </li>
             <li className="flex items-start gap-3">
@@ -463,7 +513,7 @@ export default function CSVImportFeaturePage() {
                 <span className="text-xs font-bold text-primary">7</span>
               </div>
               <p className="text-sm text-muted-foreground pt-0.5">
-                Check for duplicates if you've already manually entered some transactions
+                Check for duplicates in the Import Queue - they're automatically detected and highlighted
               </p>
             </li>
           </ul>

@@ -14,7 +14,8 @@ import {
   Landmark,
   Target,
   TrendingUp,
-  Zap
+  Zap,
+  Brain
 } from 'lucide-react';
 
 export default function DashboardFeaturePage() {
@@ -49,9 +50,18 @@ export default function DashboardFeaturePage() {
       {/* Summary Cards Section */}
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-bold mb-4">Understanding the Summary Cards</h2>
+          <h2 className="text-2xl font-bold mb-4">Understanding the Dashboard</h2>
           <p className="text-muted-foreground mb-6">
-            The Dashboard displays several cards, each showing a different aspect of your finances:
+            The Dashboard displays summary cards at the top showing key financial metrics, followed by
+            collapsible cards for managing different aspects of your finances:
+          </p>
+        </div>
+
+        {/* Summary Cards */}
+        <div>
+          <h3 className="text-xl font-bold mb-4">Summary Cards</h3>
+          <p className="text-muted-foreground mb-4">
+            At the top of the Dashboard, you'll see five summary cards showing your key financial metrics:
           </p>
         </div>
 
@@ -80,6 +90,73 @@ export default function DashboardFeaturePage() {
             </CardContent>
           </Card>
 
+          {/* Total Envelopes */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <FolderOpen className="h-6 w-6 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-xl mb-2">Total Envelopes</CardTitle>
+                  <CardDescription className="text-base leading-relaxed">
+                    The total amount of money currently allocated across all your budget categories (envelopes).
+                    This includes your income buffer if you have one enabled.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                This number shows in red if any of your envelopes have negative balances.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Credit Card Balances */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <CreditCard className="h-6 w-6 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-xl mb-2">Credit Card Balances</CardTitle>
+                  <CardDescription className="text-base leading-relaxed">
+                    The sum of all credit card balances (money you owe) from cards included in totals.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Credit card balances are shown as negative numbers because they represent debt.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Pending Checks */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <FileCheck className="h-6 w-6 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-xl mb-2">Pending Checks</CardTitle>
+                  <CardDescription className="text-base leading-relaxed">
+                    The total value of pending checks (both income and expenses) that haven't cleared yet.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Pending income checks increase your available funds, while pending expense checks reduce them.
+              </p>
+            </CardContent>
+          </Card>
+
           {/* Available to Save */}
           <Card>
             <CardHeader>
@@ -99,16 +176,30 @@ export default function DashboardFeaturePage() {
             <CardContent className="space-y-4">
               <div className="bg-muted/50 rounded-lg p-4 border">
                 <p className="text-sm font-medium text-muted-foreground mb-1">Formula</p>
-                <p className="text-sm font-mono">Total Monies - Total Allocated to Categories - Pending Checks</p>
+                <p className="text-sm font-mono">Total Monies - Total Envelopes - Credit Card Balances + Pending Checks</p>
               </div>
               <Callout type="tip" title="Goal: Zero Available to Save">
                 Ideally, this number should be zero (or close to it). This means every dollar has been
                 given a job. If it's positive, you have unallocated money. If it's negative, you've
                 allocated more than you have.
               </Callout>
+              <p className="text-sm text-muted-foreground">
+                This number is displayed in green when positive and red when negative.
+              </p>
             </CardContent>
           </Card>
+        </div>
 
+        {/* Feature Cards Section */}
+        <div className="mt-8">
+          <h3 className="text-xl font-bold mb-4">Feature Cards</h3>
+          <p className="text-muted-foreground mb-4">
+            Below the summary cards, you'll find collapsible cards for managing different aspects of your finances.
+            Each card can be expanded or collapsed by clicking on its header. Your preferences are saved automatically.
+          </p>
+        </div>
+
+        <div className="grid gap-6">
           {/* Budget Categories */}
           <Card>
             <CardHeader>
@@ -119,16 +210,79 @@ export default function DashboardFeaturePage() {
                 <div className="flex-1">
                   <CardTitle className="text-xl mb-2">Budget Categories (Envelopes)</CardTitle>
                   <CardDescription className="text-base leading-relaxed">
-                    Shows the total amount of money currently allocated across all your budget categories.
-                    This is money that has been assigned a specific purpose.
+                    Displays all your budget categories (envelopes) with their current balances, spending,
+                    and monthly budgets. This is the main card for managing your budget allocation.
                   </CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Click <strong>View All</strong> to see the full list of categories, or <strong>Add Category</strong> to create a new one.
-              </p>
+              <div className="space-y-2">
+                <p className="text-sm font-medium mb-3">Available actions:</p>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>View all categories with balances and spending</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>Add new categories</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>Edit category balances inline</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>See year-to-date spending for each category</span>
+                  </li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* AI Insights */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Brain className="h-6 w-6 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-xl mb-2">AI Insights</CardTitle>
+                  <CardDescription className="text-base leading-relaxed">
+                    Get intelligent, personalized insights about your financial patterns and spending habits.
+                    This is a premium feature that analyzes your transactions and provides actionable recommendations.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-sm font-medium mb-3">Features:</p>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>Monthly financial insights and summaries</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>Spending pattern analysis</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>Actionable recommendations</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>Refresh insights on demand</span>
+                  </li>
+                </ul>
+              </div>
+              <Callout type="info" title="Premium Feature">
+                AI Insights requires a premium subscription. If you don't have premium, you'll see an
+                upgrade prompt instead of insights.
+              </Callout>
             </CardContent>
           </Card>
 
@@ -274,6 +428,51 @@ export default function DashboardFeaturePage() {
             </CardContent>
           </Card>
 
+          {/* Non-Cash Assets */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <TrendingUp className="h-6 w-6 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-xl mb-2">Non-Cash Assets</CardTitle>
+                  <CardDescription className="text-base leading-relaxed">
+                    Track investments, retirement accounts, real estate, vehicles, and other non-cash assets.
+                    These assets are included in your net worth but don't affect your "Available to Save" calculation.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-sm font-medium mb-3">Available actions:</p>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>View all non-cash assets with current values</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>Add new assets (investments, real estate, vehicles, etc.)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>Update asset values inline</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>See total asset value</span>
+                  </li>
+                </ul>
+              </div>
+              <Callout type="info" title="Learn More">
+                For detailed information about tracking non-cash assets, see{' '}
+                <Link href="/help/features/non-cash-assets" className="text-primary hover:underline">Non-Cash Assets</Link>.
+              </Callout>
+            </CardContent>
+          </Card>
+
           {/* Goals */}
           <Card>
             <CardHeader>
@@ -352,6 +551,37 @@ export default function DashboardFeaturePage() {
         </div>
       </div>
 
+      {/* Card Collapsibility Section */}
+      <div className="space-y-4">
+        <h2 className="text-2xl font-bold">Collapsible Cards</h2>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-base leading-relaxed mb-4">
+              All feature cards on the Dashboard are collapsible. Click on any card header to expand or collapse it.
+              Your preferences are automatically saved, so cards will remember whether they were open or closed
+              the next time you visit the Dashboard.
+            </p>
+            <div className="bg-muted/50 rounded-lg p-4 border">
+              <p className="text-sm font-medium mb-2">How it works:</p>
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                  <span>Click the card header to toggle expand/collapse</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                  <span>When expanded, click the chevron icon in the bottom-right corner to collapse</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                  <span>Your preferences are saved per card and persist across sessions</span>
+                </li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Quick Actions Section */}
       <div className="space-y-4">
         <h2 className="text-2xl font-bold">Quick Actions</h2>
@@ -364,15 +594,15 @@ export default function DashboardFeaturePage() {
               <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
                 <TrendingUp className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <div className="font-medium text-sm mb-1">Add Account/Category/Goal</div>
-                  <div className="text-sm text-muted-foreground">Create new items</div>
+                  <div className="font-medium text-sm mb-1">Add Items</div>
+                  <div className="text-sm text-muted-foreground">Create new accounts, categories, goals, assets, loans, etc.</div>
                 </div>
               </div>
               <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
                 <TrendingUp className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <div className="font-medium text-sm mb-1">Update Balance</div>
-                  <div className="text-sm text-muted-foreground">Quickly update account balances</div>
+                  <div className="font-medium text-sm mb-1">Update Values</div>
+                  <div className="text-sm text-muted-foreground">Quickly update account balances, asset values, and category balances inline</div>
                 </div>
               </div>
               <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
@@ -380,6 +610,13 @@ export default function DashboardFeaturePage() {
                 <div>
                   <div className="font-medium text-sm mb-1">View All</div>
                   <div className="text-sm text-muted-foreground">Navigate to the full page for that feature</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <TrendingUp className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="font-medium text-sm mb-1">Edit & Delete</div>
+                  <div className="text-sm text-muted-foreground">Access edit and delete options via the menu (three dots) on each item</div>
                 </div>
               </div>
             </div>

@@ -163,9 +163,9 @@ export default function GoalsWidget({ disabled = false }: GoalsWidgetProps) {
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <Card className="relative">
         <CardHeader>
-          <div className="flex justify-between items-start">
+          <div className="flex flex-wrap items-start gap-2">
             <CollapsibleTrigger asChild>
-              <div className="flex-1 cursor-pointer">
+              <div className="flex-1 min-w-[200px] cursor-pointer">
                 <CardTitle className="flex items-center gap-2">
                   <Target className="h-5 w-5" />
                   Goals
@@ -175,8 +175,8 @@ export default function GoalsWidget({ disabled = false }: GoalsWidgetProps) {
                 </CardDescription>
               </div>
             </CollapsibleTrigger>
-            <Link href="/goals">
-              <Button variant="ghost" size="sm">
+            <Link href="/goals" className="ml-auto">
+              <Button variant="ghost" size="sm" className="shrink-0">
                 View All
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>

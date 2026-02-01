@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -16,8 +16,9 @@ import type {
   DashboardSummary,
 } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
-import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, Mail, ChevronUp, TrendingUp, ArrowRight } from 'lucide-react';
+import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, Mail, ChevronUp, TrendingUp, ArrowRight, Settings } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import CategoryList from './CategoryList';
 import AccountList from './AccountList';
 import CreditCardList from './CreditCardList';
@@ -91,8 +92,10 @@ function calculateSummary(
 }
 
 export default function Dashboard() {
+  const router = useRouter();
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const loansEnabled = useFeature('loans');
+  const nonCashAssetsEnabled = useFeature('non_cash_assets');
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
@@ -135,7 +138,7 @@ export default function Dashboard() {
           fetch('/api/accounts'),
           fetch('/api/credit-cards'),
           fetch('/api/loans'),
-          fetch('/api/non-cash-assets'),
+          nonCashAssetsEnabled ? fetch('/api/non-cash-assets') : Promise.resolve({ ok: false, json: () => Promise.resolve([]) } as Response),
           fetch('/api/pending-checks'),
           fetch('/api/dashboard'),
           fetch('/api/income-buffer/status'),
@@ -241,7 +244,7 @@ export default function Dashboard() {
     }
   };
 
-  const updateAssets = async () => {
+  const updateAssets = useCallback(async () => {
     try {
       const response = await fetch('/api/non-cash-assets');
       if (response.ok) {
@@ -251,7 +254,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error fetching assets:', error);
     }
-  };
+  }, []);
 
   const updateSummary = async () => {
     try {
@@ -272,6 +275,15 @@ export default function Dashboard() {
       fetchData();
     }
   }, []);
+
+  // Fetch assets when feature is enabled
+  useEffect(() => {
+    if (nonCashAssetsEnabled) {
+      updateAssets();
+    } else {
+      setAssets([]);
+    }
+  }, [nonCashAssetsEnabled, updateAssets]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -346,17 +358,17 @@ export default function Dashboard() {
           <Collapsible open={isAccountsOpen} onOpenChange={setIsAccountsOpen}>
             <Card id="accounts-section" className="relative">
               <CardHeader>
-                <div className="flex justify-between items-start">
+                <div className="flex flex-wrap items-start gap-2">
                   <CollapsibleTrigger asChild>
-                    <div className="flex-1 cursor-pointer">
+                    <div className="flex-1 min-w-[200px] cursor-pointer">
                       <CardTitle className="flex items-center gap-2">
                         <Wallet className="h-5 w-5" />
                         Accounts
                       </CardTitle>
                     </div>
                   </CollapsibleTrigger>
-                  <Link href="/accounts">
-                    <Button variant="ghost" size="sm">
+                  <Link href="/accounts" className="ml-auto">
+                    <Button variant="ghost" size="sm" className="shrink-0">
                       View All
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
@@ -388,17 +400,17 @@ export default function Dashboard() {
           <Collapsible open={isCreditCardsOpen} onOpenChange={setIsCreditCardsOpen}>
             <Card id="credit-cards-section" className="relative">
               <CardHeader>
-                <div className="flex justify-between items-start">
+                <div className="flex flex-wrap items-start gap-2">
                   <CollapsibleTrigger asChild>
-                    <div className="flex-1 cursor-pointer">
+                    <div className="flex-1 min-w-[200px] cursor-pointer">
                       <CardTitle className="flex items-center gap-2">
                         <CreditCardIcon className="h-5 w-5" />
                         Credit Cards
                       </CardTitle>
                     </div>
                   </CollapsibleTrigger>
-                  <Link href="/credit-cards">
-                    <Button variant="ghost" size="sm">
+                  <Link href="/credit-cards" className="ml-auto">
+                    <Button variant="ghost" size="sm" className="shrink-0">
                       View All
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
@@ -430,9 +442,9 @@ export default function Dashboard() {
           <Collapsible open={isPendingChecksOpen} onOpenChange={setIsPendingChecksOpen}>
             <Card className="relative">
               <CardHeader>
-                <div className="flex justify-between items-start">
+                <div className="flex flex-wrap items-start gap-2">
                   <CollapsibleTrigger asChild>
-                    <div className="flex-1 cursor-pointer">
+                    <div className="flex-1 min-w-[200px] cursor-pointer">
                       <CardTitle className="flex items-center gap-2">
                         <FileText className="h-5 w-5" />
                         Pending Checks
@@ -442,8 +454,8 @@ export default function Dashboard() {
                       </CardTitle>
                     </div>
                   </CollapsibleTrigger>
-                  <Link href="/pending-checks">
-                    <Button variant="ghost" size="sm">
+                  <Link href="/pending-checks" className="ml-auto">
+                    <Button variant="ghost" size="sm" className="shrink-0">
                       View All
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
@@ -476,17 +488,17 @@ export default function Dashboard() {
             <Collapsible open={isLoansOpen} onOpenChange={setIsLoansOpen}>
               <Card id="loans-section" className="relative">
                 <CardHeader>
-                  <div className="flex justify-between items-start">
+                  <div className="flex flex-wrap items-start gap-2">
                     <CollapsibleTrigger asChild>
-                      <div className="flex-1 cursor-pointer">
+                      <div className="flex-1 min-w-[200px] cursor-pointer">
                         <CardTitle className="flex items-center gap-2">
                           <Landmark className="h-5 w-5" />
                           Loans
                         </CardTitle>
                       </div>
                     </CollapsibleTrigger>
-                    <Link href="/loans">
-                      <Button variant="ghost" size="sm">
+                    <Link href="/loans" className="ml-auto">
+                      <Button variant="ghost" size="sm" className="shrink-0">
                         View All
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
@@ -518,30 +530,48 @@ export default function Dashboard() {
           <Collapsible open={isAssetsOpen} onOpenChange={setIsAssetsOpen}>
             <Card id="assets-section" className="relative">
               <CardHeader>
-                <div className="flex justify-between items-start">
+                <div className="flex flex-wrap items-start gap-2">
                   <CollapsibleTrigger asChild>
-                    <div className="flex-1 cursor-pointer">
+                    <div className="flex-1 min-w-[200px] cursor-pointer">
                       <CardTitle className="flex items-center gap-2">
                         <TrendingUp className="h-5 w-5" />
                         Non-Cash Assets
                       </CardTitle>
                     </div>
                   </CollapsibleTrigger>
-                  <Link href="/non-cash-assets">
-                    <Button variant="ghost" size="sm">
-                      View All
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
+                  {nonCashAssetsEnabled && (
+                    <Link href="/non-cash-assets" className="ml-auto">
+                      <Button variant="ghost" size="sm" className="shrink-0">
+                        View All
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  )}
                 </div>
               </CardHeader>
               <CollapsibleContent>
                 <CardContent className="pb-8">
-                  <AssetList 
-                    assets={assets} 
-                    onUpdate={(updatedAssets) => setAssets(updatedAssets)}
-                    disabled={!isEditor || permissionsLoading}
-                  />
+                  {nonCashAssetsEnabled ? (
+                    <AssetList 
+                      assets={assets} 
+                      onUpdate={(updatedAssets) => setAssets(updatedAssets)}
+                      disabled={!isEditor || permissionsLoading}
+                    />
+                  ) : (
+                    <div className="text-center py-4 space-y-4">
+                      <p className="text-muted-foreground">
+                        Non-Cash Assets feature is not enabled
+                      </p>
+                      <Button
+                        onClick={() => router.push('/settings')}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Settings className="mr-2 h-4 w-4" />
+                        Enable Feature
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
                 {isAssetsOpen && (
                   <button

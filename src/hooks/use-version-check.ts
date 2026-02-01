@@ -32,7 +32,11 @@ export function useVersionCheck() {
           currentVersionRef.current = version.buildTimestamp;
         }
       } catch (error) {
-        console.error('Error fetching initial version:', error);
+        // Silently handle errors - version check is non-critical
+        // Network errors, API unavailability, etc. are expected in some scenarios
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Version check unavailable:', error);
+        }
       }
     };
 
@@ -52,22 +56,33 @@ export function useVersionCheck() {
         });
 
         if (response.ok) {
-          const version: VersionInfo = await response.json();
-          
-          // Compare with current version
-          if (
-            currentVersionRef.current !== null &&
-            version.buildTimestamp > currentVersionRef.current
-          ) {
-            setHasUpdate(true);
-            // Clear interval once update is detected
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
+          try {
+            const version: VersionInfo = await response.json();
+            
+            // Compare with current version
+            if (
+              currentVersionRef.current !== null &&
+              version.buildTimestamp > currentVersionRef.current
+            ) {
+              setHasUpdate(true);
+              // Clear interval once update is detected
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+              }
+            }
+          } catch (parseError) {
+            // Silently handle JSON parsing errors
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('Error parsing version response:', parseError);
             }
           }
         }
       } catch (error) {
-        console.error('Error checking version:', error);
+        // Silently handle network errors - version check is non-critical
+        // Network errors, API unavailability, etc. are expected in some scenarios
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Version check failed:', error);
+        }
       } finally {
         setIsChecking(false);
       }

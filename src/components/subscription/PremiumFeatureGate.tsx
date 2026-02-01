@@ -1,9 +1,12 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useFeature, useFeatures } from '@/contexts/FeatureContext';
 import { UpgradePrompt } from './UpgradePrompt';
 import { Loader2 } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import type { FeatureName } from '@/contexts/FeatureContext';
 
 interface PremiumFeatureGateProps {
@@ -21,6 +24,7 @@ export function PremiumFeatureGate({
   featureKey,
   fallback,
 }: PremiumFeatureGateProps) {
+  const router = useRouter();
   const { isPremium, loading: subscriptionLoading } = useSubscription();
   const { loading: featuresLoading } = useFeatures();
 
@@ -33,6 +37,8 @@ export function PremiumFeatureGate({
     'AI Chat Assistant': 'ai_chat', // Backward compatibility
     'Income Buffer': 'income_buffer',
     'Automatic Imports': 'automatic_imports',
+    'Retirement Planning': 'retirement_planning',
+    'Recurring Transactions': 'recurring_transactions',
   };
 
   // Use provided featureKey or try to map from featureName
@@ -59,9 +65,28 @@ export function PremiumFeatureGate({
     );
   }
 
-  // If user has premium but feature is disabled, don't show anything (return null)
+  // If user has premium but feature is disabled, show feature disabled message
   if (actualFeatureKey && !isFeatureEnabled) {
-    return null;
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Feature Not Enabled</CardTitle>
+            <CardDescription>
+              {featureName} is not enabled for your account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              To access {featureName}, please enable the feature in your settings.
+            </p>
+            <Button onClick={() => router.push('/settings')}>
+              Go to Feature Settings
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return <>{children}</>;

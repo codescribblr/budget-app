@@ -22,15 +22,18 @@ const allPages = [
   // Features
   { label: 'Dashboard', href: '/help/features/dashboard', section: 'Features' },
   { label: 'Accounts & Credit Cards', href: '/help/features/accounts', section: 'Features' },
+  { label: 'Non-Cash Assets', href: '/help/features/non-cash-assets', section: 'Features' },
   { label: 'Budget Categories', href: '/help/features/categories', section: 'Features' },
   { label: 'Transactions', href: '/help/features/transactions', section: 'Features' },
   { label: 'Money Movement', href: '/help/features/money-movement', section: 'Features' },
   { label: 'CSV Import', href: '/help/features/csv-import', section: 'Features' },
+  { label: 'Import Queue', href: '/help/features/import-queue', section: 'Features' },
   { label: 'Merchants', href: '/help/features/merchants', section: 'Features' },
   { label: 'Goals', href: '/help/features/goals', section: 'Features' },
   { label: 'Loans', href: '/help/features/loans', section: 'Features' },
   { label: 'Pending Checks', href: '/help/features/pending-checks', section: 'Features' },
   { label: 'Income Buffer', href: '/help/features/income-buffer', section: 'Features' },
+  { label: 'Retirement Planning', href: '/help/features/retirement-planning', section: 'Features' },
   { label: 'Reports', href: '/help/features/reports', section: 'Features' },
 
   // Tutorials

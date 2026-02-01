@@ -325,6 +325,157 @@ export const HELP_CONTENT = {
     ],
   },
 
+  retirement_planning: {
+    title: 'Retirement Planning',
+    tooltip: 'Project your future net worth and plan for retirement based on your assets, loans, income growth, Social Security, RMDs, and historical trends.',
+    description: 'Retirement Planning helps you visualize your financial future by projecting your net worth over time, taking into account retirement income, Social Security benefits, Required Minimum Distributions (RMDs), and distribution planning.',
+    sections: [
+      {
+        title: 'What is Retirement Planning?',
+        content: (
+          <>
+            <p>
+              Retirement Planning is a comprehensive forecasting tool that projects your future net worth based on your current financial situation, 
+              including assets, loans, income growth, retirement age, Social Security benefits, and Required Minimum Distributions (RMDs).
+            </p>
+            <p className="mt-2">
+              <strong>Key Features:</strong>
+            </p>
+            <ul className="list-disc list-inside space-y-1 mt-1">
+              <li>Project net worth up to age 90 (or custom forecast age)</li>
+              <li>Model retirement income including Social Security and other retirement income</li>
+              <li>Calculate and apply Required Minimum Distributions (RMDs) from retirement accounts</li>
+              <li>Plan distribution strategies from liquid and illiquid assets</li>
+              <li>Track when cash runs out and when distributions are needed</li>
+              <li>Add timeline events like asset liquidations, windfalls, or expense changes</li>
+            </ul>
+          </>
+        ),
+      },
+      {
+        title: 'Getting Started',
+        content: (
+          <ol className="list-decimal list-inside space-y-2">
+            <li>
+              <strong>Set Your Birth Year:</strong> The first time you access Retirement Planning, you'll be prompted to enter your birth year. 
+              This is essential for calculating your age and retirement timeline.
+            </li>
+            <li>
+              <strong>Configure Forecast Settings:</strong> Set your retirement age, forecast timeline (default: age 90), income growth rate, 
+              savings rate, and inflation assumptions.
+            </li>
+            <li>
+              <strong>Set Up Retirement Income:</strong> Configure Social Security start age and benefit level, plus any other retirement income sources.
+            </li>
+            <li>
+              <strong>Mark RMD-Qualified Assets:</strong> For retirement accounts subject to Required Minimum Distributions, mark them as RMD-qualified 
+              in your Non-Cash Assets settings.
+            </li>
+            <li>
+              <strong>Add Timeline Events:</strong> Optionally add one-time events like asset liquidations, windfalls, or expense changes that will 
+              affect your forecast.
+            </li>
+          </ol>
+        ),
+      },
+      {
+        title: 'Understanding the Forecast',
+        content: (
+          <div className="space-y-3">
+            <div>
+              <strong>Net Worth Projection</strong>
+              <p className="text-muted-foreground">
+                The forecast calculates your net worth year by year, accounting for income growth, savings, asset appreciation, 
+                loan paydowns, and distributions. You'll see both historical net worth (from past snapshots) and projected future net worth.
+              </p>
+            </div>
+            <div>
+              <strong>Retirement Transition</strong>
+              <p className="text-muted-foreground">
+                At your retirement age, work income stops and retirement income begins. The forecast accounts for Social Security 
+                (which may start at a different age), other retirement income, and any savings you continue to make after retirement.
+              </p>
+            </div>
+            <div>
+              <strong>Distribution Planning</strong>
+              <p className="text-muted-foreground">
+                When your cash accounts would go negative, the forecast automatically calculates distributions needed from your assets. 
+                It prioritizes liquid non-RMD assets first, then liquid RMD assets, and finally illiquid RMD assets when RMDs are required.
+              </p>
+            </div>
+            <div>
+              <strong>Required Minimum Distributions (RMDs)</strong>
+              <p className="text-muted-foreground">
+                For assets marked as RMD-qualified, the forecast calculates and applies Required Minimum Distributions starting at age 73 
+                (or your configured RMD age). RMDs are calculated using IRS Uniform Lifetime Table factors.
+              </p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: 'Key Metrics & Charts',
+        content: (
+          <div className="space-y-3">
+            <div>
+              <strong>Summary Metrics</strong>
+              <ul className="list-disc list-inside space-y-1 mt-1 text-muted-foreground">
+                <li>Current Net Worth: Your net worth today</li>
+                <li>Projected Net Worth: Estimated net worth at the end of the forecast period</li>
+                <li>Net Worth Change: Dollar amount and percentage change over the forecast period</li>
+                <li>Distribution Start Year: When you'll need to start taking distributions from assets</li>
+                <li>Cash Runs Out Year: When your cash accounts would go negative without distributions</li>
+              </ul>
+            </div>
+            <div>
+              <strong>Forecast Charts</strong>
+              <ul className="list-disc list-inside space-y-1 mt-1 text-muted-foreground">
+                <li>Net Worth Forecast: Shows historical and projected net worth over time</li>
+                <li>Net Worth Breakdown: Shows how accounts, assets, credit cards, and loans change over time</li>
+                <li>Retirement Marker: Visual indicator showing when you plan to retire</li>
+                <li>Timeline Events: White vertical lines marking one-time events</li>
+              </ul>
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: 'Best Practices',
+        content: (
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Keep Data Updated:</strong> Regularly update your asset values, account balances, and loan balances for accurate projections</li>
+            <li><strong>Use Conservative Estimates:</strong> Use conservative growth rates and return assumptions - actual results will vary</li>
+            <li><strong>Review Annually:</strong> Review and update your forecast settings annually or when your financial situation changes</li>
+            <li><strong>Test Different Scenarios:</strong> Adjust retirement age, savings rates, and income growth to see how different choices affect your future</li>
+            <li><strong>Plan for Distributions:</strong> Pay attention to when distributions start and plan accordingly for tax implications</li>
+            <li><strong>Consider Timeline Events:</strong> Add major life events like selling a house, receiving an inheritance, or changing expenses</li>
+          </ul>
+        ),
+      },
+      {
+        title: 'Limitations & Notes',
+        content: (
+          <div className="space-y-2">
+            <p>
+              <strong>Forecasts are estimates, not guarantees:</strong>
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+              <li>Actual market returns will differ from estimated returns</li>
+              <li>Social Security benefits are estimated based on your current income</li>
+              <li>RMD calculations use simplified IRS table factors</li>
+              <li>Inflation and income growth are linear projections</li>
+              <li>Life events and market changes aren't predictable</li>
+            </ul>
+            <p className="mt-2">
+              Use Retirement Planning as a tool to understand trends and plan for the future, but always consult with a financial advisor 
+              for personalized retirement planning advice.
+            </p>
+          </div>
+        ),
+      },
+    ],
+  },
+
   automatic_imports: {
     title: 'Automatic Imports',
     tooltip: 'Set up automatic transaction imports from your bank accounts via email forwarding or API integrations.',
@@ -593,6 +744,353 @@ export const HELP_CONTENT = {
             <li><strong>Leverage Tag Rules:</strong> Set up rules for common patterns to reduce manual tagging</li>
             <li><strong>Review Regularly:</strong> Periodically review and merge duplicate tags to keep your tag list clean</li>
             <li><strong>Combine with Categories:</strong> Tags work alongside categories - use categories for budgeting and tags for tracking</li>
+          </ul>
+        ),
+      },
+    ],
+  },
+
+  recurring_transactions: {
+    title: 'Recurring Transactions',
+    tooltip: 'Automatically detect and track recurring transactions like subscriptions, bills, and regular payments.',
+    description: 'Recurring Transactions automatically identifies patterns in your transaction history to detect subscriptions, bills, and other regular payments, then helps you manage and track them.',
+    sections: [
+      {
+        title: 'What are Recurring Transactions?',
+        content: (
+          <>
+            <p>
+              Recurring Transactions are payments that happen regularly - like monthly subscriptions, weekly bills, 
+              or annual fees. This feature automatically detects these patterns from your transaction history and helps 
+              you track and manage them.
+            </p>
+            <p className="mt-2">
+              <strong>Common Examples:</strong>
+            </p>
+            <ul className="list-disc list-inside space-y-1 mt-1">
+              <li>Monthly subscriptions (Netflix, Spotify, gym memberships)</li>
+              <li>Regular bills (mortgage, rent, utilities, insurance)</li>
+              <li>Weekly expenses (grocery delivery, meal kits)</li>
+              <li>Annual fees (Amazon Prime, software licenses)</li>
+              <li>Biweekly paychecks or other regular income</li>
+            </ul>
+          </>
+        ),
+      },
+      {
+        title: 'How Detection Works',
+        content: (
+          <div className="space-y-3">
+            <div>
+              <strong>Automatic Detection</strong>
+              <p className="text-muted-foreground">
+                The system analyzes your transaction history to find patterns. It looks for transactions that:
+              </p>
+              <ul className="list-disc list-inside space-y-1 mt-1 text-muted-foreground">
+                <li>Occur regularly (weekly, biweekly, monthly, quarterly, yearly)</li>
+                <li>Come from the same merchant or merchant group</li>
+                <li>Have similar amounts (with some variance allowed)</li>
+                <li>Happen on consistent dates or intervals</li>
+              </ul>
+            </div>
+            <div>
+              <strong>Detection Frequency</strong>
+              <p className="text-muted-foreground">
+                Recurring transactions are detected automatically when you import new transactions. The system looks 
+                back at your transaction history (typically 12-18 months) to identify patterns.
+              </p>
+            </div>
+            <div>
+              <strong>Confidence Scores</strong>
+              <p className="text-muted-foreground">
+                Each detected recurring transaction has a confidence score based on how consistent the pattern is. 
+                Higher confidence means more reliable detection. You can review and confirm or reject detected patterns.
+              </p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: 'Managing Recurring Transactions',
+        content: (
+          <ol className="list-decimal list-inside space-y-2">
+            <li>
+              <strong>View Detected Patterns:</strong> Go to the Recurring Transactions page to see all detected 
+              recurring transactions, organized by frequency and merchant.
+            </li>
+            <li>
+              <strong>Confirm or Reject:</strong> Review each detected pattern and confirm it if it's accurate, or 
+              reject it if it's not actually recurring.
+            </li>
+            <li>
+              <strong>Edit Details:</strong> Adjust the expected amount, frequency, next occurrence date, or other 
+              details if the detection wasn't perfect.
+            </li>
+            <li>
+              <strong>Manual Creation:</strong> Create recurring transactions manually if the system didn't detect 
+              them automatically.
+            </li>
+            <li>
+              <strong>Deactivate:</strong> Mark recurring transactions as inactive when you cancel a subscription or 
+              stop making a regular payment.
+            </li>
+          </ol>
+        ),
+      },
+      {
+        title: 'Notifications & Alerts',
+        content: (
+          <div className="space-y-2">
+            <p>
+              Get proactive notifications about your recurring transactions:
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Upcoming Transactions:</strong> Get notified a few days before a recurring transaction is expected</li>
+              <li><strong>Insufficient Funds:</strong> Alerted when your account balance might be too low for an upcoming payment</li>
+              <li><strong>Missed Transactions:</strong> Notified when an expected recurring transaction didn't occur</li>
+              <li><strong>Amount Changes:</strong> Alerted when a recurring transaction amount changes significantly</li>
+            </ul>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Configure notification preferences in Settings → Notifications. You can choose which types of alerts 
+              to receive and how (email, in-app, or both).
+            </p>
+          </div>
+        ),
+      },
+      {
+        title: 'Use Cases',
+        content: (
+          <div className="space-y-3">
+            <div>
+              <strong>Subscription Management</strong>
+              <p className="text-muted-foreground">
+                See all your subscriptions in one place, track how much you spend monthly on subscriptions, and 
+                identify services you might want to cancel.
+              </p>
+            </div>
+            <div>
+              <strong>Budget Planning</strong>
+              <p className="text-muted-foreground">
+                Understand your fixed vs variable expenses. See your total recurring expenses for the month to help 
+                with budget planning.
+              </p>
+            </div>
+            <div>
+              <strong>Payment Reminders</strong>
+              <p className="text-muted-foreground">
+                Never miss a bill payment. Get notified before recurring transactions are due so you can ensure 
+                you have enough money in your account.
+              </p>
+            </div>
+            <div>
+              <strong>Financial Forecasting</strong>
+              <p className="text-muted-foreground">
+                Predict your expenses for upcoming months based on your recurring transactions. This helps with 
+                long-term financial planning.
+              </p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: 'Best Practices',
+        content: (
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Review Regularly:</strong> Periodically review detected recurring transactions to ensure they're still accurate</li>
+            <li><strong>Confirm Patterns:</strong> Confirm detected patterns that are correct to improve the system's accuracy</li>
+            <li><strong>Deactivate When Done:</strong> Mark recurring transactions as inactive when you cancel subscriptions or stop payments</li>
+            <li><strong>Adjust Amounts:</strong> Update expected amounts if they change (e.g., subscription price increases)</li>
+            <li><strong>Use Notifications:</strong> Enable notifications for important recurring transactions to avoid missed payments</li>
+            <li><strong>Link to Merchants:</strong> Link recurring transactions to merchants for easier subscription management</li>
+          </ul>
+        ),
+      },
+    ],
+  },
+
+  non_cash_assets: {
+    title: 'Non-Cash Assets',
+    tooltip: 'Track investment accounts, retirement accounts, real estate, vehicles, and other non-cash assets.',
+    description: 'Non-Cash Assets allows you to track investments, retirement accounts, real estate, vehicles, and other assets that aren\'t cash-based accounts. These assets are included in net worth calculations and retirement planning forecasts.',
+    sections: [
+      {
+        title: 'What are Non-Cash Assets?',
+        content: (
+          <>
+            <p>
+              Non-Cash Assets are valuable items you own that aren't cash or cash-equivalent accounts. These assets 
+              are important for calculating your net worth and planning for retirement, but they're separate from 
+              your cash-based budgeting accounts.
+            </p>
+            <p className="mt-2">
+              <strong>Common Examples:</strong>
+            </p>
+            <ul className="list-disc list-inside space-y-1 mt-1">
+              <li>Investment accounts (stocks, bonds, mutual funds)</li>
+              <li>Retirement accounts (401(k), IRA, Roth IRA, 403(b))</li>
+              <li>Real estate (primary residence, rental properties, land)</li>
+              <li>Vehicles (cars, trucks, motorcycles, boats)</li>
+              <li>Collectibles (art, jewelry, antiques)</li>
+              <li>Other valuable assets (equipment, business assets)</li>
+            </ul>
+          </>
+        ),
+      },
+      {
+        title: 'Why Track Non-Cash Assets?',
+        content: (
+          <div className="space-y-3">
+            <div>
+              <strong>Net Worth Calculation</strong>
+              <p className="text-muted-foreground">
+                Your net worth includes both cash accounts and non-cash assets. Tracking these assets gives you a 
+                complete picture of your financial health.
+              </p>
+            </div>
+            <div>
+              <strong>Retirement Planning</strong>
+              <p className="text-muted-foreground">
+                Retirement accounts and investments are crucial for retirement planning. The forecast feature uses 
+                your asset values to project your future net worth and plan distributions.
+              </p>
+            </div>
+            <div>
+              <strong>Asset Growth Tracking</strong>
+              <p className="text-muted-foreground">
+                Track how your investments and assets grow over time. Set estimated returns to see projected growth 
+                in retirement forecasts.
+              </p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: 'Adding and Managing Assets',
+        content: (
+          <ol className="list-decimal list-inside space-y-2">
+            <li>
+              <strong>Add an Asset:</strong> Go to the Non-Cash Assets page and click "Add Asset". Choose the asset 
+              type and enter details like name, current value, and purchase date.
+            </li>
+            <li>
+              <strong>Set Asset Properties:</strong> Configure whether the asset is liquid (easily converted to cash), 
+              RMD-qualified (subject to Required Minimum Distributions), and estimated return percentage.
+            </li>
+            <li>
+              <strong>Update Values:</strong> Regularly update asset values to keep your net worth accurate. You can 
+              update values from the asset list or detail page.
+            </li>
+            <li>
+              <strong>View Details:</strong> Click on any asset to see its detail page with history, transactions, 
+              and related information.
+            </li>
+            <li>
+              <strong>Delete Assets:</strong> Remove assets you no longer own. Historical data is preserved for 
+              reporting purposes.
+            </li>
+          </ol>
+        ),
+      },
+      {
+        title: 'Asset Types',
+        content: (
+          <div className="space-y-3">
+            <div>
+              <strong>Investment Accounts</strong>
+              <p className="text-muted-foreground">
+                Brokerage accounts, stocks, bonds, mutual funds, ETFs. These are typically liquid and can have 
+                estimated returns set for forecasting.
+              </p>
+            </div>
+            <div>
+              <strong>Retirement Accounts</strong>
+              <p className="text-muted-foreground">
+                401(k), IRA, Roth IRA, 403(b), and other retirement accounts. Mark these as RMD-qualified if they 
+                require Required Minimum Distributions. These are typically liquid but have withdrawal restrictions.
+              </p>
+            </div>
+            <div>
+              <strong>Real Estate</strong>
+              <p className="text-muted-foreground">
+                Primary residence, rental properties, land, commercial real estate. These are typically illiquid 
+                (not easily converted to cash). You can set estimated appreciation rates for forecasting.
+              </p>
+            </div>
+            <div>
+              <strong>Vehicles</strong>
+              <p className="text-muted-foreground">
+                Cars, trucks, motorcycles, boats, RVs. These typically depreciate over time. Set negative estimated 
+                returns to reflect depreciation.
+              </p>
+            </div>
+            <div>
+              <strong>Other Assets</strong>
+              <p className="text-muted-foreground">
+                Collectibles, equipment, business assets, or any other valuable items. Configure liquidity and 
+                estimated returns based on the asset type.
+              </p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: 'Liquidity and RMD Settings',
+        content: (
+          <div className="space-y-3">
+            <div>
+              <strong>Liquid Assets</strong>
+              <p className="text-muted-foreground">
+                Assets that can be easily converted to cash (like investment accounts). These are prioritized when 
+                calculating distributions in retirement planning forecasts.
+              </p>
+            </div>
+            <div>
+              <strong>Illiquid Assets</strong>
+              <p className="text-muted-foreground">
+                Assets that are harder to convert to cash (like real estate). These are used for distributions only 
+                when liquid assets are exhausted or when RMDs are required.
+              </p>
+            </div>
+            <div>
+              <strong>RMD-Qualified</strong>
+              <p className="text-muted-foreground">
+                Retirement accounts subject to Required Minimum Distributions (typically traditional IRAs, 401(k)s). 
+                The forecast automatically calculates and applies RMDs starting at age 73 (or your configured RMD age).
+              </p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: 'Estimated Returns',
+        content: (
+          <div className="space-y-2">
+            <p>
+              Set estimated annual return percentages for forecasting:
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Investments:</strong> Typically 5-10% annual returns (historical stock market average)</li>
+              <li><strong>Real Estate:</strong> Typically 3-5% annual appreciation</li>
+              <li><strong>Vehicles:</strong> Typically -10% to -20% annual depreciation</li>
+              <li><strong>Retirement Accounts:</strong> Use the same returns as your investment strategy (5-10%)</li>
+            </ul>
+            <p className="mt-2 text-sm text-muted-foreground">
+              <strong>Note:</strong> Estimated returns are used for forecasting only, not guaranteed outcomes. Use 
+              conservative estimates for planning purposes.
+            </p>
+          </div>
+        ),
+      },
+      {
+        title: 'Best Practices',
+        content: (
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Keep Values Updated:</strong> Update asset values regularly (monthly or quarterly) for accurate net worth tracking</li>
+            <li><strong>Use Conservative Estimates:</strong> Use conservative return estimates for forecasting - actual results will vary</li>
+            <li><strong>Mark RMD Accounts:</strong> Mark retirement accounts as RMD-qualified if they require Required Minimum Distributions</li>
+            <li><strong>Set Liquidity Correctly:</strong> Mark assets as liquid or illiquid based on how easily they can be converted to cash</li>
+            <li><strong>Include Major Assets:</strong> Track all significant assets that contribute meaningfully to your net worth</li>
+            <li><strong>Review Annually:</strong> Review and update all asset values annually as part of your financial review</li>
           </ul>
         ),
       },

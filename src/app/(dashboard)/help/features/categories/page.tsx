@@ -15,7 +15,14 @@ import {
   Shield,
   Lightbulb,
   Layers,
-  Archive
+  Archive,
+  List,
+  Grid3X3,
+  Search,
+  Filter,
+  FileText,
+  History,
+  Eye
 } from 'lucide-react';
 
 export default function CategoriesFeaturePage() {
@@ -80,7 +87,7 @@ export default function CategoriesFeaturePage() {
         </CardContent>
       </Card>
 
-      {/* Standalone Categories Page */}
+      {/* Categories List Page */}
       <Card>
         <CardHeader>
           <div className="flex items-start gap-4">
@@ -88,38 +95,195 @@ export default function CategoriesFeaturePage() {
               <Layers className="h-6 w-6 text-primary" />
             </div>
             <div className="flex-1">
-              <CardTitle className="text-xl mb-2">Standalone Categories Page</CardTitle>
+              <CardTitle className="text-xl mb-2">Categories List Page</CardTitle>
               <CardDescription className="text-base">
-                A dedicated place to manage categories in detail
+                A comprehensive view for managing all your categories
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            You can manage categories from the dashboard, but the <Link href="/categories" className="text-primary hover:underline">Categories</Link> page provides a full management experience:
+            The <Link href="/categories" className="text-primary hover:underline">Categories</Link> page provides powerful tools for managing your budget categories:
           </p>
-          <div className="grid gap-3">
-            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-              <Edit3 className="h-4 w-4 mt-0.5 text-muted-foreground" />
-              <div className="text-sm">
-                <div className="font-medium">Edit details</div>
-                <div className="text-muted-foreground">Update type, targets, notes, and balances in one place</div>
+
+          {/* View Modes */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-sm">View Modes</h3>
+            <div className="grid gap-3">
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <List className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <div className="text-sm flex-1">
+                  <div className="font-medium">List View</div>
+                  <div className="text-muted-foreground">Table format showing category name, type, monthly amount, current balance, spending this month, and year-to-date spending</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <Grid3X3 className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <div className="text-sm flex-1">
+                  <div className="font-medium">Grid View</div>
+                  <div className="text-muted-foreground">Card-based layout for a visual overview of your categories</div>
+                </div>
               </div>
             </div>
+          </div>
+
+          {/* Search and Filters */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-sm">Search and Filters</h3>
+            <div className="grid gap-3">
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <Search className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <div className="text-sm flex-1">
+                  <div className="font-medium">Search</div>
+                  <div className="text-muted-foreground">Quickly find categories by name</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <Filter className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <div className="text-sm flex-1">
+                  <div className="font-medium">Status Filter</div>
+                  <div className="text-muted-foreground">Filter by Active, Archived, or both</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <Filter className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <div className="text-sm flex-1">
+                  <div className="font-medium">Type Filter</div>
+                  <div className="text-muted-foreground">Filter by category type (Monthly Expense, Accumulation, Target Balance) when category types are enabled</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <Shield className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <div className="text-sm flex-1">
+                  <div className="font-medium">Show System/Buffer</div>
+                  <div className="text-muted-foreground">Toggle visibility of system categories and buffer categories</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bulk Actions */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-sm">Bulk Actions</h3>
+            <div className="grid gap-3">
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <Archive className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <div className="text-sm flex-1">
+                  <div className="font-medium">Bulk Archive/Restore</div>
+                  <div className="text-muted-foreground">Select multiple categories and archive or restore them at once</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                <Edit3 className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <div className="text-sm flex-1">
+                  <div className="font-medium">Bulk Delete</div>
+                  <div className="text-muted-foreground">Select multiple categories and delete them together</div>
+                </div>
+              </div>
+            </div>
+            <Callout type="tip" title="Selection tip">
+              Use Shift+Click to select multiple categories quickly. Click the "Bulk" button to enter bulk selection mode.
+            </Callout>
+          </div>
+
+          {/* Reordering */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-sm">Reordering</h3>
             <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
               <ArrowUpDown className="h-4 w-4 mt-0.5 text-muted-foreground" />
-              <div className="text-sm">
-                <div className="font-medium">Reorder and bulk actions</div>
-                <div className="text-muted-foreground">Drag to reorder and optionally archive/delete multiple categories</div>
+              <div className="text-sm flex-1">
+                <div className="font-medium">Drag to Reorder</div>
+                <div className="text-muted-foreground">Click "Reorder" to enter reorder mode, then drag categories by their grip handles to change their order. Your preferences are saved automatically.</div>
               </div>
             </div>
+          </div>
+
+          {/* Click to View Details */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-sm">Viewing Category Details</h3>
             <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-              <Archive className="h-4 w-4 mt-0.5 text-muted-foreground" />
-              <div className="text-sm">
-                <div className="font-medium">Archive instead of delete</div>
-                <div className="text-muted-foreground">Hide old categories while keeping transaction history intact</div>
+              <Eye className="h-4 w-4 mt-0.5 text-muted-foreground" />
+              <div className="text-sm flex-1">
+                <div className="font-medium">Click Category Name</div>
+                <div className="text-muted-foreground">Click any category name to view its detail page with spending statistics, activity, and balance history</div>
               </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Category Detail Page */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <FileText className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">Category Detail Page</CardTitle>
+              <CardDescription className="text-base">
+                Deep dive into a single category's information and history
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Click any category name from the list page to view its detail page. This page provides comprehensive information about the category:
+          </p>
+
+          <div className="grid gap-3">
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm mb-2">Category Overview</div>
+              <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
+                <li>Category name, type, and status badges (Archived, System, Buffer)</li>
+                <li>Monthly amount or target (depending on category type)</li>
+                <li>Current balance</li>
+              </ul>
+            </div>
+
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm mb-2">Spending Statistics</div>
+              <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
+                <li>Spent this month</li>
+                <li>Spent year-to-date (YTD)</li>
+                <li>Transaction count for the current month</li>
+                <li>Last activity date</li>
+              </ul>
+            </div>
+
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm mb-2">Category Notes</div>
+              <p className="text-sm text-muted-foreground">Any notes you've added to the category are displayed here</p>
+            </div>
+
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm mb-2">Balance History</div>
+              <p className="text-sm text-muted-foreground mb-2">
+                A complete audit trail showing every change to the category's balance, including:
+              </p>
+              <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
+                <li>Old balance → New balance</li>
+                <li>Change amount (increase or decrease)</li>
+                <li>Timestamp and user who made the change</li>
+                <li>Related transaction (if applicable)</li>
+                <li>Change type (transaction, manual adjustment, transfer, etc.)</li>
+              </ul>
+              <p className="text-sm text-muted-foreground mt-2">
+                Click on any transaction link in the history to view full transaction details. Use "Load More" to see older history entries.
+              </p>
+            </div>
+
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm mb-2">Quick Actions</div>
+              <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
+                <li>Edit category details</li>
+                <li>Archive or restore the category</li>
+                <li>Delete the category</li>
+                <li>View full category report</li>
+                <li>Navigate back to categories list</li>
+              </ul>
             </div>
           </div>
         </CardContent>
@@ -376,30 +540,63 @@ export default function CategoriesFeaturePage() {
         </Card>
       </div>
 
-      {/* Sorting and Organizing */}
+      {/* Balance History */}
       <Card>
         <CardHeader>
           <div className="flex items-start gap-4">
             <div className="p-2 bg-primary/10 rounded-lg">
-              <ArrowUpDown className="h-6 w-6 text-primary" />
+              <History className="h-6 w-6 text-primary" />
             </div>
             <div className="flex-1">
-              <CardTitle className="text-xl mb-2">Sorting and Organizing Categories</CardTitle>
+              <CardTitle className="text-xl mb-2">Balance History</CardTitle>
               <CardDescription className="text-base">
-                Reorder your categories to match your preferences
+                Track every change to your category balances
               </CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <StepList
-            steps={[
-              { title: 'Navigate to categories', content: 'Go to the Dashboard or view all categories' },
-              { title: 'Click "Reorder"', content: 'Find and click the "Reorder" button' },
-              { title: 'Drag to reorder', content: 'Drag categories to your desired order' },
-              { title: 'Save changes', content: 'Click "Save" to keep the new order' },
-            ]}
-          />
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Every category detail page includes a complete balance history showing all changes to the category's balance over time.
+          </p>
+
+          <div className="grid gap-3">
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm mb-2">What's Tracked</div>
+              <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
+                <li>Transaction-based changes (when you record spending or income)</li>
+                <li>Manual balance adjustments</li>
+                <li>Money transfers between categories</li>
+                <li>Allocation changes</li>
+                <li>Any other balance modifications</li>
+              </ul>
+            </div>
+
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm mb-2">History Details</div>
+              <p className="text-sm text-muted-foreground mb-2">For each change, you'll see:</p>
+              <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
+                <li>The previous balance and new balance</li>
+                <li>The amount of change (with + or - indicator)</li>
+                <li>When the change occurred</li>
+                <li>Who made the change (in multi-user accounts)</li>
+                <li>A link to the related transaction (if applicable)</li>
+                <li>The type of change (transaction, adjustment, transfer, etc.)</li>
+              </ul>
+            </div>
+
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm mb-2">Viewing History</div>
+              <p className="text-sm text-muted-foreground">
+                The balance history appears at the bottom of each category's detail page. Use the "Load More" button to view older entries. 
+                Click on any transaction link to see full transaction details in a popup dialog.
+              </p>
+            </div>
+          </div>
+
+          <Callout type="info" title="Audit Trail">
+            The balance history provides a complete audit trail, making it easy to understand how your category balances changed over time and to identify any discrepancies.
+          </Callout>
         </CardContent>
       </Card>
 
@@ -419,24 +616,33 @@ export default function CategoriesFeaturePage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            You can edit or delete categories from both the list page and the detail page:
+          </p>
           <div className="grid gap-3">
             <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-              <div className="font-medium text-sm min-w-[80px]">Edit</div>
+              <div className="font-medium text-sm min-w-[100px]">From List Page</div>
               <div className="text-sm text-muted-foreground">
-                Click the "..." menu and select "Edit" to change name, monthly amount, type, or priority
+                Click the "..." menu on any category row or card and select "Edit" or "Delete"
               </div>
             </div>
             <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-              <div className="font-medium text-sm min-w-[80px]">Delete</div>
+              <div className="font-medium text-sm min-w-[100px]">From Detail Page</div>
               <div className="text-sm text-muted-foreground">
-                Click the "..." menu and select "Delete" to remove the category
+                Use the "Edit", "Archive", or "Delete" buttons in the top-right corner of the detail page
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="font-medium text-sm min-w-[100px]">What You Can Edit</div>
+              <div className="text-sm text-muted-foreground">
+                Category name, monthly amount, current balance, category type, annual target, target balance, priority, and notes
               </div>
             </div>
           </div>
           <Callout type="warning" title="Deleting categories">
             Deleting a category will remove the category assignments from all transactions in that category.
             The transactions will remain in your history but will become uncategorized. Re-categorize
-            transactions before deleting if you want to preserve their category assignments.
+            transactions before deleting if you want to preserve their category assignments. Consider archiving instead to keep history intact.
           </Callout>
         </CardContent>
       </Card>
