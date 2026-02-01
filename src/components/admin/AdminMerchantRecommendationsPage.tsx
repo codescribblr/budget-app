@@ -261,6 +261,7 @@ export function AdminMerchantRecommendationsPage() {
       let successCount = 0;
       let errorCount = 0;
       const totalPatternsGrouped: number[] = [];
+      const successfullyProcessedIds = new Set<number>(); // Track successfully processed IDs
 
       // Process each recommendation sequentially
       let switchedToMerge = false;
@@ -293,6 +294,7 @@ export function AdminMerchantRecommendationsPage() {
           if (response.ok) {
             const data = await response.json();
             successCount++;
+            successfullyProcessedIds.add(rec.id); // Track successful processing
             if (data.patterns_grouped) {
               totalPatternsGrouped.push(data.patterns_grouped);
             }
@@ -357,14 +359,26 @@ export function AdminMerchantRecommendationsPage() {
           toast.error(`${errorCount} recommendation(s) failed to process`);
         }
 
-        // Always refresh and close dialog after processing (whether success or error)
+        // Update local state to remove successfully processed recommendations
+        // This preserves scroll position and user's place in the list
+        if (successfullyProcessedIds.size > 0) {
+          setRecommendations(prev => 
+            prev.filter(rec => !successfullyProcessedIds.has(rec.id))
+          );
+        }
+
+        // Close dialog and reset state
         setShowReviewDialog(false);
         setSelectedRecommendation(null);
         setSelectedRecommendations([]);
-        setSelectedRecommendationIds(new Set());
+        // Remove successfully processed IDs from selection (if any were selected)
+        setSelectedRecommendationIds(prev => {
+          const newSet = new Set(prev);
+          successfullyProcessedIds.forEach(id => newSet.delete(id));
+          return newSet;
+        });
         setReviewAction(null);
         setMerchantExistsError(null);
-        fetchRecommendations();
       } else {
         // Switched to merge mode - show info message and keep dialog open
         toast.info('Switched to merge mode. Please select the existing merchant to merge with.');
