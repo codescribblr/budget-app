@@ -85,14 +85,15 @@ export async function sendPushNotification(
 
     return true;
   } catch (error: any) {
-    console.error('Error sending push notification:', error);
-    
-    // If subscription is invalid (410 Gone), we should remove it
+    // If subscription is invalid (410 Gone), this is expected - subscription expired
     if (error.statusCode === 410) {
       // Subscription expired or invalid - will be cleaned up by caller
+      // Don't log as error, this is normal behavior
       return false;
     }
     
+    // Log other errors
+    console.error('Error sending push notification:', error);
     return false;
   }
 }

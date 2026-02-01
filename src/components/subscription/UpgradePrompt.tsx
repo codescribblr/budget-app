@@ -18,6 +18,8 @@ const PREMIUM_BENEFITS = [
   'Income Buffer',
   'Goals & Debt Tracking',
   'Loans Management',
+  'Retirement Planning & Net Worth Tracking',
+  'Automatic Transaction Import (powered by Teller IO)',
   'Advanced Reports',
   'Priority Support',
 ];
@@ -65,8 +67,9 @@ export function UpgradePrompt({ featureName, featureDescription }: UpgradePrompt
 
           <div className="text-center space-y-4">
             <div className="text-sm text-muted-foreground">
-              <span className="text-2xl font-bold text-foreground">$5.00</span>/month
+              <span className="text-2xl font-bold text-foreground">$8.33</span>/month
             </div>
+            <p className="text-xs text-muted-foreground">Billed annually as $100/year</p>
             <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3">
               <p className="text-sm font-semibold text-green-800 dark:text-green-200">
                 🎉 Start with a 60-day free trial!

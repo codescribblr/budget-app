@@ -6,17 +6,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 export default function TestNotificationsPage() {
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'recurring' | 'subscription'>('recurring');
+  
+  // Recurring transaction fields
   const [notificationType, setNotificationType] = useState<'upcoming' | 'insufficient_funds' | 'amount_changed'>('upcoming');
   const [recurringTransactionId, setRecurringTransactionId] = useState<string>('');
   const [merchantName, setMerchantName] = useState('Test Merchant');
   const [expectedAmount, setExpectedAmount] = useState('100.00');
+  
+  // Subscription fields
+  const [subscriptionType, setSubscriptionType] = useState<'trial_ending' | 'payment_failed'>('trial_ending');
+  const [daysRemaining, setDaysRemaining] = useState<string>('7');
+  const [trialEndDate, setTrialEndDate] = useState<string>('');
+  const [subscriptionId, setSubscriptionId] = useState<string>('');
+  const [nextRetryDate, setNextRetryDate] = useState<string>('');
 
-  const handleTest = async () => {
+  const handleRecurringTest = async () => {
     try {
       setLoading(true);
 
@@ -59,96 +70,264 @@ export default function TestNotificationsPage() {
     }
   };
 
+  const handleSubscriptionTest = async () => {
+    try {
+      setLoading(true);
+
+      const body: any = {
+        type: subscriptionType,
+      };
+
+      if (subscriptionType === 'trial_ending') {
+        body.daysRemaining = parseInt(daysRemaining);
+        if (trialEndDate) {
+          body.trialEndDate = trialEndDate;
+        }
+      } else if (subscriptionType === 'payment_failed') {
+        if (subscriptionId) {
+          body.subscriptionId = subscriptionId;
+        }
+        if (nextRetryDate) {
+          body.nextRetryDate = nextRetryDate;
+        }
+      }
+
+      const response = await fetch('/api/test/notifications/subscriptions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create test notification');
+      }
+
+      toast.success(`Test ${subscriptionType} notification created successfully!`, {
+        description: `Notification ID: ${data.notificationId}`,
+      });
+    } catch (error: any) {
+      console.error('Error creating test notification:', error);
+      toast.error('Failed to create test notification', {
+        description: error.message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="container max-w-2xl py-8">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold">Test Recurring Transaction Notifications</h1>
+        <h1 className="text-3xl font-bold">Test Notifications</h1>
         <p className="text-muted-foreground mt-2">
           Create test notifications to verify email and in-app notifications are working correctly.
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Create Test Notification</CardTitle>
-          <CardDescription>
-            Choose a notification type and either use an existing recurring transaction or provide test data.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="type">Notification Type</Label>
-            <Select
-              value={notificationType}
-              onValueChange={(value: any) => setNotificationType(value)}
-            >
-              <SelectTrigger id="type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="upcoming">Upcoming Transaction</SelectItem>
-                <SelectItem value="insufficient_funds">Insufficient Funds</SelectItem>
-                <SelectItem value="amount_changed">Amount Changed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'recurring' | 'subscription')}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="recurring">Recurring Transactions</TabsTrigger>
+          <TabsTrigger value="subscription">Subscriptions</TabsTrigger>
+        </TabsList>
 
-          <div className="space-y-2">
-            <Label htmlFor="rtId">Recurring Transaction ID (Optional)</Label>
-            <Input
-              id="rtId"
-              type="number"
-              placeholder="Leave empty to use test data"
-              value={recurringTransactionId}
-              onChange={(e) => setRecurringTransactionId(e.target.value)}
-            />
-            <p className="text-sm text-muted-foreground">
-              If provided, will use the existing recurring transaction. Otherwise, will create a test one.
-            </p>
-          </div>
-
-          {!recurringTransactionId && (
-            <>
+        <TabsContent value="recurring">
+          <Card>
+            <CardHeader>
+              <CardTitle>Create Test Recurring Transaction Notification</CardTitle>
+              <CardDescription>
+                Choose a notification type and either use an existing recurring transaction or provide test data.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="merchant">Merchant Name</Label>
-                <Input
-                  id="merchant"
-                  value={merchantName}
-                  onChange={(e) => setMerchantName(e.target.value)}
-                  placeholder="Test Merchant"
-                />
+                <Label htmlFor="type">Notification Type</Label>
+                <Select
+                  value={notificationType}
+                  onValueChange={(value: any) => setNotificationType(value)}
+                >
+                  <SelectTrigger id="type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="upcoming">Upcoming Transaction</SelectItem>
+                    <SelectItem value="insufficient_funds">Insufficient Funds</SelectItem>
+                    <SelectItem value="amount_changed">Amount Changed</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="amount">Expected Amount</Label>
+                <Label htmlFor="rtId">Recurring Transaction ID (Optional)</Label>
                 <Input
-                  id="amount"
+                  id="rtId"
                   type="number"
-                  step="0.01"
-                  value={expectedAmount}
-                  onChange={(e) => setExpectedAmount(e.target.value)}
-                  placeholder="100.00"
+                  placeholder="Leave empty to use test data"
+                  value={recurringTransactionId}
+                  onChange={(e) => setRecurringTransactionId(e.target.value)}
                 />
+                <p className="text-sm text-muted-foreground">
+                  If provided, will use the existing recurring transaction. Otherwise, will create a test one.
+                </p>
               </div>
-            </>
-          )}
 
-          <Button
-            onClick={handleTest}
-            disabled={loading}
-            className="w-full"
-          >
-            {loading ? (
-              <>
-                <LoadingSpinner className="mr-2 h-4 w-4" />
-                Creating Notification...
-              </>
-            ) : (
-              'Create Test Notification'
-            )}
-          </Button>
-        </CardContent>
-      </Card>
+              {!recurringTransactionId && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="merchant">Merchant Name</Label>
+                    <Input
+                      id="merchant"
+                      value={merchantName}
+                      onChange={(e) => setMerchantName(e.target.value)}
+                      placeholder="Test Merchant"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="amount">Expected Amount</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      step="0.01"
+                      value={expectedAmount}
+                      onChange={(e) => setExpectedAmount(e.target.value)}
+                      placeholder="100.00"
+                    />
+                  </div>
+                </>
+              )}
+
+              <Button
+                onClick={handleRecurringTest}
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? (
+                  <>
+                    <LoadingSpinner className="mr-2 h-4 w-4" />
+                    Creating Notification...
+                  </>
+                ) : (
+                  'Create Test Notification'
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="subscription">
+          <Card>
+            <CardHeader>
+              <CardTitle>Create Test Subscription Notification</CardTitle>
+              <CardDescription>
+                Test subscription-related notifications like trial ending or payment failures.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="subType">Notification Type</Label>
+                <Select
+                  value={subscriptionType}
+                  onValueChange={(value: any) => setSubscriptionType(value)}
+                >
+                  <SelectTrigger id="subType">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="trial_ending">Trial Ending Soon</SelectItem>
+                    <SelectItem value="payment_failed">Payment Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {subscriptionType === 'trial_ending' && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="daysRemaining">Days Remaining</Label>
+                    <Select
+                      value={daysRemaining}
+                      onValueChange={(value) => setDaysRemaining(value)}
+                    >
+                      <SelectTrigger id="daysRemaining">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="7">7 days</SelectItem>
+                        <SelectItem value="3">3 days</SelectItem>
+                        <SelectItem value="1">1 day</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      Notifications are sent at 7, 3, and 1 days before trial ends.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="trialEndDate">Trial End Date (Optional)</Label>
+                    <Input
+                      id="trialEndDate"
+                      type="datetime-local"
+                      value={trialEndDate}
+                      onChange={(e) => setTrialEndDate(e.target.value)}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Leave empty to auto-calculate based on days remaining.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {subscriptionType === 'payment_failed' && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="subId">Subscription ID (Optional)</Label>
+                    <Input
+                      id="subId"
+                      value={subscriptionId}
+                      onChange={(e) => setSubscriptionId(e.target.value)}
+                      placeholder="test_sub_12345"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Leave empty to generate a test subscription ID.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="nextRetry">Next Retry Date (Optional)</Label>
+                    <Input
+                      id="nextRetry"
+                      type="datetime-local"
+                      value={nextRetryDate}
+                      onChange={(e) => setNextRetryDate(e.target.value)}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      When Stripe will retry the payment. Leave empty if no retry scheduled.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              <Button
+                onClick={handleSubscriptionTest}
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? (
+                  <>
+                    <LoadingSpinner className="mr-2 h-4 w-4" />
+                    Creating Notification...
+                  </>
+                ) : (
+                  'Create Test Notification'
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <Card className="mt-6">
         <CardHeader>

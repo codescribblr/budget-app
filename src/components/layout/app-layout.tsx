@@ -8,6 +8,7 @@ import { CommandPaletteTrigger } from "@/components/layout/command-palette-trigg
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext"
 import { NotificationCenter } from "@/components/notifications/NotificationCenter"
+import { SubscriptionBanner } from "@/components/subscription/SubscriptionBanner"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -25,6 +26,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           <main className="flex flex-1 flex-col gap-4 p-4 md:p-6 min-h-0 overflow-hidden">
+            <SubscriptionBanner />
             {children}
           </main>
         </SidebarInset>

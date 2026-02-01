@@ -20,7 +20,13 @@ import {
   FileText,
   Rocket,
   Brain,
-  MessageSquare
+  MessageSquare,
+  Calendar,
+  Layers,
+  PiggyBank,
+  LineChart,
+  RefreshCw,
+  Coins
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -203,6 +209,115 @@ export default function HomePage() {
                 </CardDescription>
               </CardHeader>
             </Card>
+
+            {/* Premium Feature Cards */}
+            <Card className="border-2 border-primary/50 relative">
+              <div className="absolute top-2 right-2">
+                <Badge variant="secondary" className="text-xs">
+                  <Crown className="h-3 w-3 mr-1" />
+                  Premium
+                </Badge>
+              </div>
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center mb-4">
+                  <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <CardTitle>Monthly Funding Tracking</CardTitle>
+                <CardDescription>
+                  Track how much you've funded to each category this month, separate from balances. Never refund already-paid bills.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            <Card className="border-2 border-primary/50 relative">
+              <div className="absolute top-2 right-2">
+                <Badge variant="secondary" className="text-xs">
+                  <Crown className="h-3 w-3 mr-1" />
+                  Premium
+                </Badge>
+              </div>
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center mb-4">
+                  <Layers className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                </div>
+                <CardTitle>Smart Allocation</CardTitle>
+                <CardDescription>
+                  Automatically allocate funds to categories based on priorities. Let the app handle your budget distribution intelligently.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            <Card className="border-2 border-primary/50 relative">
+              <div className="absolute top-2 right-2">
+                <Badge variant="secondary" className="text-xs">
+                  <Crown className="h-3 w-3 mr-1" />
+                  Premium
+                </Badge>
+              </div>
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center mb-4">
+                  <PiggyBank className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <CardTitle>Income Buffer</CardTitle>
+                <CardDescription>
+                  Smooth irregular income by storing large payments and releasing funds monthly. Perfect for freelancers and variable earners.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            <Card className="border-2 border-primary/50 relative">
+              <div className="absolute top-2 right-2">
+                <Badge variant="secondary" className="text-xs">
+                  <Crown className="h-3 w-3 mr-1" />
+                  Premium
+                </Badge>
+              </div>
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center mb-4">
+                  <LineChart className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
+                </div>
+                <CardTitle>Retirement Planning & Net Worth</CardTitle>
+                <CardDescription>
+                  Project your financial future with comprehensive net worth forecasting. Plan for retirement with Social Security, RMDs, and distribution strategies.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            <Card className="border-2 border-primary/50 relative">
+              <div className="absolute top-2 right-2">
+                <Badge variant="secondary" className="text-xs">
+                  <Crown className="h-3 w-3 mr-1" />
+                  Premium
+                </Badge>
+              </div>
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-violet-100 dark:bg-violet-900 flex items-center justify-center mb-4">
+                  <RefreshCw className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+                </div>
+                <CardTitle>Automatic Transaction Import</CardTitle>
+                <CardDescription>
+                  Connect your bank accounts via Teller IO for automatic transaction imports. No more manual data entry - transactions sync automatically.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            <Card className="border-2 border-primary/50 relative">
+              <div className="absolute top-2 right-2">
+                <Badge variant="secondary" className="text-xs">
+                  <Crown className="h-3 w-3 mr-1" />
+                  Premium
+                </Badge>
+              </div>
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-rose-100 dark:bg-rose-900 flex items-center justify-center mb-4">
+                  <Brain className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+                </div>
+                <CardTitle>AI-Powered Insights</CardTitle>
+                <CardDescription>
+                  Get intelligent transaction categorization, personalized budget advice, and chat with an AI assistant that understands your finances.
+                </CardDescription>
+              </CardHeader>
+            </Card>
           </div>
         </div>
       </section>
@@ -284,11 +399,11 @@ export default function HomePage() {
                   Premium
                 </CardTitle>
                 <div className="mt-4">
-                  <span className="text-4xl font-bold">$5</span>
+                  <span className="text-4xl font-bold">$8.33</span>
                   <span className="text-muted-foreground">/month</span>
                 </div>
                 <CardDescription className="mt-2">
-                  <span className="text-green-600 font-semibold">60-day free trial</span> · All features unlocked
+                  <span className="text-green-600 font-semibold">60-day free trial</span> · Billed annually as $100/year · All features unlocked
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -333,6 +448,14 @@ export default function HomePage() {
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                     <span>Loans Management</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span>Retirement Planning & Net Worth Tracking</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span>Automatic Transaction Import (powered by Teller IO)</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />

@@ -88,12 +88,12 @@ export default function TermsPage() {
             
             <h3 className="text-xl font-semibold mb-3 mt-6">Free Trial</h3>
             <p className="text-muted-foreground leading-relaxed">
-              Premium subscriptions include a 60-day free trial. You will not be charged during the trial period. After the trial ends, your subscription will automatically renew at the current monthly rate unless you cancel before the trial period ends.
+              Premium subscriptions include a 60-day free trial. You will not be charged during the trial period. After the trial ends, your subscription will automatically renew annually at $100/year unless you cancel before the trial period ends.
             </p>
 
             <h3 className="text-xl font-semibold mb-3 mt-6">Subscription Fees</h3>
             <p className="text-muted-foreground leading-relaxed">
-              Premium subscriptions are billed monthly at $5/month. All fees are in USD and are non-refundable except as required by law. We reserve the right to change our pricing with 30 days notice.
+              Premium subscriptions are billed annually at $100/year ($8.33/month). All fees are in USD and are non-refundable except as required by law. We reserve the right to change our pricing with 30 days notice.
             </p>
 
             <h3 className="text-xl font-semibold mb-3 mt-6">Cancellation</h3>

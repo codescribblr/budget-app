@@ -5,6 +5,8 @@
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { NotificationService } from '@/lib/notifications/notification-service';
 import { createRecurringTransactionNotification } from '@/lib/notifications/helpers';
+import { getUsersNeedingTrialNotifications, createTrialEndingNotification } from '@/lib/notifications/subscription-helpers';
+import { checkAndDisableExpiredSubscriptions } from '@/lib/subscription-access-control';
 
 const notificationService = new NotificationService();
 
@@ -467,6 +469,53 @@ export async function handleNetWorthSnapshot(): Promise<JobResult> {
 }
 
 /**
+ * Handler for check_trial_periods job
+ * Checks all trialing subscriptions and sends notifications for trials ending soon
+ * Also disables premium access for expired trials
+ */
+export async function handleCheckTrialPeriods(): Promise<JobResult> {
+  try {
+    // Step 1: Send trial ending notifications
+    const usersNeedingNotifications = await getUsersNeedingTrialNotifications();
+    
+    let notificationsSent = 0;
+    let notificationErrors = 0;
+
+    for (const user of usersNeedingNotifications) {
+      try {
+        await createTrialEndingNotification(
+          user.userId,
+          user.accountId,
+          user.daysRemaining,
+          user.trialEnd
+        );
+        notificationsSent++;
+      } catch (error: any) {
+        console.error(`Error sending trial notification for user ${user.userId}:`, error);
+        notificationErrors++;
+      }
+    }
+
+    // Step 2: Disable premium access for expired subscriptions
+    const { disabled, errors } = await checkAndDisableExpiredSubscriptions();
+
+    const messages: string[] = [];
+    if (notificationsSent > 0) messages.push(`Sent ${notificationsSent} trial ending notifications`);
+    if (notificationErrors > 0) messages.push(`${notificationErrors} notification errors`);
+    if (disabled > 0) messages.push(`Disabled premium access for ${disabled} accounts`);
+    if (errors > 0) messages.push(`${errors} disable errors`);
+
+    return {
+      success: notificationErrors === 0 && errors === 0,
+      message: messages.length > 0 ? messages.join(', ') : 'No trial notifications needed',
+    };
+  } catch (error: any) {
+    console.error('Error in check trial periods job:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Get handler function for a job type
  */
 export function getJobHandler(jobType: string): (() => Promise<JobResult>) | null {
@@ -479,6 +528,8 @@ export function getJobHandler(jobType: string): (() => Promise<JobResult>) | nul
       return handleMonthlyRollover;
     case 'net_worth_snapshot':
       return handleNetWorthSnapshot;
+    case 'check_trial_periods':
+      return handleCheckTrialPeriods;
     default:
       return null;
   }

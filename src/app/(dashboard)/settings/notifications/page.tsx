@@ -25,6 +25,8 @@ const IMPLEMENTED_NOTIFICATION_TYPES = new Set([
   'recurring_transaction_upcoming',
   'recurring_transaction_insufficient_funds',
   'recurring_transaction_amount_changed',
+  'subscription_trial_ending',
+  'subscription_payment_failed',
   'system_notification',
 ]);
 

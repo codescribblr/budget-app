@@ -22,8 +22,13 @@ export async function GET(
       );
     }
 
-    // Sync read status first
-    await syncAdminNotificationReadStatus(notificationId);
+    // Sync read status first (may fail silently if recipients don't exist)
+    try {
+      await syncAdminNotificationReadStatus(notificationId);
+    } catch (error: any) {
+      // Log but don't fail - stats can still be returned
+      console.warn(`Warning: Could not sync read status for notification ${notificationId}:`, error.message);
+    }
 
     const stats = await getAdminNotificationStats(notificationId);
 

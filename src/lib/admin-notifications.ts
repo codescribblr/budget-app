@@ -216,7 +216,9 @@ export async function getAdminNotificationRecipients(
     .order('created_at', { ascending: false });
 
   if (error) {
-    throw new Error(`Failed to fetch recipients: ${error.message}`);
+    // Log error but don't throw - return empty array instead
+    console.warn(`Failed to fetch recipients for admin notification ${adminNotificationId}:`, error.message);
+    return [];
   }
 
   return (data || []).map((r: any) => ({

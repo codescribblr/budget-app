@@ -18,6 +18,8 @@ const PREMIUM_FEATURES = [
   'Income Buffer',
   'Goals & Debt Tracking',
   'Loans Management',
+  'Retirement Planning & Net Worth Tracking',
+  'Automatic Transaction Import (powered by Teller IO)',
   'Advanced Reports',
   'Priority Support',
 ];
@@ -279,8 +281,9 @@ function SubscriptionPageContent() {
                     <Crown className="h-5 w-5 text-yellow-500" />
                     Premium
                   </h3>
-                  <p className="text-2xl font-bold">$5<span className="text-sm font-normal text-muted-foreground">/month</span></p>
+                  <p className="text-2xl font-bold">$8.33<span className="text-sm font-normal text-muted-foreground">/month</span></p>
                   <p className="text-xs text-green-600 font-semibold mt-1">60-day free trial</p>
+                  <p className="text-xs text-muted-foreground mt-1">Billed annually as $100/year</p>
                 </div>
                 <p className="text-sm text-muted-foreground">Everything in Free, plus:</p>
                 <ul className="space-y-2">

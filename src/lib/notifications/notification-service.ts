@@ -219,9 +219,18 @@ export class NotificationService {
           if (sent > 0) {
             pushSent = true;
           }
+          
+          // Log failed push notifications only if there were failures and no successes
+          // (expired subscriptions are handled silently by push-notification-sender)
+          if (failed > 0 && sent === 0) {
+            await this.logDelivery(notificationId, 'push', 'failed', 'No valid push subscriptions');
+          }
         } catch (error: any) {
-          console.error(`Error sending push notification ${notificationId}:`, error);
-          await this.logDelivery(notificationId, 'push', 'failed', error.message);
+          // Only log unexpected errors (not 410 expired subscription errors)
+          if (!error.message?.includes('410') && !error.statusCode === 410) {
+            console.error(`Error sending push notification ${notificationId}:`, error);
+            await this.logDelivery(notificationId, 'push', 'failed', error.message);
+          }
         }
       }
     }

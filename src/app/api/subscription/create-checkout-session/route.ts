@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       payment_method_collection: 'if_required', // Only collect payment method if required after discounts
       line_items: [
         {
-          price: process.env.STRIPE_PREMIUM_PRICE_ID!,
+          price: process.env.STRIPE_PREMIUM_ANNUAL_PRICE_ID!,
           quantity: 1,
         },
       ],

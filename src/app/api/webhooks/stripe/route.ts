@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { setupPremiumFeatures } from '@/lib/premium-feature-setup';
+import { createPaymentFailedNotification } from '@/lib/notifications/subscription-helpers';
+import { disablePremiumAccess } from '@/lib/subscription-access-control';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -170,6 +172,13 @@ export async function POST(request: Request) {
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
 
+        // Get account_id before updating
+        const { data: existingSub } = await supabase
+          .from('user_subscriptions')
+          .select('account_id')
+          .eq('stripe_subscription_id', subscription.id)
+          .single();
+
         await supabase
           .from('user_subscriptions')
           .update({
@@ -179,6 +188,15 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq('stripe_subscription_id', subscription.id);
+
+        // Disable premium access
+        if (existingSub?.account_id) {
+          try {
+            await disablePremiumAccess(existingSub.account_id);
+          } catch (error: any) {
+            console.error(`Error disabling premium access:`, error);
+          }
+        }
 
         console.log(`✅ Subscription canceled for subscription ${subscription.id}`);
         // TODO: Send cancellation confirmation email
@@ -196,6 +214,19 @@ export async function POST(request: Request) {
         const invoice = event.data.object as any;
         const subscriptionId = invoice.subscription as string;
 
+        // Get subscription details to find user and account
+        const { data: subscription } = await supabase
+          .from('user_subscriptions')
+          .select('user_id, account_id, stripe_subscription_id')
+          .eq('stripe_subscription_id', subscriptionId)
+          .single();
+
+        if (!subscription) {
+          console.error(`⚠️ Subscription not found for payment failure: ${subscriptionId}`);
+          break;
+        }
+
+        // Update subscription status
         await supabase
           .from('user_subscriptions')
           .update({
@@ -204,8 +235,33 @@ export async function POST(request: Request) {
           })
           .eq('stripe_subscription_id', subscriptionId);
 
-        console.log(`⚠️ Payment failed for subscription ${subscriptionId}`);
-        // TODO: Send payment failed email
+        // Get next retry date from invoice if available
+        const nextRetryDate = invoice.next_payment_attempt 
+          ? new Date(invoice.next_payment_attempt * 1000).toISOString()
+          : undefined;
+
+        // Send notification
+        if (subscription.user_id && subscription.account_id) {
+          try {
+            await createPaymentFailedNotification(
+              subscription.user_id,
+              subscription.account_id,
+              subscriptionId,
+              nextRetryDate
+            );
+          } catch (error: any) {
+            console.error(`Error sending payment failed notification:`, error);
+          }
+        }
+
+        // Disable premium access immediately
+        try {
+          await disablePremiumAccess(subscription.account_id);
+        } catch (error: any) {
+          console.error(`Error disabling premium access:`, error);
+        }
+
+        console.log(`⚠️ Payment failed for subscription ${subscriptionId}, premium access disabled`);
         break;
       }
     }
