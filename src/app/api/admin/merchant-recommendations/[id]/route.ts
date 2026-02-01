@@ -102,78 +102,96 @@ export async function PATCH(
 
       // Group all patterns under the new merchant and collect pattern IDs
       const patternIds: number[] = [];
-      for (const pattern of patternsToProcess) {
-        // Find or create pattern in global_merchant_patterns
-        const { data: existingPattern } = await supabase
-          .from('global_merchant_patterns')
-          .select('id')
-          .eq('pattern', pattern)
-          .maybeSingle();
-
-        let patternId: number | null = null;
-        if (existingPattern) {
-          patternId = existingPattern.id;
-          await supabase
+      try {
+        for (const pattern of patternsToProcess) {
+          // Find or create pattern in global_merchant_patterns
+          const { data: existingPattern } = await supabase
             .from('global_merchant_patterns')
-            .update({ global_merchant_id: newMerchant.id })
-            .eq('id', existingPattern.id);
-        } else {
-          // Pattern should exist (created by trigger), but handle gracefully
-          const normalized = pattern.toLowerCase().trim().replace(/\s+/g, ' ');
-          // Try insert first, handle conflict if pattern already exists
-          const { data: insertedPattern, error: insertError } = await supabase
-            .from('global_merchant_patterns')
-            .insert({
-              pattern,
-              normalized_pattern: normalized,
-              global_merchant_id: newMerchant.id,
-            })
             .select('id')
+            .eq('pattern', pattern)
             .maybeSingle();
 
-          if (insertError) {
-            // Pattern might already exist - try to get it and update
-            const { data: existingPatternAfterConflict } = await supabase
+          let patternId: number | null = null;
+          if (existingPattern) {
+            patternId = existingPattern.id;
+            await supabase
               .from('global_merchant_patterns')
-              .select('id')
-              .eq('pattern', pattern)
-              .maybeSingle();
-            
-            if (existingPatternAfterConflict) {
-              patternId = existingPatternAfterConflict.id;
-              await supabase
-                .from('global_merchant_patterns')
-                .update({ global_merchant_id: newMerchant.id })
-                .eq('id', patternId);
-            }
+              .update({ global_merchant_id: newMerchant.id })
+              .eq('id', existingPattern.id);
           } else {
-            patternId = insertedPattern?.id || null;
+            // Pattern should exist (created by trigger), but handle gracefully
+            const normalized = pattern.toLowerCase().trim().replace(/\s+/g, ' ');
+            // Try insert first, handle conflict if pattern already exists
+            const { data: insertedPattern, error: insertError } = await supabase
+              .from('global_merchant_patterns')
+              .insert({
+                pattern,
+                normalized_pattern: normalized,
+                global_merchant_id: newMerchant.id,
+              })
+              .select('id')
+              .maybeSingle();
+
+            if (insertError) {
+              // Pattern might already exist - try to get it and update
+              const { data: existingPatternAfterConflict } = await supabase
+                .from('global_merchant_patterns')
+                .select('id')
+                .eq('pattern', pattern)
+                .maybeSingle();
+              
+              if (existingPatternAfterConflict) {
+                patternId = existingPatternAfterConflict.id;
+                await supabase
+                  .from('global_merchant_patterns')
+                  .update({ global_merchant_id: newMerchant.id })
+                  .eq('id', patternId);
+              }
+            } else {
+              patternId = insertedPattern?.id || null;
+            }
+          }
+          if (patternId) patternIds.push(patternId);
+        }
+
+        // Sync transactions for the grouped patterns
+        if (patternIds.length > 0) {
+          try {
+            const { syncTransactionsForPatterns } = await import('@/lib/db/sync-merchant-groups');
+            await syncTransactionsForPatterns(patternIds, newMerchant.id);
+          } catch (syncError) {
+            console.error('Error syncing transactions after approval:', syncError);
+            // Don't fail the request - merchant is created and patterns are grouped
           }
         }
-        if (patternId) patternIds.push(patternId);
+      } catch (patternError) {
+        console.error('Error processing patterns:', patternError);
+        // Continue to delete recommendation even if pattern processing had errors
       }
 
-      // Sync transactions for the grouped patterns
-      if (patternIds.length > 0) {
-        try {
-          const { syncTransactionsForPatterns } = await import('@/lib/db/sync-merchant-groups');
-          await syncTransactionsForPatterns(patternIds, newMerchant.id);
-        } catch (syncError) {
-          console.error('Error syncing transactions after approval:', syncError);
-          // Don't fail the request - merchant is created and patterns are grouped
-        }
-      }
-
-      // Delete recommendation after processing (cascade will delete merchant_recommendation_patterns)
-      await supabase
+      // Always delete recommendation after processing (cascade will delete merchant_recommendation_patterns)
+      // Patterns that weren't included remain ungrouped in global_merchant_patterns
+      const { error: deleteError, data: deleteData } = await supabase
         .from('merchant_recommendations')
         .delete()
-        .eq('id', recommendationId);
+        .eq('id', recommendationId)
+        .select();
+      
+      if (deleteError) {
+        console.error(`Error deleting recommendation ${recommendationId}:`, deleteError);
+        throw deleteError; // Throw error so it's caught and logged properly
+      }
+      
+      if (!deleteData || deleteData.length === 0) {
+        console.warn(`Recommendation ${recommendationId} was not found for deletion (may have already been deleted)`);
+      } else {
+        console.log(`Successfully deleted recommendation ${recommendationId}`);
+      }
 
       return NextResponse.json({ 
         success: true, 
         merchant: newMerchant,
-        patterns_grouped: patternsToProcess.length 
+        patterns_grouped: patternIds.length 
       });
 
     } else if (action === 'merge') {
@@ -200,94 +218,124 @@ export async function PATCH(
 
       // Merge all patterns into the existing merchant
       const patternIds: number[] = [];
-      for (const pattern of patternsToProcess) {
-        const { data: existingPattern } = await supabase
-          .from('global_merchant_patterns')
-          .select('id, global_merchant_id')
-          .eq('pattern', pattern)
-          .maybeSingle();
-
-        let patternId: number | null = null;
-        if (existingPattern) {
-          patternId = existingPattern.id;
-          // If pattern is already grouped to a different merchant, admin can choose to move it
-          if (existingPattern.global_merchant_id && existingPattern.global_merchant_id !== merchant_id) {
-            // Move pattern to the selected merchant
-            await supabase
-              .from('global_merchant_patterns')
-              .update({ global_merchant_id: merchant_id })
-              .eq('id', existingPattern.id);
-          } else {
-            // Update to selected merchant
-            await supabase
-              .from('global_merchant_patterns')
-              .update({ global_merchant_id: merchant_id })
-              .eq('id', existingPattern.id);
-          }
-        } else {
-          // Create pattern and link to merchant
-          const normalized = pattern.toLowerCase().trim().replace(/\s+/g, ' ');
-          const { data: insertedPattern, error: insertError } = await supabase
+      try {
+        for (const pattern of patternsToProcess) {
+          const { data: existingPattern } = await supabase
             .from('global_merchant_patterns')
-            .insert({
-              pattern,
-              normalized_pattern: normalized,
-              global_merchant_id: merchant_id,
-            })
-            .select('id')
+            .select('id, global_merchant_id')
+            .eq('pattern', pattern)
             .maybeSingle();
 
-          if (insertError) {
-            // Pattern might already exist - try to get it and update
-            const { data: existingPatternAfterConflict } = await supabase
-              .from('global_merchant_patterns')
-              .select('id')
-              .eq('pattern', pattern)
-              .maybeSingle();
-            
-            if (existingPatternAfterConflict) {
-              patternId = existingPatternAfterConflict.id;
+          let patternId: number | null = null;
+          if (existingPattern) {
+            patternId = existingPattern.id;
+            // If pattern is already grouped to a different merchant, admin can choose to move it
+            if (existingPattern.global_merchant_id && existingPattern.global_merchant_id !== merchant_id) {
+              // Move pattern to the selected merchant
               await supabase
                 .from('global_merchant_patterns')
                 .update({ global_merchant_id: merchant_id })
-                .eq('id', patternId);
+                .eq('id', existingPattern.id);
+            } else {
+              // Update to selected merchant
+              await supabase
+                .from('global_merchant_patterns')
+                .update({ global_merchant_id: merchant_id })
+                .eq('id', existingPattern.id);
             }
           } else {
-            patternId = insertedPattern?.id || null;
+            // Create pattern and link to merchant
+            const normalized = pattern.toLowerCase().trim().replace(/\s+/g, ' ');
+            const { data: insertedPattern, error: insertError } = await supabase
+              .from('global_merchant_patterns')
+              .insert({
+                pattern,
+                normalized_pattern: normalized,
+                global_merchant_id: merchant_id,
+              })
+              .select('id')
+              .maybeSingle();
+
+            if (insertError) {
+              // Pattern might already exist - try to get it and update
+              const { data: existingPatternAfterConflict } = await supabase
+                .from('global_merchant_patterns')
+                .select('id')
+                .eq('pattern', pattern)
+                .maybeSingle();
+              
+              if (existingPatternAfterConflict) {
+                patternId = existingPatternAfterConflict.id;
+                await supabase
+                  .from('global_merchant_patterns')
+                  .update({ global_merchant_id: merchant_id })
+                  .eq('id', patternId);
+              }
+            } else {
+              patternId = insertedPattern?.id || null;
+            }
+          }
+          if (patternId) patternIds.push(patternId);
+        }
+
+        // Sync transactions for the merged patterns
+        if (patternIds.length > 0) {
+          try {
+            const { syncTransactionsForPatterns } = await import('@/lib/db/sync-merchant-groups');
+            await syncTransactionsForPatterns(patternIds, merchant_id);
+          } catch (syncError) {
+            console.error('Error syncing transactions after merge:', syncError);
+            // Don't fail the request - patterns are merged
           }
         }
-        if (patternId) patternIds.push(patternId);
+      } catch (patternError) {
+        console.error('Error processing patterns:', patternError);
+        // Continue to delete recommendation even if pattern processing had errors
       }
 
-      // Sync transactions for the merged patterns
-      if (patternIds.length > 0) {
-        try {
-          const { syncTransactionsForPatterns } = await import('@/lib/db/sync-merchant-groups');
-          await syncTransactionsForPatterns(patternIds, merchant_id);
-        } catch (syncError) {
-          console.error('Error syncing transactions after merge:', syncError);
-          // Don't fail the request - patterns are merged
-        }
-      }
-
-      // Delete recommendation after processing (cascade will delete merchant_recommendation_patterns)
-      await supabase
+      // Always delete recommendation after processing (cascade will delete merchant_recommendation_patterns)
+      // Patterns that weren't included remain ungrouped in global_merchant_patterns
+      const { error: deleteError, data: deleteData } = await supabase
         .from('merchant_recommendations')
         .delete()
-        .eq('id', recommendationId);
+        .eq('id', recommendationId)
+        .select();
+      
+      if (deleteError) {
+        console.error('Error deleting recommendation:', deleteError);
+        throw deleteError; // Throw error so it's caught and logged properly
+      }
+      
+      if (!deleteData || deleteData.length === 0) {
+        console.warn(`Recommendation ${recommendationId} was not found for deletion (may have already been deleted)`);
+      } else {
+        console.log(`Successfully deleted recommendation ${recommendationId}`);
+      }
 
       return NextResponse.json({ 
         success: true, 
         merchant: existingMerchant,
-        patterns_merged: patternsToProcess.length 
+        patterns_merged: patternIds.length 
       });
 
     } else if (action === 'deny') {
       // Delete recommendation after denying (cascade will delete merchant_recommendation_patterns)
-      await supabase
+      const { error: deleteError, data: deleteData } = await supabase
         .from('merchant_recommendations')
         .delete()
-        .eq('id', recommendationId);
+        .eq('id', recommendationId)
+        .select();
+      
+      if (deleteError) {
+        console.error(`Error deleting recommendation ${recommendationId}:`, deleteError);
+        throw deleteError;
+      }
+      
+      if (!deleteData || deleteData.length === 0) {
+        console.warn(`Recommendation ${recommendationId} was not found for deletion (may have already been deleted)`);
+      } else {
+        console.log(`Successfully deleted recommendation ${recommendationId}`);
+      }
 
       return NextResponse.json({ success: true });
     }
@@ -298,8 +346,9 @@ export async function PATCH(
     if (error.message === 'Unauthorized: Admin access required') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const errorMessage = error?.message || error?.toString() || 'Failed to review recommendation';
     return NextResponse.json(
-      { error: 'Failed to review recommendation' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

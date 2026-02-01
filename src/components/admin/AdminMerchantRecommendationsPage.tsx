@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, CheckCircle, XCircle, Merge, ChevronDown, X, Plus } from 'lucide-react';
+import { Search, CheckCircle, XCircle, Merge, ChevronDown, X, Plus, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { MerchantLogo } from '@/components/admin/MerchantLogo';
@@ -72,6 +72,7 @@ export function AdminMerchantRecommendationsPage() {
   const [selectedRecommendations, setSelectedRecommendations] = useState<MerchantRecommendation[]>([]);
   // Track which patterns are included for each recommendation (key: recommendationId, value: Set of pattern strings)
   const [includedPatterns, setIncludedPatterns] = useState<Map<number, Set<string>>>(new Map());
+  const [merchantExistsError, setMerchantExistsError] = useState<string | null>(null);
 
   const fetchRecommendations = async () => {
     try {
@@ -112,6 +113,23 @@ export function AdminMerchantRecommendationsPage() {
       fetchMerchants(merchantSearchQuery);
     }
   }, [reviewAction, merchantSearchQuery, showReviewDialog]);
+
+  // Auto-select merchant when merchantExistsError is set
+  useEffect(() => {
+    if (merchantExistsError && reviewAction === 'merge' && availableMerchants.length > 0) {
+      // Extract merchant name from error message (format: "Merchant \"Name\" already exists...")
+      const match = merchantExistsError.match(/Merchant "([^"]+)" already exists/);
+      if (match) {
+        const merchantName = match[1];
+        const existingMerchant = availableMerchants.find(m => 
+          m.display_name.toLowerCase() === merchantName.toLowerCase()
+        );
+        if (existingMerchant && !selectedMerchantId) {
+          setSelectedMerchantId(existingMerchant.id);
+        }
+      }
+    }
+  }, [merchantExistsError, reviewAction, availableMerchants, selectedMerchantId]);
 
   const initializePatterns = (recs: MerchantRecommendation[]) => {
     const newIncludedPatterns = new Map<number, Set<string>>();
@@ -230,11 +248,20 @@ export function AdminMerchantRecommendationsPage() {
       const totalPatternsGrouped: number[] = [];
 
       // Process each recommendation sequentially
+      let switchedToMerge = false;
       for (const rec of recommendationsToProcess) {
         try {
           // Get included patterns for this recommendation
           const included = includedPatterns.get(rec.id);
-          const patternsToProcess = included ? Array.from(included) : undefined;
+          const patternsToProcess = included && included.size > 0 ? Array.from(included) : undefined;
+
+          // Validate that we have patterns to process
+          if (!patternsToProcess || patternsToProcess.length === 0) {
+            console.error(`No patterns to process for recommendation ${rec.id}`);
+            toast.error(`No patterns selected for recommendation: ${rec.suggested_merchant_name}`);
+            errorCount++;
+            continue;
+          }
 
           const response = await fetch(`/api/admin/merchant-recommendations/${rec.id}`, {
             method: 'PATCH',
@@ -255,38 +282,79 @@ export function AdminMerchantRecommendationsPage() {
               totalPatternsGrouped.push(data.patterns_grouped);
             }
           } else {
-            const error = await response.json();
+            let errorMessage = 'Unknown error';
+            try {
+              const errorData = await response.json();
+              errorMessage = errorData.error || errorData.message || JSON.stringify(errorData);
+              
+              // Check if error is "merchant already exists" - switch to merge mode
+              if ((reviewAction === 'approve' || reviewAction === 'approve_rename') && 
+                  errorMessage.includes('already exists') && 
+                  errorMessage.includes('Use "merge" action')) {
+                // Extract merchant name from error
+                const match = errorMessage.match(/Merchant "([^"]+)" already exists/);
+                if (match) {
+                  const merchantName = match[1];
+                  setMerchantExistsError(errorMessage);
+                  setReviewAction('merge');
+                  switchedToMerge = true;
+                  // Fetch merchants to populate the dropdown
+                  await fetchMerchants('');
+                  // Stop processing and keep dialog open for merge
+                  break;
+                }
+              }
+            } catch (parseError) {
+              errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+            }
+            
+            if (!switchedToMerge) {
+              console.error(`Error processing recommendation ${rec.id}:`, errorMessage);
+              toast.error(`Failed to process ${rec.suggested_merchant_name}: ${errorMessage}`);
+              errorCount++;
+            }
+          }
+        } catch (error: any) {
+          if (!switchedToMerge) {
+            const errorMessage = error?.message || error?.toString() || 'Unknown error';
             console.error(`Error processing recommendation ${rec.id}:`, error);
+            toast.error(`Error processing ${rec.suggested_merchant_name}: ${errorMessage}`);
             errorCount++;
           }
-        } catch (error) {
-          console.error(`Error processing recommendation ${rec.id}:`, error);
-          errorCount++;
         }
       }
 
-      if (successCount > 0) {
-        const totalPatterns = totalPatternsGrouped.reduce((a, b) => a + b, 0);
-        const patternText = totalPatterns > 0 ? ` and ${totalPatterns} pattern(s) grouped` : '';
-        toast.success(
-          reviewAction === 'approve' || reviewAction === 'approve_rename'
-            ? `${successCount} merchant(s) created${patternText}`
-            : reviewAction === 'merge'
-            ? `${successCount} recommendation(s) merged into existing merchant`
-            : `${successCount} recommendation(s) denied`
-        );
-      }
+      // Only close dialog and reset if we didn't switch to merge mode
+      if (!switchedToMerge) {
+        if (successCount > 0) {
+          const totalPatterns = totalPatternsGrouped.reduce((a, b) => a + b, 0);
+          const patternText = totalPatterns > 0 ? ` and ${totalPatterns} pattern(s) grouped` : '';
+          toast.success(
+            reviewAction === 'approve' || reviewAction === 'approve_rename'
+              ? `${successCount} merchant(s) created${patternText}`
+              : reviewAction === 'merge'
+              ? `${successCount} recommendation(s) merged into existing merchant`
+              : `${successCount} recommendation(s) denied`
+          );
+        }
 
-      if (errorCount > 0) {
-        toast.error(`${errorCount} recommendation(s) failed to process`);
-      }
+        if (errorCount > 0) {
+          toast.error(`${errorCount} recommendation(s) failed to process`);
+        }
 
-      setShowReviewDialog(false);
-      setSelectedRecommendation(null);
-      setSelectedRecommendations([]);
-      setSelectedRecommendationIds(new Set());
-      setReviewAction(null);
-      fetchRecommendations();
+        // Always refresh and close dialog after processing (whether success or error)
+        setShowReviewDialog(false);
+        setSelectedRecommendation(null);
+        setSelectedRecommendations([]);
+        setSelectedRecommendationIds(new Set());
+        setReviewAction(null);
+        setMerchantExistsError(null);
+        fetchRecommendations();
+      } else {
+        // Switched to merge mode - show info message and keep dialog open
+        toast.info('Switched to merge mode. Please select the existing merchant to merge with.');
+        // Don't refresh yet - wait for user to complete merge
+      }
     } catch (error) {
       console.error('Error processing recommendations:', error);
       toast.error('Failed to process recommendations');
@@ -513,6 +581,7 @@ export function AdminMerchantRecommendationsPage() {
           setSelectedMerchantId(null);
           setMerchantPopoverOpen(false);
           setIncludedPatterns(new Map()); // Clear pattern selections
+          setMerchantExistsError(null); // Clear merchant exists error
           // Don't clear selectedRecommendationIds here - let user keep selection after dialog closes
         }
       }}>
@@ -555,6 +624,23 @@ export function AdminMerchantRecommendationsPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {merchantExistsError && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                <div className="flex items-start gap-2">
+                  <div className="text-yellow-600 dark:text-yellow-400 mt-0.5">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                      Merchant Already Exists
+                    </p>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                      This merchant name already exists. Please select the existing merchant below to merge the patterns instead.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             {selectedRecommendations.length > 1 && (
               <div>
                 <Label>Selected Recommendations</Label>

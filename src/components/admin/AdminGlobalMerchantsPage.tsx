@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, Plus, Edit, Trash2, MoreVertical, CheckCircle, FileText, Link2, Unlink, ChevronDown, Upload, X } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, MoreVertical, CheckCircle, FileText, Link2, Unlink, ChevronDown, Upload, X, Loader2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -92,6 +92,10 @@ export function AdminGlobalMerchantsPage() {
   const [iconSearchQuery, setIconSearchQuery] = useState('');
   const [selectedIconName, setSelectedIconName] = useState<string | null>(null);
   const [logoDialogTab, setLogoDialogTab] = useState<'icon' | 'upload'>('icon');
+  const [showPatternsDialog, setShowPatternsDialog] = useState(false);
+  const [merchantPatterns, setMerchantPatterns] = useState<GlobalMerchantPattern[]>([]);
+  const [loadingPatterns, setLoadingPatterns] = useState(false);
+  const [removingPattern, setRemovingPattern] = useState<number | null>(null);
 
   const fetchMerchants = async () => {
     try {
@@ -122,6 +126,58 @@ export function AdminGlobalMerchantsPage() {
     } catch (error) {
       console.error('Error fetching patterns:', error);
       toast.error('Failed to fetch patterns');
+    }
+  };
+
+  const fetchMerchantPatterns = async (merchantId: number) => {
+    setLoadingPatterns(true);
+    try {
+      const response = await fetch(`/api/admin/global-merchants/patterns?merchant_id=${merchantId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setMerchantPatterns(data.patterns || []);
+      } else {
+        toast.error('Failed to fetch merchant patterns');
+      }
+    } catch (error) {
+      console.error('Error fetching merchant patterns:', error);
+      toast.error('Failed to fetch merchant patterns');
+    } finally {
+      setLoadingPatterns(false);
+    }
+  };
+
+  const handleViewPatterns = async (merchant: GlobalMerchant) => {
+    setSelectedMerchant(merchant);
+    setShowPatternsDialog(true);
+    await fetchMerchantPatterns(merchant.id);
+  };
+
+  const handleRemovePattern = async (patternId: number) => {
+    if (!selectedMerchant) return;
+
+    setRemovingPattern(patternId);
+    try {
+      const response = await fetch('/api/admin/global-merchants/patterns/ungroup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pattern_ids: [patternId] }),
+      });
+
+      if (response.ok) {
+        toast.success('Pattern removed from merchant');
+        // Refresh merchant patterns and main patterns list
+        await fetchMerchantPatterns(selectedMerchant.id);
+        await fetchPatterns(patternFilter);
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to remove pattern');
+      }
+    } catch (error) {
+      console.error('Error removing pattern:', error);
+      toast.error('Failed to remove pattern');
+    } finally {
+      setRemovingPattern(null);
     }
   };
 
@@ -715,7 +771,14 @@ export function AdminGlobalMerchantsPage() {
               ) : (
                 filteredMerchants.map((merchant) => (
                   <TableRow key={merchant.id}>
-                    <TableCell className="font-medium">{merchant.display_name}</TableCell>
+                    <TableCell>
+                      <button
+                        onClick={() => handleViewPatterns(merchant)}
+                        className="font-medium hover:underline text-left"
+                      >
+                        {merchant.display_name}
+                      </button>
+                    </TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -1356,6 +1419,74 @@ export function AdminGlobalMerchantsPage() {
               variant="destructive"
             >
               {merging ? 'Merging...' : 'Merge Merchants'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Patterns Dialog */}
+      <Dialog open={showPatternsDialog} onOpenChange={(open) => {
+        setShowPatternsDialog(open);
+        if (!open) {
+          setMerchantPatterns([]);
+          setSelectedMerchant(null);
+        }
+      }}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>
+              Patterns for {selectedMerchant?.display_name}
+            </DialogTitle>
+            <DialogDescription>
+              View and manage patterns associated with this merchant. Removing a pattern will ungroup it and update matching transactions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {loadingPatterns ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : merchantPatterns.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No patterns found for this merchant
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                {merchantPatterns.map((pattern) => (
+                  <div
+                    key={pattern.id}
+                    className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-mono text-sm break-all">{pattern.pattern}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Used in {pattern.usage_count} transaction{pattern.usage_count !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemovePattern(pattern.id)}
+                      disabled={removingPattern === pattern.id}
+                      className="ml-4 shrink-0"
+                    >
+                      {removingPattern === pattern.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <X className="h-4 w-4 mr-1" />
+                          Remove
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPatternsDialog(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
