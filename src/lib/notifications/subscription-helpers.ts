@@ -31,16 +31,16 @@ export async function createTrialEndingNotification(
   
   if (daysRemaining === 7) {
     title = 'Your Premium trial ends in 7 days';
-    message = `Your 60-day Premium trial will end on ${new Date(trialEndDate).toLocaleDateString()}. You'll be billed ${billingDescription} unless you cancel before then.`;
+    message = `Your 60-day Premium trial will end on ${new Date(trialEndDate).toLocaleDateString()}. You'll be billed ${billingDescription} unless you cancel before then. Please check your payment information to ensure uninterrupted Premium access.`;
   } else if (daysRemaining === 3) {
     title = 'Your Premium trial ends in 3 days';
-    message = `Your Premium trial ends on ${new Date(trialEndDate).toLocaleDateString()}. You'll be charged ${billingDescription} unless you cancel.`;
+    message = `Your Premium trial ends on ${new Date(trialEndDate).toLocaleDateString()}. You'll be charged ${billingDescription} unless you cancel. Please verify your payment method is up to date to avoid any interruption to your Premium access.`;
   } else if (daysRemaining === 1) {
     title = 'Last day of your Premium trial';
-    message = `Tomorrow (${new Date(trialEndDate).toLocaleDateString()}), you'll be charged ${billingDescription} for Premium. Cancel now if you don't want to continue.`;
+    message = `Tomorrow (${new Date(trialEndDate).toLocaleDateString()}), you'll be charged ${billingDescription} for Premium. Please check your payment information now to ensure uninterrupted access. Cancel now if you don't want to continue.`;
   } else {
     title = `Your Premium trial ends in ${daysRemaining} days`;
-    message = `Your Premium trial ends on ${new Date(trialEndDate).toLocaleDateString()}. You'll be billed ${billingDescription} unless you cancel.`;
+    message = `Your Premium trial ends on ${new Date(trialEndDate).toLocaleDateString()}. You'll be billed ${billingDescription} unless you cancel. Please check your payment information to ensure uninterrupted Premium access.`;
   }
 
   return service.createNotification({
@@ -75,8 +75,8 @@ export async function createPaymentFailedNotification(
 
   const title = 'Payment Failed - Action Required';
   const message = nextRetryDate
-    ? `Your Premium subscription payment failed. We'll retry on ${new Date(nextRetryDate).toLocaleDateString()}. Please update your payment method to avoid service interruption.`
-    : `Your Premium subscription payment failed. Please update your payment method to reactivate your subscription.`;
+    ? `Your Premium subscription payment failed. We'll retry on ${new Date(nextRetryDate).toLocaleDateString()}. Please update your payment method immediately to avoid interruption to your Premium access.`
+    : `Your Premium subscription payment failed. Please update your payment method now to reactivate your subscription and avoid interruption to your Premium access.`;
 
   return service.createNotification({
     userId,
