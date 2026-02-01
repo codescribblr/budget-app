@@ -105,15 +105,17 @@ export default function SpendingPieChart({
         transaction.splits.forEach(split => {
           if (split.category_id === selectedCategoryId) {
             const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
-            const current = merchantSpending.get(transaction.description) || 0;
-            merchantSpending.set(transaction.description, current + signedAmount);
+            // Use merchant_name if available, otherwise fall back to description
+            const merchantName = transaction.merchant_name || transaction.description;
+            const current = merchantSpending.get(merchantName) || 0;
+            merchantSpending.set(merchantName, current + signedAmount);
           }
         });
       });
 
       const merchantsArray = Array.from(merchantSpending.entries())
-        .map(([description, amount]) => ({
-          name: description,
+        .map(([merchantName, amount]) => ({
+          name: merchantName,
           value: amount,
         }))
         .sort((a, b) => b.value - a.value);
