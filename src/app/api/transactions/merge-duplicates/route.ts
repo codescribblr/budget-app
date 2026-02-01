@@ -107,6 +107,8 @@ export async function POST(request: Request) {
               {
                 transaction_id: transaction.id,
                 transaction_description: transaction.description,
+                merge_reason: 'Reversing original transaction before merge',
+                merged_transaction_ids: allTransactionIds,
               }
             );
           }
@@ -202,6 +204,9 @@ export async function POST(request: Request) {
             {
               transaction_id: baseTransactionId,
               transaction_description: mergeData.description,
+              merge_reason: 'Applying merged transaction after combining duplicates',
+              merged_transaction_ids: allTransactionIds,
+              merged_count: transactionsToMerge.length + 1,
             }
           );
         }
