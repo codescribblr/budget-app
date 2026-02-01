@@ -23,7 +23,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Search, CheckCircle, XCircle, Merge, ChevronDown } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Search, CheckCircle, XCircle, Merge, ChevronDown, X, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { MerchantLogo } from '@/components/admin/MerchantLogo';
@@ -56,7 +57,6 @@ interface GlobalMerchant {
 export function AdminMerchantRecommendationsPage() {
   const [recommendations, setRecommendations] = useState<MerchantRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'denied' | 'merged'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRecommendation, setSelectedRecommendation] = useState<MerchantRecommendation | null>(null);
   const [showReviewDialog, setShowReviewDialog] = useState(false);
@@ -67,12 +67,16 @@ export function AdminMerchantRecommendationsPage() {
   const [availableMerchants, setAvailableMerchants] = useState<GlobalMerchant[]>([]);
   const [adminNotes, setAdminNotes] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [merchantPopoverOpen, setMerchantPopoverOpen] = useState(false);
+  const [selectedRecommendationIds, setSelectedRecommendationIds] = useState<Set<number>>(new Set());
+  const [selectedRecommendations, setSelectedRecommendations] = useState<MerchantRecommendation[]>([]);
+  // Track which patterns are included for each recommendation (key: recommendationId, value: Set of pattern strings)
+  const [includedPatterns, setIncludedPatterns] = useState<Map<number, Set<string>>>(new Map());
 
   const fetchRecommendations = async () => {
     try {
       setLoading(true);
-      const statusParam = statusFilter !== 'all' ? `?status=${statusFilter}` : '';
-      const response = await fetch(`/api/admin/merchant-recommendations${statusParam}`);
+      const response = await fetch(`/api/admin/merchant-recommendations`);
       if (response.ok) {
         const data = await response.json();
         setRecommendations(data.recommendations || []);
@@ -101,26 +105,113 @@ export function AdminMerchantRecommendationsPage() {
 
   useEffect(() => {
     fetchRecommendations();
-  }, [statusFilter]);
+  }, []);
 
   useEffect(() => {
-    if (reviewAction === 'merge') {
+    if (reviewAction === 'merge' && showReviewDialog) {
       fetchMerchants(merchantSearchQuery);
     }
-  }, [reviewAction, merchantSearchQuery]);
+  }, [reviewAction, merchantSearchQuery, showReviewDialog]);
+
+  const initializePatterns = (recs: MerchantRecommendation[]) => {
+    const newIncludedPatterns = new Map<number, Set<string>>();
+    recs.forEach(rec => {
+      const patterns = rec.merchant_recommendation_patterns || [];
+      const allPatterns = patterns.length > 0 
+        ? patterns.map(p => p.pattern)
+        : [rec.pattern];
+      newIncludedPatterns.set(rec.id, new Set(allPatterns));
+    });
+    setIncludedPatterns(newIncludedPatterns);
+  };
 
   const handleReview = (recommendation: MerchantRecommendation, action: 'approve' | 'approve_rename' | 'deny' | 'merge') => {
     setSelectedRecommendation(recommendation);
+    setSelectedRecommendations([recommendation]);
+    initializePatterns([recommendation]);
     setReviewAction(action);
     setNewMerchantName(recommendation.suggested_merchant_name);
     setSelectedMerchantId(null);
     setMerchantSearchQuery('');
     setAdminNotes('');
+    setMerchantPopoverOpen(false);
     setShowReviewDialog(true);
   };
 
+  const handleBulkReview = (action: 'approve' | 'approve_rename' | 'deny' | 'merge') => {
+    // Get full recommendation objects from state (which include patterns)
+    const selected = recommendations.filter(rec => 
+      selectedRecommendationIds.has(rec.id)
+    );
+    if (selected.length === 0) {
+      toast.error('Please select at least one recommendation');
+      return;
+    }
+    setSelectedRecommendation(null);
+    setSelectedRecommendations(selected);
+    initializePatterns(selected);
+    setReviewAction(action);
+    // Use the first recommendation's suggested name as default
+    setNewMerchantName(selected[0]?.suggested_merchant_name || '');
+    setSelectedMerchantId(null);
+    setMerchantSearchQuery('');
+    setAdminNotes('');
+    setMerchantPopoverOpen(false);
+    setShowReviewDialog(true);
+  };
+
+  const removePattern = (recommendationId: number, pattern: string) => {
+    const newIncludedPatterns = new Map(includedPatterns);
+    const patterns = newIncludedPatterns.get(recommendationId);
+    if (patterns) {
+      const newPatterns = new Set(patterns);
+      newPatterns.delete(pattern);
+      if (newPatterns.size === 0) {
+        toast.error('At least one pattern must be included');
+        return;
+      }
+      newIncludedPatterns.set(recommendationId, newPatterns);
+      setIncludedPatterns(newIncludedPatterns);
+    }
+  };
+
+  const restorePattern = (recommendationId: number, pattern: string) => {
+    const newIncludedPatterns = new Map(includedPatterns);
+    const patterns = newIncludedPatterns.get(recommendationId);
+    if (patterns) {
+      const newPatterns = new Set(patterns);
+      newPatterns.add(pattern);
+      newIncludedPatterns.set(recommendationId, newPatterns);
+      setIncludedPatterns(newIncludedPatterns);
+    }
+  };
+
+  const toggleRecommendationSelection = (id: number) => {
+    const newSet = new Set(selectedRecommendationIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedRecommendationIds(newSet);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedRecommendationIds.size === filteredRecommendations.length) {
+      setSelectedRecommendationIds(new Set());
+    } else {
+      setSelectedRecommendationIds(new Set(filteredRecommendations.map(rec => rec.id)));
+    }
+  };
+
   const handleSubmitReview = async () => {
-    if (!selectedRecommendation) return;
+    const recommendationsToProcess = selectedRecommendations.length > 0 
+      ? selectedRecommendations 
+      : selectedRecommendation 
+        ? [selectedRecommendation] 
+        : [];
+
+    if (recommendationsToProcess.length === 0) return;
 
     if (reviewAction === 'approve_rename' && !newMerchantName.trim()) {
       toast.error('Please enter a merchant name');
@@ -134,37 +225,71 @@ export function AdminMerchantRecommendationsPage() {
 
     setIsProcessing(true);
     try {
-      const response = await fetch(`/api/admin/merchant-recommendations/${selectedRecommendation.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: reviewAction,
-          merchant_name: reviewAction === 'approve_rename' ? newMerchantName.trim() : undefined,
-          merchant_id: reviewAction === 'merge' ? selectedMerchantId : undefined,
-          admin_notes: adminNotes.trim() || undefined,
-        }),
-      });
+      let successCount = 0;
+      let errorCount = 0;
+      const totalPatternsGrouped: number[] = [];
 
-      if (response.ok) {
-        const data = await response.json();
+      // Process each recommendation sequentially
+      for (const rec of recommendationsToProcess) {
+        try {
+          // Get included patterns for this recommendation
+          const included = includedPatterns.get(rec.id);
+          const patternsToProcess = included ? Array.from(included) : undefined;
+
+          const response = await fetch(`/api/admin/merchant-recommendations/${rec.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: reviewAction,
+              merchant_name: reviewAction === 'approve_rename' ? newMerchantName.trim() : undefined,
+              merchant_id: reviewAction === 'merge' ? selectedMerchantId : undefined,
+              admin_notes: adminNotes.trim() || undefined,
+              patterns: patternsToProcess, // Send only included patterns
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            successCount++;
+            if (data.patterns_grouped) {
+              totalPatternsGrouped.push(data.patterns_grouped);
+            }
+          } else {
+            const error = await response.json();
+            console.error(`Error processing recommendation ${rec.id}:`, error);
+            errorCount++;
+          }
+        } catch (error) {
+          console.error(`Error processing recommendation ${rec.id}:`, error);
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        const totalPatterns = totalPatternsGrouped.reduce((a, b) => a + b, 0);
+        const patternText = totalPatterns > 0 ? ` and ${totalPatterns} pattern(s) grouped` : '';
         toast.success(
           reviewAction === 'approve' || reviewAction === 'approve_rename'
-            ? `Merchant created and ${data.patterns_grouped || 1} pattern(s) grouped`
+            ? `${successCount} merchant(s) created${patternText}`
             : reviewAction === 'merge'
-            ? `Patterns merged into existing merchant`
-            : 'Recommendation denied'
+            ? `${successCount} recommendation(s) merged into existing merchant`
+            : `${successCount} recommendation(s) denied`
         );
-        setShowReviewDialog(false);
-        setSelectedRecommendation(null);
-        setReviewAction(null);
-        fetchRecommendations();
-      } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to process recommendation');
       }
+
+      if (errorCount > 0) {
+        toast.error(`${errorCount} recommendation(s) failed to process`);
+      }
+
+      setShowReviewDialog(false);
+      setSelectedRecommendation(null);
+      setSelectedRecommendations([]);
+      setSelectedRecommendationIds(new Set());
+      setReviewAction(null);
+      fetchRecommendations();
     } catch (error) {
-      console.error('Error processing recommendation:', error);
-      toast.error('Failed to process recommendation');
+      console.error('Error processing recommendations:', error);
+      toast.error('Failed to process recommendations');
     } finally {
       setIsProcessing(false);
     }
@@ -175,10 +300,34 @@ export function AdminMerchantRecommendationsPage() {
     rec.pattern.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const patterns = selectedRecommendation?.merchant_recommendation_patterns || [];
-  const allPatterns = patterns.length > 0 
-    ? patterns.map(p => p.pattern)
-    : [selectedRecommendation?.pattern || ''];
+  // Collect all patterns from selected recommendations (only included ones)
+  const getAllPatterns = () => {
+    const allPatternsSet = new Set<string>();
+    const recsToUse = selectedRecommendations.length > 0 
+      ? selectedRecommendations 
+      : selectedRecommendation 
+        ? [selectedRecommendation] 
+        : [];
+    
+    recsToUse.forEach(rec => {
+      const included = includedPatterns.get(rec.id);
+      if (included && included.size > 0) {
+        included.forEach(pattern => allPatternsSet.add(pattern));
+      }
+    });
+    
+    return Array.from(allPatternsSet);
+  };
+
+  // Get all patterns for a specific recommendation (including excluded ones)
+  const getAllPatternsForRecommendation = (rec: MerchantRecommendation) => {
+    const patterns = rec.merchant_recommendation_patterns || [];
+    return patterns.length > 0 
+      ? patterns.map(p => p.pattern)
+      : [rec.pattern];
+  };
+
+  const allPatterns = getAllPatterns();
 
   if (loading) {
     return (
@@ -201,22 +350,6 @@ export function AdminMerchantRecommendationsPage() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex gap-4 items-center">
-            <div className="flex gap-2">
-              <Button
-                variant={statusFilter === 'pending' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setStatusFilter('pending')}
-              >
-                Pending ({recommendations.filter(r => r.status === 'pending').length})
-              </Button>
-              <Button
-                variant={statusFilter === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setStatusFilter('all')}
-              >
-                All
-              </Button>
-            </div>
             <div className="flex-1 max-w-md">
               <Input
                 placeholder="Search recommendations..."
@@ -228,12 +361,65 @@ export function AdminMerchantRecommendationsPage() {
         </CardContent>
       </Card>
 
+      {/* Bulk Actions Bar */}
+      {selectedRecommendationIds.size > 0 && (
+        <Card className="border-primary">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium">
+                  {selectedRecommendationIds.size} recommendation(s) selected
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedRecommendationIds(new Set())}
+                >
+                  Clear Selection
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleBulkReview('approve')}
+                >
+                  <CheckCircle className="h-4 w-4 mr-1" />
+                  Approve All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleBulkReview('approve_rename')}
+                >
+                  Rename All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleBulkReview('merge')}
+                >
+                  <Merge className="h-4 w-4 mr-1" />
+                  Merge All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleBulkReview('deny')}
+                >
+                  <XCircle className="h-4 w-4 mr-1" />
+                  Deny All
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Recommendations Table */}
       <Card>
         <CardHeader>
-          <CardTitle>
-            {statusFilter === 'pending' ? 'Pending Recommendations' : 'All Recommendations'}
-          </CardTitle>
+          <CardTitle>Pending Recommendations</CardTitle>
           <CardDescription>
             {filteredRecommendations.length} recommendation(s) found
           </CardDescription>
@@ -247,73 +433,69 @@ export function AdminMerchantRecommendationsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={
+                        filteredRecommendations.length > 0 &&
+                        filteredRecommendations.every(rec => selectedRecommendationIds.has(rec.id))
+                      }
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
                   <TableHead>Pattern</TableHead>
                   <TableHead>Suggested Name</TableHead>
                   <TableHead>Pattern Count</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredRecommendations.map((rec) => (
                   <TableRow key={rec.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedRecommendationIds.has(rec.id)}
+                        onCheckedChange={() => toggleRecommendationSelection(rec.id)}
+                      />
+                    </TableCell>
                     <TableCell className="font-mono text-sm">{rec.pattern}</TableCell>
                     <TableCell className="font-medium">{rec.suggested_merchant_name}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">{rec.pattern_count}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant={
-                          rec.status === 'approved' ? 'default' :
-                          rec.status === 'denied' ? 'destructive' :
-                          rec.status === 'merged' ? 'secondary' :
-                          'outline'
-                        }
-                      >
-                        {rec.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(rec.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      {rec.status === 'pending' && (
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleReview(rec, 'approve')}
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleReview(rec, 'approve_rename')}
-                          >
-                            Rename
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleReview(rec, 'merge')}
-                          >
-                            <Merge className="h-4 w-4 mr-1" />
-                            Merge
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleReview(rec, 'deny')}
-                          >
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Deny
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleReview(rec, 'approve')}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Approve
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleReview(rec, 'approve_rename')}
+                        >
+                          Rename
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleReview(rec, 'merge')}
+                        >
+                          <Merge className="h-4 w-4 mr-1" />
+                          Merge
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleReview(rec, 'deny')}
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          Deny
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -324,17 +506,43 @@ export function AdminMerchantRecommendationsPage() {
       </Card>
 
       {/* Review Dialog */}
-      <Dialog open={showReviewDialog} onOpenChange={setShowReviewDialog}>
+      <Dialog open={showReviewDialog} onOpenChange={(open) => {
+        setShowReviewDialog(open);
+        if (!open) {
+          setMerchantSearchQuery('');
+          setSelectedMerchantId(null);
+          setMerchantPopoverOpen(false);
+          setIncludedPatterns(new Map()); // Clear pattern selections
+          // Don't clear selectedRecommendationIds here - let user keep selection after dialog closes
+        }
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {reviewAction === 'approve' && 'Approve Recommendation'}
-              {reviewAction === 'approve_rename' && 'Approve & Rename'}
-              {reviewAction === 'merge' && 'Merge with Existing Merchant'}
-              {reviewAction === 'deny' && 'Deny Recommendation'}
+              {selectedRecommendations.length > 1 ? (
+                <>
+                  {reviewAction === 'approve' && 'Approve Recommendations'}
+                  {reviewAction === 'approve_rename' && 'Approve & Rename Recommendations'}
+                  {reviewAction === 'merge' && 'Merge Recommendations with Existing Merchant'}
+                  {reviewAction === 'deny' && 'Deny Recommendations'}
+                </>
+              ) : (
+                <>
+                  {reviewAction === 'approve' && 'Approve Recommendation'}
+                  {reviewAction === 'approve_rename' && 'Approve & Rename'}
+                  {reviewAction === 'merge' && 'Merge with Existing Merchant'}
+                  {reviewAction === 'deny' && 'Deny Recommendation'}
+                </>
+              )}
             </DialogTitle>
             <DialogDescription>
-              {selectedRecommendation && (
+              {selectedRecommendations.length > 1 ? (
+                <>
+                  Processing {selectedRecommendations.length} recommendation(s)
+                  <br />
+                  Total patterns to group: {allPatterns.length}
+                </>
+              ) : selectedRecommendation ? (
                 <>
                   Pattern: <span className="font-mono">{selectedRecommendation.pattern}</span>
                   <br />
@@ -342,23 +550,136 @@ export function AdminMerchantRecommendationsPage() {
                   <br />
                   Patterns to group: {allPatterns.length}
                 </>
-              )}
+              ) : null}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {allPatterns.length > 1 && (
+            {selectedRecommendations.length > 1 && (
               <div>
-                <Label>All Patterns (will be grouped together)</Label>
+                <Label>Selected Recommendations</Label>
                 <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
-                  {allPatterns.map((pattern, idx) => (
-                    <div key={idx} className="text-sm font-mono bg-muted p-2 rounded">
-                      {pattern}
+                  {selectedRecommendations.map((rec) => (
+                    <div key={rec.id} className="text-sm bg-muted p-2 rounded">
+                      <span className="font-medium">{rec.suggested_merchant_name}</span>
+                      <span className="text-muted-foreground ml-2">
+                        ({includedPatterns.get(rec.id)?.size || 0} of {getAllPatternsForRecommendation(rec).length} pattern{getAllPatternsForRecommendation(rec).length !== 1 ? 's' : ''} selected)
+                      </span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+            <div>
+              <Label>
+                Patterns to Process
+                {selectedRecommendations.length === 1 && (
+                  <span className="text-muted-foreground ml-2 text-sm font-normal">
+                    (click × to exclude a pattern)
+                  </span>
+                )}
+              </Label>
+              <div className="mt-2 space-y-2 max-h-64 overflow-y-auto">
+                {selectedRecommendations.length > 1 ? (
+                  // Show patterns grouped by recommendation for bulk operations
+                  selectedRecommendations.map((rec) => {
+                    const allRecPatterns = getAllPatternsForRecommendation(rec);
+                    const included = includedPatterns.get(rec.id) || new Set();
+                    const excluded = allRecPatterns.filter(p => !included.has(p));
+                    
+                    return (
+                      <div key={rec.id} className="border rounded-lg p-3 space-y-2">
+                        <div className="text-sm font-medium text-muted-foreground">
+                          {rec.suggested_merchant_name}
+                        </div>
+                        <div className="space-y-1">
+                          {allRecPatterns.map((pattern) => {
+                            const isIncluded = included.has(pattern);
+                            return (
+                              <div
+                                key={pattern}
+                                className={`text-sm font-mono p-2 rounded flex items-center justify-between gap-2 ${
+                                  isIncluded ? 'bg-muted' : 'bg-muted/50 opacity-60'
+                                }`}
+                              >
+                                <span>{pattern}</span>
+                                {isIncluded ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0"
+                                    onClick={() => removePattern(rec.id, pattern)}
+                                    title="Remove pattern"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0"
+                                    onClick={() => restorePattern(rec.id, pattern)}
+                                    title="Add pattern back"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : selectedRecommendation ? (
+                  // Show patterns for single recommendation
+                  (() => {
+                    const allRecPatterns = getAllPatternsForRecommendation(selectedRecommendation);
+                    const included = includedPatterns.get(selectedRecommendation.id) || new Set();
+                    
+                    return allRecPatterns.map((pattern) => {
+                      const isIncluded = included.has(pattern);
+                      return (
+                        <div
+                          key={pattern}
+                          className={`text-sm font-mono p-2 rounded flex items-center justify-between gap-2 ${
+                            isIncluded ? 'bg-muted' : 'bg-muted/50 opacity-60'
+                          }`}
+                        >
+                          <span>{pattern}</span>
+                          {isIncluded ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => removePattern(selectedRecommendation.id, pattern)}
+                              title="Remove pattern"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => restorePattern(selectedRecommendation.id, pattern)}
+                              title="Add pattern back"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()
+                ) : null}
+              </div>
+              {allPatterns.length === 0 && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  No patterns selected. At least one pattern must be included.
+                </p>
+              )}
+            </div>
 
             {reviewAction === 'approve_rename' && (
               <div>
@@ -375,7 +696,7 @@ export function AdminMerchantRecommendationsPage() {
             {reviewAction === 'merge' && (
               <div>
                 <Label htmlFor="merge-merchant">Select Merchant to Merge With</Label>
-                <Popover>
+                <Popover open={merchantPopoverOpen} onOpenChange={setMerchantPopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -408,6 +729,7 @@ export function AdminMerchantRecommendationsPage() {
                             onClick={() => {
                               setSelectedMerchantId(merchant.id);
                               setMerchantSearchQuery('');
+                              setMerchantPopoverOpen(false);
                             }}
                           >
                             {(merchant.logo_url || merchant.icon_name) && (
@@ -451,7 +773,8 @@ export function AdminMerchantRecommendationsPage() {
               disabled={
                 isProcessing ||
                 (reviewAction === 'approve_rename' && !newMerchantName.trim()) ||
-                (reviewAction === 'merge' && !selectedMerchantId)
+                (reviewAction === 'merge' && !selectedMerchantId) ||
+                allPatterns.length === 0
               }
             >
               {isProcessing ? 'Processing...' : 'Confirm'}

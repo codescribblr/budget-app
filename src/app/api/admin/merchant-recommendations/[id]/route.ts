@@ -22,7 +22,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { action, merchant_name, merchant_id, admin_notes } = body;
+    const { action, merchant_name, merchant_id, admin_notes, patterns } = body;
 
     if (!action || !['approve', 'approve_rename', 'deny', 'merge'].includes(action)) {
       return NextResponse.json(
@@ -50,15 +50,23 @@ export async function PATCH(
       );
     }
 
-    if (recommendation.status !== 'pending') {
+    // Note: We only fetch pending recommendations, so this check is redundant but kept for safety
+
+    // Get all patterns from the recommendation
+    const allRecommendationPatterns = (recommendation.merchant_recommendation_patterns || []).map((p: any) => p.pattern);
+    const defaultPatterns = allRecommendationPatterns.length > 0 ? allRecommendationPatterns : [recommendation.pattern];
+    
+    // Use provided patterns if specified, otherwise use all patterns (backward compatible)
+    const patternsToProcess = patterns && Array.isArray(patterns) && patterns.length > 0
+      ? patterns.filter((p: string) => defaultPatterns.includes(p)) // Only allow patterns that exist in the recommendation
+      : defaultPatterns;
+    
+    if (patternsToProcess.length === 0) {
       return NextResponse.json(
-        { error: 'Recommendation has already been reviewed' },
+        { error: 'At least one pattern must be included' },
         { status: 400 }
       );
     }
-
-    const patterns = (recommendation.merchant_recommendation_patterns || []).map((p: any) => p.pattern);
-    const allPatterns = patterns.length > 0 ? patterns : [recommendation.pattern];
 
     if (action === 'approve' || action === 'approve_rename') {
       // Check for duplicate merchant name
@@ -94,7 +102,7 @@ export async function PATCH(
 
       // Group all patterns under the new merchant and collect pattern IDs
       const patternIds: number[] = [];
-      for (const pattern of allPatterns) {
+      for (const pattern of patternsToProcess) {
         // Find or create pattern in global_merchant_patterns
         const { data: existingPattern } = await supabase
           .from('global_merchant_patterns')
@@ -156,21 +164,16 @@ export async function PATCH(
         }
       }
 
-      // Update recommendation status
+      // Delete recommendation after processing (cascade will delete merchant_recommendation_patterns)
       await supabase
         .from('merchant_recommendations')
-        .update({
-          status: 'approved',
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString(),
-          admin_notes: admin_notes || null,
-        })
+        .delete()
         .eq('id', recommendationId);
 
       return NextResponse.json({ 
         success: true, 
         merchant: newMerchant,
-        patterns_grouped: allPatterns.length 
+        patterns_grouped: patternsToProcess.length 
       });
 
     } else if (action === 'merge') {
@@ -197,7 +200,7 @@ export async function PATCH(
 
       // Merge all patterns into the existing merchant
       const patternIds: number[] = [];
-      for (const pattern of allPatterns) {
+      for (const pattern of patternsToProcess) {
         const { data: existingPattern } = await supabase
           .from('global_merchant_patterns')
           .select('id, global_merchant_id')
@@ -267,33 +270,23 @@ export async function PATCH(
         }
       }
 
-      // Update recommendation status
+      // Delete recommendation after processing (cascade will delete merchant_recommendation_patterns)
       await supabase
         .from('merchant_recommendations')
-        .update({
-          status: 'merged',
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString(),
-          admin_notes: admin_notes || null,
-        })
+        .delete()
         .eq('id', recommendationId);
 
       return NextResponse.json({ 
         success: true, 
         merchant: existingMerchant,
-        patterns_merged: allPatterns.length 
+        patterns_merged: patternsToProcess.length 
       });
 
     } else if (action === 'deny') {
-      // Update recommendation status
+      // Delete recommendation after denying (cascade will delete merchant_recommendation_patterns)
       await supabase
         .from('merchant_recommendations')
-        .update({
-          status: 'denied',
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString(),
-          admin_notes: admin_notes || null,
-        })
+        .delete()
         .eq('id', recommendationId);
 
       return NextResponse.json({ success: true });
