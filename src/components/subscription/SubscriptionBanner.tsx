@@ -5,11 +5,41 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, CreditCard, Crown, X } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/use-local-storage';
+import { formatCurrency } from '@/lib/utils';
 
 export function SubscriptionBanner() {
   const { subscription, isPremium, isTrialing, trialDaysRemaining, loading } = useSubscription();
+  const [billingDescription, setBillingDescription] = useState<string>('$100/year');
+
+  useEffect(() => {
+    if (subscription && subscription.billing_amount && subscription.billing_interval) {
+      // Use stored billing info
+      const amount = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: (subscription.billing_currency || 'usd').toUpperCase(),
+        minimumFractionDigits: subscription.billing_amount % 1 === 0 ? 0 : 2,
+      }).format(subscription.billing_amount);
+      const interval = subscription.billing_interval === 'month' ? 'month' : 
+                       subscription.billing_interval === 'year' ? 'year' : 
+                       subscription.billing_interval;
+      setBillingDescription(`${amount}/${interval}`);
+    } else if (subscription && subscription.stripe_price_id) {
+      // Fetch from API if not stored
+      fetch(`/api/subscription/billing-info?accountId=${subscription.account_id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.billingDescription) {
+            setBillingDescription(data.billingDescription);
+          }
+        })
+        .catch(() => {
+          // Fallback to default
+          setBillingDescription('$100/year');
+        });
+    }
+  }, [subscription]);
   const [dismissed, setDismissed] = useLocalStorage<Record<string, boolean>>('subscription-banner-dismissed', {});
   const [localDismissed, setLocalDismissed] = useState(false);
 
@@ -49,7 +79,7 @@ export function SubscriptionBanner() {
                 : `Your Premium trial ends in ${trialDaysRemaining} days`}
             </span>
             <span className="text-yellow-800 dark:text-yellow-200 ml-2">
-              You'll be billed $100/year unless you cancel.
+              You'll be billed {billingDescription} unless you cancel.
             </span>
           </div>
           <div className="flex gap-2">

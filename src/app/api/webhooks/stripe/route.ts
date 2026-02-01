@@ -4,6 +4,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { setupPremiumFeatures } from '@/lib/premium-feature-setup';
 import { createPaymentFailedNotification } from '@/lib/notifications/subscription-helpers';
 import { disablePremiumAccess } from '@/lib/subscription-access-control';
+import { getPriceInfoFromStripe } from '@/lib/subscription-price-utils';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -68,6 +69,21 @@ export async function POST(request: Request) {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
         console.log(`📝 Subscription status: ${subscription.status}`);
 
+        // Get price information from Stripe
+        const priceId = subscription.items.data[0]?.price.id;
+        let billingAmount: number | null = null;
+        let billingInterval: string | null = null;
+        let billingCurrency: string | null = null;
+
+        if (priceId) {
+          const priceInfo = await getPriceInfoFromStripe(priceId);
+          if (priceInfo) {
+            billingAmount = priceInfo.amount;
+            billingInterval = priceInfo.interval;
+            billingCurrency = priceInfo.currency;
+          }
+        }
+
         // Create or update subscription record
         // Note: user_id is kept for backwards compatibility but can be null
         const { data: subData, error: subError } = await supabase
@@ -79,7 +95,10 @@ export async function POST(request: Request) {
             status: subscription.status,
             stripe_customer_id: session.customer as string,
             stripe_subscription_id: subscriptionId,
-            stripe_price_id: subscription.items.data[0]?.price.id,
+            stripe_price_id: priceId,
+            billing_amount: billingAmount,
+            billing_interval: billingInterval,
+            billing_currency: billingCurrency,
             trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
             trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
             current_period_start: subscription.current_period_start ? new Date(subscription.current_period_start * 1000).toISOString() : null,
@@ -151,18 +170,43 @@ export async function POST(request: Request) {
 
         if (!userId) break;
 
+        // Get price information if price changed
+        const priceId = subscription.items.data[0]?.price.id;
+        let billingAmount: number | null = null;
+        let billingInterval: string | null = null;
+        let billingCurrency: string | null = null;
+
+        if (priceId) {
+          const priceInfo = await getPriceInfoFromStripe(priceId);
+          if (priceInfo) {
+            billingAmount = priceInfo.amount;
+            billingInterval = priceInfo.interval;
+            billingCurrency = priceInfo.currency;
+          }
+        }
+
+        const updateData: any = {
+          status: subscription.status,
+          stripe_price_id: priceId,
+          trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
+          trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+          current_period_start: subscription.current_period_start ? new Date(subscription.current_period_start * 1000).toISOString() : null,
+          current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+          cancel_at_period_end: subscription.cancel_at_period_end,
+          canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
+          updated_at: new Date().toISOString(),
+        };
+
+        // Only update billing info if we have it (don't overwrite with null)
+        if (billingAmount !== null) {
+          updateData.billing_amount = billingAmount;
+          updateData.billing_interval = billingInterval;
+          updateData.billing_currency = billingCurrency;
+        }
+
         await supabase
           .from('user_subscriptions')
-          .update({
-            status: subscription.status,
-            trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
-            trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-            current_period_start: subscription.current_period_start ? new Date(subscription.current_period_start * 1000).toISOString() : null,
-            current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
-            cancel_at_period_end: subscription.cancel_at_period_end,
-            canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq('stripe_subscription_id', subscription.id);
 
         console.log(`✅ Subscription updated for user ${userId}`);

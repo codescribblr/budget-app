@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { setupPremiumFeatures } from '@/lib/premium-feature-setup';
+import { getPriceInfoFromStripe } from '@/lib/subscription-price-utils';
 
 function getStripe(): Stripe {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -108,6 +109,21 @@ export async function POST(request: Request) {
     
     const isUpgrading = !finalAccountWasPremium && ['active', 'trialing'].includes(activeSubscription.status);
 
+    // Get price information from Stripe
+    const priceId = activeSubscription.items.data[0]?.price.id;
+    let billingAmount: number | null = null;
+    let billingInterval: string | null = null;
+    let billingCurrency: string | null = null;
+
+    if (priceId) {
+      const priceInfo = await getPriceInfoFromStripe(priceId);
+      if (priceInfo) {
+        billingAmount = priceInfo.amount;
+        billingInterval = priceInfo.interval;
+        billingCurrency = priceInfo.currency;
+      }
+    }
+
     // Update subscription record
     // Note: user_id is kept for backwards compatibility but can be null
     const { data: subData, error: subError } = await supabase
@@ -119,7 +135,10 @@ export async function POST(request: Request) {
         status: activeSubscription.status,
         stripe_customer_id: activeSubscription.customer as string,
         stripe_subscription_id: activeSubscription.id,
-        stripe_price_id: activeSubscription.items.data[0]?.price.id,
+        stripe_price_id: priceId,
+        billing_amount: billingAmount,
+        billing_interval: billingInterval,
+        billing_currency: billingCurrency,
         trial_start: activeSubscription.trial_start ? new Date(activeSubscription.trial_start * 1000).toISOString() : null,
         trial_end: activeSubscription.trial_end ? new Date(activeSubscription.trial_end * 1000).toISOString() : null,
         current_period_start: (activeSubscription as any).current_period_start ? new Date((activeSubscription as any).current_period_start * 1000).toISOString() : null,
