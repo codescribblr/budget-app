@@ -132,6 +132,7 @@ async function getAllTransactionsWithDateFilter(startDate?: string, endDate?: st
         display_name,
         global_merchant_id,
         global_merchants (
+          display_name,
           logo_url,
           icon_name,
           status
@@ -240,6 +241,7 @@ async function getAllTransactionsWithDateFilter(startDate?: string, endDate?: st
       : merchantGroups.global_merchants;
     if (!globalMerchant || globalMerchant.status !== 'active') return null;
     return {
+      display_name: globalMerchant.display_name || null,
       logo_url: globalMerchant.logo_url || null,
       icon_name: globalMerchant.icon_name || null,
     };
@@ -247,11 +249,14 @@ async function getAllTransactionsWithDateFilter(startDate?: string, endDate?: st
 
   // Build the final result (same format as getAllTransactions)
   const transactionsWithSplits = allTransactions.map((txn: any) => {
-    const globalMerchant = getGlobalMerchantInfo(txn.merchant_groups);
+    const overrideMerchant = txn.merchant_override;
+    const globalMerchant = overrideMerchant || getGlobalMerchantInfo(txn.merchant_groups);
+    // Prefer global merchant name over user's merchant group name
+    const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || txn.merchant_groups?.display_name || null;
     return {
       ...txn,
       splits: splitsByTransaction.get(txn.id) || [],
-      merchant_name: txn.merchant_groups?.display_name || null,
+      merchant_name: merchantName,
       merchant_logo_url: globalMerchant?.logo_url || null,
       merchant_icon_name: globalMerchant?.icon_name || null,
       account_name: txn.accounts?.name || null,

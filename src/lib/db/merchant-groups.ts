@@ -43,6 +43,7 @@ export async function getMerchantGroupsWithStats(): Promise<MerchantGroupWithSta
     .select(`
       *,
       global_merchants (
+        display_name,
         logo_url,
         icon_name,
         status
@@ -89,9 +90,14 @@ export async function getMerchantGroupsWithStats(): Promise<MerchantGroupWithSta
       ? group.global_merchants[0]
       : group.global_merchants;
     const hasActiveGlobalMerchant = globalMerchant && globalMerchant.status === 'active';
+    // Prefer global merchant name over user's merchant group name
+    const displayName = hasActiveGlobalMerchant && globalMerchant.display_name
+      ? globalMerchant.display_name
+      : group.display_name;
     
     return {
       ...group,
+      display_name: displayName,
       transaction_count: groupTransactions.length,
       total_amount: netTotal,
       unique_patterns: patterns.size,
@@ -201,6 +207,7 @@ export async function getMerchantGroupStats(
       display_name,
       global_merchant_id,
       global_merchants (
+        display_name,
         logo_url,
         icon_name,
         status
@@ -220,10 +227,14 @@ export async function getMerchantGroupStats(
       ? group.global_merchants[0]
       : group.global_merchants;
     const hasActiveGlobalMerchant = globalMerchant && globalMerchant.status === 'active';
+    // Prefer global merchant name over user's merchant group name
+    const displayName = hasActiveGlobalMerchant && globalMerchant.display_name
+      ? globalMerchant.display_name
+      : group.display_name;
     
     return {
       group_id: group.id,
-      display_name: group.display_name,
+      display_name: displayName,
       transaction_count: stats.transaction_count,
       total_amount: stats.total_amount,
       average_amount: stats.total_amount / stats.transaction_count,

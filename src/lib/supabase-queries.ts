@@ -1259,7 +1259,7 @@ function calculateMonthlyNetIncome(settingsObj: Record<string, string>): number 
 /**
  * Helper function to extract global merchant info from nested Supabase query result
  */
-function getGlobalMerchantInfo(merchantGroups: any): { logo_url: string | null; icon_name: string | null } | null {
+function getGlobalMerchantInfo(merchantGroups: any): { display_name: string | null; logo_url: string | null; icon_name: string | null } | null {
   if (!merchantGroups?.global_merchants) return null;
   
   const globalMerchant = Array.isArray(merchantGroups.global_merchants)
@@ -1269,6 +1269,7 @@ function getGlobalMerchantInfo(merchantGroups: any): { logo_url: string | null; 
   if (!globalMerchant || globalMerchant.status !== 'active') return null;
   
   return {
+    display_name: globalMerchant.display_name || null,
     logo_url: globalMerchant.logo_url || null,
     icon_name: globalMerchant.icon_name || null,
   };
@@ -1291,6 +1292,7 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
         display_name,
         global_merchant_id,
         global_merchants (
+          display_name,
           logo_url,
           icon_name,
           status
@@ -1352,24 +1354,34 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
   });
 
   // Build the final result
-  const transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => ({
-    id: transaction.id,
-    date: transaction.date,
-    description: transaction.description,
-    total_amount: transaction.total_amount,
-    transaction_type: transaction.transaction_type || 'expense',
-    merchant_group_id: transaction.merchant_group_id,
-    account_id: transaction.account_id,
-    credit_card_id: transaction.credit_card_id,
-    is_historical: transaction.is_historical || false,
-    created_at: transaction.created_at,
-    updated_at: transaction.updated_at,
-    merchant_name: transaction.merchant_override?.display_name || transaction.merchant_groups?.display_name || null,
-    account_name: transaction.accounts?.name || null,
-    credit_card_name: transaction.credit_cards?.name || null,
-    tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
-    splits: splitsByTransaction.get(transaction.id) || [],
-  }));
+  const transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => {
+    const overrideMerchant = transaction.merchant_override;
+    const merchantGroup = transaction.merchant_groups;
+    const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
+    // Prefer global merchant name over user's merchant group name
+    const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || merchantGroup?.display_name || null;
+    
+    return {
+      id: transaction.id,
+      date: transaction.date,
+      description: transaction.description,
+      total_amount: transaction.total_amount,
+      transaction_type: transaction.transaction_type || 'expense',
+      merchant_group_id: transaction.merchant_group_id,
+      account_id: transaction.account_id,
+      credit_card_id: transaction.credit_card_id,
+      is_historical: transaction.is_historical || false,
+      created_at: transaction.created_at,
+      updated_at: transaction.updated_at,
+      merchant_name: merchantName,
+      merchant_logo_url: globalMerchant?.logo_url || null,
+      merchant_icon_name: globalMerchant?.icon_name || null,
+      account_name: transaction.accounts?.name || null,
+      credit_card_name: transaction.credit_cards?.name || null,
+      tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
+      splits: splitsByTransaction.get(transaction.id) || [],
+    };
+  });
 
   return transactionsWithSplits;
 }
@@ -1393,10 +1405,18 @@ export async function searchTransactions(
         display_name,
         global_merchant_id,
         global_merchants (
+          display_name,
           logo_url,
           icon_name,
           status
         )
+      ),
+      merchant_override:global_merchants!merchant_override_id (
+        id,
+        display_name,
+        logo_url,
+        icon_name,
+        status
       ),
       accounts (
         name
@@ -1449,24 +1469,34 @@ export async function searchTransactions(
   });
 
   // Build the final result
-  const transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => ({
-    id: transaction.id,
-    date: transaction.date,
-    description: transaction.description,
-    total_amount: transaction.total_amount,
-    transaction_type: transaction.transaction_type || 'expense',
-    merchant_group_id: transaction.merchant_group_id,
-    account_id: transaction.account_id,
-    credit_card_id: transaction.credit_card_id,
-    is_historical: transaction.is_historical || false,
-    created_at: transaction.created_at,
-    updated_at: transaction.updated_at,
-    merchant_name: transaction.merchant_override?.display_name || transaction.merchant_groups?.display_name || null,
-    account_name: transaction.accounts?.name || null,
-    credit_card_name: transaction.credit_cards?.name || null,
-    tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
-    splits: splitsByTransaction.get(transaction.id) || [],
-  }));
+  const transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => {
+    const overrideMerchant = transaction.merchant_override;
+    const merchantGroup = transaction.merchant_groups;
+    const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
+    // Prefer global merchant name over user's merchant group name
+    const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || merchantGroup?.display_name || null;
+    
+    return {
+      id: transaction.id,
+      date: transaction.date,
+      description: transaction.description,
+      total_amount: transaction.total_amount,
+      transaction_type: transaction.transaction_type || 'expense',
+      merchant_group_id: transaction.merchant_group_id,
+      account_id: transaction.account_id,
+      credit_card_id: transaction.credit_card_id,
+      is_historical: transaction.is_historical || false,
+      created_at: transaction.created_at,
+      updated_at: transaction.updated_at,
+      merchant_name: merchantName,
+      merchant_logo_url: globalMerchant?.logo_url || null,
+      merchant_icon_name: globalMerchant?.icon_name || null,
+      account_name: transaction.accounts?.name || null,
+      credit_card_name: transaction.credit_cards?.name || null,
+      tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
+      splits: splitsByTransaction.get(transaction.id) || [],
+    };
+  });
 
   return transactionsWithSplits;
 }
@@ -1527,6 +1557,7 @@ export async function getTransactionsPaginated(
         display_name,
         global_merchant_id,
         global_merchants (
+          display_name,
           logo_url,
           icon_name,
           status
@@ -1788,7 +1819,8 @@ export async function getTransactionsPaginated(
     const overrideMerchant = transaction.merchant_override;
     const merchantGroup = transaction.merchant_groups;
     const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
-    const merchantName = overrideMerchant?.display_name || merchantGroup?.display_name || null;
+    // Prefer global merchant name over user's merchant group name
+    const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || merchantGroup?.display_name || null;
     
     return {
       id: transaction.id,
@@ -1850,6 +1882,7 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
         display_name,
         global_merchant_id,
         global_merchants (
+          display_name,
           logo_url,
           icon_name,
           status
@@ -1904,7 +1937,8 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
   const overrideMerchant = transaction.merchant_override;
   const merchantGroup = transaction.merchant_groups;
   const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
-  const merchantName = overrideMerchant?.display_name || merchantGroup?.display_name || null;
+  // Prefer global merchant name over user's merchant group name
+  const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || merchantGroup?.display_name || null;
 
   return {
     id: transaction.id,
