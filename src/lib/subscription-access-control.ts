@@ -4,6 +4,8 @@ import { getUserSubscription, hasActiveSubscription } from './subscription-utils
 /**
  * Disable premium access for an account
  * This disables all premium features when subscription is inactive
+ * IMPORTANT: This does NOT delete any user data - only disables feature flags
+ * All data (goals, loans, monthly funding tracking, etc.) is preserved
  */
 export async function disablePremiumAccess(accountId: number): Promise<void> {
   const supabase = createServiceRoleClient();
@@ -16,7 +18,28 @@ export async function disablePremiumAccess(accountId: number): Promise<void> {
     return; // Subscription is still active, don't disable
   }
 
+  const now = new Date().toISOString();
+
+  // Update subscription status if it's still marked as trialing but trial has ended
+  if (subscription && subscription.status === 'trialing' && subscription.trial_end) {
+    const trialEndDate = new Date(subscription.trial_end);
+    if (trialEndDate < new Date()) {
+      // Trial has ended - update status to canceled
+      await supabase
+        .from('user_subscriptions')
+        .update({
+          status: 'canceled',
+          updated_at: now,
+        })
+        .eq('account_id', accountId);
+      
+      console.log(`📝 Updated subscription status to 'canceled' for account ${accountId} (trial ended)`);
+    }
+  }
+
   // Disable all premium features
+  // NOTE: This only disables feature flags - NO DATA IS DELETED
+  // All user data (goals, loans, monthly funding records, etc.) remains intact
   const premiumFeatures = [
     'monthly_funding_tracking',
     'category_types',
@@ -30,22 +53,23 @@ export async function disablePremiumAccess(accountId: number): Promise<void> {
     'automatic_imports',
   ];
 
-  const now = new Date().toISOString();
-  
   // Update all premium features to disabled
+  // Using upsert to ensure feature flags exist even if they weren't created before
   for (const featureName of premiumFeatures) {
     await supabase
       .from('user_feature_flags')
-      .update({
+      .upsert({
+        account_id: accountId,
+        feature_name: featureName,
         enabled: false,
         disabled_at: now,
         updated_at: now,
-      })
-      .eq('account_id', accountId)
-      .eq('feature_name', featureName);
+      }, {
+        onConflict: 'account_id,feature_name',
+      });
   }
 
-  console.log(`✅ Disabled premium access for account ${accountId}`);
+  console.log(`✅ Disabled premium access for account ${accountId} (features disabled, data preserved)`);
 }
 
 /**

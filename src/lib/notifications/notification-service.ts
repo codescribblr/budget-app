@@ -227,7 +227,7 @@ export class NotificationService {
           }
         } catch (error: any) {
           // Only log unexpected errors (not 410 expired subscription errors)
-          if (!error.message?.includes('410') && !error.statusCode === 410) {
+          if (!error.message?.includes('410') && error.statusCode !== 410) {
             console.error(`Error sending push notification ${notificationId}:`, error);
             await this.logDelivery(notificationId, 'push', 'failed', error.message);
           }
