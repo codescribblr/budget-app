@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, Link2, ChevronLeft, ChevronRight, Loader2, Plus, X, CheckCircle, ChevronDown } from 'lucide-react';
+import { Search, Link2, ChevronLeft, ChevronRight, Loader2, Plus, X, CheckCircle, ChevronDown, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -50,6 +50,7 @@ export function AdminMerchantPatternsPage() {
   const [showCreateMerchantInline, setShowCreateMerchantInline] = useState(false);
   const [newMerchantNameInline, setNewMerchantNameInline] = useState('');
   const [creatingInline, setCreatingInline] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const selectAllCheckboxRef = useRef<HTMLButtonElement>(null);
 
   const fetchPatterns = async (page: number = currentPage, search: string = searchQuery) => {
@@ -240,6 +241,30 @@ export function AdminMerchantPatternsPage() {
     }
   };
 
+  const handleSyncPatterns = async () => {
+    setSyncing(true);
+    try {
+      const response = await fetch('/api/admin/global-merchants/patterns/sync', {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(data.message || 'Patterns synced successfully');
+        // Refresh the patterns list
+        await fetchPatterns(currentPage, searchQuery);
+      } else {
+        const errorData = await response.json();
+        toast.error(errorData.error || 'Failed to sync patterns');
+      }
+    } catch (error) {
+      console.error('Error syncing patterns:', error);
+      toast.error('Failed to sync patterns');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -260,15 +285,25 @@ export function AdminMerchantPatternsPage() {
                 Select patterns and associate them with merchants to update matching transactions.
               </CardDescription>
             </div>
-            {selectedPatterns.size > 0 && (
+            <div className="flex gap-2">
               <Button
-                onClick={() => setShowGroupDialog(true)}
-                disabled={selectedPatterns.size === 0}
+                variant="outline"
+                onClick={handleSyncPatterns}
+                disabled={syncing}
               >
-                <Link2 className="mr-2 h-4 w-4" />
-                Associate Selected ({selectedPatterns.size})
+                <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Syncing...' : 'Sync All Patterns'}
               </Button>
-            )}
+              {selectedPatterns.size > 0 && (
+                <Button
+                  onClick={() => setShowGroupDialog(true)}
+                  disabled={selectedPatterns.size === 0}
+                >
+                  <Link2 className="mr-2 h-4 w-4" />
+                  Associate Selected ({selectedPatterns.size})
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
