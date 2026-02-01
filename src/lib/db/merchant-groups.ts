@@ -220,12 +220,103 @@ export async function getMerchantGroupStats(
   if (groupsError) throw groupsError;
   if (!groups) return [];
 
+  // Build a map of patterns to their merchant groups for lookup
+  const patternsByGroupId = new Map<number, Set<string>>();
+  groups.forEach(group => {
+    const stats = groupStats.get(group.id);
+    if (stats) {
+      patternsByGroupId.set(group.id, stats.patterns);
+    }
+  });
+
+  // For groups without global_merchant_id, try to find global merchant by pattern matching
+  const groupsWithoutLink = groups.filter(g => !g.global_merchant_id);
+  const globalMerchantByPattern = new Map<number, { id: number; display_name: string; logo_url: string | null; icon_name: string | null; status: string } | null>();
+  
+  if (groupsWithoutLink.length > 0) {
+    // Get all patterns for groups without links
+    const allPatterns = new Set<string>();
+    groupsWithoutLink.forEach(group => {
+      const patterns = patternsByGroupId.get(group.id);
+      if (patterns) {
+        patterns.forEach(p => allPatterns.add(p));
+      }
+    });
+
+    if (allPatterns.size > 0) {
+      // Find global merchants for these patterns
+      const { data: patternMatches, error: patternError } = await supabase
+        .from('global_merchant_patterns')
+        .select('pattern, global_merchant_id, global_merchants!inner(id, display_name, logo_url, icon_name, status)')
+        .in('pattern', Array.from(allPatterns))
+        .not('global_merchant_id', 'is', null)
+        .eq('global_merchants.status', 'active');
+
+      if (!patternError && patternMatches) {
+        // Build a map: pattern -> global merchant
+        const patternToGlobalMerchant = new Map<string, { id: number; display_name: string; logo_url: string | null; icon_name: string | null; status: string }>();
+        patternMatches.forEach((pm: any) => {
+          const gm = Array.isArray(pm.global_merchants) ? pm.global_merchants[0] : pm.global_merchants;
+          if (gm && gm.status === 'active') {
+            patternToGlobalMerchant.set(pm.pattern, gm);
+          }
+        });
+
+        // For each group without a link, find the most common global merchant among its patterns
+        groupsWithoutLink.forEach(group => {
+          const patterns = patternsByGroupId.get(group.id);
+          if (patterns && patterns.size > 0) {
+            const merchantCounts = new Map<number, number>();
+            patterns.forEach(pattern => {
+              const gm = patternToGlobalMerchant.get(pattern);
+              if (gm) {
+                merchantCounts.set(gm.id, (merchantCounts.get(gm.id) || 0) + 1);
+              }
+            });
+
+            // Find the global merchant with the most matching patterns
+            let bestMerchant: { id: number; display_name: string; logo_url: string | null; icon_name: string | null; status: string } | null = null;
+            let maxCount = 0;
+            merchantCounts.forEach((count, merchantId) => {
+              if (count > maxCount) {
+                maxCount = count;
+                // Find the merchant details
+                const patternMatch = patternMatches.find((pm: any) => {
+                  const gm = Array.isArray(pm.global_merchants) ? pm.global_merchants[0] : pm.global_merchants;
+                  return gm && gm.id === merchantId;
+                });
+                if (patternMatch) {
+                  bestMerchant = Array.isArray(patternMatch.global_merchants) 
+                    ? patternMatch.global_merchants[0] 
+                    : patternMatch.global_merchants;
+                }
+              }
+            });
+
+            if (bestMerchant) {
+              globalMerchantByPattern.set(group.id, bestMerchant);
+            }
+          }
+        });
+      }
+    }
+  }
+
   // Combine stats with group details
   return groups.map(group => {
     const stats = groupStats.get(group.id)!;
-    const globalMerchant = Array.isArray(group.global_merchants)
+    let globalMerchant = Array.isArray(group.global_merchants)
       ? group.global_merchants[0]
       : group.global_merchants;
+    
+    // If no direct link, try pattern-based lookup
+    if (!globalMerchant || globalMerchant.status !== 'active') {
+      const patternBasedMerchant = globalMerchantByPattern.get(group.id);
+      if (patternBasedMerchant) {
+        globalMerchant = patternBasedMerchant;
+      }
+    }
+    
     const hasActiveGlobalMerchant = globalMerchant && globalMerchant.status === 'active';
     // Prefer global merchant name over user's merchant group name
     const displayName = hasActiveGlobalMerchant && globalMerchant.display_name
