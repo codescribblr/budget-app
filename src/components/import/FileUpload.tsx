@@ -210,22 +210,6 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
             return;
           }
         }
-      } else if (
-        fileType.startsWith('image/') ||
-        fileName.endsWith('.jpg') ||
-        fileName.endsWith('.jpeg') ||
-        fileName.endsWith('.png')
-      ) {
-        updateProgress(10, 'Processing image with AI...');
-        // Images use AI parsing
-        const parseResult = await parseImageFile(file, true);
-        
-        if (parseResult.error || parseResult.transactions.length === 0) {
-          throw new Error(parseResult.error || 'No transactions found in the file');
-        }
-        
-        transactions = parseResult.transactions;
-        sessionStorage.setItem('csvFileName', file.name);
       } else if (fileName.endsWith('.pdf') || fileType === 'application/pdf') {
         updateProgress(10, 'Converting PDF to text...');
         // Parse PDF using local parser first
@@ -322,7 +306,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           throw new Error(errorData.error || 'Failed to parse PDF');
         }
       } else {
-        setError('Unsupported file type. Please upload a CSV or image file.');
+        setError('Unsupported file type. Please upload a CSV or PDF file.');
         setIsProcessing(false);
         setProgress(0);
         setProgressStage('');
@@ -475,7 +459,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv,.jpg,.jpeg,.png,.pdf,image/*"
+        accept=".csv,.pdf"
         onChange={handleFileChange}
         disabled={disabled}
         className="hidden"
@@ -489,17 +473,17 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           : 'border-gray-300 dark:border-gray-700'
       }`}>
         <div className="space-y-4">
-          <div className="text-4xl">{isDragging && !disabled ? '📥' : '📄 📷'}</div>
+          <div className="text-4xl">{isDragging && !disabled ? '📥' : '📄'}</div>
           <div>
             <p className="text-lg font-medium">
-              {isDragging && !disabled ? 'Drop file here' : 'Upload CSV or Image'}
+              {isDragging && !disabled ? 'Drop file here' : 'Upload CSV or PDF'}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
               {isDragging && !disabled
                 ? 'Release to upload'
                 : disabled
                 ? 'Read-only users cannot import transactions'
-                : 'Upload a CSV file or screenshot/photo of transactions'}
+                : 'Upload a CSV file or PDF statement of transactions'}
             </p>
           </div>
           <Button onClick={handleButtonClick} disabled={isProcessing || disabled}>
@@ -627,9 +611,6 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
               Cancel
             </Button>
           </div>
-          <p className="text-xs text-yellow-700 dark:text-yellow-300">
-            💡 AI parsing requires OpenAI API key configured in your environment
-          </p>
         </div>
       )}
 
@@ -637,13 +618,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         <p className="font-medium">Supported formats:</p>
         <ul className="list-disc list-inside space-y-1 ml-2">
           <li><strong>CSV Files:</strong> Any bank statement format (auto-detected)</li>
-          <li><strong>Screenshots:</strong> Bank statements, transaction history</li>
-          <li><strong>Photos:</strong> Receipts, mobile banking screenshots</li>
-          <li><strong>Images:</strong> JPG, PNG, PDF</li>
+          <li><strong>PDF Files:</strong> Bank statements and transaction history</li>
         </ul>
-        <p className="text-xs mt-3 p-2 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
-          💡 <strong>Image processing requires OpenAI API key.</strong> Add OPENAI_API_KEY to your .env.local file.
-        </p>
       </div>
     </div>
   );

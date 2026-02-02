@@ -90,10 +90,10 @@ export default function ImportTransactionsPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Upload CSV or Image</CardTitle>
+        <CardTitle>Upload CSV or PDF</CardTitle>
         <CardDescription>
-          Upload a CSV file or screenshot/photo of transactions from your bank or credit card.
-          Supports CSV files, screenshots, receipts, and statement images.
+          Upload a CSV file or PDF statement of transactions from your bank or credit card.
+          Supports CSV files and PDF statements.
         </CardDescription>
       </CardHeader>
       <CardContent>
