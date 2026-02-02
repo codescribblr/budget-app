@@ -57,6 +57,8 @@ export default function MergeTransactionDialog({
   onSuccess,
 }: MergeTransactionDialogProps) {
   const transactions = duplicateGroup.transactions;
+  const [merchantGroups, setMerchantGroups] = useState<Array<{ id: number; display_name: string; global_merchant_id?: number | null }>>([]);
+  const [loadingMerchantGroups, setLoadingMerchantGroups] = useState(false);
   
   // Smart defaults: select best base transaction
   const bestBase = useMemo(() => selectBestBaseTransaction(transactions), [transactions]);
@@ -67,10 +69,9 @@ export default function MergeTransactionDialog({
   // Field selections (indices into transactions array)
   const [selectedDateIndex, setSelectedDateIndex] = useState(bestBase.index);
   const [selectedDescriptionIndex, setSelectedDescriptionIndex] = useState(bestBase.index);
-  const [selectedMerchantIndex, setSelectedMerchantIndex] = useState<number | null>(
-    transactions.findIndex(t => t.merchant_group_id !== null) >= 0 
-      ? transactions.findIndex(t => t.merchant_group_id !== null)
-      : null
+  // Store merchant_group_id directly instead of transaction index
+  const [selectedMerchantGroupId, setSelectedMerchantGroupId] = useState<number | null>(
+    transactions.find(t => t.merchant_group_id !== null)?.merchant_group_id || null
   );
   const [isHistorical, setIsHistorical] = useState(
     transactions.every(t => t.is_historical)
@@ -86,15 +87,36 @@ export default function MergeTransactionDialog({
     }));
   });
 
-  // Reset when dialog opens
+  // Fetch merchant groups when dialog opens
   useEffect(() => {
     if (isOpen) {
+      const fetchMerchantGroups = async () => {
+        setLoadingMerchantGroups(true);
+        try {
+          const response = await fetch('/api/merchant-groups');
+          if (response.ok) {
+            const data = await response.json();
+            // Extract display_name (which should already use global merchant name if linked)
+            setMerchantGroups(data.map((group: any) => ({
+              id: group.id,
+              display_name: group.display_name,
+              global_merchant_id: group.global_merchant_id,
+            })));
+          }
+        } catch (error) {
+          console.error('Error fetching merchant groups:', error);
+        } finally {
+          setLoadingMerchantGroups(false);
+        }
+      };
+      fetchMerchantGroups();
+      
       const best = selectBestBaseTransaction(transactions);
       setBaseTransactionIndex(best.index);
       setSelectedDateIndex(best.index);
       setSelectedDescriptionIndex(best.index);
-      const merchantIdx = transactions.findIndex(t => t.merchant_group_id !== null);
-      setSelectedMerchantIndex(merchantIdx >= 0 ? merchantIdx : null);
+      const transactionWithMerchant = transactions.find(t => t.merchant_group_id !== null);
+      setSelectedMerchantGroupId(transactionWithMerchant?.merchant_group_id || null);
       setIsHistorical(transactions.every(t => t.is_historical));
       setMergedSplits(
         transactions[best.index].splits.map(split => ({
@@ -110,12 +132,9 @@ export default function MergeTransactionDialog({
   const baseTransaction = transactions[baseTransactionIndex];
   const selectedDate = transactions[selectedDateIndex]?.date || '';
   const selectedDescription = transactions[selectedDescriptionIndex]?.description || '';
-  const selectedMerchantId = selectedMerchantIndex !== null 
-    ? transactions[selectedMerchantIndex]?.merchant_group_id || null
-    : null;
-  const selectedMerchantName = selectedMerchantIndex !== null
-    ? transactions[selectedMerchantIndex]?.merchant_name || null
-    : null;
+  const selectedMerchantId = selectedMerchantGroupId;
+  const selectedMerchant = merchantGroups.find(mg => mg.id === selectedMerchantGroupId);
+  const selectedMerchantName = selectedMerchant?.display_name || null;
   const transactionType = baseTransaction.transaction_type;
 
   const totalSplitAmount = mergedSplits.reduce((sum, split) => sum + split.amount, 0);
@@ -269,11 +288,6 @@ export default function MergeTransactionDialog({
               <div>
                 <span className="text-muted-foreground">Merchant:</span>{' '}
                 <span className="font-medium">{selectedMerchantName || 'None'}</span>
-                {selectedMerchantIndex !== null && (
-                  <span className="text-xs text-muted-foreground ml-1">
-                    (from Transaction {selectedMerchantIndex + 1})
-                  </span>
-                )}
               </div>
             </div>
             <div className="mt-2">
@@ -447,26 +461,27 @@ export default function MergeTransactionDialog({
                 <div>
                   <Label>Select Merchant</Label>
                   <Select
-                    value={selectedMerchantIndex?.toString() || 'none'}
-                    onValueChange={(value) => setSelectedMerchantIndex(value === 'none' ? null : parseInt(value))}
+                    value={selectedMerchantGroupId?.toString() || 'none'}
+                    onValueChange={(value) => setSelectedMerchantGroupId(value === 'none' ? null : parseInt(value))}
+                    disabled={loadingMerchantGroups}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder={loadingMerchantGroups ? "Loading merchants..." : "Select merchant"} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">No merchant</SelectItem>
-                      {transactions.map((t, idx) => {
-                        if (t.merchant_group_id) {
-                          return (
-                            <SelectItem key={idx} value={idx.toString()}>
-                              {t.merchant_name || `Transaction ${idx + 1}`} (Transaction {idx + 1})
-                            </SelectItem>
-                          );
-                        }
-                        return null;
-                      })}
+                      {merchantGroups.map((mg) => (
+                        <SelectItem key={mg.id} value={mg.id.toString()}>
+                          {mg.display_name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  {transactions.some(t => t.merchant_group_id) && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Transactions have merchants: {transactions.filter(t => t.merchant_name).map(t => t.merchant_name).join(', ')}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center space-x-2">
