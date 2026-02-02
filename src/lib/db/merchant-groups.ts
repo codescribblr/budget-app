@@ -243,7 +243,16 @@ export async function getMerchantGroup(id: number): Promise<MerchantGroup | null
 
   const { data, error } = await supabase
     .from('merchant_groups')
-    .select('*')
+    .select(`
+      *,
+      global_merchants (
+        id,
+        display_name,
+        logo_url,
+        icon_name,
+        status
+      )
+    `)
     .eq('id', id)
     .eq('user_id', user.id)
     .eq('account_id', accountId)

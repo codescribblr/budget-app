@@ -102,19 +102,6 @@ export async function POST(request: Request) {
     const isPdf = fileName.toLowerCase().endsWith('.pdf');
     const processingTasks = initializeProcessingTasks('manual', hasCsvData, isPdf);
 
-    // Debug logging
-    console.log('queue-manual API received:', {
-      fileName,
-      transactionCount: transactionsWithFilename.length,
-      hasCsvData,
-      csvDataLength: csvData ? (Array.isArray(csvData) ? csvData.length : 'not array') : 0,
-      hasCsvAnalysis: !!csvAnalysis,
-      csvMappingName,
-      csvMappingTemplateId,
-      validatedTemplateId,
-      processingTasks,
-    });
-
     // Queue transactions
     // Note: isHistorical is applied per-transaction if provided in transaction.is_historical
     // Otherwise, the batch-level isHistorical is used

@@ -377,14 +377,39 @@ export async function processTransactions(
   const { duplicates } = await response.json();
   const databaseDuplicateSet = new Set(duplicates);
 
-  // Step 3: Fetch categories for auto-categorization
-  if (progressCallback) progressCallback(55, 'Loading categories...');
+  // Step 3: Link merchants to global merchants before categorization
+  // This ensures merchant groups exist so categorization can use merchant-based rules
+  if (progressCallback) progressCallback(55, 'Linking merchants to global merchants...');
+  const descriptions = transactions.map(t => t.description || t.merchant);
+  const linkMerchantsUrl = baseUrl ? `${baseUrl}/api/import/link-merchants` : '/api/import/link-merchants';
+  try {
+    const linkResponse = await fetch(linkMerchantsUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ descriptions, batchId }),
+    });
+    
+    if (!linkResponse.ok) {
+      console.warn('Failed to link merchants, continuing without linking:', linkResponse.statusText);
+    } else {
+      const linkData = await linkResponse.json();
+      if (linkData.linked > 0) {
+        console.log(`Linked ${linkData.linked} merchants to global merchants`);
+      }
+    }
+  } catch (error) {
+    // Log but don't fail - merchant linking is helpful but not critical
+    console.warn('Error linking merchants, continuing without linking:', error);
+  }
+
+  // Step 4: Fetch categories for auto-categorization
+  if (progressCallback) progressCallback(60, 'Loading categories...');
   const categoriesUrl = baseUrl ? `${baseUrl}/api/categories` : '/api/categories';
   const categoriesResponse = await fetch(categoriesUrl);
   const categories = await categoriesResponse.json();
 
-  // Step 4: Get smart category suggestions for all merchants
-  if (progressCallback) progressCallback(60, 'Applying categorization rules...');
+  // Step 5: Get smart category suggestions for all merchants
+  if (progressCallback) progressCallback(65, 'Applying categorization rules...');
   const merchants = transactions.map(t => t.merchant);
   const categorizeUrl = baseUrl ? `${baseUrl}/api/categorize` : '/api/categorize';
   const categorizationResponse = await fetch(categorizeUrl, {
@@ -394,8 +419,8 @@ export async function processTransactions(
   });
   const { suggestions } = await categorizationResponse.json();
 
-  // Step 5: Process each transaction with initial categorization
-  if (progressCallback) progressCallback(65, 'Categorizing transactions...');
+  // Step 6: Process each transaction with initial categorization
+  if (progressCallback) progressCallback(70, 'Categorizing transactions...');
   const processedTransactions = transactions.map((transaction, index) => {
     const isDatabaseDuplicate = databaseDuplicateSet.has(transaction.hash);
     const isWithinFileDuplicate = withinFileDuplicates.has(index);
@@ -444,7 +469,7 @@ export async function processTransactions(
     }
   }
 
-  // Step 6: AI categorization for remaining uncategorized transactions (if enabled)
+  // Step 7: AI categorization for remaining uncategorized transactions (if enabled)
   if (skipAICategorization) {
     if (progressCallback) progressCallback(100, 'Processing complete!');
     return processedTransactions;
@@ -456,7 +481,7 @@ export async function processTransactions(
 
   if (uncategorizedTransactions.length > 0) {
     try {
-      if (progressCallback) progressCallback(70, `Using AI to categorize ${uncategorizedTransactions.length} transaction${uncategorizedTransactions.length !== 1 ? 's' : ''}...`);
+      if (progressCallback) progressCallback(75, `Using AI to categorize ${uncategorizedTransactions.length} transaction${uncategorizedTransactions.length !== 1 ? 's' : ''}...`);
       const aiCategorizationResponse = await fetch('/api/import/ai-categorize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -495,7 +520,7 @@ export async function processTransactions(
           });
         }
 
-        if (progressCallback) progressCallback(90, 'Applying AI category suggestions...');
+        if (progressCallback) progressCallback(95, 'Applying AI category suggestions...');
         // Update transactions with AI suggestions
         return processedTransactions.map((transaction): ParsedTransaction => {
           const aiSuggestion = aiSuggestionMap.get(transaction.id);

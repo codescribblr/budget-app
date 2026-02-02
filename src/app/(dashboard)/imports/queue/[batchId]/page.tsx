@@ -242,6 +242,27 @@ export default function BatchReviewPage() {
         console.warn('Failed to fetch categories:', err);
       }
 
+      // Fetch merchant info for all descriptions to get linked merchant names
+      let merchantInfoMap = new Map<string, string>();
+      try {
+        const descriptions = queuedImports.map((qi: any) => qi.description);
+        const merchantInfoResponse = await fetch('/api/import/get-merchant-info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ descriptions }),
+        });
+        if (merchantInfoResponse.ok) {
+          const merchantData = await merchantInfoResponse.json();
+          if (merchantData.merchantInfo) {
+            merchantData.merchantInfo.forEach((info: any) => {
+              merchantInfoMap.set(info.description, info.merchantName);
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch merchant info:', err);
+      }
+
       // Convert queued imports to ParsedTransaction format
       const initialTransactions: ParsedTransaction[] = queuedImports.map((qi: any) => {
         const category = qi.suggested_category_id 
@@ -283,13 +304,17 @@ export default function BatchReviewPage() {
           transactionStatus = 'excluded';
         }
 
+        // Use linked merchant name if available, otherwise fall back to stored merchant or description
+        const linkedMerchantName = merchantInfoMap.get(qi.description);
+        const displayMerchant = linkedMerchantName || qi.merchant || qi.description;
+
         return {
           id: `queued-${qi.id}`,
           date: qi.transaction_date,
           description: qi.description,
           amount: qi.amount,
           transaction_type: qi.transaction_type,
-          merchant: qi.merchant,
+          merchant: displayMerchant,
           suggestedCategory: qi.suggested_category_id || undefined,
           account_id: qi.target_account_id || undefined,
           credit_card_id: qi.target_credit_card_id || undefined,
