@@ -3386,6 +3386,8 @@ export async function recordMonthlyFunding(
   const newFundedAmount = currentFunded + amount;
 
   // Upsert the record
+  // Note: Using user_id, category_id, month for conflict resolution to match the unique constraint
+  // TODO: Update unique constraint to use account_id, category_id, month in a future migration
   const { error } = await supabase
     .from('category_monthly_funding')
     .upsert({
@@ -3397,7 +3399,7 @@ export async function recordMonthlyFunding(
       target_amount: targetAmount,
       updated_at: new Date().toISOString(),
     }, {
-      onConflict: 'account_id,category_id,month',
+      onConflict: 'user_id,category_id,month',
     });
 
   if (error) throw error;

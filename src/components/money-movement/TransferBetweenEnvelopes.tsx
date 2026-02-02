@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { Category } from '@/lib/types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { handleApiError } from '@/lib/api-error-handler';
+import { toast } from 'sonner';
 
 interface TransferBetweenEnvelopesProps {
   categories: Category[];
@@ -25,23 +26,31 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
 
   const handleTransfer = async () => {
     if (!fromCategoryId || !toCategoryId || !amount) {
-      alert('Please fill in all fields');
+      toast.error('Missing information', {
+        description: 'Please fill in all fields.',
+      });
       return;
     }
 
     if (fromCategoryId === toCategoryId) {
-      alert('Cannot transfer to the same category');
+      toast.error('Invalid transfer', {
+        description: 'Cannot transfer to the same category.',
+      });
       return;
     }
 
     const transferAmount = parseFloat(amount);
     if (transferAmount <= 0) {
-      alert('Amount must be greater than 0');
+      toast.error('Invalid amount', {
+        description: 'Amount must be greater than 0.',
+      });
       return;
     }
 
     if (!fromCategory || fromCategory.current_balance < transferAmount) {
-      alert('Insufficient balance in source category');
+      toast.error('Insufficient balance', {
+        description: 'The source category does not have enough funds.',
+      });
       return;
     }
 
@@ -69,7 +78,9 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
       setToCategoryId('');
       setAmount('');
       onSuccess();
-      alert('Transfer completed successfully!');
+      toast.success('Transfer completed', {
+        description: `Successfully transferred ${formatCurrency(transferAmount)} between envelopes.`,
+      });
     } catch (error) {
       console.error('Error transferring funds:', error);
       // Error toast already shown by handleApiError

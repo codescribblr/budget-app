@@ -13,6 +13,7 @@ import { AddToBufferDialog } from './AddToBufferDialog';
 import { useFeature } from '@/contexts/FeatureContext';
 import { handleApiError } from '@/lib/api-error-handler';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
+import { toast } from 'sonner';
 
 interface AllocateIncomeProps {
   categories: Category[];
@@ -41,35 +42,44 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
   const accountLinkedGoals = allGoals.filter(g => g.goal_type === 'account-linked' && g.status === 'active');
   const debtPaydownGoals = allGoals.filter(g => g.goal_type === 'debt-paydown' && g.status === 'active');
   
+  // Function to fetch monthly funding data
+  const fetchMonthlyFunding = async () => {
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
+      const fundingResponse = await fetch(`/api/monthly-funding/${currentMonth}`);
+
+      if (fundingResponse.ok) {
+        const fundingData = await fundingResponse.json();
+        const fundingMap: { [key: number]: number } = {};
+        fundingData.categories?.forEach((cat: any) => {
+          fundingMap[cat.categoryId] = cat.fundedAmount || 0;
+        });
+        setMonthlyFunding(fundingMap);
+      }
+    } catch (error) {
+      console.error('Error fetching monthly funding:', error);
+    }
+  };
+
   // Fetch all goals and monthly funding data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
-
-        const [goalsResponse, fundingResponse] = await Promise.all([
+        const [goalsResponse] = await Promise.all([
           fetch('/api/goals?status=active'),
-          fetch(`/api/monthly-funding/${currentMonth}`)
+          fetchMonthlyFunding()
         ]);
 
         if (goalsResponse.ok) {
           const goalsData = await goalsResponse.json();
           setAllGoals(goalsData);
         }
-
-        if (fundingResponse.ok) {
-          const fundingData = await fundingResponse.json();
-          const fundingMap: { [key: number]: number } = {};
-          fundingData.categories?.forEach((cat: any) => {
-            fundingMap[cat.categoryId] = cat.fundedAmount || 0;
-          });
-          setMonthlyFunding(fundingMap);
-        }
       } catch (error) {
         console.error('Error fetching data:', error);
       }
     };
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const totalMonthlyBudget = envelopeCategories.reduce((sum, cat) => sum + cat.monthly_amount, 0);
@@ -95,7 +105,9 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
 
   const handleUseProportional = () => {
     if (availableToAllocate <= 0) {
-      alert('No funds available to allocate. Please update your account balances.');
+      toast.error('No funds available', {
+        description: 'Please update your account balances to allocate funds.',
+      });
       return;
     }
 
@@ -124,7 +136,9 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
 
   const handleAllocateAll = () => {
     if (availableToAllocate <= 0) {
-      alert('No funds available to allocate. Please update your account balances.');
+      toast.error('No funds available', {
+        description: 'Please update your account balances to allocate funds.',
+      });
       return;
     }
 
@@ -188,7 +202,9 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
     const totalAllocated = getTotalAllocated();
 
     if (totalAllocated === 0) {
-      alert('Please allocate funds to at least one category');
+      toast.error('No allocations', {
+        description: 'Please allocate funds to at least one category.',
+      });
       return;
     }
 
@@ -221,7 +237,9 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
         });
 
       if (batchAllocations.length === 0) {
-        alert('Please allocate funds to at least one category');
+        toast.error('No allocations', {
+          description: 'Please allocate funds to at least one category.',
+        });
         return;
       }
 
@@ -242,8 +260,14 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
       // Reset form
       setAllocations({});
       setGoalAllocations({});
+      
+      // Refetch monthly funding data to show updated "funded this month" amounts
+      await fetchMonthlyFunding();
+      
       onSuccess();
-      alert(`Successfully allocated ${formatCurrency(totalAllocated)} to envelopes!`);
+      toast.success('Funds allocated successfully', {
+        description: `Successfully allocated ${formatCurrency(totalAllocated)} to envelopes.`,
+      });
     } catch (error) {
       console.error('Error allocating funds:', error);
       // Error toast already shown by handleApiError
