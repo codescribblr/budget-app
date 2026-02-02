@@ -90,6 +90,7 @@ export function AdminGlobalMerchantsPage() {
   const [merchantPatterns, setMerchantPatterns] = useState<GlobalMerchantPattern[]>([]);
   const [loadingPatterns, setLoadingPatterns] = useState(false);
   const [removingPattern, setRemovingPattern] = useState<number | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
 
   const fetchMerchants = async () => {
     try {
@@ -269,6 +270,31 @@ export function AdminGlobalMerchantsPage() {
       toast.error('Failed to update merchant status');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleBackfillTransactions = async () => {
+    setBackfilling(true);
+    try {
+      const response = await fetch('/api/admin/global-merchants/backfill-transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(
+          `Backfill complete: ${data.transactions_linked} transactions linked, ${data.groups_created} groups created`
+        );
+      } else {
+        const errorData = await response.json();
+        toast.error(errorData.error || 'Failed to backfill transactions');
+      }
+    } catch (error) {
+      console.error('Error backfilling transactions:', error);
+      toast.error('Failed to backfill transactions');
+    } finally {
+      setBackfilling(false);
     }
   };
 
@@ -594,10 +620,29 @@ export function AdminGlobalMerchantsPage() {
             Manage global merchant definitions that apply to all users. Patterns are automatically created from transactions.
           </p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Merchant
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleBackfillTransactions}
+            disabled={backfilling}
+          >
+            {backfilling ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Backfilling...
+              </>
+            ) : (
+              <>
+                <Link2 className="mr-2 h-4 w-4" />
+                Backfill Transactions
+              </>
+            )}
+          </Button>
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Merchant
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-6">
