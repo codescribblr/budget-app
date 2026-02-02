@@ -135,30 +135,14 @@ export async function getMerchantGroupStats(
   const accountId = await getActiveAccountId();
   if (!accountId) return [];
 
-  // Get all merchant mappings
-  const { data: mappings, error: mappingsError } = await supabase
-    .from('merchant_mappings')
-    .select('merchant_group_id, pattern')
-    .eq('user_id', user.id)
-    .eq('account_id', accountId)
-    .not('merchant_group_id', 'is', null);
-
-  if (mappingsError) throw mappingsError;
-  if (!mappings || mappings.length === 0) return [];
-
-  // Build pattern to group mapping
-  const patternToGroup = new Map<string, number>();
-  mappings.forEach(m => {
-    if (m.merchant_group_id) {
-      patternToGroup.set(m.pattern, m.merchant_group_id);
-    }
-  });
-
-  // Get transactions
+  // Get transactions with their merchant_group_id
+  // Use merchant_group_id directly instead of relying on merchant_mappings
+  // (which may not exist after merchant groups were deleted)
   let query = supabase
     .from('transactions')
-    .select('id, description, total_amount, transaction_type')
-    .eq('budget_account_id', accountId);
+    .select('id, description, total_amount, transaction_type, merchant_group_id')
+    .eq('budget_account_id', accountId)
+    .not('merchant_group_id', 'is', null);
 
   if (transactionIds && transactionIds.length > 0) {
     query = query.in('id', transactionIds);
@@ -166,9 +150,9 @@ export async function getMerchantGroupStats(
 
   const { data: transactions, error: transactionsError } = await query;
   if (transactionsError) throw transactionsError;
-  if (!transactions) return [];
+  if (!transactions || transactions.length === 0) return [];
 
-  // Group transactions by merchant group
+  // Group transactions by merchant group (using merchant_group_id directly)
   const groupStats = new Map<number, {
     transaction_count: number;
     total_amount: number;
@@ -176,7 +160,7 @@ export async function getMerchantGroupStats(
   }>();
 
   transactions.forEach(t => {
-    const groupId = patternToGroup.get(t.description);
+    const groupId = (t as any).merchant_group_id;
     if (groupId) {
       const current = groupStats.get(groupId) || {
         transaction_count: 0,
