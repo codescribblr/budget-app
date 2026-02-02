@@ -113,6 +113,9 @@ export default function MergeTransactionDialog({
   const selectedMerchantId = selectedMerchantIndex !== null 
     ? transactions[selectedMerchantIndex]?.merchant_group_id || null
     : null;
+  const selectedMerchantName = selectedMerchantIndex !== null
+    ? transactions[selectedMerchantIndex]?.merchant_name || null
+    : null;
   const transactionType = baseTransaction.transaction_type;
 
   const totalSplitAmount = mergedSplits.reduce((sum, split) => sum + split.amount, 0);
@@ -263,6 +266,15 @@ export default function MergeTransactionDialog({
                 <span className="text-muted-foreground">Historical:</span>{' '}
                 <span className="font-medium">{isHistorical ? 'Yes' : 'No'}</span>
               </div>
+              <div>
+                <span className="text-muted-foreground">Merchant:</span>{' '}
+                <span className="font-medium">{selectedMerchantName || 'None'}</span>
+                {selectedMerchantIndex !== null && (
+                  <span className="text-xs text-muted-foreground ml-1">
+                    (from Transaction {selectedMerchantIndex + 1})
+                  </span>
+                )}
+              </div>
             </div>
             <div className="mt-2">
               <span className="text-muted-foreground text-sm">Categories: </span>
@@ -372,6 +384,14 @@ export default function MergeTransactionDialog({
                         ))}
                       </tr>
                       <tr className="border-b">
+                        <td className="p-2 font-medium">Merchant</td>
+                        {transactions.map((t, idx) => (
+                          <td key={idx} className="p-2">
+                            {t.merchant_name || '—'}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr className="border-b">
                         <td className="p-2 font-medium">Historical</td>
                         {transactions.map((t, idx) => (
                           <td key={idx} className="p-2">
@@ -439,7 +459,7 @@ export default function MergeTransactionDialog({
                         if (t.merchant_group_id) {
                           return (
                             <SelectItem key={idx} value={idx.toString()}>
-                              Transaction {idx + 1} (has merchant)
+                              {t.merchant_name || `Transaction ${idx + 1}`} (Transaction {idx + 1})
                             </SelectItem>
                           );
                         }

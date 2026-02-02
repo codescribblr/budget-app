@@ -378,6 +378,7 @@ export interface DuplicateTransaction {
   total_amount: number;
   transaction_type: 'income' | 'expense';
   merchant_group_id: number | null;
+  merchant_name?: string | null;
   is_historical: boolean;
   account_id: number | null;
   credit_card_id: number | null;

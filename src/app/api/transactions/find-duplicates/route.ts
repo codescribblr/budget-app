@@ -14,7 +14,7 @@ export async function GET() {
       );
     }
 
-    // Get all transactions with their splits and categories
+    // Get all transactions with their splits, categories, and merchant info
     const { data: transactions, error } = await supabase
       .from('transactions')
       .select(`
@@ -24,10 +24,23 @@ export async function GET() {
         total_amount,
         transaction_type,
         merchant_group_id,
+        merchant_override_id,
         is_historical,
         account_id,
         credit_card_id,
         created_at,
+        merchant_groups (
+          display_name,
+          global_merchant_id,
+          global_merchants (
+            display_name,
+            status
+          )
+        ),
+        merchant_override:global_merchants!merchant_override_id (
+          display_name,
+          status
+        ),
         splits:transaction_splits(
           id,
           category_id,
@@ -82,6 +95,33 @@ export async function GET() {
       // Only add to duplicate groups if we found more than one transaction
       if (duplicates.length > 1) {
         processedIds.add(txn1.id);
+        
+        // Helper function to extract merchant name from transaction
+        const getMerchantName = (txn: any): string | null => {
+          // Prefer merchant override
+          if (txn.merchant_override?.display_name) {
+            return txn.merchant_override.display_name;
+          }
+          
+          // Then check global merchant from merchant group
+          const merchantGroup = txn.merchant_groups;
+          if (merchantGroup?.global_merchants) {
+            const globalMerchant = Array.isArray(merchantGroup.global_merchants)
+              ? merchantGroup.global_merchants[0]
+              : merchantGroup.global_merchants;
+            if (globalMerchant && globalMerchant.status === 'active' && globalMerchant.display_name) {
+              return globalMerchant.display_name;
+            }
+          }
+          
+          // Fall back to merchant group display name
+          if (merchantGroup?.display_name) {
+            return merchantGroup.display_name;
+          }
+          
+          return null;
+        };
+        
         duplicateGroups.push({
           amount: txn1.total_amount,
           transactions: duplicates.map(txn => ({
@@ -91,6 +131,7 @@ export async function GET() {
             total_amount: txn.total_amount,
             transaction_type: txn.transaction_type,
             merchant_group_id: txn.merchant_group_id,
+            merchant_name: getMerchantName(txn),
             is_historical: txn.is_historical,
             account_id: txn.account_id,
             credit_card_id: txn.credit_card_id,
