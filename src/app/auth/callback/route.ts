@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/dashboard'
+  const plan = searchParams.get('plan') // 'premium' or null
 
   if (code) {
     // Create the response first
@@ -146,6 +147,18 @@ export async function GET(request: NextRequest) {
           // If check fails, continue with normal redirect
           console.error('Error checking invitations or creating account in callback:', err);
         }
+      }
+
+      // Handle premium plan checkout for OAuth signups
+      if (plan === 'premium' && !next.startsWith('/invite/')) {
+        // Redirect to subscription page which will handle checkout creation
+        const checkoutRedirectUrl = isLocalEnv
+          ? `${origin}/settings/subscription?checkout=premium`
+          : forwardedHost
+          ? `https://${forwardedHost}/settings/subscription?checkout=premium`
+          : `${origin}/settings/subscription?checkout=premium`;
+        
+        return NextResponse.redirect(checkoutRedirectUrl);
       }
 
       return response

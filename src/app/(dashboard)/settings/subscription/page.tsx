@@ -142,6 +142,21 @@ function SubscriptionPageContent() {
     }
   }, [searchParams, refreshSubscription]);
 
+  // Handle automatic checkout for OAuth signups with premium plan
+  useEffect(() => {
+    const checkoutParam = searchParams.get('checkout');
+    if (checkoutParam === 'premium' && !loading && isOwner && !isPremium) {
+      // Remove the checkout parameter from URL to prevent re-triggering
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('checkout');
+      router.replace(`/settings/subscription?${params.toString()}`, { scroll: false });
+      
+      // Automatically start checkout
+      handleStartTrial();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, loading, isOwner, isPremium, router]);
+
   const handleStartTrial = async () => {
     try {
       setActionLoading(true);
