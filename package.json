@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "prebuild": "node scripts/generate-version.js",
-    "build": "next build --turbopack",
+    "build": "next build",
     "start": "next start",
     "seed": "tsx scripts/seed.ts",
     "migrate": "export PATH=\"/opt/homebrew/opt/postgresql@17/bin:$PATH\" && set -a && source .env.local && set +a && ./scripts/run-migrations.sh",
