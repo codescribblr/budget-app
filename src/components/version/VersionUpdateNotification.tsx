@@ -13,6 +13,7 @@ export function VersionUpdateNotification() {
   const { hasUpdate, refreshPage } = useVersionCheck();
   const [isVisible, setIsVisible] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     if (hasUpdate && !isDismissed) {
@@ -30,6 +31,9 @@ export function VersionUpdateNotification() {
   };
 
   const handleRefresh = () => {
+    if (isRefreshing) return; // Prevent multiple clicks
+    
+    setIsRefreshing(true);
     refreshPage();
   };
 
@@ -42,7 +46,7 @@ export function VersionUpdateNotification() {
       <div className="mx-auto max-w-7xl px-4 pb-4">
         <div className="flex items-center justify-between gap-4 rounded-lg border bg-background p-4 shadow-lg">
           <div className="flex items-center gap-3">
-            <RefreshCw className="h-5 w-5 text-primary" />
+            <RefreshCw className={`h-5 w-5 text-primary ${isRefreshing ? 'animate-spin' : ''}`} />
             <div>
               <p className="font-medium">New version available</p>
               <p className="text-sm text-muted-foreground">
@@ -55,8 +59,10 @@ export function VersionUpdateNotification() {
               onClick={handleRefresh}
               size="sm"
               className="shrink-0"
+              disabled={isRefreshing}
             >
-              Refresh
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
             </Button>
             <Button
               onClick={handleDismiss}
@@ -64,6 +70,7 @@ export function VersionUpdateNotification() {
               size="sm"
               className="h-8 w-8 p-0"
               aria-label="Dismiss"
+              disabled={isRefreshing}
             >
               <X className="h-4 w-4" />
             </Button>
