@@ -19,23 +19,30 @@ export async function DELETE() {
     // But we also need to check if they have any accounts at all
     const { supabase, user } = await getAuthenticatedUser();
     
-    // Check if user has any accounts
-    const accountCount = await getUserAccountCount();
+    // Check if user has any accounts (excluding soft-deleted ones)
+    // Count owned accounts (non-deleted)
+    const { count: ownedCount } = await supabase
+      .from('budget_accounts')
+      .select('id', { count: 'exact', head: true })
+      .eq('owner_id', user.id)
+      .is('deleted_at', null);
     
-    if (accountCount > 0) {
-      // Count owned vs shared
-      const { count: ownedCount } = await supabase
-        .from('budget_accounts')
-        .select('id', { count: 'exact', head: true })
-        .eq('owner_id', user.id)
-        .is('deleted_at', null);
-      
-      const { count: sharedCount } = await supabase
-        .from('account_users')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('status', 'active');
-      
+    // Count shared accounts (where account is not deleted)
+    // Use a join to filter out account_users entries for deleted accounts
+    const { data: sharedAccounts } = await supabase
+      .from('account_users')
+      .select('account_id, budget_accounts!inner(deleted_at)')
+      .eq('user_id', user.id)
+      .eq('status', 'active');
+    
+    // Filter out entries where the account has been soft-deleted
+    const sharedCount = sharedAccounts?.filter(
+      (au: any) => !au.budget_accounts?.deleted_at
+    ).length || 0;
+    
+    const totalAccountCount = (ownedCount || 0) + sharedCount;
+    
+    if (totalAccountCount > 0) {
       // If user owns accounts, they can delete their user account
       // But they must leave/delete all accounts first
       if ((ownedCount || 0) > 0) {
@@ -51,7 +58,7 @@ export async function DELETE() {
       }
       
       // If user is only a member (not owner), they cannot delete their user account
-      if ((sharedCount || 0) > 0) {
+      if (sharedCount > 0) {
         return NextResponse.json(
           {
             error: 'Unauthorized: Only account owners can delete accounts. Please leave all shared accounts first.',

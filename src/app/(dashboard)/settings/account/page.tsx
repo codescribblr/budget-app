@@ -93,11 +93,15 @@ export default function AccountPage() {
           });
 
           if (!deleteUserResponse.ok) {
-            // If user deletion fails, still log them out
-            console.error('Failed to delete user account, but logging out anyway');
+            const errorData = await deleteUserResponse.json().catch(() => ({}));
+            // If user deletion fails due to account count, it means the deletion didn't complete properly
+            // Log the error but still proceed with logout
+            console.error('Failed to delete user account:', errorData.error || 'Unknown error');
+            // Still log them out even if deletion failed
           }
         } catch (error) {
           console.error('Error deleting user account:', error);
+          // Still log them out even if deletion failed
         }
 
         // Sign out and redirect to login

@@ -92,7 +92,9 @@ export async function DELETE(
 
     if (removeUsersError) {
       console.error('Error removing account users:', removeUsersError);
-      // Don't fail the request, but log the error
+      // This is critical - if we can't remove account_users, the user won't be able to delete their account
+      // Throw error to prevent inconsistent state
+      throw removeUsersError;
     }
 
     // Clear the active account cookie if this was the active account
