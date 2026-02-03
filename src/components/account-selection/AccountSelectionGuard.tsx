@@ -24,6 +24,31 @@ export function AccountSelectionGuard({ children }: AccountSelectionGuardProps) 
       const accounts = data.accounts || [];
       const activeAccountId = data.activeAccountId;
 
+      // If no accounts found but activeAccountId exists, account was just created
+      // Refresh the accounts list to see the newly created account
+      if (accounts.length === 0 && activeAccountId) {
+        clearBudgetAccountsCache();
+        // Account was just created by getActiveAccountId - refresh to see it
+        try {
+          // Small delay to ensure account_users entry is committed
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const refreshedData = await fetchBudgetAccounts();
+          if (refreshedData.accounts.length > 0) {
+            // Account now exists - continue with normal flow
+            setNeedsAccountSelection(false);
+            setChecking(false);
+            window.location.reload(); // Reload to ensure everything is in sync
+            return;
+          }
+        } catch (err) {
+          console.error('Error refreshing accounts:', err);
+        }
+        // If refresh failed, still allow rendering - account exists even if list is empty
+        setNeedsAccountSelection(false);
+        setChecking(false);
+        return;
+      }
+
       // If no accounts found, check for pending invitations sent to user's email
       if (accounts.length === 0) {
         try {
@@ -39,8 +64,9 @@ export function AccountSelectionGuard({ children }: AccountSelectionGuardProps) 
         } catch (err) {
           console.error('Error checking invitations:', err)
         }
-        // No accounts and no invitations - user needs to create an account
-        console.warn('No budget accounts found for user')
+        // No accounts and no invitations - account should have been created by getActiveAccountId
+        // If we still have no accounts, there's an issue - don't allow dashboard to render
+        console.error('No budget accounts found for user and no active account ID')
         setNeedsAccountSelection(false)
         setChecking(false)
         return
