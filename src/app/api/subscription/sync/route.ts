@@ -142,8 +142,8 @@ export async function POST(request: Request) {
     
     // Calculate days late for past_due/unpaid subscriptions
     let daysLate: number | null = null;
-    if (isPastDue && stripeSubscription.current_period_end) {
-      const periodEnd = new Date(stripeSubscription.current_period_end * 1000);
+    if (isPastDue && (stripeSubscription as any).current_period_end) {
+      const periodEnd = new Date((stripeSubscription as any).current_period_end * 1000);
       const now = new Date();
       const daysDiff = Math.floor((now.getTime() - periodEnd.getTime()) / (1000 * 60 * 60 * 24));
       daysLate = Math.max(0, daysDiff);
@@ -191,12 +191,12 @@ export async function POST(request: Request) {
       billing_amount: billingAmount,
       billing_interval: billingInterval,
       billing_currency: billingCurrency,
-      trial_start: stripeSubscription.trial_start ? new Date(stripeSubscription.trial_start * 1000).toISOString() : null,
-      trial_end: stripeSubscription.trial_end ? new Date(stripeSubscription.trial_end * 1000).toISOString() : null,
-      current_period_start: stripeSubscription.current_period_start ? new Date(stripeSubscription.current_period_start * 1000).toISOString() : null,
-      current_period_end: stripeSubscription.current_period_end ? new Date(stripeSubscription.current_period_end * 1000).toISOString() : null,
-      cancel_at_period_end: stripeSubscription.cancel_at_period_end || false,
-      canceled_at: stripeSubscription.canceled_at ? new Date(stripeSubscription.canceled_at * 1000).toISOString() : null,
+      trial_start: (stripeSubscription as any).trial_start ? new Date((stripeSubscription as any).trial_start * 1000).toISOString() : null,
+      trial_end: (stripeSubscription as any).trial_end ? new Date((stripeSubscription as any).trial_end * 1000).toISOString() : null,
+      current_period_start: (stripeSubscription as any).current_period_start ? new Date((stripeSubscription as any).current_period_start * 1000).toISOString() : null,
+      current_period_end: (stripeSubscription as any).current_period_end ? new Date((stripeSubscription as any).current_period_end * 1000).toISOString() : null,
+      cancel_at_period_end: (stripeSubscription as any).cancel_at_period_end || false,
+      canceled_at: (stripeSubscription as any).canceled_at ? new Date((stripeSubscription as any).canceled_at * 1000).toISOString() : null,
       updated_at: new Date().toISOString(),
     };
 
