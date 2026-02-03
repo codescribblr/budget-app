@@ -49,11 +49,13 @@ export async function POST(
     let templateName = providedTemplateName;
 
     // Get all queued imports from batch to check if this is API-based or CSV-based
+    // Order by id to get the first transaction (which has CSV data) first
     const { data: allQueuedImports, error: fetchError } = await supabase
       .from('queued_imports')
       .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, import_setup_id, target_account_id, target_credit_card_id, is_historical, processing_tasks, original_data, transaction_date, description, amount')
       .eq('account_id', accountId)
       .eq('source_batch_id', batchId)
+      .order('id', { ascending: true })
       .limit(1000);
 
     if (fetchError || !allQueuedImports || allQueuedImports.length === 0) {
@@ -63,12 +65,25 @@ export async function POST(
       );
     }
 
-    const firstQueuedImport = allQueuedImports[0];
+    // Find the transaction with CSV data (should be the first one, but check all to be safe)
+    const queuedImportWithCsv = allQueuedImports.find(qi => qi.csv_data) || allQueuedImports[0];
+    const firstQueuedImport = queuedImportWithCsv;
     const hasCsvData = !!firstQueuedImport.csv_data;
     const hasOriginalData = !!firstQueuedImport.original_data;
     
-    // Determine if this is an API-based import (has original_data but may or may not have CSV data)
-    const isApiImport = hasOriginalData && (!hasCsvData || firstQueuedImport.csv_file_name?.includes('Teller') || firstQueuedImport.csv_file_name?.includes('Account Transactions'));
+    // Get import setup to determine source type first
+    const { data: importSetup } = await supabase
+      .from('automatic_import_setups')
+      .select('source_type')
+      .eq('id', firstQueuedImport.import_setup_id)
+      .single();
+    
+    const sourceType = importSetup?.source_type || 'unknown';
+    
+    // Determine if this is an API-based import
+    // Manual imports are always CSV-based, even if they have original_data (which stores filename metadata)
+    // API imports have original_data but no CSV data (or CSV is virtual/converted)
+    const isApiImport = sourceType !== 'manual' && hasOriginalData && (!hasCsvData || firstQueuedImport.csv_file_name?.includes('Teller') || firstQueuedImport.csv_file_name?.includes('Account Transactions'));
 
     let transactions: ParsedTransaction[];
     let csvData: string[][];
@@ -78,14 +93,6 @@ export async function POST(
 
     if (isApiImport) {
       // API-based import: Re-process transactions from original_data using new mapping
-      // Get import setup to determine source type
-      const { data: importSetup } = await supabase
-        .from('automatic_import_setups')
-        .select('source_type')
-        .eq('id', firstQueuedImport.import_setup_id)
-        .single();
-      
-      const sourceType = importSetup?.source_type || 'unknown';
       
       // Re-process each transaction with new mapping
       transactions = allQueuedImports.map(qi => {
