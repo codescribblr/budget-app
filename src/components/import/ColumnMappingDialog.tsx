@@ -48,34 +48,43 @@ export default function ColumnMappingDialog({
   const [saveTemplate, setSaveTemplate] = useState(false);
   const [templateName, setTemplateName] = useState('');
 
-  // Initialize mappings from analysis
+  // Initialize mappings from analysis - only use the best match for each field type
+  // The analysis already finds the highest confidence column for each type
   useEffect(() => {
     if (!open) return;
 
     const initialMappings: Record<number, FieldType> = {};
-    
-    analysis.columns.forEach((col) => {
-      if (col.fieldType !== 'unknown' && col.confidence > 0.5) {
-        initialMappings[col.columnIndex] = col.fieldType as FieldType;
-      }
-    });
+    const mappedColumns = new Set<number>();
 
-    // Set required fields if detected
+    // Set required fields if detected (these are already the best matches)
     if (analysis.dateColumn !== null) {
       initialMappings[analysis.dateColumn] = 'date';
+      mappedColumns.add(analysis.dateColumn);
     }
     if (analysis.amountColumn !== null) {
       initialMappings[analysis.amountColumn] = 'amount';
+      mappedColumns.add(analysis.amountColumn);
     }
     if (analysis.descriptionColumn !== null) {
       initialMappings[analysis.descriptionColumn] = 'description';
+      mappedColumns.add(analysis.descriptionColumn);
     }
     if (analysis.debitColumn !== null) {
       initialMappings[analysis.debitColumn] = 'debit';
+      mappedColumns.add(analysis.debitColumn);
     }
     if (analysis.creditColumn !== null) {
       initialMappings[analysis.creditColumn] = 'credit';
+      mappedColumns.add(analysis.creditColumn);
     }
+
+    // Explicitly set all other columns to "ignore" for clarity
+    // This makes it clear which columns are being used and which should be ignored
+    analysis.columns.forEach((col) => {
+      if (!mappedColumns.has(col.columnIndex)) {
+        initialMappings[col.columnIndex] = 'ignore';
+      }
+    });
 
     setMappings(initialMappings);
     setSaveTemplate(false);

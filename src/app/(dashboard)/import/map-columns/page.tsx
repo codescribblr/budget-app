@@ -116,6 +116,79 @@ function detectAmountSignConvention(
   return 'positive_is_expense';
 }
 
+/**
+ * Detect if a column contains transaction type values (credit/debit/income/expense)
+ * Returns the column index if found, null otherwise
+ */
+function detectTransactionTypeColumn(
+  data: string[][],
+  columns: ColumnAnalysis[],
+  hasHeaders: boolean,
+  excludeColumns: Set<number>
+): number | null {
+  const transactionTypeValues = ['CREDIT', 'DEBIT', 'CR', 'DB', 'INCOME', 'EXPENSE', 'DEPOSIT', 'WITHDRAWAL', '+', '-'];
+  const startRow = hasHeaders ? 1 : 0;
+  const sampleSize = Math.min(20, data.length - startRow);
+
+  for (const col of columns) {
+    if (excludeColumns.has(col.columnIndex)) continue;
+    
+    // Check header first
+    if (hasHeaders && col.headerName) {
+      const headerUpper = col.headerName.toUpperCase().trim();
+      if (['TYPE', 'TRANSACTION TYPE', 'TXN TYPE', 'TRANS TYPE'].includes(headerUpper)) {
+        // Check if values match transaction type patterns
+        let matchCount = 0;
+        let validValues = 0;
+        
+        for (let i = startRow; i < startRow + sampleSize && i < data.length; i++) {
+          const row = data[i];
+          if (!row || row.length <= col.columnIndex) continue;
+          
+          const value = row[col.columnIndex]?.trim();
+          if (!value) continue;
+          
+          validValues++;
+          const valueUpper = value.toUpperCase();
+          if (transactionTypeValues.some(pattern => valueUpper.includes(pattern))) {
+            matchCount++;
+          }
+        }
+        
+        // If at least 70% of values match transaction type patterns, consider it a match
+        if (validValues >= 3 && matchCount / validValues >= 0.7) {
+          return col.columnIndex;
+        }
+      }
+    }
+    
+    // Check values even if header doesn't match
+    let matchCount = 0;
+    let validValues = 0;
+    
+    for (let i = startRow; i < startRow + sampleSize && i < data.length; i++) {
+      const row = data[i];
+      if (!row || row.length <= col.columnIndex) continue;
+      
+      const value = row[col.columnIndex]?.trim();
+      if (!value) continue;
+      
+      validValues++;
+      const valueUpper = value.toUpperCase();
+      if (transactionTypeValues.some(pattern => valueUpper.includes(pattern))) {
+        matchCount++;
+      }
+    }
+    
+    // If at least 70% of values match transaction type patterns, consider it a match
+    if (validValues >= 3 && matchCount / validValues >= 0.7) {
+      return col.columnIndex;
+    }
+  }
+  
+  return null;
+}
+
 export default function MapColumnsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -246,39 +319,88 @@ export default function MapColumnsPage() {
           setTransactionTypeColumn(currentMapping.transactionTypeColumn);
           setStatusColumn(currentMapping.statusColumn);
         } else {
-          // Initialize from analysis
+          // Initialize from analysis - only use the best match for each field type
+          // The analysis already finds the highest confidence column for each type
+          const mappedColumns = new Set<number>();
+          
+          if (analysisData.dateColumn !== null) {
+            initialMappings[analysisData.dateColumn] = 'date';
+            mappedColumns.add(analysisData.dateColumn);
+          }
+          if (analysisData.descriptionColumn !== null) {
+            initialMappings[analysisData.descriptionColumn] = 'description';
+            mappedColumns.add(analysisData.descriptionColumn);
+          }
+          
+          // Detect amount sign convention and handle special cases
+          let detectedConvention: 'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit' = 'positive_is_expense';
+          let detectedTransactionTypeColumn: number | null = null;
+          
+          // Case 1: If both debit and credit columns exist, use separate_debit_credit convention
+          if (analysisData.debitColumn !== null && analysisData.creditColumn !== null) {
+            detectedConvention = 'separate_debit_credit';
+            initialMappings[analysisData.debitColumn] = 'debit';
+            mappedColumns.add(analysisData.debitColumn);
+            initialMappings[analysisData.creditColumn] = 'credit';
+            mappedColumns.add(analysisData.creditColumn);
+          }
+          // Case 2: If there's an amount column, check for transaction type column
+          else if (analysisData.amountColumn !== null) {
+            // Check if there's a transaction type column
+            const transactionTypeCol = detectTransactionTypeColumn(
+              csvData,
+              analysisData.columns || [],
+              analysisData.hasHeaders,
+              mappedColumns
+            );
+            
+            if (transactionTypeCol !== null) {
+              // Use separate_column convention
+              detectedConvention = 'separate_column';
+              detectedTransactionTypeColumn = transactionTypeCol;
+              initialMappings[analysisData.amountColumn] = 'amount';
+              mappedColumns.add(analysisData.amountColumn);
+              // Note: transactionTypeColumn is stored separately, not in mappings
+              // The column will be shown in the UI but doesn't need to be in initialMappings
+            } else {
+              // Use standard amount column with sign convention detection
+              initialMappings[analysisData.amountColumn] = 'amount';
+              mappedColumns.add(analysisData.amountColumn);
+              detectedConvention = detectAmountSignConvention(
+                csvData,
+                analysisData.amountColumn,
+                analysisData.hasHeaders
+              );
+            }
+          }
+          // Case 3: Only debit or credit column exists (shouldn't happen often, but handle it)
+          else if (analysisData.debitColumn !== null || analysisData.creditColumn !== null) {
+            // If only one exists, we can't use separate_debit_credit, so fall back to amount detection
+            if (analysisData.debitColumn !== null) {
+              initialMappings[analysisData.debitColumn] = 'debit';
+              mappedColumns.add(analysisData.debitColumn);
+            }
+            if (analysisData.creditColumn !== null) {
+              initialMappings[analysisData.creditColumn] = 'credit';
+              mappedColumns.add(analysisData.creditColumn);
+            }
+            // Note: This case is unusual - typically both debit and credit should exist together
+          }
+
+          // Explicitly set all other columns to "ignore" for clarity
+          // This makes it clear which columns are being used and which should be ignored
           if (Array.isArray(analysisData.columns)) {
             analysisData.columns.forEach((col: ColumnAnalysis) => {
-              if (col && col.fieldType !== 'unknown' && col.confidence > 0.5) {
-                initialMappings[col.columnIndex] = col.fieldType as FieldType;
+              if (col && !mappedColumns.has(col.columnIndex)) {
+                initialMappings[col.columnIndex] = 'ignore';
               }
             });
           }
 
-          if (analysisData.dateColumn !== null) {
-            initialMappings[analysisData.dateColumn] = 'date';
-          }
-          if (analysisData.amountColumn !== null) {
-            initialMappings[analysisData.amountColumn] = 'amount';
-          }
-          if (analysisData.descriptionColumn !== null) {
-            initialMappings[analysisData.descriptionColumn] = 'description';
-          }
-          if (analysisData.debitColumn !== null) {
-            initialMappings[analysisData.debitColumn] = 'debit';
-          }
-          if (analysisData.creditColumn !== null) {
-            initialMappings[analysisData.creditColumn] = 'credit';
-          }
-
-          // Detect amount sign convention
-          if (analysisData.amountColumn !== null) {
-            const detectedConvention = detectAmountSignConvention(
-              csvData,
-              analysisData.amountColumn,
-              analysisData.hasHeaders
-            );
-            setAmountSignConvention(detectedConvention);
+          // Set the detected convention and transaction type column
+          setAmountSignConvention(detectedConvention);
+          if (detectedTransactionTypeColumn !== null) {
+            setTransactionTypeColumn(detectedTransactionTypeColumn);
           }
         }
 
