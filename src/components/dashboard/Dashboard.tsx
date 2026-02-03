@@ -32,6 +32,9 @@ import { AIInsightsWidget } from '@/components/ai/AIInsightsWidget';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { useFeature } from '@/contexts/FeatureContext';
 import { useLocalStorage } from '@/hooks/use-local-storage';
+import { SetupWizardBanner } from '@/components/wizards/SetupWizardBanner';
+import { WizardCompletionDialog } from '@/components/wizards/WizardCompletionDialog';
+import { WizardCompletionBanner } from '@/components/wizards/WizardCompletionBanner';
 
 // Helper function to calculate summary from local state
 function calculateSummary(
@@ -112,6 +115,22 @@ export default function Dashboard() {
   const [isCategoriesOpen, setIsCategoriesOpen] = useLocalStorage('dashboard-card-categories', true);
   const [bufferStatus, setBufferStatus] = useState<any>(null);
   const [showBufferNotice, setShowBufferNotice] = useState(false);
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false);
+  const [openEditCategoryDialog, setOpenEditCategoryDialog] = useState<((category: Category) => void) | null>(null);
+  const [completionTime, setCompletionTime] = useState<string | null>(null);
+  const [incomeSettings, setIncomeSettings] = useState<{ annual_income?: string; annual_salary?: string }>({});
+  
+  // Wrapper to safely set the edit dialog function
+  const handleEditDialogReady = useCallback((fn: (category: Category) => void) => {
+    // Only update if we have a valid function
+    if (fn && typeof fn === 'function') {
+      // Store the function directly - React won't call it during setState
+      setOpenEditCategoryDialog(() => fn);
+    } else {
+      // Clear the function if invalid
+      setOpenEditCategoryDialog(null);
+    }
+  }, []);
 
   // Calculate summary from local state
   const summary = useMemo(() => {
@@ -132,7 +151,7 @@ export default function Dashboard() {
 
     try {
       setLoading(true);
-      const [categoriesRes, accountsRes, creditCardsRes, loansRes, assetsRes, pendingChecksRes, summaryRes, bufferRes] =
+      const [categoriesRes, accountsRes, creditCardsRes, loansRes, assetsRes, pendingChecksRes, summaryRes, bufferRes, settingsRes] =
         await Promise.all([
           fetch('/api/categories'),
           fetch('/api/accounts'),
@@ -142,9 +161,10 @@ export default function Dashboard() {
           fetch('/api/pending-checks'),
           fetch('/api/dashboard'),
           fetch('/api/income-buffer/status'),
+          fetch('/api/settings'),
         ]);
 
-      const [categoriesData, accountsData, creditCardsData, loansData, assetsData, pendingChecksData, summaryData, bufferData] =
+      const [categoriesData, accountsData, creditCardsData, loansData, assetsData, pendingChecksData, summaryData, bufferData, settingsData] =
         await Promise.all([
           categoriesRes.ok ? categoriesRes.json() : [],
           accountsRes.ok ? accountsRes.json() : [],
@@ -154,6 +174,7 @@ export default function Dashboard() {
           pendingChecksRes.ok ? pendingChecksRes.json() : [],
           summaryRes.ok ? summaryRes.json() : null,
           bufferRes.ok ? bufferRes.json() : null,
+          settingsRes.ok ? settingsRes.json() : {},
         ]);
 
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
@@ -166,12 +187,28 @@ export default function Dashboard() {
       setPendingChecks(Array.isArray(pendingChecksData) ? pendingChecksData : []);
       setMonthlyNetIncome(summaryData?.monthly_net_income || 0);
       setBufferStatus(bufferData);
+      setIncomeSettings(settingsData || {});
 
       // Check if we should show buffer notice
       // Show on 1st of month if buffer has funds and categories haven't been funded yet
       const today = new Date().getDate();
       if (bufferData?.enabled && today === 1 && bufferData.balance > 0 && !bufferData.hasBeenFundedThisMonth) {
         setShowBufferNotice(true);
+      }
+
+      // Check if wizard was just completed (within last 5 minutes)
+      const wizardCompletionTime = (settingsData as Record<string, string>)?.budget_wizard_completed;
+      if (wizardCompletionTime) {
+        setCompletionTime(wizardCompletionTime);
+        const completedAt = new Date(wizardCompletionTime);
+        const now = new Date();
+        const minutesSinceCompletion = (now.getTime() - completedAt.getTime()) / (1000 * 60);
+        // Show dialog if completed within last 5 minutes and not already dismissed
+        const dismissedKey = `wizard-completion-dismissed-${wizardCompletionTime}`;
+        const wasDismissed = localStorage.getItem(dismissedKey) === 'true';
+        if (minutesSinceCompletion < 5 && !wasDismissed) {
+          setShowCompletionDialog(true);
+        }
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -289,8 +326,37 @@ export default function Dashboard() {
     return <LoadingSpinner />;
   }
 
+  const handleCompletionDialogClose = (open: boolean) => {
+    setShowCompletionDialog(open);
+    if (!open && completionTime) {
+      // Mark as dismissed
+      localStorage.setItem(`wizard-completion-dismissed-${completionTime}`, 'true');
+    }
+  };
+
   return (
     <div className="space-y-4 md:space-y-6">
+      {/* Wizard Completion Dialog */}
+      {showCompletionDialog && categories.length > 0 && (
+        <WizardCompletionDialog
+          open={showCompletionDialog}
+          onOpenChange={handleCompletionDialogClose}
+          categories={categories}
+          onOpenEditCategory={openEditCategoryDialog || undefined}
+          incomeSettings={incomeSettings}
+        />
+      )}
+
+      {/* Wizard Completion Banner - Show if tasks are incomplete */}
+      <WizardCompletionBanner
+        categories={categories}
+        incomeSettings={incomeSettings}
+        onOpenDialog={() => setShowCompletionDialog(true)}
+      />
+
+      {/* Setup Wizard Banner - Show if user skipped wizard and needs help */}
+      <SetupWizardBanner categories={categories} />
+
       {/* Income Buffer Notice - Show on 1st of month if funds available */}
       {showBufferNotice && (
         <Alert className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
@@ -337,6 +403,7 @@ export default function Dashboard() {
                   onUpdate={(updatedCategories) => setCategories(updatedCategories)}
                   onUpdateSummary={updateSummary}
                   disabled={!isEditor || permissionsLoading}
+                  onEditDialogReady={handleEditDialogReady}
                 />
               </CardContent>
               {isCategoriesOpen && (

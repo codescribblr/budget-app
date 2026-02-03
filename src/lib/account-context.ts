@@ -1,6 +1,7 @@
 import { getAuthenticatedUser } from './supabase-queries';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
+import { createServiceRoleClient } from './supabase/server';
 
 export interface AccountMembership {
   accountId: number;
@@ -63,7 +64,10 @@ export const getActiveAccountId = cache(async (): Promise<number | null> => {
   }
   
   // Fallback: Get user's primary account
-  // First check if user owns any accounts (owners aren't in account_users)
+  // Priority: owned accounts first, then shared accounts (collaborator accounts)
+  // This ensures collaborators without their own account get their shared account activated
+  
+  // First check if user owns any accounts
   const { data: ownedAccounts } = await supabase
     .from('budget_accounts')
     .select('id')
@@ -75,7 +79,8 @@ export const getActiveAccountId = cache(async (): Promise<number | null> => {
     return ownedAccounts[0].id;
   }
   
-  // If no owned accounts, check shared accounts
+  // If no owned accounts, check shared accounts (user is a collaborator)
+  // This handles the case where a user was invited and doesn't have their own account yet
   const { data: accountUsers } = await supabase
     .from('account_users')
     .select('account_id, role')
@@ -88,13 +93,91 @@ export const getActiveAccountId = cache(async (): Promise<number | null> => {
     return accountUsers[0].account_id;
   }
   
-  // No accounts found - don't auto-create one
-  // User should either accept an invitation or create their own account
+  // No accounts found - create one as a fallback
+  // This handles edge cases where account creation failed during signup
+  // First check if user has pending invitations - if so, don't create an account
+  try {
+    const { data: pendingInvitations } = await supabase
+      .from('account_invitations')
+      .select('id')
+      .eq('email', user.email?.toLowerCase() || '')
+      .is('accepted_at', null)
+      .limit(1);
+    
+    // If user has pending invitations, don't create an account
+    // They should accept the invitation first
+    if (pendingInvitations && pendingInvitations.length > 0) {
+      return null;
+    }
+    
+    // No pending invitations and no accounts - create one automatically
+    // Use service role client to bypass RLS policies
+    const adminSupabase = createServiceRoleClient();
+    const accountName = user.email?.split('@')[0] || 'My Budget';
+    const { data: newAccount, error: accountError } = await adminSupabase
+      .from('budget_accounts')
+      .insert({
+        owner_id: user.id,
+        name: accountName,
+      })
+      .select('id')
+      .single();
+    
+    if (accountError) {
+      console.error('Error creating fallback account:', accountError);
+      return null;
+    }
+    
+    if (!newAccount) {
+      console.error('Failed to create fallback account: No account returned');
+      return null;
+    }
+    
+    // Add user as owner in account_users
+    const { error: userError } = await adminSupabase
+      .from('account_users')
+      .insert({
+        account_id: newAccount.id,
+        user_id: user.id,
+        role: 'owner',
+        status: 'active',
+        accepted_at: new Date().toISOString(),
+      });
+    
+    if (userError) {
+      console.error('Error adding user to account_users:', userError);
+      // Account was created but user entry failed - still return the account ID
+      // The user entry can be fixed later if needed
+    }
+    
+    // Set the newly created account as the active account in cookie
+    try {
+      const cookieStore = await cookies();
+      cookieStore.set(ACTIVE_ACCOUNT_COOKIE, newAccount.id.toString(), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 365, // 1 year
+      });
+    } catch (cookieError) {
+      // Cookie setting failed, but account was created - continue
+      console.error('Failed to set active account cookie:', cookieError);
+    }
+    
+    return newAccount.id;
+  } catch (error) {
+    // If account creation fails, log error and return null
+    console.error('Error creating fallback account:', error);
+  }
+  
+  // If all else fails, return null
   return null;
 });
 
 /**
  * Set the active account ID (stores in cookie)
+ * This function verifies access and sets the cookie
+ * Must be called from a route handler context where cookies() is available
  */
 export async function setActiveAccountId(accountId: number): Promise<void> {
   const { supabase, user } = await getAuthenticatedUser();
@@ -122,8 +205,29 @@ export async function setActiveAccountId(accountId: number): Promise<void> {
     }
   }
   
-  // Store in cookie (will be handled by middleware/client)
-  // For now, we'll use a server-side approach
+  // Set the cookie
+  const cookieStore = await cookies();
+  cookieStore.set(ACTIVE_ACCOUNT_COOKIE, accountId.toString(), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 365, // 1 year
+  });
+}
+
+/**
+ * Set the active account ID cookie without verification
+ * Use this when you've already verified access (e.g., after creating account or accepting invitation)
+ * Must be called from a route handler context where cookies() is available
+ */
+export async function setActiveAccountIdCookie(accountId: number): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(ACTIVE_ACCOUNT_COOKIE, accountId.toString(), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 365, // 1 year
+  });
 }
 
 /**

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getUserAccountCount } from '@/lib/account-context';
 import { checkOwnerAccess } from '@/lib/api-helpers';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 /**
  * DELETE /api/user/delete-account
@@ -89,7 +90,9 @@ export async function DELETE() {
     }
 
     // Then delete the user account
-    const { error: deleteError } = await supabase.auth.admin.deleteUser(user.id);
+    // Use service role client for admin API operations
+    const serviceRoleSupabase = createServiceRoleClient();
+    const { error: deleteError } = await serviceRoleSupabase.auth.admin.deleteUser(user.id);
 
     if (deleteError) {
       console.error('Error deleting user account:', deleteError);

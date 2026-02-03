@@ -30,10 +30,9 @@ export function AccountSelectionGuard({ children }: AccountSelectionGuardProps) 
           const inviteResponse = await fetch('/api/invitations/my-invitations')
           if (inviteResponse.ok) {
             const inviteData = await inviteResponse.json()
-            // If there are pending invitations, redirect to accept the first one
+            // If there are pending invitations, redirect to choice page
             if (inviteData.invitations && inviteData.invitations.length > 0) {
-              const firstInvite = inviteData.invitations[0]
-              window.location.href = `/invite/${firstInvite.token}`
+              window.location.href = '/invitations/choose'
               return
             }
           }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { userHasOwnAccount } from '@/lib/account-context';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
 
 /**
  * POST /api/invitations/[token]/accept
@@ -123,7 +124,16 @@ export async function POST(
 
     const hasOwnAccount = await userHasOwnAccount();
 
-    return NextResponse.json({
+    // Set the invited account as the active account
+    const cookieStore = await cookies();
+    cookieStore.set('active_account_id', invitation.account_id.toString(), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+    });
+
+    const response = NextResponse.json({
       success: true,
       account: {
         id: invitation.account_id,
@@ -133,6 +143,16 @@ export async function POST(
       role: invitation.role,
       userHasOwnAccount: hasOwnAccount,
     });
+
+    // Also set cookie on response (in case cookies() didn't work)
+    response.cookies.set('active_account_id', invitation.account_id.toString(), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+    });
+
+    return response;
   } catch (error: any) {
     console.error('Error accepting invitation:', error);
     if (error.message === 'Unauthorized') {

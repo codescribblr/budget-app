@@ -11,9 +11,10 @@ interface WizardProps {
   onComplete: () => void | Promise<void>;
   onCancel?: () => void;
   isProcessing?: boolean;
+  cancelButtonText?: string;
 }
 
-export function Wizard({ steps, children, onComplete, onCancel, isProcessing = false }: WizardProps) {
+export function Wizard({ steps, children, onComplete, onCancel, isProcessing = false, cancelButtonText = 'Cancel' }: WizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = steps.length;
   const isFirstStep = currentStep === 1;
@@ -52,7 +53,7 @@ export function Wizard({ steps, children, onComplete, onCancel, isProcessing = f
               variant="ghost"
               onClick={onCancel}
             >
-              Cancel
+              {cancelButtonText}
             </Button>
           )}
         </div>

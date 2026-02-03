@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, CheckCircle2, XCircle } from "lucide-react"
+import { Loader2, CheckCircle2, XCircle, User } from "lucide-react"
 import Link from "next/link"
 
 export default function AcceptInvitationPage() {
@@ -20,9 +20,11 @@ export default function AcceptInvitationPage() {
     account: { id: number; name: string; ownerEmail?: string | null }
     role: string
     userHasOwnAccount: boolean
+    hasOtherAccounts?: boolean
     alreadyMember?: boolean
   } | null>(null)
   const [success, setSuccess] = useState(false)
+  const [creatingAccount, setCreatingAccount] = useState(false)
 
   useEffect(() => {
     if (!token) {
@@ -151,6 +153,45 @@ export default function AcceptInvitationPage() {
     }
   }
 
+  const handleCreateOwnAccount = async () => {
+    setCreatingAccount(true)
+    setError(null)
+
+    try {
+      // Create a new account for the user
+      const response = await fetch('/api/budget-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'My Budget',
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        setError(data.error || 'Failed to create account')
+        setCreatingAccount(false)
+        return
+      }
+
+      const data = await response.json()
+      
+      // Switch to the new account
+      await fetch('/api/budget-accounts/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: data.account.id }),
+      })
+
+      // Redirect to dashboard
+      window.location.href = '/dashboard'
+    } catch (err) {
+      console.error('Error creating account:', err)
+      setError('Failed to create account')
+      setCreatingAccount(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -274,6 +315,54 @@ export default function AcceptInvitationPage() {
               <p className="text-xs text-muted-foreground text-center">
                 By accepting, you'll be able to {invitation.role === 'viewer' ? 'view' : 'view and edit'} this account's budget data.
               </p>
+              
+              {!invitation.userHasOwnAccount && !invitation.hasOtherAccounts && (
+                <div className="border-t pt-4 mt-4">
+                  <div className="space-y-2 mb-4">
+                    <p className="text-sm font-medium">Or create your own account</p>
+                    <p className="text-xs text-muted-foreground">
+                      You can create your own budget account and still accept this invitation later from the account switcher.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleCreateOwnAccount}
+                    variant="outline"
+                    disabled={creatingAccount || accepting}
+                    className="w-full"
+                  >
+                    {creatingAccount ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <User className="mr-2 h-4 w-4" />
+                        Create My Own Account
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+              {(invitation.userHasOwnAccount || invitation.hasOtherAccounts) && (
+                <div className="border-t pt-4 mt-4">
+                  <div className="space-y-2 mb-4">
+                    <p className="text-sm font-medium">Or switch to another account</p>
+                    <p className="text-xs text-muted-foreground">
+                      You can accept this invitation later from the account switcher in the header.
+                    </p>
+                  </div>
+                  <Link href="/account-selection">
+                    <Button
+                      variant="outline"
+                      disabled={accepting}
+                      className="w-full"
+                    >
+                      Go to Account Selector
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </>
           )}
         </CardContent>

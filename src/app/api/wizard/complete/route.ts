@@ -32,34 +32,66 @@ export async function POST(request: NextRequest) {
     const createdAccounts: any[] = [];
     const createdCategories: any[] = [];
 
-    // Create accounts in batch
+    // Get existing accounts to check for duplicates
+    const { data: existingAccounts } = await supabase
+      .from('accounts')
+      .select('name')
+      .eq('account_id', accountId);
+
+    const existingAccountNames = new Set(
+      (existingAccounts || []).map((acc: any) => acc.name?.toLowerCase().trim())
+    );
+
+    // Create accounts in batch (only if they don't already exist)
     if (accounts.length > 0) {
-      const accountsToInsert = accounts.map((account) => ({
-        user_id: user.id,
-        account_id: accountId,
-        name: account.name,
-        balance: account.balance ?? 0,
-        account_type: account.account_type ?? 'checking',
-        include_in_totals: account.include_in_totals ?? true,
-        sort_order: account.sort_order ?? 0,
-      }));
+      const accountsToInsert = accounts
+        .filter((account) => {
+          const accountName = account.name?.toLowerCase().trim();
+          return accountName && !existingAccountNames.has(accountName);
+        })
+        .map((account) => ({
+          user_id: user.id,
+          account_id: accountId,
+          name: account.name,
+          balance: account.balance ?? 0,
+          account_type: account.account_type ?? 'checking',
+          include_in_totals: account.include_in_totals ?? true,
+          sort_order: account.sort_order ?? 0,
+        }));
 
-      const { data: accountsData, error: accountsError } = await supabase
-        .from('accounts')
-        .insert(accountsToInsert)
-        .select();
+      if (accountsToInsert.length > 0) {
+        const { data: accountsData, error: accountsError } = await supabase
+          .from('accounts')
+          .insert(accountsToInsert)
+          .select();
 
-      if (accountsError) {
-        console.error('Error creating accounts:', accountsError);
-        throw accountsError;
+        if (accountsError) {
+          console.error('Error creating accounts:', accountsError);
+          throw accountsError;
+        }
+
+        createdAccounts.push(...(accountsData || []));
       }
-
-      createdAccounts.push(...(accountsData || []));
     }
 
-    // Create categories in batch
+    // Get existing categories to check for duplicates
+    const { data: existingCategories } = await supabase
+      .from('categories')
+      .select('name')
+      .eq('account_id', accountId);
+
+    const existingCategoryNames = new Set(
+      (existingCategories || []).map((cat: any) => cat.name?.toLowerCase().trim())
+    );
+
+    // Create categories in batch (only if they don't already exist)
     if (categories.length > 0) {
-      const categoriesToInsert = categories.map((category) => {
+      const categoriesToInsert = categories
+        .filter((category) => {
+          const categoryName = category.name?.toLowerCase().trim();
+          return categoryName && !existingCategoryNames.has(categoryName);
+        })
+        .map((category) => {
         const categoryType = category.category_type ?? 'monthly_expense';
         let monthlyAmount = category.monthly_amount ?? 0;
         let monthlyTarget = category.monthly_target ?? null;
@@ -102,17 +134,19 @@ export async function POST(request: NextRequest) {
         };
       });
 
-      const { data: categoriesData, error: categoriesError } = await supabase
-        .from('categories')
-        .insert(categoriesToInsert)
-        .select();
+      if (categoriesToInsert.length > 0) {
+        const { data: categoriesData, error: categoriesError } = await supabase
+          .from('categories')
+          .insert(categoriesToInsert)
+          .select();
 
-      if (categoriesError) {
-        console.error('Error creating categories:', categoriesError);
-        throw categoriesError;
+        if (categoriesError) {
+          console.error('Error creating categories:', categoriesError);
+          throw categoriesError;
+        }
+
+        createdCategories.push(...(categoriesData || []));
       }
-
-      createdCategories.push(...(categoriesData || []));
     }
 
     return NextResponse.json({

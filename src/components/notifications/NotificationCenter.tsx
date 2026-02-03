@@ -55,9 +55,18 @@ export function NotificationCenter() {
       if (response.ok) {
         const data = await response.json();
         setNotifications(data.notifications || []);
+      } else if (response.status === 401) {
+        // User is not authenticated - silently handle this
+        setNotifications([]);
+      } else {
+        // Only log non-401 errors
+        console.error('Error fetching notifications:', response.status, response.statusText);
+        setNotifications([]);
       }
     } catch (error) {
+      // Network errors or other unexpected errors
       console.error('Error fetching notifications:', error);
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -69,9 +78,18 @@ export function NotificationCenter() {
       if (response.ok) {
         const data = await response.json();
         setUnreadCount(data.count || 0);
+      } else if (response.status === 401) {
+        // User is not authenticated - silently handle this
+        setUnreadCount(0);
+      } else {
+        // Only log non-401 errors
+        console.error('Error fetching unread count:', response.status, response.statusText);
+        setUnreadCount(0);
       }
     } catch (error) {
+      // Network errors or other unexpected errors
       console.error('Error fetching unread count:', error);
+      setUnreadCount(0);
     }
   };
 

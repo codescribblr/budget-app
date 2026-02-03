@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,7 @@ export function SmartAllocationDialog({
   availableToSave,
   onSuccess,
 }: SmartAllocationDialogProps) {
+  const router = useRouter();
   const [amount, setAmount] = useState('');
   const [allocations, setAllocations] = useState<AllocationPlan[]>([]);
   const [editedAllocations, setEditedAllocations] = useState<{ [key: number]: number }>({});
@@ -153,6 +155,9 @@ export function SmartAllocationDialog({
       setAmount('');
       setAllocations([]);
       setEditedAllocations({});
+      
+      // Redirect to dashboard after successful allocation
+      router.push('/dashboard');
     } catch (error) {
       console.error('Error applying allocation:', error);
       // Error toast already shown by handleApiError

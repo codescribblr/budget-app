@@ -65,11 +65,14 @@ export async function middleware(request: NextRequest) {
   )
 
   // Public routes - allow without authentication
-  const publicPaths = ['/login', '/signup', '/auth', '/privacy', '/terms']
+  const publicPaths = ['/login', '/signup', '/auth', '/privacy', '/terms', '/invite']
   const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path))
+  
+  // Invitations choose page requires authentication
+  const isInvitationsChoose = request.nextUrl.pathname === '/invitations/choose'
 
   // Redirect to login if accessing protected route without authentication
-  if (isProtectedPath && !user) {
+  if ((isProtectedPath || isInvitationsChoose) && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('redirectTo', request.nextUrl.pathname)

@@ -115,12 +115,62 @@ export default function BudgetSetupWizardPage() {
 
       const result = await response.json();
 
+      // Save completion status and income settings if provided
+      try {
+        const settingsToSave: Array<{ key: string; value: string }> = [
+          {
+            key: 'budget_wizard_completed',
+            value: new Date().toISOString(),
+          },
+        ];
+
+        // Check existing income settings before updating
+        const settingsRes = await fetch('/api/settings');
+        const existingSettings = settingsRes.ok ? await settingsRes.json() : {};
+        const existingAnnualIncome = parseFloat(existingSettings.annual_income || existingSettings.annual_salary || '0');
+
+        // If monthly income was entered and no income settings exist yet, save income settings
+        if (wizardData.monthlyIncome && parseFloat(wizardData.monthlyIncome) > 0 && existingAnnualIncome === 0) {
+          const monthlyIncome = parseFloat(wizardData.monthlyIncome);
+          const annualIncome = monthlyIncome * 12;
+          
+          settingsToSave.push(
+            {
+              key: 'annual_income',
+              value: annualIncome.toString(),
+            },
+            {
+              key: 'annual_salary',
+              value: annualIncome.toString(), // Keep for backwards compatibility
+            },
+            {
+              key: 'pay_frequency',
+              value: 'monthly',
+            },
+            {
+              key: 'include_extra_paychecks',
+              value: 'true',
+            }
+          );
+        }
+
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            settings: settingsToSave,
+          }),
+        });
+      } catch (error) {
+        console.error('Error saving completion status and income settings:', error);
+      }
+
       toast.success(
         `Budget created! Added ${result.accountsCount || accountsToCreate.length} account(s) and ${result.categoriesCount || categoriesToCreate.length} categories.`
       );
 
-      // Redirect to money movement page
-      router.push('/money-movement');
+      // Redirect to dashboard to show completion dialog
+      router.push('/dashboard');
     } catch (error: any) {
       console.error('Error creating budget:', error);
       toast.error(error.message || 'Failed to create budget. Please try again.');
@@ -160,7 +210,7 @@ export default function BudgetSetupWizardPage() {
 
       <div className="bg-card border rounded-lg p-6">
         <Wizard
-          steps={['Welcome', 'Accounts', 'Income Info', 'Categories', 'Review']}
+          steps={['Welcome', 'Accounts', 'Income', 'Categories', 'Review']}
           onComplete={handleComplete}
           onCancel={handleCancel}
           isProcessing={isCreating}

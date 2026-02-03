@@ -57,6 +57,7 @@ interface CategoryListProps {
   onUpdate: (updatedCategories: Category[]) => void;
   onUpdateSummary?: () => void;
   disabled?: boolean;
+  onEditDialogReady?: (openEditDialog: (category: Category) => void) => void;
 }
 
 interface SortableRowProps {
@@ -165,7 +166,20 @@ function SortableRow({
             </div>
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground">No budget set</span>
+          <div>
+            {disabled ? (
+              <span className="text-xs text-muted-foreground">No budget set</span>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openEditDialog(category)}
+                className="h-7 text-xs"
+              >
+                Set Budget
+              </Button>
+            )}
+          </div>
         )}
       </TableCell>
       <TableCell className="text-right">
@@ -359,7 +373,20 @@ function CategoryCard({
             </div>
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground">No budget set</span>
+          <div>
+            {disabled ? (
+              <span className="text-xs text-muted-foreground">No budget set</span>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openEditDialog(category)}
+                className="h-7 text-xs w-full"
+              >
+                Set Budget
+              </Button>
+            )}
+          </div>
         )}
 
         {/* Monthly and Balance */}
@@ -439,7 +466,7 @@ function CategoryCard({
   );
 }
 
-export default function CategoryList({ categories, summary, onUpdate, onUpdateSummary, disabled = false }: CategoryListProps) {
+export default function CategoryList({ categories, summary, onUpdate, onUpdateSummary, disabled = false, onEditDialogReady }: CategoryListProps) {
   // Feature flags
   const categoryTypesEnabled = useFeature('category_types');
   const prioritySystemEnabled = useFeature('priority_system');
@@ -699,6 +726,10 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
   };
 
   const openEditDialog = (category: Category) => {
+    if (!category) {
+      console.error('openEditDialog called with null or undefined category');
+      return;
+    }
     setEditingCategory(category);
     setNewName(category.name);
     setNewMonthlyAmount(category.monthly_amount.toString());
@@ -712,6 +743,41 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
     setNewTargetBalance(category.target_balance?.toString() || '');
     setIsEditDialogOpen(true);
   };
+
+  // Expose openEditDialog to parent component
+  useEffect(() => {
+    if (!onEditDialogReady) return;
+    
+    // Only expose the function if we have categories loaded
+    if (categories.length === 0) {
+      return;
+    }
+
+    // Create a stable reference to the current categories
+    const currentCategories = categories;
+
+    // Wrap in a function that validates the category before calling
+    const wrappedOpenEditDialog = (category: Category | null | undefined) => {
+      // Silently handle null/undefined - this is expected in some cases
+      if (!category) {
+        return;
+      }
+      // Double-check category exists in our list using the captured categories
+      const categoryExists = currentCategories.some(c => c.id === category.id);
+      if (!categoryExists) {
+        return;
+      }
+      openEditDialog(category);
+    };
+    
+    // Defer setting the function to avoid React calling it during state update
+    const timeoutId = setTimeout(() => {
+      onEditDialogReady(wrappedOpenEditDialog);
+    }, 0);
+    
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onEditDialogReady, categories.length]);
 
   const openAddDialog = () => {
     resetFormFields();

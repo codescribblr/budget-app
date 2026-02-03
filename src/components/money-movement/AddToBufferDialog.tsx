@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,7 @@ export function AddToBufferDialog({
   availableToSave,
   onSuccess,
 }: AddToBufferDialogProps) {
+  const router = useRouter();
   const [amount, setAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -66,6 +68,9 @@ export function AddToBufferDialog({
       setPendingAmount(null);
       onOpenChange(false);
       onSuccess();
+      
+      // Redirect to dashboard after successful allocation
+      router.push('/dashboard');
     } catch (error: any) {
       console.error('Error adding to buffer:', error);
       // Error toast already shown by handleApiError

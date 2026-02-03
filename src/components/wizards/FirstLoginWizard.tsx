@@ -77,22 +77,27 @@ export function FirstLoginWizard() {
   useEffect(() => {
     const checkFirstLogin = async () => {
       try {
-        const [accountsRes, categoriesRes] = await Promise.all([
+        const [accountsRes, categoriesRes, settingsRes] = await Promise.all([
           fetch('/api/accounts'),
           fetch('/api/categories'),
+          fetch('/api/settings'),
         ]);
 
-        if (accountsRes.ok && categoriesRes.ok) {
-          const [accounts, categories] = await Promise.all([
+        if (accountsRes.ok && categoriesRes.ok && settingsRes.ok) {
+          const [accounts, categories, settings] = await Promise.all([
             accountsRes.json(),
             categoriesRes.json(),
+            settingsRes.json(),
           ]);
+
+          // Check if user has skipped the wizard
+          const hasSkipped = settings?.budget_wizard_skipped === 'true';
 
           // Filter out system categories
           const userCategories = categories.filter((cat: any) => !cat.is_system);
 
-          // If no accounts AND no user categories, show wizard
-          if (accounts.length === 0 && userCategories.length === 0) {
+          // If no accounts AND no user categories AND hasn't skipped, show wizard
+          if (accounts.length === 0 && userCategories.length === 0 && !hasSkipped) {
             setOpen(true);
           }
         }
@@ -155,6 +160,56 @@ export function FirstLoginWizard() {
 
       const result = await response.json();
 
+      // Save completion status and income settings if provided
+      try {
+        const settingsToSave: Array<{ key: string; value: string }> = [
+          {
+            key: 'budget_wizard_completed',
+            value: new Date().toISOString(),
+          },
+        ];
+
+        // Check existing income settings before updating
+        const settingsRes = await fetch('/api/settings');
+        const existingSettings = settingsRes.ok ? await settingsRes.json() : {};
+        const existingAnnualIncome = parseFloat(existingSettings.annual_income || existingSettings.annual_salary || '0');
+
+        // If monthly income was entered and no income settings exist yet, save income settings
+        if (wizardData.monthlyIncome && parseFloat(wizardData.monthlyIncome) > 0 && existingAnnualIncome === 0) {
+          const monthlyIncome = parseFloat(wizardData.monthlyIncome);
+          const annualIncome = monthlyIncome * 12;
+          
+          settingsToSave.push(
+            {
+              key: 'annual_income',
+              value: annualIncome.toString(),
+            },
+            {
+              key: 'annual_salary',
+              value: annualIncome.toString(), // Keep for backwards compatibility
+            },
+            {
+              key: 'pay_frequency',
+              value: 'monthly',
+            },
+            {
+              key: 'include_extra_paychecks',
+              value: 'true',
+            }
+          );
+        }
+
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            settings: settingsToSave,
+          }),
+        });
+      } catch (error) {
+        console.error('Error saving completion status and income settings:', error);
+      }
+
       toast.success(
         `Budget created! Added ${result.accountsCount || accountsToCreate.length} account(s) and ${result.categoriesCount || categoriesToCreate.length} categories.`
       );
@@ -170,7 +225,24 @@ export function FirstLoginWizard() {
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
+    try {
+      // Save skip status to settings
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: [
+            {
+              key: 'budget_wizard_skipped',
+              value: 'true',
+            },
+          ],
+        }),
+      });
+    } catch (error) {
+      console.error('Error saving skip status:', error);
+    }
     setOpen(false);
   };
 
@@ -193,10 +265,11 @@ export function FirstLoginWizard() {
 
         <div className="mt-4">
           <Wizard
-            steps={['Welcome', 'Accounts', 'Income Info', 'Categories', 'Review']}
+            steps={['Welcome', 'Accounts', 'Income', 'Categories', 'Review']}
             onComplete={handleComplete}
             onCancel={handleCancel}
             isProcessing={isCreating}
+            cancelButtonText="Skip"
           >
             {/* Step 1: Welcome */}
             <WizardStep
@@ -404,6 +477,19 @@ export function FirstLoginWizard() {
                       (!wizardData.savingsBalance || parseFloat(wizardData.savingsBalance) <= 0) && (
                         <li className="text-muted-foreground">No accounts will be created</li>
                       )}
+                  </ul>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="font-semibold">Income:</h3>
+                  <ul className="list-disc list-inside space-y-1 text-sm">
+                    {wizardData.monthlyIncome && parseFloat(wizardData.monthlyIncome) > 0 ? (
+                      <li>
+                        Monthly Income: ${parseFloat(wizardData.monthlyIncome).toFixed(2)}
+                      </li>
+                    ) : (
+                      <li className="text-muted-foreground">No income entered</li>
+                    )}
                   </ul>
                 </div>
 

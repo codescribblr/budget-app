@@ -21,10 +21,12 @@ export async function GET() {
 
     return NextResponse.json({ count: count || 0 });
   } catch (error: any) {
-    console.error('Error fetching unread count:', error);
+    // Silently handle unauthorized requests (user not logged in)
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // Only log unexpected errors
+    console.error('Error fetching unread count:', error);
     return NextResponse.json(
       { error: 'Failed to fetch unread count' },
       { status: 500 }

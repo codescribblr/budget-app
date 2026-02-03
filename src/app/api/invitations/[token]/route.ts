@@ -94,6 +94,7 @@ export async function GET(
 
       const { data: { user: authUser } } = await supabase.auth.getUser();
       const hasOwnAccount = authUser ? await checkUserHasOwnAccount(supabase, authUser.id) : false;
+      const hasOtherAccounts = authUser ? await checkUserHasOtherAccounts(supabase, authUser.id, invitation.account_id) : false;
 
       // Return success with alreadyMember flag
       return NextResponse.json({
@@ -104,6 +105,7 @@ export async function GET(
         },
         role: invitation.role,
         userHasOwnAccount: hasOwnAccount,
+        hasOtherAccounts: hasOtherAccounts,
         alreadyMember: true,
       });
     }
@@ -137,6 +139,7 @@ export async function GET(
 
     const { data: { user: authUser } } = await supabase.auth.getUser();
     const hasOwnAccount = authUser ? await checkUserHasOwnAccount(supabase, authUser.id) : false;
+    const hasOtherAccounts = authUser ? await checkUserHasOtherAccounts(supabase, authUser.id, invitation.account_id) : false;
 
     return NextResponse.json({
       account: {
@@ -146,6 +149,7 @@ export async function GET(
       },
       role: invitation.role,
       userHasOwnAccount: hasOwnAccount,
+      hasOtherAccounts: hasOtherAccounts,
     });
   } catch (error: any) {
     console.error('Error fetching invitation:', error);
@@ -167,6 +171,29 @@ async function checkUserHasOwnAccount(supabase: any, userId: string): Promise<bo
     .is('deleted_at', null);
   
   return (count || 0) > 0;
+}
+
+async function checkUserHasOtherAccounts(supabase: any, userId: string, excludeAccountId: number): Promise<boolean> {
+  // Check if user owns any other accounts
+  const { count: ownedCount } = await supabase
+    .from('budget_accounts')
+    .select('id', { count: 'exact', head: true })
+    .eq('owner_id', userId)
+    .neq('id', excludeAccountId)
+    .is('deleted_at', null);
+  
+  // Check if user is a member of any other accounts
+  const { data: sharedAccounts } = await supabase
+    .from('account_users')
+    .select('account_id, budget_accounts!inner(id, deleted_at)')
+    .eq('user_id', userId)
+    .eq('status', 'active');
+  
+  const sharedCount = sharedAccounts?.filter(
+    (au: any) => au.account_id !== excludeAccountId && !au.budget_accounts?.deleted_at
+  ).length || 0;
+  
+  return (ownedCount || 0) > 0 || sharedCount > 0;
 }
 
 /**
