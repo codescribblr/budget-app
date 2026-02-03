@@ -159,7 +159,7 @@ export default function TroubleshootingFAQPage() {
           answer={
             <>
               <p>
-                If you want to start fresh, you can clear all your data:
+                If you want to start fresh, you can delete your account and create a new one:
               </p>
               <ol className="list-decimal list-inside mt-2 space-y-1">
                 <li>
@@ -171,15 +171,16 @@ export default function TroubleshootingFAQPage() {
                 </li>
                 <li>
                   Go to{' '}
-                  <Link href="/settings/data" className="text-primary hover:underline">
-                    Settings → Data Management
+                  <Link href="/settings/account" className="text-primary hover:underline">
+                    Settings → Account
                   </Link>
                 </li>
-                <li>Click "Clear All Data"</li>
-                <li>Confirm that you want to delete everything</li>
+                <li>Click "Delete Account"</li>
+                <li>Confirm that you want to delete your account</li>
+                <li>Create a new account if desired</li>
               </ol>
               <p className="mt-2">
-                <strong>Warning:</strong> This will delete all your accounts, categories, transactions,
+                <strong>Warning:</strong> This will delete your account and all associated data including accounts, categories, transactions,
                 goals, and settings. This action cannot be undone (unless you have a backup).
               </p>
             </>

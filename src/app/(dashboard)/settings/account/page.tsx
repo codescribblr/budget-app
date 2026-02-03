@@ -21,8 +21,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Trash2, Edit2, Check, X } from 'lucide-react';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { clearBudgetAccountsCache } from '@/lib/budget-accounts-cache';
 
@@ -35,6 +37,10 @@ export default function AccountPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [accountCount, setAccountCount] = useState<number | null>(null);
   const [activeAccountId, setActiveAccountId] = useState<number | null>(null);
+  const [accountName, setAccountName] = useState<string>('');
+  const [editingName, setEditingName] = useState(false);
+  const [newAccountName, setNewAccountName] = useState<string>('');
+  const [isRenaming, setIsRenaming] = useState(false);
   const [loadingAccountInfo, setLoadingAccountInfo] = useState(true);
 
   useEffect(() => {
@@ -49,11 +55,87 @@ export default function AccountPage() {
         const accounts = data.accounts || [];
         setAccountCount(accounts.length);
         setActiveAccountId(data.activeAccountId);
+        
+        // Find the current account name
+        if (data.activeAccountId) {
+          const currentAccount = accounts.find(
+            (acc: any) => acc.accountId === data.activeAccountId
+          );
+          if (currentAccount) {
+            setAccountName(currentAccount.accountName || '');
+            setNewAccountName(currentAccount.accountName || '');
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching account info:', error);
     } finally {
       setLoadingAccountInfo(false);
+    }
+  };
+
+  const handleStartRename = () => {
+    setNewAccountName(accountName);
+    setEditingName(true);
+  };
+
+  const handleCancelRename = () => {
+    setNewAccountName(accountName);
+    setEditingName(false);
+  };
+
+  const handleSaveRename = async () => {
+    if (!activeAccountId) {
+      toast.error('No active account found');
+      return;
+    }
+
+    const trimmedName = newAccountName.trim();
+    if (!trimmedName) {
+      toast.error('Account name cannot be empty');
+      return;
+    }
+
+    if (trimmedName === accountName) {
+      setEditingName(false);
+      return;
+    }
+
+    setIsRenaming(true);
+
+    try {
+      const response = await fetch(`/api/budget-accounts/${activeAccountId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: trimmedName }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to rename account');
+      }
+
+      const data = await response.json();
+      setAccountName(data.account.name);
+      setEditingName(false);
+      toast.success('Account renamed successfully');
+      
+      // Clear cache and trigger account switcher refresh
+      clearBudgetAccountsCache();
+      
+      // Dispatch event to update account switcher and other components
+      window.dispatchEvent(new CustomEvent('accountRenamed', { 
+        detail: { accountId: activeAccountId, newName: data.account.name }
+      }));
+      
+      router.refresh();
+    } catch (error: any) {
+      console.error('Error renaming account:', error);
+      toast.error(error.message || 'Failed to rename account');
+    } finally {
+      setIsRenaming(false);
     }
   };
 
@@ -155,6 +237,77 @@ export default function AccountPage() {
 
   return (
     <>
+      {/* Account Name Section */}
+      {isOwner && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Account Name</CardTitle>
+            <CardDescription>Change the name of your budget account</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {editingName ? (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="account-name">Account Name</Label>
+                  <Input
+                    id="account-name"
+                    value={newAccountName}
+                    onChange={(e) => setNewAccountName(e.target.value)}
+                    disabled={isRenaming || permissionsLoading}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSaveRename();
+                      } else if (e.key === 'Escape') {
+                        handleCancelRename();
+                      }
+                    }}
+                    className="mt-2"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSaveRename}
+                    disabled={isRenaming || permissionsLoading || !newAccountName.trim()}
+                    size="sm"
+                  >
+                    {isRenaming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <Check className="mr-2 h-4 w-4" />
+                    Save
+                  </Button>
+                  <Button
+                    onClick={handleCancelRename}
+                    disabled={isRenaming || permissionsLoading}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">{accountName || 'Loading...'}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    This name appears in the account switcher and throughout the app
+                  </p>
+                </div>
+                <Button
+                  onClick={handleStartRename}
+                  disabled={permissionsLoading || loadingAccountInfo}
+                  variant="outline"
+                  size="sm"
+                >
+                  <Edit2 className="mr-2 h-4 w-4" />
+                  Rename
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="border-destructive">
         <CardHeader>
           <CardTitle className="text-destructive">Danger Zone</CardTitle>

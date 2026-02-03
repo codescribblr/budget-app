@@ -7,7 +7,6 @@ import { useFeature } from '@/contexts/FeatureContext';
 import {
   User,
   Key,
-  Database,
   Sparkles,
   Copy,
   Users,
@@ -75,12 +74,6 @@ const settingsNavItems = [
     href: '/settings/backup',
     icon: Download,
     description: 'Export and restore data',
-  },
-  {
-    title: 'Data',
-    href: '/settings/data',
-    icon: Database,
-    description: 'Import or clear data',
   },
   {
     title: 'Collaborators',

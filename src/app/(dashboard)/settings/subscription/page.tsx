@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,73 @@ function SubscriptionPageContent() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ daysLate?: number; requiresBillingUpdate?: boolean; changes?: string[] } | null>(null);
+  const hasSyncedRef = useRef(false);
+
+  // Auto-sync subscription status from Stripe on page load (only once, after loading completes)
+  useEffect(() => {
+    // Skip if already synced
+    if (hasSyncedRef.current) return;
+    
+    // Wait for permissions and subscription to load, and ensure user is owner
+    if (permissionsLoading || loading || !isOwner) return;
+    
+    // Skip if this is a redirect from checkout (will be handled by the other useEffect)
+    if (searchParams.get('success') || searchParams.get('canceled')) return;
+    
+    // Mark as synced to prevent multiple calls
+    hasSyncedRef.current = true;
+    
+    const syncSubscriptionStatus = async () => {
+      setSyncing(true);
+      try {
+        const response = await fetch('/api/subscription/sync', {
+          method: 'POST',
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setSyncResult({
+            daysLate: data.daysLate || undefined,
+            requiresBillingUpdate: data.requiresBillingUpdate || false,
+            changes: data.changes || [],
+          });
+          
+          // Refresh subscription context to get updated status
+          // Use setTimeout to avoid triggering re-renders that might cause loops
+          setTimeout(() => {
+            refreshSubscription();
+          }, 100);
+          
+          // Show success message if status was updated
+          if (data.changes && data.changes.length > 0) {
+            const hasStatusChange = data.changes.some((c: string) => c.includes('status_changed') || c.includes('downgraded') || c.includes('upgraded'));
+            if (hasStatusChange) {
+              setSuccess('Subscription status synced with Stripe');
+              setTimeout(() => setSuccess(null), 5000);
+            }
+          }
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          // Don't show error if no subscription found (user might not have one yet)
+          if (response.status !== 404) {
+            console.error('Error syncing subscription:', errorData.error);
+          }
+        }
+      } catch (err) {
+        console.error('Error syncing subscription:', err);
+        // Don't show error to user - sync is a background operation
+      } finally {
+        setSyncing(false);
+      }
+    };
+
+    syncSubscriptionStatus();
+    // Note: We check loading inside but don't include it in deps to avoid loops
+    // The hasSyncedRef ensures we only sync once even if loading changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, permissionsLoading]); // hasSyncedRef prevents multiple calls even if loading changes
 
   useEffect(() => {
     if (searchParams.get('success') === 'true') {
@@ -54,6 +121,7 @@ function SubscriptionPageContent() {
           });
           if (response.ok) {
             console.log('Subscription synced successfully');
+            refreshSubscription();
           }
         } catch (err) {
           console.error('Error syncing subscription:', err);
@@ -158,6 +226,33 @@ function SubscriptionPageContent() {
         </Alert>
       )}
 
+      {/* Billing Issue Alert */}
+      {syncResult?.requiresBillingUpdate && syncResult.daysLate !== undefined && syncResult.daysLate > 0 && (
+        <Alert variant="destructive">
+          <X className="h-4 w-4" />
+          <AlertDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold">Payment Failed - Action Required</p>
+                <p className="text-sm mt-1">
+                  Your subscription payment failed {syncResult.daysLate} day{syncResult.daysLate !== 1 ? 's' : ''} ago. 
+                  Premium features have been disabled until payment is updated.
+                </p>
+              </div>
+              <Button
+                onClick={handleManageSubscription}
+                disabled={actionLoading || !isOwner || permissionsLoading}
+                variant="outline"
+                size="sm"
+                className="ml-4"
+              >
+                Update Payment
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Current Plan Card */}
       <Card>
         <CardHeader>
@@ -176,15 +271,33 @@ function SubscriptionPageContent() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {syncing && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Syncing subscription status with Stripe...
+            </div>
+          )}
+          
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Status</p>
-              <p className="font-medium capitalize">{subscription?.status || 'Active'}</p>
+              <p className="font-medium capitalize">
+                {subscription?.status || 'Active'}
+                {syncResult?.requiresBillingUpdate && (
+                  <Badge variant="destructive" className="ml-2">Payment Failed</Badge>
+                )}
+              </p>
             </div>
             {isTrialing && trialDaysRemaining !== null && (
               <div>
                 <p className="text-sm text-muted-foreground">Trial Ends In</p>
                 <p className="font-medium">{trialDaysRemaining} days</p>
+              </div>
+            )}
+            {syncResult?.daysLate !== undefined && syncResult.daysLate > 0 && (
+              <div>
+                <p className="text-sm text-muted-foreground">Days Past Due</p>
+                <p className="font-medium text-destructive">{syncResult.daysLate} days</p>
               </div>
             )}
           </div>

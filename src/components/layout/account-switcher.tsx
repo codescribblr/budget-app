@@ -49,6 +49,17 @@ export function AccountSwitcher() {
   useEffect(() => {
     setMounted(true)
     loadAccounts()
+
+    // Listen for account rename events to refresh the account list
+    const handleAccountRenamed = () => {
+      clearBudgetAccountsCache()
+      loadAccounts()
+    }
+
+    window.addEventListener('accountRenamed', handleAccountRenamed)
+    return () => {
+      window.removeEventListener('accountRenamed', handleAccountRenamed)
+    }
   }, [])
 
   // Use default icon during SSR to prevent hydration mismatch

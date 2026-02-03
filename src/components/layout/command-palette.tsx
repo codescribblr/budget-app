@@ -28,7 +28,6 @@ import {
   Repeat,
   User,
   Key,
-  Database,
   Copy,
   Users,
   Download,
@@ -64,7 +63,6 @@ const settingsItems = [
   { label: "Merchant Settings", path: "/settings/merchants", icon: Store, section: null, keywords: "merchant groups manage" },
   { label: "Category Rules", path: "/category-rules", icon: FolderTree, section: null, keywords: "category rules auto categorize" },
   { label: "Backup & Restore", path: "/settings/backup", icon: Download, section: null, keywords: "backup restore export import data" },
-  { label: "Data Management", path: "/settings/data", icon: Database, section: null, keywords: "clear delete all data reset import" },
   { label: "Collaborators", path: "/settings/collaborators", icon: UserPlus, section: null, keywords: "collaborators team members share account" },
   { label: "Delete Account", path: "/settings/account", icon: Trash2, section: null, keywords: "delete account close remove" },
 ]
