@@ -94,19 +94,49 @@ export default function AccountPage() {
 
           if (!deleteUserResponse.ok) {
             const errorData = await deleteUserResponse.json().catch(() => ({}));
-            // If user deletion fails due to account count, it means the deletion didn't complete properly
-            // Log the error but still proceed with logout
-            console.error('Failed to delete user account:', errorData.error || 'Unknown error');
-            // Still log them out even if deletion failed
+            const errorMessage = errorData.error || 'Unknown error';
+            console.error('Failed to delete user account:', errorMessage);
+            
+            // Show error to user and don't log out - they still have an account
+            toast.error('Failed to delete user account', {
+              description: errorMessage,
+            });
+            setIsDeleting(false);
+            setShowDeleteAccountDialog(false);
+            return; // Don't proceed with logout if deletion failed
           }
+
+          // Verify user account was actually deleted by trying to get user info
+          // If deletion succeeded, this should fail
+          try {
+            const { data: { user: currentUser } } = await supabase.auth.getUser();
+            if (currentUser) {
+              // User still exists - deletion didn't work
+              console.error('User account still exists after deletion attempt');
+              toast.error('Failed to delete user account', {
+                description: 'User account deletion did not complete. Please contact support.',
+              });
+              setIsDeleting(false);
+              setShowDeleteAccountDialog(false);
+              return;
+            }
+          } catch (authError) {
+            // Expected - user should not exist, so getUser should fail
+            // This means deletion succeeded
+          }
+
+          // User account deletion succeeded - now log out
+          toast.success('Account and user deleted successfully');
+          await supabase.auth.signOut();
+          router.push('/login');
         } catch (error) {
           console.error('Error deleting user account:', error);
-          // Still log them out even if deletion failed
+          toast.error('Failed to delete user account', {
+            description: 'An unexpected error occurred. Please try again.',
+          });
+          setIsDeleting(false);
+          return; // Don't proceed with logout if deletion failed
         }
-
-        // Sign out and redirect to login
-        await supabase.auth.signOut();
-        router.push('/login');
       } else if (remainingAccounts > 0) {
         // User has other accounts - redirect to account selection
         // The AccountSelectionGuard will handle showing the account chooser
