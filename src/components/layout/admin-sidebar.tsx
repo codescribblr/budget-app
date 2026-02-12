@@ -10,6 +10,7 @@ import {
   Bell,
   MessageSquare,
   Link2,
+  Users,
 } from "lucide-react"
 
 import {
@@ -31,6 +32,7 @@ import { cn } from "@/lib/utils"
 
 const adminNavigationItems = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
+  { label: "Users", path: "/admin/users", icon: Users },
   { label: "Notifications", path: "/admin/notifications", icon: Bell },
   { label: "Settings", path: "/admin/settings", icon: Settings },
 ]

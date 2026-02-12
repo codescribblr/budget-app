@@ -1,6 +1,6 @@
 import { isAdmin } from "@/lib/admin"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Store, Settings, Shield, Bell, TestTube, MessageSquare } from "lucide-react"
+import { Store, Settings, Shield, Bell, TestTube, MessageSquare, Users } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
@@ -13,6 +13,13 @@ export default async function AdminDashboard() {
   }
 
   const adminSections = [
+    {
+      title: "Users",
+      description: "View all users, verification, wizard completion, subscription, and activity",
+      icon: Users,
+      href: "/admin/users",
+      color: "text-cyan-600",
+    },
     {
       title: "Global Merchants",
       description: "Manage global merchant mappings and logos that apply to all users",

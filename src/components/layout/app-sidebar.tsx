@@ -93,7 +93,7 @@ const navigationSections = [
   {
     label: "Reports",
     items: [
-      { label: "Overview", path: "/reports", icon: FileText },
+      { label: "Overview", path: "/reports", icon: FileText, exact: true },
       { label: "Trends", path: "/reports/trends", icon: TrendingUp, featureKey: "advanced_reporting" },
       { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
       { label: "Tag Reports", path: "/reports/tags", icon: Tag, featureKey: "tags" },
@@ -141,9 +141,12 @@ export function AppSidebar() {
   const [openWizards, setOpenWizards] = React.useState(false)
   const [openAssetsLiabilities, setOpenAssetsLiabilities] = React.useState(false)
 
-  const isActive = (path: string) => {
+  const isActive = (path: string, exact?: boolean) => {
     if (path === "/") {
       return pathname === "/"
+    }
+    if (exact) {
+      return pathname === path
     }
     // Exact match or starts with path followed by a slash
     return pathname === path || pathname.startsWith(path + "/")
@@ -244,7 +247,7 @@ export function AppSidebar() {
                           )
                   .map((item) => {
                     const Icon = item.icon
-                    const active = isActive(item.path)
+                    const active = isActive(item.path, !!('exact' in item && item.exact))
                     const hasSubItems = 'subItems' in item && Array.isArray(item.subItems) && item.subItems.length > 0
                     const isWizards = item.path === "/help/wizards"
                     
@@ -335,7 +338,7 @@ export function AppSidebar() {
                         )
                         .map((item) => {
                           const Icon = item.icon
-                          const active = isActive(item.path)
+                          const active = isActive(item.path, !!('exact' in item && item.exact))
                           const hasSubItems = 'subItems' in item && Array.isArray(item.subItems) && item.subItems.length > 0
                           const isWizards = item.path === "/help/wizards"
                           
