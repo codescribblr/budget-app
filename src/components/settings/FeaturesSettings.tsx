@@ -35,7 +35,7 @@ const LEVEL_LABELS = {
   basic: 'Basic',
   intermediate: 'Intermediate',
   advanced: 'Advanced',
-  power: 'Power User',
+  power: 'Pro',
 };
 
 export default function FeaturesSettings() {
@@ -127,7 +127,7 @@ export default function FeaturesSettings() {
             Features
           </CardTitle>
           <CardDescription>
-            Enable advanced features to customize your budgeting experience. Features are organized by complexity level.
+            Explore what&apos;s possible and enable features when you&apos;re ready. Optional and Premium features are listed below by complexity.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">

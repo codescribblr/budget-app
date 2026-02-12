@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getUserSubscription, isPremiumUser } from '@/lib/subscription-utils';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import { getActiveAccountId } from '@/lib/account-context';
+import type { FeatureName } from '@/lib/feature-flags';
 
 /**
  * Feature definitions with metadata
@@ -121,8 +122,6 @@ const FEATURES = {
     requiresPremium: true,
   },
 } as const;
-
-export type FeatureName = keyof typeof FEATURES;
 
 /**
  * GET /api/features

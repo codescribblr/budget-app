@@ -170,6 +170,10 @@ export default function CoreConceptsPage() {
           <li>Your budget is a plan, not a restriction - adjust it as life happens</li>
           <li>Consistency is key - record transactions regularly to keep your budget accurate</li>
         </ul>
+
+        <Callout type="tip" title="You're in control">
+          Most features are optional. You can enable extra features (Goals, Loans, Reports, AI, and more) anytime under <Link href="/settings" className="text-primary hover:underline font-medium">Settings → Features</Link> when you're ready.
+        </Callout>
       </div>
 
       <WasThisHelpful articlePath="/help/getting-started/core-concepts" />

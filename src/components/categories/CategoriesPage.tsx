@@ -1037,7 +1037,16 @@ export default function CategoriesPage() {
       {/* Content */}
       {categoriesToRender.length === 0 ? (
         <Card className="p-6">
-          <div className="text-sm text-muted-foreground">No categories match your filters.</div>
+          <div className="flex flex-col items-center gap-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              {categories.filter((c) => !c.is_system && !c.is_buffer).length === 0
+                ? 'No categories yet. Create one to start budgeting.'
+                : 'No categories match your filters.'}
+            </p>
+            {categories.filter((c) => !c.is_system && !c.is_buffer).length === 0 && canEdit && (
+              <Button onClick={() => setIsAddDialogOpen(true)}>Create category</Button>
+            )}
+          </div>
         </Card>
       ) : viewMode === 'grid' ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

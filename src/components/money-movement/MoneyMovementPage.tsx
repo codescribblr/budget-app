@@ -7,6 +7,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import type { Category } from '@/lib/types';
 import TransferBetweenEnvelopes from './TransferBetweenEnvelopes';
 import AllocateIncome from './AllocateIncome';
+import { FeatureTeaser } from '@/components/FeatureTeaser';
 
 export default function MoneyMovementPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -60,6 +61,11 @@ export default function MoneyMovementPage() {
 
   return (
     <div className="space-y-6">
+      <FeatureTeaser
+        storageKey="income-buffer"
+        featureKey="income_buffer"
+        message="Tip: Income Buffer helps smooth irregular paychecks. Explore in Settings → Features."
+      />
 
       <Tabs defaultValue="allocate" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 max-w-md">

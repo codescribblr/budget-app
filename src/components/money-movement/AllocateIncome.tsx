@@ -347,6 +347,14 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
         </div>
       </div>
 
+      {availableToAllocate <= 0 && envelopeCategories.length > 0 && (
+        <Alert>
+          <AlertDescription>
+            Add income or update account balances on the dashboard, then come back to allocate to your categories.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {smartAllocationEnabled && (
           <Button

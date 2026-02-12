@@ -521,6 +521,9 @@ export function FirstLoginWizard() {
                     <li>Import transactions from your bank</li>
                     <li>Customize your categories</li>
                   </ul>
+                  <p className="text-sm mt-2 text-muted-foreground">
+                    Want more? Explore and enable optional features anytime in <strong>Settings → Features</strong>.
+                  </p>
                 </Callout>
               </div>
             </WizardStep>

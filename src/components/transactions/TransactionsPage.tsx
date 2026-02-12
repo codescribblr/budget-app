@@ -40,6 +40,7 @@ import type { TransactionWithSplits, Category, MerchantGroup, Tag, Account, Cred
 import TransactionList from './TransactionList';
 import AddTransactionDialog from './AddTransactionDialog';
 import EditTransactionDialog from './EditTransactionDialog';
+import { FeatureTeaser } from '@/components/FeatureTeaser';
 import { format } from 'date-fns';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import { useFeature } from '@/contexts/FeatureContext';
@@ -708,6 +709,11 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-6">
+      <FeatureTeaser
+        storageKey="recurring-transactions"
+        featureKey="recurring_transactions"
+        message="Recurring Transactions can track subscriptions and bills. See Settings → Features."
+      />
       <div className="flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
@@ -1080,12 +1086,31 @@ export default function TransactionsPage() {
             </p>
           )}
 
+          {totalTransactions === 0 && !tableLoading && !loading && !debouncedSearchQuery && !hasFilters && (
+            <Card className="py-12">
+              <CardContent className="flex flex-col items-center justify-center gap-4 text-center">
+                <p className="text-muted-foreground">
+                  No transactions yet. Add your first transaction or import from your bank to get started.
+                </p>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  <Button onClick={() => setIsAddDialogOpen(true)}>
+                    Add transaction
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link href="/import">Import from CSV</Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="relative">
             {tableLoading && (
               <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
                 <LoadingSpinner />
               </div>
             )}
+            {(totalTransactions > 0 || debouncedSearchQuery || hasFilters) && (
             <TransactionList
               transactions={paginatedTransactions}
               categories={categories}
@@ -1094,6 +1119,7 @@ export default function TransactionsPage() {
               sortDirection={sortDirection}
               onSort={handleSort}
             />
+            )}
           </div>
 
           {/* Pagination Controls */}

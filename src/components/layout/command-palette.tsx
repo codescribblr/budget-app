@@ -38,7 +38,9 @@ import {
   Bell,
   Palmtree,
 } from "lucide-react"
-import { useFeature } from "@/contexts/FeatureContext"
+import { useFeatures } from "@/contexts/FeatureContext"
+import { shouldShowNavItem } from "@/lib/feature-flags"
+import { FEATURE_KEYS, type FeatureName } from "@/lib/feature-flags"
 
 import {
   CommandDialog,
@@ -88,6 +90,7 @@ function useDebounce<T extends (...args: any[]) => any>(
 }
 
 const navigationItems = [
+  { label: "Explore features", path: "/settings", icon: Sparkles, keywords: "features enable optional premium discover" },
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Budgets", path: "/categories", icon: Mail },
   { label: "Transactions", path: "/transactions", icon: Receipt },
@@ -98,7 +101,7 @@ const navigationItems = [
   { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureKey: "income_buffer" },
   { label: "Cash Accounts", path: "/accounts", icon: Banknote },
   { label: "Credit Cards", path: "/credit-cards", icon: CreditCardIcon },
-  { label: "Loans", path: "/loans", icon: Landmark },
+  { label: "Loans", path: "/loans", icon: Landmark, featureKey: "loans" },
   { label: "Non-cash Assets", path: "/non-cash-assets", icon: TrendingUp, featureKey: "non_cash_assets" },
   { label: "Pending Checks", path: "/pending-checks", icon: FileText },
   { label: "Reports", path: "/reports", icon: FileText },
@@ -129,15 +132,16 @@ export function CommandPalette() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [transactionsLoading, setTransactionsLoading] = React.useState(false)
   const router = useRouter()
-  const incomeBufferEnabled = useFeature('income_buffer')
-  const goalsEnabled = useFeature('goals')
-  const aiChatEnabled = useFeature('ai_chat')
-  const advancedReportingEnabled = useFeature('advanced_reporting')
-  const tagsEnabled = useFeature('tags')
-  const recurringTransactionsEnabled = useFeature('recurring_transactions')
-  const automaticImportsEnabled = useFeature('automatic_imports')
-  const retirementPlanningEnabled = useFeature('retirement_planning')
-  const nonCashAssetsEnabled = useFeature('non_cash_assets')
+  const { isFeatureEnabled } = useFeatures()
+  const featureFlags = React.useMemo(
+    () =>
+      Object.fromEntries(
+        FEATURE_KEYS.map((k) => [k, isFeatureEnabled(k as FeatureName)])
+      ) as Partial<Record<FeatureName, boolean>>,
+    [isFeatureEnabled]
+  )
+  const automaticImportsEnabled = isFeatureEnabled('automatic_imports' as FeatureName)
+  const tagsEnabled = isFeatureEnabled('tags' as FeatureName)
   const scrollTimeoutsRef = React.useRef<NodeJS.Timeout[]>([])
 
   React.useEffect(() => {
@@ -265,38 +269,12 @@ export function CommandPalette() {
           </CommandEmpty>
           <CommandGroup heading="Navigation">
             {navigationItems
-              .filter((item) => {
-                // If item has a featureKey, check if feature is enabled
-                if ('featureKey' in item && item.featureKey) {
-                  const featureKey = item.featureKey as string
-                  switch (featureKey) {
-                    case 'income_buffer':
-                      return incomeBufferEnabled
-                    case 'goals':
-                      return goalsEnabled
-                    case 'ai_chat':
-                      return aiChatEnabled
-                    case 'advanced_reporting':
-                      return advancedReportingEnabled
-                    case 'tags':
-                      return tagsEnabled
-                    case 'recurring_transactions':
-                      return recurringTransactionsEnabled
-                    case 'retirement_planning':
-                      return retirementPlanningEnabled
-                    case 'non_cash_assets':
-                      return nonCashAssetsEnabled
-                    default:
-                      return true
-                  }
-                }
-                // Legacy support for featureFlag
-                if ('featureFlag' in item && item.featureFlag) {
-                  return item.featureFlag === 'income_buffer' && incomeBufferEnabled
-                }
-                // No feature requirement, show item
-                return true
-              })
+              .filter((item) =>
+                shouldShowNavItem(
+                  'featureKey' in item ? { featureKey: item.featureKey } : {},
+                  featureFlags
+                )
+              )
               .map((item) => {
                 const Icon = item.icon
                 return (

@@ -51,8 +51,10 @@ import {
 } from "@/components/ui/collapsible"
 import { UserMenu } from "@/components/layout/user-menu"
 import { AccountSwitcher } from "@/components/layout/account-switcher"
-import { useFeature } from "@/contexts/FeatureContext"
+import { useFeatures } from "@/contexts/FeatureContext"
 import { useSubscription } from "@/contexts/SubscriptionContext"
+import { shouldShowNavItem } from "@/lib/feature-flags"
+import { FEATURE_KEYS, type FeatureName } from "@/lib/feature-flags"
 import { cn } from "@/lib/utils"
 
 const navigationSections = [
@@ -76,7 +78,7 @@ const navigationSections = [
     items: [
       { label: "Cash Accounts", path: "/accounts", icon: Banknote },
       { label: "Credit Cards", path: "/credit-cards", icon: CreditCard },
-      { label: "Loans", path: "/loans", icon: Landmark },
+      { label: "Loans", path: "/loans", icon: Landmark, featureKey: "loans" },
       { label: "Non-cash Assets", path: "/non-cash-assets", icon: TrendingUp, featureKey: "non_cash_assets" },
       { label: "Pending Checks", path: "/pending-checks", icon: FileText },
     ],
@@ -128,14 +130,14 @@ export function AppSidebar() {
   const router = useRouter()
   const { state, isMobile, setOpenMobile } = useSidebar()
   const { isPremium } = useSubscription()
-  const incomeBufferEnabled = useFeature('income_buffer')
-  const goalsEnabled = useFeature('goals')
-  const aiChatEnabled = useFeature('ai_chat')
-  const advancedReportingEnabled = useFeature('advanced_reporting')
-  const tagsEnabled = useFeature('tags')
-  const recurringTransactionsEnabled = useFeature('recurring_transactions')
-  const retirementPlanningEnabled = useFeature('retirement_planning')
-  const nonCashAssetsEnabled = useFeature('non_cash_assets')
+  const { isFeatureEnabled } = useFeatures()
+  const featureFlags = React.useMemo(
+    () =>
+      Object.fromEntries(
+        FEATURE_KEYS.map((k) => [k, isFeatureEnabled(k as FeatureName)])
+      ) as Partial<Record<FeatureName, boolean>>,
+    [isFeatureEnabled]
+  )
   const [openWizards, setOpenWizards] = React.useState(false)
   const [openAssetsLiabilities, setOpenAssetsLiabilities] = React.useState(false)
 
@@ -229,38 +231,17 @@ export function AppSidebar() {
                         <SidebarGroupContent>
                           <SidebarMenu>
                         {section.items
-                          .filter((item) => {
-                    // If item has a featureKey, check if feature is enabled
-                    if ('featureKey' in item && item.featureKey) {
-                      const featureKey = item.featureKey as string
-                      switch (featureKey) {
-                        case 'income_buffer':
-                          return incomeBufferEnabled
-                        case 'goals':
-                          return goalsEnabled
-                        case 'ai_chat':
-                          return aiChatEnabled
-                        case 'advanced_reporting':
-                          return advancedReportingEnabled
-                        case 'tags':
-                          return tagsEnabled
-                        case 'recurring_transactions':
-                          return recurringTransactionsEnabled
-                        case 'retirement_planning':
-                          return retirementPlanningEnabled
-                        case 'non_cash_assets':
-                          return nonCashAssetsEnabled
-                        default:
-                          return true
-                      }
-                    }
-                    // Legacy support for featureFlag
-                    if ('featureFlag' in item && item.featureFlag) {
-                      return item.featureFlag === 'income_buffer' && incomeBufferEnabled
-                    }
-                    // No feature requirement, show item
-                    return true
-                  })
+                          .filter((item) =>
+                            shouldShowNavItem(
+                              'featureKey' in item || 'featureFlag' in item
+                                ? {
+                                    featureKey: 'featureKey' in item ? (item.featureKey as string | undefined) : undefined,
+                                    featureFlag: 'featureFlag' in item ? (item.featureFlag as string | undefined) : undefined,
+                                  }
+                                : {},
+                              featureFlags
+                            )
+                          )
                   .map((item) => {
                     const Icon = item.icon
                     const active = isActive(item.path)
@@ -288,28 +269,14 @@ export function AppSidebar() {
                             <CollapsibleContent>
                               <SidebarMenuSub>
                                 {(('subItems' in item && Array.isArray(item.subItems) && item.subItems) ? item.subItems : [])
-                                  .filter((subItem) => {
-                                    // If subItem has a featureKey, check if feature is enabled
-                                    if ('featureKey' in subItem && subItem.featureKey) {
-                                      const featureKey = subItem.featureKey as string;
-                                      switch (featureKey) {
-                                        case 'income_buffer':
-                                          return incomeBufferEnabled;
-                                        case 'goals':
-                                          return goalsEnabled;
-                                        case 'ai_chat':
-                                          return aiChatEnabled;
-                                        case 'advanced_reporting':
-                                          return advancedReportingEnabled;
-                                        case 'tags':
-                                          return tagsEnabled;
-                                        default:
-                                          return true;
-                                      }
-                                    }
-                                    // No feature requirement, show item
-                                    return true;
-                                  })
+                                  .filter((subItem) =>
+                                    shouldShowNavItem(
+                                      'featureKey' in subItem
+                                        ? { featureKey: subItem.featureKey }
+                                        : {},
+                                      featureFlags
+                                    )
+                                  )
                                   .map((subItem) => {
                                     const subActive = isActive(subItem.path);
                                     return (
@@ -355,38 +322,17 @@ export function AppSidebar() {
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {section.items
-                        .filter((item) => {
-                          // If item has a featureKey, check if feature is enabled
-                          if ('featureKey' in item && item.featureKey) {
-                            const featureKey = item.featureKey as string
-                            switch (featureKey) {
-                              case 'income_buffer':
-                                return incomeBufferEnabled
-                              case 'goals':
-                                return goalsEnabled
-                              case 'ai_chat':
-                                return aiChatEnabled
-                              case 'advanced_reporting':
-                                return advancedReportingEnabled
-                              case 'tags':
-                                return tagsEnabled
-                              case 'recurring_transactions':
-                                return recurringTransactionsEnabled
-                              case 'retirement_planning':
-                                return retirementPlanningEnabled
-                              case 'non_cash_assets':
-                                return nonCashAssetsEnabled
-                              default:
-                                return true
-                            }
-                          }
-                          // Legacy support for featureFlag
-                          if ('featureFlag' in item && item.featureFlag) {
-                            return item.featureFlag === 'income_buffer' && incomeBufferEnabled
-                          }
-                          // No feature requirement, show item
-                          return true
-                        })
+                        .filter((item) =>
+                          shouldShowNavItem(
+                            'featureKey' in item || 'featureFlag' in item
+                              ? {
+                                  featureKey: 'featureKey' in item ? (item.featureKey as string | undefined) : undefined,
+                                  featureFlag: 'featureFlag' in item ? (item.featureFlag as string | undefined) : undefined,
+                                }
+                              : {},
+                            featureFlags
+                          )
+                        )
                         .map((item) => {
                           const Icon = item.icon
                           const active = isActive(item.path)
@@ -414,28 +360,14 @@ export function AppSidebar() {
                                   <CollapsibleContent>
                                     <SidebarMenuSub>
                                       {(('subItems' in item && Array.isArray(item.subItems) && item.subItems) ? item.subItems : [])
-                                        .filter((subItem) => {
-                                          // If subItem has a featureKey, check if feature is enabled
-                                          if ('featureKey' in subItem && subItem.featureKey) {
-                                            const featureKey = subItem.featureKey as string;
-                                            switch (featureKey) {
-                                              case 'income_buffer':
-                                                return incomeBufferEnabled;
-                                              case 'goals':
-                                                return goalsEnabled;
-                                              case 'ai_chat':
-                                                return aiChatEnabled;
-                                              case 'advanced_reporting':
-                                                return advancedReportingEnabled;
-                                              case 'tags':
-                                                return tagsEnabled;
-                                              default:
-                                                return true;
-                                            }
-                                          }
-                                          // No feature requirement, show item
-                                          return true;
-                                        })
+                                        .filter((subItem) =>
+                                          shouldShowNavItem(
+                                            'featureKey' in subItem
+                                              ? { featureKey: subItem.featureKey }
+                                              : {},
+                                            featureFlags
+                                          )
+                                        )
                                         .map((subItem) => {
                                           const subActive = isActive(subItem.path);
                                           return (
@@ -479,6 +411,15 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={() => handleNavigation("/settings")}
+              tooltip="Explore and enable optional features"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>Explore features</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <UserMenu />
           </SidebarMenuItem>

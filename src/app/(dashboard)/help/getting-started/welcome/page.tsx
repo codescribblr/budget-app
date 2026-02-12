@@ -133,6 +133,10 @@ export default function WelcomePage() {
           <li><strong>Reports:</strong> Analyze your spending patterns and trends</li>
         </ul>
 
+        <p className="text-muted-foreground">
+          Curious what else the app can do? Explore and enable optional features (including Premium) under <Link href="/settings" className="text-primary hover:underline font-medium">Settings → Features</Link>.
+        </p>
+
         <h2>Next Steps</h2>
         <p>
           Ready to get started? Here's what we recommend:

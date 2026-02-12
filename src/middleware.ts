@@ -59,7 +59,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected routes - require authentication
-  const protectedPaths = ['/dashboard', '/categories', '/accounts', '/credit-cards', '/transactions', '/reports', '/import', '/goals', '/loans', '/settings', '/help', '/income', '/income-buffer', '/money-movement', '/category-rules', '/non-cash-assets', '/pending-checks']
+  const protectedPaths = ['/dashboard', '/categories', '/accounts', '/credit-cards', '/transactions', '/reports', '/import', '/imports', '/goals', '/loans', '/settings', '/help', '/income', '/income-buffer', '/money-movement', '/category-rules', '/non-cash-assets', '/pending-checks']
   const isProtectedPath = protectedPaths.some(path =>
     request.nextUrl.pathname === path || request.nextUrl.pathname.startsWith(path + '/')
   )

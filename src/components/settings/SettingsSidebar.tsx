@@ -24,7 +24,7 @@ const settingsNavItems = [
     title: 'Features',
     href: '/settings',
     icon: Sparkles,
-    description: 'Manage optional features',
+    description: 'Explore and enable optional features',
   },
   {
     title: 'Subscription',
