@@ -10,6 +10,7 @@ export interface AdminUserDetail {
   createdAt: string;
   emailConfirmedAt: string | null;
   lastSignInAt: string | null;
+  lastActivityAt: string | null;
   isAdmin: boolean;
   birthYear: number | null;
   wizardCompleted: boolean;
@@ -159,12 +160,24 @@ export async function GET(
       totalRequests += 1;
     });
 
+    const { data: activityRows } = await serviceSupabase.rpc('get_user_last_activity', {
+      user_ids: [userId],
+    });
+    const appActivityAt =
+      activityRows?.length > 0 ? activityRows[0].last_activity ?? null : null;
+    const signInAt = u.last_sign_in_at ?? null;
+    const lastActivityAt =
+      appActivityAt && signInAt
+        ? (appActivityAt >= signInAt ? appActivityAt : signInAt)
+        : appActivityAt ?? signInAt;
+
     const detail: AdminUserDetail = {
       id: u.id,
       email: u.email ?? null,
       createdAt: u.created_at,
       emailConfirmedAt: u.email_confirmed_at ?? null,
       lastSignInAt: u.last_sign_in_at ?? null,
+      lastActivityAt,
       isAdmin: profile?.is_admin ?? false,
       birthYear: profile?.birth_year ?? null,
       wizardCompleted,

@@ -10,6 +10,7 @@ export interface AdminUserListItem {
   createdAt: string;
   verified: boolean;
   lastSignInAt: string | null;
+  lastActivityAt: string | null; // latest of settings/transactions/categories/accounts for this user
   isAdmin: boolean;
   wizardCompleted: boolean;
   isPremium: boolean;
@@ -17,7 +18,7 @@ export interface AdminUserListItem {
   trialEnd: string | null;
   subscriptionEnd: string | null;
   isTrialing: boolean;
-  active: boolean; // recent login (e.g. within 30 days)
+  active: boolean; // recent activity (e.g. within 30 days)
 }
 
 const ACTIVE_DAYS = 30;
@@ -134,6 +135,18 @@ export async function GET(request: NextRequest) {
     cutoff.setDate(cutoff.getDate() - ACTIVE_DAYS);
     const cutoffIso = cutoff.toISOString();
 
+    // Last activity from app usage (settings, transactions, categories, budget_accounts)
+    let lastActivityByUser = new Map<string, string>();
+    const { data: activityRows, error: activityError } = await serviceSupabase.rpc(
+      'get_user_last_activity',
+      { user_ids: userIds }
+    );
+    if (!activityError && activityRows?.length) {
+      lastActivityByUser = new Map(
+        activityRows.map((r: { user_id: string; last_activity: string }) => [r.user_id, r.last_activity])
+      );
+    }
+
     const list: AdminUserListItem[] = users.map((u) => {
       const profile = profileMap.get(u.id);
       const sub = userSubMap.get(u.id);
@@ -141,6 +154,13 @@ export async function GET(request: NextRequest) {
         sub && ['active', 'trialing'].includes(sub.status) && sub.tier === 'premium'
       );
       const isTrialing = sub?.status === 'trialing' || false;
+      const appActivityAt = lastActivityByUser.get(u.id) ?? null;
+      const signInAt = u.last_sign_in_at ?? null;
+      const lastActivityAt =
+        appActivityAt && signInAt
+          ? (appActivityAt >= signInAt ? appActivityAt : signInAt)
+          : appActivityAt ?? signInAt;
+      const activeAt = lastActivityAt ?? null;
 
       return {
         id: u.id,
@@ -148,6 +168,7 @@ export async function GET(request: NextRequest) {
         createdAt: u.created_at,
         verified: !!u.email_confirmed_at,
         lastSignInAt: u.last_sign_in_at ?? null,
+        lastActivityAt,
         isAdmin: profile?.is_admin ?? false,
         wizardCompleted: wizardUserIds.has(u.id),
         isPremium,
@@ -155,7 +176,7 @@ export async function GET(request: NextRequest) {
         trialEnd: sub?.trial_end ?? null,
         subscriptionEnd: sub?.current_period_end ?? null,
         isTrialing,
-        active: !!(u.last_sign_in_at && u.last_sign_in_at >= cutoffIso),
+        active: !!(activeAt && activeAt >= cutoffIso),
       };
     });
 

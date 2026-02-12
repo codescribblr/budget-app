@@ -104,7 +104,7 @@ export function AdminUsersList() {
                       <TableHead className="text-center">Trial</TableHead>
                       <TableHead>Subscription ends</TableHead>
                       <TableHead className="text-center">Active</TableHead>
-                      <TableHead>Last sign in</TableHead>
+                      <TableHead>Last activity</TableHead>
                       <TableHead className="w-10" />
                     </TableRow>
                   </TableHeader>
@@ -179,8 +179,8 @@ export function AdminUsersList() {
                             )}
                           </TableCell>
                           <TableCell className="text-muted-foreground text-sm">
-                            {user.lastSignInAt
-                              ? formatDistanceToNow(new Date(user.lastSignInAt), { addSuffix: true })
+                            {user.lastActivityAt
+                              ? formatDistanceToNow(new Date(user.lastActivityAt), { addSuffix: true })
                               : 'Never'}
                           </TableCell>
                           <TableCell>

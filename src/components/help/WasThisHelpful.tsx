@@ -28,20 +28,23 @@ export function WasThisHelpful({ articlePath }: WasThisHelpfulProps) {
 
   const submitFeedback = async (isHelpful: boolean, text: string) => {
     try {
-      // TODO: Implement API call to save feedback
-      // await fetch('/api/help/feedback', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     articlePath,
-      //     wasHelpful: isHelpful,
-      //     feedbackText: text,
-      //   }),
-      // });
-      
+      const res = await fetch('/api/help/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          articlePath,
+          wasHelpful: isHelpful,
+          feedbackText: text,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to submit');
+      }
       setSubmitted(true);
     } catch (error) {
       console.error('Error submitting feedback:', error);
+      setSubmitted(true); // Still show thank you so UX isn't broken
     }
   };
 

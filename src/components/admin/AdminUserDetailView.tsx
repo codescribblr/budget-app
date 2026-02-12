@@ -139,10 +139,10 @@ export function AdminUserDetailView({ userId }: { userId: string }) {
             <div className="flex items-center gap-2 rounded-lg border p-3">
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <div>
-                <p className="text-xs text-muted-foreground">Last sign in</p>
+                <p className="text-xs text-muted-foreground">Last activity</p>
                 <p className="font-medium">
-                  {user.lastSignInAt
-                    ? format(new Date(user.lastSignInAt), 'MMM d, yyyy HH:mm')
+                  {user.lastActivityAt
+                    ? format(new Date(user.lastActivityAt), 'MMM d, yyyy HH:mm')
                     : 'Never'}
                 </p>
               </div>

@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Link2,
   Users,
+  BookOpen,
 } from "lucide-react"
 
 import {
@@ -33,6 +34,7 @@ import { cn } from "@/lib/utils"
 const adminNavigationItems = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
   { label: "Users", path: "/admin/users", icon: Users },
+  { label: "Help Feedback", path: "/admin/help-feedback", icon: BookOpen },
   { label: "Notifications", path: "/admin/notifications", icon: Bell },
   { label: "Settings", path: "/admin/settings", icon: Settings },
 ]

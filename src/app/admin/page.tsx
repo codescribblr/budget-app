@@ -1,6 +1,6 @@
 import { isAdmin } from "@/lib/admin"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Store, Settings, Shield, Bell, TestTube, MessageSquare, Users } from "lucide-react"
+import { Store, Settings, Shield, Bell, TestTube, MessageSquare, Users, BookOpen } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
@@ -33,6 +33,13 @@ export default async function AdminDashboard() {
       icon: MessageSquare,
       href: "/admin/merchant-recommendations",
       color: "text-orange-600",
+    },
+    {
+      title: "Help Feedback",
+      description: "View \"Was this helpful?\" ratings and comments from help center articles",
+      icon: BookOpen,
+      href: "/admin/help-feedback",
+      color: "text-teal-600",
     },
     {
       title: "Notifications",
