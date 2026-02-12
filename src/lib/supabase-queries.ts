@@ -652,7 +652,8 @@ export async function getAllNonCashAssets(): Promise<NonCashAsset[]> {
     .from('non_cash_assets')
     .select('*')
     .eq('account_id', accountId)
-    .order('sort_order', { ascending: true });
+    .order('asset_type', { ascending: true })
+    .order('name', { ascending: true });
 
   if (error) throw error;
   return (assets || []) as NonCashAsset[];
