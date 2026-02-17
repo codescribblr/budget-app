@@ -305,19 +305,20 @@ function determineTransactionTypeFromColumn(
 
 /**
  * Parse amount string to number
+ * Handles $(123.45) and $1,234.56 by removing $ and spaces before parenthesis check.
  */
 function parseAmount(amountStr: string): number {
   if (!amountStr) return 0;
 
   let cleaned = amountStr.trim();
 
-  // Handle negative amounts in parentheses: (123.45)
+  // Remove currency symbols and spaces first so " $(3.17)" and "$(4,838.54)" become "(3.17)" / "(4838.54)"
+  cleaned = cleaned.replace(/[$,\s]/g, '');
+
+  // Handle negative amounts in parentheses: (123.45) or (1,234.56) after comma removal
   if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
     cleaned = '-' + cleaned.slice(1, -1);
   }
-
-  // Remove currency symbols and spaces
-  cleaned = cleaned.replace(/[$,\s]/g, '');
 
   // Handle European format
   if (/^\d{1,3}(\.\d{3})+(,\d{2})?$/.test(cleaned)) {

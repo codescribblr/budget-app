@@ -459,20 +459,20 @@ function parseRowWithMapping(
 
 /**
  * Parse amount string to number
- * Handles various formats: $1,234.56, (123.45), -123.45, 1.234,56 (European)
+ * Handles various formats: $1,234.56, (123.45), $(123.45), -123.45, 1.234,56 (European)
  */
 function parseAmount(amountStr: string): number {
   if (!amountStr) return 0;
 
   let cleaned = amountStr.trim();
 
-  // Handle negative amounts in parentheses: (123.45)
+  // Remove currency symbols and spaces first so " $(3.17)" and "$(4,838.54)" become "(3.17)" / "(4838.54)"
+  cleaned = cleaned.replace(/[$,\s]/g, '');
+
+  // Handle negative amounts in parentheses: (123.45) or (1,234.56) after comma removal
   if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
     cleaned = '-' + cleaned.slice(1, -1);
   }
-
-  // Remove currency symbols and spaces
-  cleaned = cleaned.replace(/[$,\s]/g, '');
 
   // Handle European format (comma as decimal separator)
   // Check if it looks like European format (has dots as thousands separators and comma as decimal)
