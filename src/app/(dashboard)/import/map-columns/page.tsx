@@ -216,6 +216,8 @@ export default function MapColumnsPage() {
   const [isProcessingRemap, setIsProcessingRemap] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [processingStage, setProcessingStage] = useState('');
+  const [targetAccountId, setTargetAccountId] = useState<number | null>(null);
+  const [targetCreditCardId, setTargetCreditCardId] = useState<number | null>(null);
 
   useEffect(() => {
     // Check permissions - redirect if read-only user
@@ -273,6 +275,8 @@ export default function MapColumnsPage() {
           setRemapBatchId(batchId);
           setCurrentTemplateId(templateId);
           setCurrentTemplateName(templateName);
+          setTargetAccountId(remapData.targetAccountId ?? null);
+          setTargetCreditCardId(remapData.targetCreditCardId ?? null);
           
           // Store in sessionStorage for template dialog
           sessionStorage.setItem('csvData', JSON.stringify(csvData));
@@ -283,6 +287,8 @@ export default function MapColumnsPage() {
           const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
           const csvDataStr = sessionStorage.getItem('csvData');
           fileNameStr = sessionStorage.getItem('csvFileName') || '';
+          const targetAccountIdStr = sessionStorage.getItem('csvTargetAccountId') || '';
+          const targetCreditCardIdStr = sessionStorage.getItem('csvTargetCreditCardId') || '';
 
           if (!csvAnalysisStr || !csvDataStr) {
             router.push('/import');
@@ -291,6 +297,12 @@ export default function MapColumnsPage() {
 
           analysisData = JSON.parse(csvAnalysisStr);
           csvData = JSON.parse(csvDataStr);
+
+          // Target account for template save and queue (from sessionStorage for normal flow)
+          const tid = targetAccountIdStr ? parseInt(targetAccountIdStr, 10) : null;
+          const cid = targetCreditCardIdStr ? parseInt(targetCreditCardIdStr, 10) : null;
+          setTargetAccountId(isNaN(tid as number) ? null : tid);
+          setTargetCreditCardId(isNaN(cid as number) ? null : cid);
         }
 
         // Validate data structure
@@ -689,6 +701,8 @@ export default function MapColumnsPage() {
             fingerprint: analysis.fingerprint,
             columnCount: analysis.columns.length,
             mapping,
+            targetAccountId: targetAccountId ?? undefined,
+            targetCreditCardId: targetCreditCardId ?? undefined,
           });
           savedTemplateId = savedTemplate.id;
           mappingName = savedTemplate.templateName || templateName || 'Saved Template';
@@ -712,6 +726,8 @@ export default function MapColumnsPage() {
         body: JSON.stringify({
           transactions, // Raw parsed transactions, NOT processed
           fileName,
+          targetAccountId: targetAccountId ?? undefined,
+          targetCreditCardId: targetCreditCardId ?? undefined,
           csvData, // csvData is already parsed from sessionStorage above
           csvAnalysis: analysis,
           csvFingerprint: analysis.fingerprint,

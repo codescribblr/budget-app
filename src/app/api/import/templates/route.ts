@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getActiveAccountId } from '@/lib/account-context';
 import type { CSVImportTemplate, ColumnMapping } from '@/lib/mapping-templates';
 
 /**
  * GET /api/import/templates
  * List all CSV import templates for the authenticated user
- * Query params: ?fingerprint=xxx to get a specific template
+ * Query params:
+ *   - fingerprint=xxx: Get specific template (account-aware lookup)
+ *   - targetAccountId=N: Target bank account for lookup (optional)
+ *   - targetCreditCardId=M: Target credit card for lookup (optional)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -16,32 +20,76 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json({ error: 'No active account' }, { status: 400 });
+    }
+
     const fingerprint = request.nextUrl.searchParams.get('fingerprint');
+    const targetAccountIdParam = request.nextUrl.searchParams.get('targetAccountId');
+    const targetCreditCardIdParam = request.nextUrl.searchParams.get('targetCreditCardId');
+
+    const targetAccountId = targetAccountIdParam ? parseInt(targetAccountIdParam, 10) : null;
+    const targetCreditCardId = targetCreditCardIdParam ? parseInt(targetCreditCardIdParam, 10) : null;
 
     if (fingerprint) {
-      // Get specific template by fingerprint
-      const { data: template, error } = await supabase
-        .from('csv_import_templates')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('fingerprint', fingerprint)
-        .single();
+      // Account-aware lookup: try (fingerprint, target_account, target_credit_card) first, then (fingerprint, null, null)
+      let template: any = null;
+      let error: any = null;
 
-      if (error) {
-        if (error.code === 'PGRST116') {
-          // Not found
-          return NextResponse.json(null, { status: 404 });
-        }
+      // First try account-specific template if target is specified
+      if (targetAccountId !== null && !isNaN(targetAccountId)) {
+        const result = await supabase
+          .from('csv_import_templates')
+          .select('*')
+          .eq('account_id', accountId)
+          .eq('fingerprint', fingerprint)
+          .eq('target_account_id', targetAccountId)
+          .is('target_credit_card_id', null)
+          .single();
+        template = result.data;
+        error = result.error;
+      } else if (targetCreditCardId !== null && !isNaN(targetCreditCardId)) {
+        const result = await supabase
+          .from('csv_import_templates')
+          .select('*')
+          .eq('account_id', accountId)
+          .eq('fingerprint', fingerprint)
+          .is('target_account_id', null)
+          .eq('target_credit_card_id', targetCreditCardId)
+          .single();
+        template = result.data;
+        error = result.error;
+      }
+
+      // Fallback to format-only template (both targets null) if account-specific not found
+      if (!template && (error?.code === 'PGRST116' || !template)) {
+        const result = await supabase
+          .from('csv_import_templates')
+          .select('*')
+          .eq('account_id', accountId)
+          .eq('fingerprint', fingerprint)
+          .is('target_account_id', null)
+          .is('target_credit_card_id', null)
+          .single();
+        template = result.data;
+        error = result.error;
+      }
+
+      if (error && error.code !== 'PGRST116') {
         throw error;
+      }
+      if (!template) {
+        return NextResponse.json(null, { status: 404 });
       }
 
       return NextResponse.json(template);
     } else {
-      // List all templates
+      // List all templates for this budget account
       const { data: templates, error } = await supabase
         .from('csv_import_templates')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('account_id', accountId)
         .order('last_used', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
 
@@ -75,17 +123,36 @@ export async function POST(request: NextRequest) {
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
 
-    const body = await request.json() as Omit<CSVImportTemplate, 'id' | 'createdAt'>;
-    const { mapping, ...templateData } = body;
+    const accountId = await getActiveAccountId();
+    if (!accountId) {
+      return NextResponse.json({ error: 'No active account' }, { status: 400 });
+    }
+
+    const body = await request.json() as Omit<CSVImportTemplate, 'id' | 'createdAt'> & { targetAccountId?: number | null; targetCreditCardId?: number | null };
+    const { mapping, targetAccountId, targetCreditCardId, ...templateData } = body;
+
+    // Validate: at most one of targetAccountId or targetCreditCardId
+    if (targetAccountId != null && targetCreditCardId != null) {
+      return NextResponse.json(
+        { error: 'Cannot specify both targetAccountId and targetCreditCardId' },
+        { status: 400 }
+      );
+    }
+
+    const targetAccountIdVal = targetAccountId != null && !isNaN(Number(targetAccountId)) ? Number(targetAccountId) : null;
+    const targetCreditCardIdVal = targetCreditCardId != null && !isNaN(Number(targetCreditCardId)) ? Number(targetCreditCardId) : null;
 
     // Insert template with mapping data flattened
     const { data: template, error } = await supabase
       .from('csv_import_templates')
       .insert({
         user_id: user.id,
+        account_id: accountId,
         template_name: templateData.templateName,
         fingerprint: templateData.fingerprint,
         column_count: templateData.columnCount,
+        target_account_id: targetAccountIdVal,
+        target_credit_card_id: targetCreditCardIdVal,
         date_column: mapping.dateColumn,
         amount_column: mapping.amountColumn,
         description_column: mapping.descriptionColumn,
@@ -106,8 +173,8 @@ export async function POST(request: NextRequest) {
     if (error) {
       // Handle unique constraint violation (template already exists)
       if (error.code === '23505') {
-        // Update existing template instead
-        const { data: updated, error: updateError } = await supabase
+        // Update existing template instead (match by unique key)
+        let query = supabase
           .from('csv_import_templates')
           .update({
             template_name: templateData.templateName,
@@ -123,10 +190,18 @@ export async function POST(request: NextRequest) {
             skip_rows: mapping.skipRows || 0,
             last_used: new Date().toISOString(),
           })
-          .eq('user_id', user.id)
-          .eq('fingerprint', templateData.fingerprint)
-          .select()
-          .single();
+          .eq('account_id', accountId)
+          .eq('fingerprint', templateData.fingerprint);
+
+        if (targetAccountIdVal !== null) {
+          query = query.eq('target_account_id', targetAccountIdVal).is('target_credit_card_id', null);
+        } else if (targetCreditCardIdVal !== null) {
+          query = query.is('target_account_id', null).eq('target_credit_card_id', targetCreditCardIdVal);
+        } else {
+          query = query.is('target_account_id', null).is('target_credit_card_id', null);
+        }
+
+        const { data: updated, error: updateError } = await query.select().single();
 
         if (updateError) throw updateError;
         return NextResponse.json(updated, { status: 200 });

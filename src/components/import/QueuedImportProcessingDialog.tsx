@@ -11,7 +11,6 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import { processTransactions } from '@/lib/csv-parser-helpers';
@@ -47,8 +46,7 @@ export default function QueuedImportProcessingDialog({
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [defaultAccountId, setDefaultAccountId] = useState<number | null>(null);
-  const [defaultCreditCardId, setDefaultCreditCardId] = useState<number | null>(null);
+  const [linkedAccountName, setLinkedAccountName] = useState<string | null>(null);
   const [isHistorical, setIsHistorical] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
@@ -81,6 +79,24 @@ export default function QueuedImportProcessingDialog({
     }
   }, [open, batchId]);
 
+  // Resolve linked account/card name when we have status and account lists
+  useEffect(() => {
+    if (!status) return;
+    if (status.defaultCreditCardId && creditCards.length > 0) {
+      const card = creditCards.find((c: CreditCard) => c.id === status.defaultCreditCardId);
+      setLinkedAccountName(card?.name ?? `Credit Card #${status.defaultCreditCardId}`);
+    } else if (status.defaultAccountId && accounts.length > 0) {
+      const acc = accounts.find((a: Account) => a.id === status.defaultAccountId);
+      setLinkedAccountName(acc?.name ?? `Account #${status.defaultAccountId}`);
+    } else if (status.defaultCreditCardId) {
+      setLinkedAccountName(`Credit Card #${status.defaultCreditCardId}`);
+    } else if (status.defaultAccountId) {
+      setLinkedAccountName(`Account #${status.defaultAccountId}`);
+    } else {
+      setLinkedAccountName(null);
+    }
+  }, [status, accounts, creditCards]);
+
   const fetchStatus = async (autoStartProcessing: boolean = true) => {
     if (!batchId) return;
     try {
@@ -91,8 +107,6 @@ export default function QueuedImportProcessingDialog({
       }
       const data = await response.json();
       setStatus(data);
-      setDefaultAccountId(data.defaultAccountId);
-      setDefaultCreditCardId(data.defaultCreditCardId);
       setIsHistorical(data.isHistorical || false);
       setLoading(false);
 
@@ -187,8 +201,8 @@ export default function QueuedImportProcessingDialog({
 
       const processedTransactions = await processTransactions(
         initialTransactions,
-        defaultAccountId || undefined,
-        defaultCreditCardId || undefined,
+        firstImport.target_account_id ?? undefined,
+        firstImport.target_credit_card_id ?? undefined,
         true, // Skip AI categorization - user can trigger it manually on review page
         updateProgress,
         undefined, // baseUrl
@@ -236,38 +250,17 @@ export default function QueuedImportProcessingDialog({
     }
   };
 
-  const handleAccountChange = (value: string) => {
-    if (value === 'none') {
-      setDefaultAccountId(null);
-      setDefaultCreditCardId(null);
-    } else if (value.startsWith('account-')) {
-      setDefaultAccountId(parseInt(value.replace('account-', '')));
-      setDefaultCreditCardId(null);
-    } else if (value.startsWith('card-')) {
-      setDefaultCreditCardId(parseInt(value.replace('card-', '')));
-      setDefaultAccountId(null);
-    }
-  };
-
-  const getAccountValue = (): string => {
-    if (defaultCreditCardId) return `card-${defaultCreditCardId}`;
-    if (defaultAccountId) return `account-${defaultAccountId}`;
-    return 'none';
-  };
-
   const handleContinue = async () => {
     if (!processingComplete || !batchId) return;
 
     setIsSubmitting(true);
     try {
-      // Update batch with default account and historical flag
+      // Update batch with historical flag only (target account was set at queue time)
       const updateResponse = await fetch(`/api/automatic-imports/queue/update-batch`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           batchId,
-          targetAccountId: defaultAccountId,
-          targetCreditCardId: defaultCreditCardId,
           isHistorical: isHistorical,
         }),
       });
@@ -431,39 +424,14 @@ export default function QueuedImportProcessingDialog({
                 </div>
               )}
 
-              {/* Default Account Selection */}
+              {/* Linked Account (read-only) and Historical flag */}
               {processingComplete && (
                 <div className="space-y-4 border-t pt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="default-account">Default Account</Label>
-                    <Select value={getAccountValue()} onValueChange={handleAccountChange}>
-                      <SelectTrigger id="default-account">
-                        <SelectValue placeholder="None" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {accounts.length > 0 && (
-                          <>
-                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Accounts</div>
-                            {accounts.map((account) => (
-                              <SelectItem key={account.id} value={`account-${account.id}`}>
-                                {account.name}
-                              </SelectItem>
-                            ))}
-                          </>
-                        )}
-                        {creditCards.length > 0 && (
-                          <>
-                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Credit Cards</div>
-                            {creditCards.map((card) => (
-                              <SelectItem key={card.id} value={`card-${card.id}`}>
-                                {card.name}
-                              </SelectItem>
-                            ))}
-                          </>
-                        )}
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-sm font-semibold">Linked to</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {linkedAccountName ?? 'No account (unassigned)'}
+                    </p>
                   </div>
 
                   <div className="flex items-center space-x-2">

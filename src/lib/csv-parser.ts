@@ -15,13 +15,23 @@ export { extractMerchant, generateTransactionHash };
  */
 export async function parseCSVFile(
   file: File,
-  options?: { skipTemplate?: boolean }
+  options?: {
+    skipTemplate?: boolean;
+    targetAccountId?: number | null;
+    targetCreditCardId?: number | null;
+  }
 ): Promise<{ transactions: ParsedTransaction[]; templateId?: number; fingerprint?: string; dateFormat?: string | null }> {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       complete: async (results) => {
         try {
-          const result = await processCSVData(results.data as string[][], file.name, options?.skipTemplate);
+          const result = await processCSVData(
+            results.data as string[][],
+            file.name,
+            options?.skipTemplate,
+            options?.targetAccountId,
+            options?.targetCreditCardId
+          );
           resolve(result);
         } catch (error) {
           reject(error);
@@ -166,7 +176,9 @@ function detectTransactionTypeColumn(
 async function processCSVData(
   data: string[][],
   fileName: string,
-  skipTemplate?: boolean
+  skipTemplate?: boolean,
+  targetAccountId?: number | null,
+  targetCreditCardId?: number | null
 ): Promise<{ transactions: ParsedTransaction[]; templateId?: number; fingerprint: string; dateFormat?: string | null }> {
   if (data.length === 0) {
     throw new Error('CSV file is empty');
@@ -175,13 +187,17 @@ async function processCSVData(
   // Analyze CSV structure
   const analysis = analyzeCSV(data);
 
-  // Check for saved template (unless skipping)
+  // Check for saved template (unless skipping) - use account-aware lookup
   let mapping: ColumnMapping | null = null;
   let templateId: number | undefined;
   
   if (!skipTemplate) {
     try {
-      const template = await loadTemplate(analysis.fingerprint);
+      const template = await loadTemplate(
+        analysis.fingerprint,
+        targetAccountId,
+        targetCreditCardId
+      );
       if (template) {
         mapping = template.mapping;
         templateId = template.id;

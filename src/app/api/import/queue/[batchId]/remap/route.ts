@@ -25,7 +25,7 @@ export async function GET(
     // Get all queued imports from batch to check for CSV data or API data
     const { data: queuedImports, error: fetchError } = await supabase
       .from('queued_imports')
-      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, original_data, transaction_date, description, amount, import_setup_id')
+      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, original_data, transaction_date, description, amount, import_setup_id, target_account_id, target_credit_card_id')
       .eq('account_id', accountId)
       .eq('source_batch_id', batchId)
       .limit(100); // Get enough to check for CSV data
@@ -139,6 +139,8 @@ export async function GET(
       currentTemplateId: currentTemplate?.id,
       currentTemplateName: currentTemplate?.name,
       currentMappingName: csvMappingName,
+      targetAccountId: firstImport?.target_account_id ?? null,
+      targetCreditCardId: firstImport?.target_credit_card_id ?? null,
     });
   } catch (error: any) {
     console.error('Error fetching remap data:', error);

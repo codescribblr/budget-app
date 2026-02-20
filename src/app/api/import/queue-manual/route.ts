@@ -51,9 +51,11 @@ export async function POST(request: Request) {
     // Generate batch ID from filename and timestamp
     const batchId = `manual-${Date.now()}-${fileName.replace(/[^a-zA-Z0-9]/g, '-')}`;
 
-    // Add filename to each transaction's originalData for manual uploads
-    const transactionsWithFilename = transactions.map(txn => ({
+    // Add filename and target account to each transaction
+    const transactionsWithMetadata = transactions.map(txn => ({
       ...txn,
+      account_id: txn.account_id ?? targetAccountId ?? undefined,
+      credit_card_id: txn.credit_card_id ?? targetCreditCardId ?? undefined,
       originalData: txn.originalData 
         ? (typeof txn.originalData === 'string' 
             ? JSON.stringify({ ...JSON.parse(txn.originalData), _uploadFileName: fileName })
@@ -68,25 +70,21 @@ export async function POST(request: Request) {
         const { createClient } = await import('@/lib/supabase/server');
         const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
+        const { getActiveAccountId } = await import('@/lib/account-context');
+        const accountId = await getActiveAccountId();
         
-        if (user) {
-          const { getActiveAccountId } = await import('@/lib/account-context');
-          const accountId = await getActiveAccountId();
+        if (user && accountId) {
+          const { data: template, error: templateError } = await supabase
+            .from('csv_import_templates')
+            .select('id')
+            .eq('id', csvMappingTemplateId)
+            .eq('account_id', accountId)
+            .single();
           
-          if (accountId) {
-            // Check if template exists and belongs to user
-            const { data: template, error: templateError } = await supabase
-              .from('csv_import_templates')
-              .select('id')
-              .eq('id', csvMappingTemplateId)
-              .eq('user_id', user.id)
-              .single();
-            
-            if (!templateError && template) {
-              validatedTemplateId = csvMappingTemplateId;
-            } else {
-              console.warn('Template ID provided but not found or not accessible:', csvMappingTemplateId);
-            }
+          if (!templateError && template) {
+            validatedTemplateId = csvMappingTemplateId;
+          } else {
+            console.warn('Template ID provided but not found or not accessible:', csvMappingTemplateId);
           }
         }
       } catch (err) {
@@ -107,7 +105,7 @@ export async function POST(request: Request) {
     // Otherwise, the batch-level isHistorical is used
     const queuedCount = await queueTransactions({
       importSetupId,
-      transactions: transactionsWithFilename as ParsedTransaction[],
+      transactions: transactionsWithMetadata as ParsedTransaction[],
       sourceBatchId: batchId,
       isHistorical,
       csvData,

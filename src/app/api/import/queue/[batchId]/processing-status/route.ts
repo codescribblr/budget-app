@@ -53,6 +53,9 @@ export async function GET(
       defaultAccountId: firstImport.target_account_id,
       defaultCreditCardId: firstImport.target_credit_card_id,
       isHistorical: firstImport.is_historical || false,
+      // Read-only display: target account/card is set at queue time, not editable
+      targetAccountId: firstImport.target_account_id,
+      targetCreditCardId: firstImport.target_credit_card_id,
     });
   } catch (error: any) {
     console.error('Error fetching processing status:', error);

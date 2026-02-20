@@ -259,6 +259,9 @@ export async function POST(
         // Create new template - use Supabase directly since we're server-side
         try {
           const fingerprint = csvAnalysis.fingerprint || firstQueuedImport.csv_fingerprint || '';
+          const targetAccountIdVal = firstQueuedImport.target_account_id ?? null;
+          const targetCreditCardIdVal = firstQueuedImport.target_credit_card_id ?? null;
+
           const { data: savedTemplate, error: insertError } = await supabase
             .from('csv_import_templates')
             .insert({
@@ -267,6 +270,8 @@ export async function POST(
               template_name: templateName || undefined,
               fingerprint: fingerprint,
               column_count: csvData[0]?.length || 0,
+              target_account_id: targetAccountIdVal,
+              target_credit_card_id: targetCreditCardIdVal,
               date_column: mapping.dateColumn,
               amount_column: mapping.amountColumn,
               description_column: mapping.descriptionColumn,
@@ -286,11 +291,10 @@ export async function POST(
           if (insertError) {
             // Handle unique constraint violation (template already exists)
             if (insertError.code === '23505') {
-              // Update existing template instead
-              const { data: updated, error: updateError } = await supabase
+              // Update existing template instead (match by unique: account_id, fingerprint, targets)
+              let conflictQuery = supabase
                 .from('csv_import_templates')
                 .update({
-                  account_id: accountId, // Ensure account_id is set
                   template_name: templateName,
                   date_column: mapping.dateColumn,
                   amount_column: mapping.amountColumn,
@@ -304,10 +308,18 @@ export async function POST(
                   skip_rows: mapping.skipRows || 0,
                   last_used: new Date().toISOString(),
                 })
-                .eq('user_id', user.id)
-                .eq('fingerprint', fingerprint)
-                .select('id, template_name')
-                .single();
+                .eq('account_id', accountId)
+                .eq('fingerprint', fingerprint);
+
+              if (targetAccountIdVal != null) {
+                conflictQuery = conflictQuery.eq('target_account_id', targetAccountIdVal).is('target_credit_card_id', null);
+              } else if (targetCreditCardIdVal != null) {
+                conflictQuery = conflictQuery.is('target_account_id', null).eq('target_credit_card_id', targetCreditCardIdVal);
+              } else {
+                conflictQuery = conflictQuery.is('target_account_id', null).is('target_credit_card_id', null);
+              }
+
+              const { data: updated, error: updateError } = await conflictQuery.select('id, template_name').single();
 
               if (updateError) {
                 throw updateError;

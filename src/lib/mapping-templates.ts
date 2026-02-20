@@ -24,6 +24,8 @@ export interface SaveTemplateInput {
   fingerprint: string;
   columnCount: number;
   mapping: ColumnMapping;
+  targetAccountId?: number | null;
+  targetCreditCardId?: number | null;
 }
 
 export interface CSVImportTemplate {
@@ -51,6 +53,8 @@ export async function saveTemplate(template: SaveTemplateInput): Promise<CSVImpo
       fingerprint: template.fingerprint,
       columnCount: template.columnCount,
       mapping: template.mapping,
+      targetAccountId: template.targetAccountId ?? null,
+      targetCreditCardId: template.targetCreditCardId ?? null,
     }),
   });
 
@@ -63,10 +67,18 @@ export async function saveTemplate(template: SaveTemplateInput): Promise<CSVImpo
 }
 
 /**
- * Load a template by fingerprint
+ * Load a template by fingerprint with optional account binding.
+ * Lookup order: (fingerprint, targetAccountId, targetCreditCardId) then (fingerprint, null, null)
  */
-export async function loadTemplate(fingerprint: string): Promise<CSVImportTemplate | null> {
-  const response = await fetch(`/api/import/templates?fingerprint=${encodeURIComponent(fingerprint)}`);
+export async function loadTemplate(
+  fingerprint: string,
+  targetAccountId?: number | null,
+  targetCreditCardId?: number | null
+): Promise<CSVImportTemplate | null> {
+  const params = new URLSearchParams({ fingerprint });
+  if (targetAccountId != null) params.set('targetAccountId', String(targetAccountId));
+  if (targetCreditCardId != null) params.set('targetCreditCardId', String(targetCreditCardId));
+  const response = await fetch(`/api/import/templates?${params.toString()}`);
 
   if (!response.ok) {
     if (response.status === 404) {
