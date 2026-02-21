@@ -487,6 +487,7 @@ export interface UpdateGoalRequest {
   status?: 'active' | 'completed' | 'overdue' | 'paused';
   notes?: string | null;
   sort_order?: number;
+  linked_account_id?: number | null;
 }
 
 export interface GoalProgress {

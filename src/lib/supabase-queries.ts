@@ -3233,6 +3233,67 @@ export async function updateGoal(id: number, data: UpdateGoalRequest): Promise<G
   
   updateData.updated_at = new Date().toISOString();
   
+  // Handle linked account change for account-linked goals
+  if (existingGoal.goal_type === 'account-linked' && data.linked_account_id !== undefined) {
+    const newLinkedAccountId = data.linked_account_id;
+    const oldLinkedAccountId = existingGoal.linked_account_id;
+    
+    if (newLinkedAccountId !== oldLinkedAccountId) {
+      // Unlink old account if there was one
+      if (oldLinkedAccountId) {
+        const { error: unlinkError } = await supabase
+          .from('accounts')
+          .update({
+            include_in_totals: true,
+            linked_goal_id: null,
+          })
+          .eq('id', oldLinkedAccountId);
+        
+        if (unlinkError) throw unlinkError;
+      }
+      
+      // Link new account if specified
+      if (newLinkedAccountId) {
+        // Verify account exists and belongs to budget account
+        const { data: account, error: accError } = await supabase
+          .from('accounts')
+          .select('*')
+          .eq('id', newLinkedAccountId)
+          .eq('account_id', accountId)
+          .single();
+        
+        if (accError || !account) {
+          throw new Error('Account not found or does not belong to this account');
+        }
+        
+        // Check if account is already linked to another goal (other than this one)
+        const { data: existingGoalLink } = await supabase
+          .from('goals')
+          .select('id')
+          .eq('linked_account_id', newLinkedAccountId)
+          .eq('account_id', accountId)
+          .neq('id', id)
+          .single();
+        
+        if (existingGoalLink) {
+          throw new Error('Account is already linked to another goal');
+        }
+        
+        const { error: linkError } = await supabase
+          .from('accounts')
+          .update({
+            include_in_totals: false,
+            linked_goal_id: id,
+          })
+          .eq('id', newLinkedAccountId);
+        
+        if (linkError) throw linkError;
+      }
+      
+      updateData.linked_account_id = newLinkedAccountId;
+    }
+  }
+  
   const { error } = await supabase
     .from('goals')
     .update(updateData)

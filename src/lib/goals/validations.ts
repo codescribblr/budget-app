@@ -126,6 +126,11 @@ export function validateUpdateGoal(
     return { valid: false, error: 'Monthly contribution cannot be negative' };
   }
   
+  // Account-linked goals must have a linked account
+  if (goal.goal_type === 'account-linked' && data.linked_account_id !== undefined && !data.linked_account_id) {
+    return { valid: false, error: 'Account-linked goals must have a linked account' };
+  }
+  
   // Warn if changing goal type with existing balance
   if (goal.goal_type === 'envelope' && currentBalance > 0) {
     return {

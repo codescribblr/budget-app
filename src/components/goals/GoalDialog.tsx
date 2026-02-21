@@ -184,16 +184,23 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
     try {
       if (goal) {
         // Update existing goal
+        const updatePayload: Record<string, unknown> = {
+          name,
+          target_amount: parseFloat(targetAmount),
+          target_date: targetDate ? formatLocalDate(targetDate) : null,
+          monthly_contribution: parseFloat(monthlyContribution),
+          notes: notes || null,
+        };
+        // Include linked account for account-linked goals
+        if (goal.goal_type === 'account-linked') {
+          updatePayload.linked_account_id = linkedAccountId
+            ? parseInt(linkedAccountId)
+            : null;
+        }
         const response = await fetch(`/api/goals/${goal.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name,
-            target_amount: parseFloat(targetAmount),
-            target_date: targetDate ? formatLocalDate(targetDate) : null,
-            monthly_contribution: parseFloat(monthlyContribution),
-            notes: notes || null,
-          }),
+          body: JSON.stringify(updatePayload),
         });
 
         if (!response.ok) {
