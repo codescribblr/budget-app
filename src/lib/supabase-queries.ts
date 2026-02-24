@@ -167,6 +167,18 @@ export async function createCategory(data: {
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
+  // When sort_order not provided, add new category to end of list
+  let sortOrder = data.sort_order;
+  if (sortOrder === undefined) {
+    const { data: maxData } = await supabase
+      .from('categories')
+      .select('sort_order')
+      .eq('account_id', accountId)
+      .order('sort_order', { ascending: false })
+      .limit(1);
+    sortOrder = maxData && maxData.length > 0 ? maxData[0].sort_order + 1 : 0;
+  }
+
   const { data: category, error } = await supabase
     .from('categories')
     .insert({
@@ -175,7 +187,7 @@ export async function createCategory(data: {
       name: data.name,
       monthly_amount: monthlyAmount,
       current_balance: data.current_balance ?? 0,
-      sort_order: data.sort_order ?? 0,
+      sort_order: sortOrder,
       notes: data.notes ?? null,
       is_system: data.is_system ?? false,
       is_archived: data.is_archived ?? false,
