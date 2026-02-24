@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -9,7 +10,12 @@ import TransferBetweenEnvelopes from './TransferBetweenEnvelopes';
 import AllocateIncome from './AllocateIncome';
 import { FeatureTeaser } from '@/components/FeatureTeaser';
 
+const VALID_TABS = ['allocate', 'transfer'] as const;
+type TabValue = (typeof VALID_TABS)[number];
+
 export default function MoneyMovementPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [categories, setCategories] = useState<Category[]>([]);
   const [currentSavings, setCurrentSavings] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -17,6 +23,23 @@ export default function MoneyMovementPage() {
   // Track if fetch is in progress to prevent duplicate calls
   const fetchingRef = useRef(false);
   const hasMountedRef = useRef(false);
+
+  const tabParam = searchParams.get('tab');
+  const activeTab: TabValue = tabParam === 'transfer' ? 'transfer' : 'allocate';
+
+  const setActiveTab = useCallback(
+    (tab: TabValue) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (tab === 'allocate') {
+        params.delete('tab');
+      } else {
+        params.set('tab', tab);
+      }
+      const qs = params.toString();
+      router.replace(qs ? `/money-movement?${qs}` : '/money-movement', { scroll: false });
+    },
+    [router, searchParams]
+  );
 
   const fetchData = async () => {
     // Prevent duplicate calls
@@ -67,7 +90,7 @@ export default function MoneyMovementPage() {
         message="Tip: Income Buffer helps smooth irregular paychecks. Explore in Settings → Features."
       />
 
-      <Tabs defaultValue="allocate" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 max-w-md">
           <TabsTrigger value="allocate">Allocate to Envelopes</TabsTrigger>
           <TabsTrigger value="transfer">Transfer Between Envelopes</TabsTrigger>
