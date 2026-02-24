@@ -119,6 +119,7 @@ export default function Dashboard() {
   const [openEditCategoryDialog, setOpenEditCategoryDialog] = useState<((category: Category) => void) | null>(null);
   const [completionTime, setCompletionTime] = useState<string | null>(null);
   const [incomeSettings, setIncomeSettings] = useState<{ annual_income?: string; annual_salary?: string }>({});
+  const [hasIncomeStreams, setHasIncomeStreams] = useState(false);
   
   // Wrapper to safely set the edit dialog function
   const handleEditDialogReady = useCallback((fn: (category: Category) => void) => {
@@ -151,7 +152,7 @@ export default function Dashboard() {
 
     try {
       setLoading(true);
-      const [categoriesRes, accountsRes, creditCardsRes, loansRes, assetsRes, pendingChecksRes, summaryRes, bufferRes, settingsRes] =
+      const [categoriesRes, accountsRes, creditCardsRes, loansRes, assetsRes, pendingChecksRes, summaryRes, bufferRes, settingsRes, incomeStreamsRes] =
         await Promise.all([
           fetch('/api/categories'),
           fetch('/api/accounts'),
@@ -162,9 +163,10 @@ export default function Dashboard() {
           fetch('/api/dashboard'),
           fetch('/api/income-buffer/status'),
           fetch('/api/settings'),
+          fetch('/api/income-streams'),
         ]);
 
-      const [categoriesData, accountsData, creditCardsData, loansData, assetsData, pendingChecksData, summaryData, bufferData, settingsData] =
+      const [categoriesData, accountsData, creditCardsData, loansData, assetsData, pendingChecksData, summaryData, bufferData, settingsData, incomeStreamsData] =
         await Promise.all([
           categoriesRes.ok ? categoriesRes.json() : [],
           accountsRes.ok ? accountsRes.json() : [],
@@ -175,6 +177,7 @@ export default function Dashboard() {
           summaryRes.ok ? summaryRes.json() : null,
           bufferRes.ok ? bufferRes.json() : null,
           settingsRes.ok ? settingsRes.json() : {},
+          incomeStreamsRes.ok ? incomeStreamsRes.json() : [],
         ]);
 
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
@@ -188,6 +191,8 @@ export default function Dashboard() {
       setMonthlyNetIncome(summaryData?.monthly_net_income || 0);
       setBufferStatus(bufferData);
       setIncomeSettings(settingsData || {});
+      const streams = Array.isArray(incomeStreamsData) ? incomeStreamsData : [];
+      setHasIncomeStreams(streams.some((s: any) => s.include_in_budget && (s.annual_income || 0) > 0));
 
       // Check if we should show buffer notice
       // Show on 1st of month if buffer has funds and categories haven't been funded yet
@@ -344,6 +349,7 @@ export default function Dashboard() {
           categories={categories}
           onOpenEditCategory={openEditCategoryDialog || undefined}
           incomeSettings={incomeSettings}
+          hasIncomeConfigured={hasIncomeStreams || parseFloat(incomeSettings.annual_income || incomeSettings.annual_salary || '0') > 0}
         />
       )}
 
@@ -351,6 +357,7 @@ export default function Dashboard() {
       <WizardCompletionBanner
         categories={categories}
         incomeSettings={incomeSettings}
+        hasIncomeConfigured={hasIncomeStreams || parseFloat(incomeSettings.annual_income || incomeSettings.annual_salary || '0') > 0}
         onOpenDialog={() => setShowCompletionDialog(true)}
       />
 

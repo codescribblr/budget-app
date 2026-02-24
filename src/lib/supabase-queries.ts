@@ -14,7 +14,11 @@ import type {
   GoalWithDetails,
   CreateGoalRequest,
   UpdateGoalRequest,
+  IncomeStream,
+  CreateIncomeStreamRequest,
+  UpdateIncomeStreamRequest,
 } from './types';
+import { calculateAggregateMonthlyNetIncome } from './income-calculations';
 import { calculateGoalProgress, calculateGoalStatus } from './goals/calculations';
 import { getActiveAccountId } from './account-context';
 import { cache } from 'react';
@@ -1050,6 +1054,166 @@ export async function deletePendingCheck(id: number): Promise<void> {
 }
 
 // =====================================================
+// INCOME STREAMS
+// =====================================================
+
+function parseIncomeStreamFromRow(row: any): IncomeStream {
+  let preTaxDeductionItems: any[] = [];
+  if (row.pre_tax_deduction_items) {
+    try {
+      preTaxDeductionItems = typeof row.pre_tax_deduction_items === 'string'
+        ? JSON.parse(row.pre_tax_deduction_items)
+        : row.pre_tax_deduction_items;
+    } catch {
+      preTaxDeductionItems = [];
+    }
+  }
+  return {
+    id: row.id,
+    account_id: row.account_id,
+    name: row.name,
+    annual_income: Number(row.annual_income),
+    tax_rate: Number(row.tax_rate),
+    pay_frequency: row.pay_frequency,
+    include_extra_paychecks: row.include_extra_paychecks ?? true,
+    pre_tax_deduction_items: preTaxDeductionItems,
+    include_in_budget: row.include_in_budget ?? true,
+    sort_order: row.sort_order ?? 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export async function getAllIncomeStreams(): Promise<IncomeStream[]> {
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  const { data, error } = await supabase
+    .from('income_streams')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('sort_order', { ascending: true });
+
+  if (error) {
+    // Table might not exist yet (migration not run) - return empty
+    if (error.code === '42P01') return [];
+    throw error;
+  }
+
+  const streams = (data || []).map(parseIncomeStreamFromRow);
+
+  // Migration: if no streams but legacy settings exist, create default stream from settings
+  if (streams.length === 0) {
+    const { data: settings } = await supabase
+      .from('settings')
+      .select('*')
+      .eq('account_id', accountId);
+
+    const settingsObj: Record<string, string> = {};
+    settings?.forEach((s: any) => { settingsObj[s.key] = s.value; });
+
+    const annualIncome = parseFloat(settingsObj.annual_income || settingsObj.annual_salary || '0');
+    if (annualIncome > 0 || settingsObj.tax_rate || settingsObj.pay_frequency) {
+      let deductionItems: any[] = [];
+      if (settingsObj.pre_tax_deduction_items) {
+        try {
+          deductionItems = JSON.parse(settingsObj.pre_tax_deduction_items);
+        } catch {
+          deductionItems = [];
+        }
+      }
+      const newStream = await createIncomeStream({
+        name: 'Primary Income',
+        annual_income: annualIncome,
+        tax_rate: parseFloat(settingsObj.tax_rate || '0'),
+        pay_frequency: (settingsObj.pay_frequency || 'monthly') as any,
+        include_extra_paychecks: settingsObj.include_extra_paychecks === 'true',
+        pre_tax_deduction_items: deductionItems,
+        include_in_budget: true,
+      });
+      return [newStream];
+    }
+  }
+
+  return streams;
+}
+
+export async function createIncomeStream(data: CreateIncomeStreamRequest): Promise<IncomeStream> {
+  const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  const { data: maxOrder } = await supabase
+    .from('income_streams')
+    .select('sort_order')
+    .eq('account_id', accountId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .single();
+
+  const { data: row, error } = await supabase
+    .from('income_streams')
+    .insert({
+      account_id: accountId,
+      name: data.name,
+      annual_income: data.annual_income,
+      tax_rate: data.tax_rate ?? 0,
+      pay_frequency: data.pay_frequency ?? 'monthly',
+      include_extra_paychecks: data.include_extra_paychecks ?? true,
+      pre_tax_deduction_items: JSON.stringify(data.pre_tax_deduction_items ?? []),
+      include_in_budget: data.include_in_budget ?? true,
+      sort_order: data.sort_order ?? ((maxOrder?.sort_order ?? -1) + 1),
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return parseIncomeStreamFromRow(row);
+}
+
+export async function updateIncomeStream(id: number, data: UpdateIncomeStreamRequest): Promise<IncomeStream> {
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  const updateData: any = { updated_at: new Date().toISOString() };
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.annual_income !== undefined) updateData.annual_income = data.annual_income;
+  if (data.tax_rate !== undefined) updateData.tax_rate = data.tax_rate;
+  if (data.pay_frequency !== undefined) updateData.pay_frequency = data.pay_frequency;
+  if (data.include_extra_paychecks !== undefined) updateData.include_extra_paychecks = data.include_extra_paychecks;
+  if (data.pre_tax_deduction_items !== undefined) updateData.pre_tax_deduction_items = JSON.stringify(data.pre_tax_deduction_items);
+  if (data.include_in_budget !== undefined) updateData.include_in_budget = data.include_in_budget;
+  if (data.sort_order !== undefined) updateData.sort_order = data.sort_order;
+
+  const { data: row, error } = await supabase
+    .from('income_streams')
+    .update(updateData)
+    .eq('id', id)
+    .eq('account_id', accountId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return parseIncomeStreamFromRow(row);
+}
+
+export async function deleteIncomeStream(id: number): Promise<void> {
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  const { error } = await supabase
+    .from('income_streams')
+    .delete()
+    .eq('id', id)
+    .eq('account_id', accountId);
+
+  if (error) throw error;
+}
+
+// =====================================================
 // DASHBOARD
 // =====================================================
 
@@ -1093,19 +1257,27 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   if (pcError) throw pcError;
 
-  // Get settings for income calculation
-  const { data: settings, error: settingsError } = await supabase
-    .from('settings')
+  // Get income streams for income calculation
+  let monthlyNetIncome: number;
+  const { data: streamRows, error: streamsError } = await supabase
+    .from('income_streams')
     .select('*')
-    .eq('account_id', accountId);
+    .eq('account_id', accountId)
+    .order('sort_order', { ascending: true });
 
-  if (settingsError) throw settingsError;
-
-  // Convert settings array to object
-  const settingsObj: Record<string, string> = {};
-  settings?.forEach((setting: any) => {
-    settingsObj[setting.key] = setting.value;
-  });
+  if (!streamsError && streamRows?.length) {
+    const incomeStreams = streamRows.map((row: any) => parseIncomeStreamFromRow(row));
+    monthlyNetIncome = calculateAggregateMonthlyNetIncome(incomeStreams);
+  } else {
+    // Fallback: table doesn't exist or no streams - use legacy settings
+    const { data: settings } = await supabase
+      .from('settings')
+      .select('*')
+      .eq('account_id', accountId);
+    const settingsObj: Record<string, string> = {};
+    settings?.forEach((s: any) => { settingsObj[s.key] = s.value; });
+    monthlyNetIncome = calculateMonthlyNetIncome(settingsObj);
+  }
 
   // Calculate totals (only include accounts/credit cards with include_in_totals = true)
   const totalMonies = (accounts as Account[])
@@ -1144,9 +1316,6 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   // Calculate total monthly budget (exclude buffer from budget totals)
   const totalMonthlyBudget = envelopeCategories
     .reduce((sum, cat) => sum + Number(cat.monthly_amount), 0);
-
-  // Calculate monthly net income
-  const monthlyNetIncome = calculateMonthlyNetIncome(settingsObj);
 
   return {
     total_monies: totalMonies,

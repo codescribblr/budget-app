@@ -24,6 +24,7 @@ interface WizardCompletionDialogProps {
     annual_income?: string;
     annual_salary?: string;
   };
+  hasIncomeConfigured?: boolean;
 }
 
 export function WizardCompletionDialog({
@@ -32,6 +33,7 @@ export function WizardCompletionDialog({
   categories,
   onOpenEditCategory,
   incomeSettings = {},
+  hasIncomeConfigured: hasIncomeConfiguredProp,
 }: WizardCompletionDialogProps) {
   const router = useRouter();
 
@@ -43,7 +45,7 @@ export function WizardCompletionDialog({
   // Check completion status
   const hasBudgetSet = userCategories.some(cat => cat.monthly_amount > 0);
   const hasFundedCategories = userCategories.some(cat => cat.current_balance > 0);
-  const hasIncomeConfigured = parseFloat(incomeSettings.annual_income || incomeSettings.annual_salary || '0') > 0;
+  const hasIncomeConfigured = hasIncomeConfiguredProp ?? parseFloat(incomeSettings.annual_income || incomeSettings.annual_salary || '0') > 0;
 
   // Find first category without a budget (monthly_amount === 0)
   const firstCategoryWithoutBudget = userCategories.find(

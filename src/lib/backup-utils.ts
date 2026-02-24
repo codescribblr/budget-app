@@ -48,6 +48,7 @@ export interface AccountBackupData {
   merchant_category_rules: any[];
   pending_checks: any[];
   income_settings: any[];
+  income_streams?: any[];
   pre_tax_deductions: any[];
   settings: any[];
   goals?: any[];
@@ -89,6 +90,7 @@ export interface UserBackupData {
   merchant_category_rules: any[];
   pending_checks: any[];
   income_settings: any[];
+  income_streams?: any[];
   pre_tax_deductions: any[];
   settings: any[];
   goals?: any[];
@@ -218,6 +220,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     merchant_category_rules,
     pending_checks,
     income_settings,
+    income_streams,
     pre_tax_deductions,
     settings,
     goals,
@@ -265,6 +268,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     fetchAllRecords((limit, offset) => supabase.from('merchant_category_rules').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
     fetchAllRecords((limit, offset) => supabase.from('pending_checks').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
     fetchAllRecordsSafe((limit, offset) => supabase.from('income_settings').select('*').eq('account_id', accountId).range(offset, offset + limit - 1), 'income_settings'),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('income_streams').select('*').eq('account_id', accountId).range(offset, offset + limit - 1), 'income_streams'),
     fetchAllRecordsSafe((limit, offset) => supabase.from('pre_tax_deductions').select('*').eq('account_id', accountId).range(offset, offset + limit - 1), 'pre_tax_deductions'),
     fetchAllRecords((limit, offset) => supabase.from('settings').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
     fetchAllRecords((limit, offset) => supabase.from('goals').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
@@ -360,6 +364,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     merchant_category_rules: merchant_category_rules,
     pending_checks: pending_checks,
     income_settings: income_settings,
+    income_streams: income_streams || [],
     pre_tax_deductions: pre_tax_deductions,
     settings: settings,
     goals: goals,
@@ -409,6 +414,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     merchant_category_rules: accountData.merchant_category_rules,
     pending_checks: accountData.pending_checks,
     income_settings: accountData.income_settings,
+    income_streams: accountData.income_streams,
     pre_tax_deductions: accountData.pre_tax_deductions,
     settings: accountData.settings,
     goals: accountData.goals,
@@ -557,6 +563,13 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   }
   try {
     await supabase.from('income_settings').delete().eq('account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
+  try {
+    await supabase.from('income_streams').delete().eq('account_id', accountId);
   } catch (error: any) {
     if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
       throw error;
@@ -1246,6 +1259,42 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
           error?.message?.includes('does not exist') ||
           error?.code === 'PGRST204') {
         console.warn('[Import] income_settings table does not exist, skipping (this is OK for older schemas)');
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  // Insert income streams (batch)
+  const incomeStreams = backupData.income_streams || [];
+  if (incomeStreams.length > 0) {
+    try {
+      const incomeStreamsToInsert = incomeStreams.map(({ id, account_id, ...stream }: any) => ({
+        ...stream,
+        account_id: accountId,
+      }));
+
+      const { error } = await supabase
+        .from('income_streams')
+        .insert(incomeStreamsToInsert);
+
+      if (error) {
+        if (error.message?.includes('Could not find the table') || 
+            error.message?.includes('does not exist') ||
+            error.code === 'PGRST204') {
+          console.warn('[Import] income_streams table does not exist, skipping (run migration 106)');
+        } else {
+          console.error('[Import] Error inserting income streams:', error);
+          throw error;
+        }
+      } else {
+        console.log('[Import] Inserted', incomeStreamsToInsert.length, 'income streams');
+      }
+    } catch (error: any) {
+      if (error?.message?.includes('Could not find the table') || 
+          error?.message?.includes('does not exist') ||
+          error?.code === 'PGRST204') {
+        console.warn('[Import] income_streams table does not exist, skipping');
       } else {
         throw error;
       }

@@ -13,7 +13,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { HelpPanel, HelpSection } from '@/components/ui/help-panel';
 import { toast } from 'sonner';
-import type { Account, NonCashAsset, Loan, CreditCard, Category } from '@/lib/types';
+import type { Account, NonCashAsset, Loan, CreditCard, Category, IncomeStream } from '@/lib/types';
+import { calculateAggregateMonthlyNetIncome } from '@/lib/income-calculations';
 import RetirementMarker from './RetirementMarker';
 
 interface NetWorthSnapshot {
@@ -69,6 +70,7 @@ export default function ForecastPage() {
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
+  const [incomeStreams, setIncomeStreams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [birthYear, setBirthYear] = useState<number | null>(null);
   const [showBirthYearDialog, setShowBirthYearDialog] = useState(false);
@@ -176,7 +178,7 @@ export default function ForecastPage() {
       }
       
       // Fetch all data in parallel
-      const [snapshotsRes, accountsRes, assetsRes, loansRes, creditCardsRes, categoriesRes, settingsRes] = await Promise.all([
+      const [snapshotsRes, accountsRes, assetsRes, loansRes, creditCardsRes, categoriesRes, settingsRes, incomeStreamsRes] = await Promise.all([
         fetch('/api/net-worth-snapshots'),
         fetch('/api/accounts'),
         fetch('/api/non-cash-assets'),
@@ -184,6 +186,7 @@ export default function ForecastPage() {
         fetch('/api/credit-cards'),
         fetch('/api/categories'),
         fetch('/api/settings'),
+        fetch('/api/income-streams'),
       ]);
 
       if (snapshotsRes.ok) {
@@ -219,6 +222,11 @@ export default function ForecastPage() {
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
         setSettings(settingsData);
+      }
+
+      if (incomeStreamsRes.ok) {
+        const streamsData = await incomeStreamsRes.json();
+        setIncomeStreams(Array.isArray(streamsData) ? streamsData : []);
       }
 
       // Fetch forecast settings
@@ -351,13 +359,22 @@ export default function ForecastPage() {
     return totalAccounts + totalAssets - totalCreditCards - totalLoans;
   }, [accounts, assets, creditCards, loans]);
 
+  // Aggregate annual income from income streams (for Social Security calc)
+  const aggregateAnnualIncome = useMemo(() => {
+    if (incomeStreams?.length > 0) {
+      return incomeStreams
+        .filter((s: IncomeStream) => s.include_in_budget)
+        .reduce((sum: number, s: IncomeStream) => sum + (s.annual_income || 0), 0);
+    }
+    return parseFloat(settings.annual_income || settings.annual_salary || '0') || 0;
+  }, [incomeStreams, settings.annual_income, settings.annual_salary]);
+
   // Calculate social security benefit amount
   // Calculate base Social Security benefit (at full retirement age of 67)
   const calculateBaseSocialSecurityBenefit = useMemo(() => {
-    if (!settings.annual_income) return 0;
+    if (!aggregateAnnualIncome) return 0;
     
-    const annualIncome = parseFloat(settings.annual_income || '0');
-    if (!annualIncome) return 0;
+    const annualIncome = aggregateAnnualIncome;
     
     // Simplified Social Security calculation:
     // Social Security typically replaces about 40% of pre-retirement income for average earners
@@ -386,7 +403,7 @@ export default function ForecastPage() {
                       socialSecurityBenefitLevel === 'half' ? 0.5 : 0;
     
     return annualBenefit * multiplier;
-  }, [settings.annual_income, socialSecurityBenefitLevel]);
+  }, [aggregateAnnualIncome, socialSecurityBenefitLevel]);
 
   // Calculate actual Social Security benefit based on start age
   // Early retirement (before 67): reduce by ~6.67% per year early (max 30% reduction at 62)
@@ -428,42 +445,30 @@ export default function ForecastPage() {
       .reduce((sum, cat) => sum + Number(cat.monthly_amount || 0), 0);
   }, [categories]);
 
-  // Calculate monthly net income from settings
+  // Calculate monthly net income from income streams or legacy settings
   const monthlyNetIncome = useMemo(() => {
-    const annualIncome = parseFloat(settings.annual_income || '0');
+    if (incomeStreams?.length > 0) {
+      return calculateAggregateMonthlyNetIncome(incomeStreams);
+    }
+    // Legacy: from settings
+    const annualIncome = parseFloat(settings.annual_income || settings.annual_salary || '0');
     const taxRate = parseFloat(settings.tax_rate || '0');
-    
     if (!annualIncome) return 0;
-    
-    // Calculate monthly net income
     const monthlyGross = annualIncome / 12;
     const monthlyTaxes = (annualIncome * taxRate) / 12;
-    
-    // Handle pre-tax deductions if available
     let preTaxDeductions = 0;
     if (settings.pre_tax_deduction_items) {
       try {
         const items = JSON.parse(settings.pre_tax_deduction_items);
         const payFrequency = settings.pay_frequency || 'monthly';
         const includeExtra = settings.include_extra_paychecks === 'true';
-        
-        // Calculate paychecks per month
         let paychecksPerMonth = 1;
         switch (payFrequency) {
-          case 'weekly':
-            paychecksPerMonth = 52 / 12;
-            break;
-          case 'bi-weekly':
-            paychecksPerMonth = includeExtra ? 26 / 12 : 24 / 12;
-            break;
-          case 'semi-monthly':
-            paychecksPerMonth = 2;
-            break;
-          case 'monthly':
-            paychecksPerMonth = 1;
-            break;
+          case 'weekly': paychecksPerMonth = 52 / 12; break;
+          case 'bi-weekly': paychecksPerMonth = includeExtra ? 26 / 12 : 24 / 12; break;
+          case 'semi-monthly': paychecksPerMonth = 2; break;
+          case 'monthly': paychecksPerMonth = 1; break;
         }
-        
         items.forEach((item: any) => {
           if (item.type === 'percentage') {
             preTaxDeductions += (annualIncome * item.value / 100) / 12;
@@ -471,13 +476,10 @@ export default function ForecastPage() {
             preTaxDeductions += item.value * paychecksPerMonth;
           }
         });
-      } catch (e) {
-        // Ignore parsing errors
-      }
+      } catch (e) { /* ignore */ }
     }
-    
     return monthlyGross - preTaxDeductions - monthlyTaxes;
-  }, [settings]);
+  }, [incomeStreams, settings]);
 
   // Calculate loan payment schedule
   const calculateLoanPaydown = (loan: Loan, years: number): number[] => {

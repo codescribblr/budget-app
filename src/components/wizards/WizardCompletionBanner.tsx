@@ -12,12 +12,14 @@ interface WizardCompletionBannerProps {
     annual_income?: string;
     annual_salary?: string;
   };
+  hasIncomeConfigured?: boolean;
   onOpenDialog: () => void;
 }
 
 export function WizardCompletionBanner({
   categories,
   incomeSettings = {},
+  hasIncomeConfigured: hasIncomeConfiguredProp,
   onOpenDialog,
 }: WizardCompletionBannerProps) {
   const [hasWizardCompleted, setHasWizardCompleted] = useState(false);
@@ -62,7 +64,7 @@ export function WizardCompletionBanner({
   // Check completion status
   const hasBudgetSet = userCategories.some(cat => cat.monthly_amount > 0);
   const hasFundedCategories = userCategories.some(cat => cat.current_balance > 0);
-  const hasIncomeConfigured = parseFloat(incomeSettings.annual_income || incomeSettings.annual_salary || '0') > 0;
+  const hasIncomeConfigured = hasIncomeConfiguredProp ?? parseFloat(incomeSettings.annual_income || incomeSettings.annual_salary || '0') > 0;
 
   // Only show banner if not all tasks are complete
   if (hasBudgetSet && hasFundedCategories && hasIncomeConfigured) {

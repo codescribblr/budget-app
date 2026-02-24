@@ -23,6 +23,8 @@ interface PreTaxDeductionsSectionProps {
   includeExtraPaychecks: boolean;
   onChange: (items: PreTaxDeductionItem[]) => void;
   disabled?: boolean;
+  /** When false, changes are not persisted to settings - parent handles persistence (e.g. when embedded in income stream) */
+  persistToSettings?: boolean;
 }
 
 export default function PreTaxDeductionsSection({
@@ -32,6 +34,7 @@ export default function PreTaxDeductionsSection({
   includeExtraPaychecks,
   onChange,
   disabled = false,
+  persistToSettings = true,
 }: PreTaxDeductionsSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PreTaxDeductionItem | null>(null);
@@ -180,11 +183,13 @@ export default function PreTaxDeductionsSection({
       updatedItems = [...items, newItem];
     }
 
-    // Save to database
-    const saved = await saveToDatabase(updatedItems);
-
-    if (saved) {
-      // Update parent state
+    if (persistToSettings) {
+      const saved = await saveToDatabase(updatedItems);
+      if (saved) {
+        onChange(updatedItems);
+        handleCloseDialog();
+      }
+    } else {
       onChange(updatedItems);
       handleCloseDialog();
     }
@@ -193,11 +198,10 @@ export default function PreTaxDeductionsSection({
   const handleDelete = async (id: string) => {
     const updatedItems = items.filter(item => item.id !== id);
 
-    // Save to database
-    const saved = await saveToDatabase(updatedItems);
-
-    if (saved) {
-      // Update parent state
+    if (persistToSettings) {
+      const saved = await saveToDatabase(updatedItems);
+      if (saved) onChange(updatedItems);
+    } else {
       onChange(updatedItems);
     }
   };

@@ -229,6 +229,45 @@ export interface PreTaxDeductionItem {
   value: number; // Percentage (e.g., 10 for 10%) or fixed amount per paycheck
 }
 
+export type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly' | 'quarterly' | 'annually';
+
+export interface IncomeStream {
+  id: number;
+  account_id: number;
+  name: string;
+  annual_income: number;
+  tax_rate: number;
+  pay_frequency: PayFrequency;
+  include_extra_paychecks: boolean;
+  pre_tax_deduction_items: PreTaxDeductionItem[];
+  include_in_budget: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateIncomeStreamRequest {
+  name: string;
+  annual_income: number;
+  tax_rate?: number;
+  pay_frequency?: PayFrequency;
+  include_extra_paychecks?: boolean;
+  pre_tax_deduction_items?: PreTaxDeductionItem[];
+  include_in_budget?: boolean;
+  sort_order?: number;
+}
+
+export interface UpdateIncomeStreamRequest {
+  name?: string;
+  annual_income?: number;
+  tax_rate?: number;
+  pay_frequency?: PayFrequency;
+  include_extra_paychecks?: boolean;
+  pre_tax_deduction_items?: PreTaxDeductionItem[];
+  include_in_budget?: boolean;
+  sort_order?: number;
+}
+
 // API request/response types
 export interface CreateCategoryRequest {
   name: string;

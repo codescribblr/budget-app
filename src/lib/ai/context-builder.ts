@@ -153,34 +153,79 @@ export async function buildUserContext(userId: string, dateRange?: { start: stri
     .eq('is_buffer', true)
     .single();
 
-  // Get income settings
-  const { data: settings } = await supabase
-    .from('settings')
-    .select('key, value')
+  // Get income - prefer income streams, fallback to legacy settings
+  let incomeSettings: UserContext['incomeSettings'] = {
+    annual_income: null,
+    tax_rate: null,
+    pay_frequency: null,
+    include_extra_paychecks: null,
+    pre_tax_deduction_items: null,
+  };
+
+  const { data: incomeStreamRows } = await supabase
+    .from('income_streams')
+    .select('*')
     .eq('account_id', accountId)
-    .in('key', [
-      'annual_income',
-      'annual_salary', // Keep for backwards compatibility
-      'tax_rate',
-      'pay_frequency',
-      'include_extra_paychecks',
-      'pre_tax_deduction_items'
-    ]);
+    .order('sort_order', { ascending: true });
 
-  // Parse income settings
-  const settingsMap: Record<string, string> = {};
-  settings?.forEach((s) => {
-    settingsMap[s.key] = s.value;
-  });
-
-  // Parse pre-tax deduction items
-  let preTaxDeductionItems: Array<{ id: string; name: string; type: 'percentage' | 'fixed'; value: number }> | null = null;
-  if (settingsMap['pre_tax_deduction_items']) {
-    try {
-      preTaxDeductionItems = JSON.parse(settingsMap['pre_tax_deduction_items']);
-    } catch (e) {
-      console.error('Error parsing pre_tax_deduction_items:', e);
+  if (incomeStreamRows && incomeStreamRows.length > 0) {
+    const { calculateAggregateMonthlyNetIncome } = await import('../income-calculations');
+    const streams = incomeStreamRows.map((row: any) => {
+      let items: any[] = [];
+      if (row.pre_tax_deduction_items) {
+        try {
+          items = typeof row.pre_tax_deduction_items === 'string'
+            ? JSON.parse(row.pre_tax_deduction_items)
+            : row.pre_tax_deduction_items;
+        } catch { items = []; }
+      }
+      return {
+        ...row,
+        annual_income: Number(row.annual_income),
+        tax_rate: Number(row.tax_rate),
+        include_in_budget: row.include_in_budget ?? true,
+        pre_tax_deduction_items: items,
+      };
+    });
+    const aggregateAnnual = streams
+      .filter((s: any) => s.include_in_budget)
+      .reduce((sum: number, s: any) => sum + s.annual_income, 0);
+    const monthlyNet = calculateAggregateMonthlyNetIncome(streams);
+    incomeSettings = {
+      annual_income: aggregateAnnual || null,
+      tax_rate: streams.length === 1 ? streams[0].tax_rate : null,
+      pay_frequency: streams.length === 1 ? streams[0].pay_frequency : null,
+      include_extra_paychecks: streams.length === 1 ? streams[0].include_extra_paychecks : null,
+      pre_tax_deduction_items: streams.length === 1 ? streams[0].pre_tax_deduction_items : null,
+    };
+  } else {
+    const { data: settings } = await supabase
+      .from('settings')
+      .select('key, value')
+      .eq('account_id', accountId)
+      .in('key', [
+        'annual_income',
+        'annual_salary',
+        'tax_rate',
+        'pay_frequency',
+        'include_extra_paychecks',
+        'pre_tax_deduction_items'
+      ]);
+    const settingsMap: Record<string, string> = {};
+    settings?.forEach((s: any) => { settingsMap[s.key] = s.value; });
+    let preTaxDeductionItems: Array<{ id: string; name: string; type: 'percentage' | 'fixed'; value: number }> | null = null;
+    if (settingsMap['pre_tax_deduction_items']) {
+      try {
+        preTaxDeductionItems = JSON.parse(settingsMap['pre_tax_deduction_items']);
+      } catch (e) { /* ignore */ }
     }
+    incomeSettings = {
+      annual_income: settingsMap['annual_income'] ? parseFloat(settingsMap['annual_income']) : (settingsMap['annual_salary'] ? parseFloat(settingsMap['annual_salary']) : null),
+      tax_rate: settingsMap['tax_rate'] ? parseFloat(settingsMap['tax_rate']) : null,
+      pay_frequency: settingsMap['pay_frequency'] || null,
+      include_extra_paychecks: settingsMap['include_extra_paychecks'] === 'true' ? true : (settingsMap['include_extra_paychecks'] === 'false' ? false : null),
+      pre_tax_deduction_items: preTaxDeductionItems,
+    };
   }
 
   // Calculate monthly spending trend (last 6 months)
@@ -290,13 +335,7 @@ export async function buildUserContext(userId: string, dateRange?: { start: stri
       current_balance: incomeBufferCategory.current_balance || 0,
       monthly_amount: incomeBufferCategory.monthly_amount || 0,
     } : null,
-    incomeSettings: {
-      annual_income: settingsMap['annual_income'] ? parseFloat(settingsMap['annual_income']) : (settingsMap['annual_salary'] ? parseFloat(settingsMap['annual_salary']) : null),
-      tax_rate: settingsMap['tax_rate'] ? parseFloat(settingsMap['tax_rate']) : null,
-      pay_frequency: settingsMap['pay_frequency'] || null,
-      include_extra_paychecks: settingsMap['include_extra_paychecks'] === 'true' ? true : (settingsMap['include_extra_paychecks'] === 'false' ? false : null),
-      pre_tax_deduction_items: preTaxDeductionItems,
-    },
+    incomeSettings,
     dateRange: {
       start: startDate.toISOString().split('T')[0],
       end: endDate.toISOString().split('T')[0],
