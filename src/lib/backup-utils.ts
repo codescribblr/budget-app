@@ -1269,9 +1269,11 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   const incomeStreams = backupData.income_streams || [];
   if (incomeStreams.length > 0) {
     try {
-      const incomeStreamsToInsert = incomeStreams.map(({ id, account_id, ...stream }: any) => ({
+      const incomeStreamsToInsert = incomeStreams.map(({ id, account_id, linked_non_cash_asset_id, ...stream }: any) => ({
         ...stream,
         account_id: accountId,
+        // Clear linked asset on restore - assets may not exist in target account
+        linked_non_cash_asset_id: null,
       }));
 
       const { error } = await supabase

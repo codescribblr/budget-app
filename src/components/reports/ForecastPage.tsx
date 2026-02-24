@@ -607,6 +607,9 @@ export default function ForecastPage() {
     // Track base expenses for expense_change events
     let baseAnnualExpenses = currentAnnualExpenses;
     let expenseChangeYear = 0; // Track when expenses last changed
+
+    // Track assets liquidated via timeline events - income from linked streams stops from that year onward
+    const liquidatedAssetIds = new Set<number>();
     
     for (let yearOffset = 0; yearOffset < forecastYears; yearOffset++) {
       const forecastYear = startYear + yearOffset;
@@ -621,6 +624,7 @@ export default function ForecastPage() {
       const eventsThisYear = timelineEvents.filter(e => e.year === forecastYear);
       for (const event of eventsThisYear) {
         if (event.type === 'liquidation' && event.assetId) {
+          liquidatedAssetIds.add(event.assetId);
           // Convert illiquid asset to liquid
           const assetIndex = assetValues.findIndex(a => a.id === event.assetId);
           if (assetIndex !== -1 && !assetValues[assetIndex].isLiquid) {
@@ -656,6 +660,18 @@ export default function ForecastPage() {
       });
       // Remove loan payments from expenses after payoff (payments stop after maturity)
       annualExpenses -= totalLoanPaymentsRemoved;
+      
+      // Compute work income from streams not linked to liquidated assets
+      const activeStreams = incomeStreams?.length
+        ? incomeStreams.filter(
+            (s: IncomeStream) =>
+              s.include_in_budget &&
+              (s.linked_non_cash_asset_id == null || !liquidatedAssetIds.has(s.linked_non_cash_asset_id))
+          )
+        : [];
+      const effectiveMonthlyNet =
+        activeStreams.length > 0 ? calculateAggregateMonthlyNetIncome(activeStreams) : monthlyNetIncome;
+      let workIncomeForYear = effectiveMonthlyNet * 12;
       
       // Determine income for this year
       const isSocialSecurityStarted = socialSecurityStartYear ? forecastYear >= socialSecurityStartYear : false;
@@ -694,10 +710,13 @@ export default function ForecastPage() {
           }
         }
       } else {
-        // Before retirement: grow work income (no retirement income yet)
-        // For current year, don't apply income growth
-        if (!isCurrentYear) {
-          forecastIncome *= (1 + incomeGrowthDecimal);
+        // Before retirement: use work income (from streams not linked to liquidated assets)
+        // Reset to new base when current year, or when asset liquidated; otherwise grow from previous year
+        const hadLiquidationThisYear = eventsThisYear.some((e) => e.type === 'liquidation');
+        if (isCurrentYear || hadLiquidationThisYear) {
+          forecastIncome = workIncomeForYear;
+        } else {
+          forecastIncome *= 1 + incomeGrowthDecimal;
         }
         // Calculate net cash flow after expenses
         const netCashFlow = forecastIncome - annualExpenses;
@@ -948,7 +967,7 @@ export default function ForecastPage() {
     }
 
     return data;
-  }, [snapshots, accounts, assets, loans, creditCards, forecastYears, incomeGrowthRate, savingsRate, retirementSavingsRate, monthlyNetIncome, monthlyBudget, inflationRate, birthYear, retirementAge, socialSecurityStartAge, calculateSocialSecurityBenefit, otherRetirementIncome, rmdAge, calculateRMD, timelineEvents]);
+  }, [snapshots, accounts, assets, loans, creditCards, incomeStreams, forecastYears, incomeGrowthRate, savingsRate, retirementSavingsRate, monthlyNetIncome, monthlyBudget, inflationRate, birthYear, retirementAge, socialSecurityStartAge, calculateSocialSecurityBenefit, otherRetirementIncome, rmdAge, calculateRMD, timelineEvents]);
 
   // Calculate minimum distribution needed to keep cash above 0
   const minimumDistributionNeeded = useMemo(() => {

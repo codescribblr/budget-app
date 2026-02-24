@@ -242,6 +242,7 @@ export interface IncomeStream {
   pre_tax_deduction_items: PreTaxDeductionItem[];
   include_in_budget: boolean;
   sort_order: number;
+  linked_non_cash_asset_id?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -255,6 +256,7 @@ export interface CreateIncomeStreamRequest {
   pre_tax_deduction_items?: PreTaxDeductionItem[];
   include_in_budget?: boolean;
   sort_order?: number;
+  linked_non_cash_asset_id?: number | null;
 }
 
 export interface UpdateIncomeStreamRequest {
@@ -266,6 +268,7 @@ export interface UpdateIncomeStreamRequest {
   pre_tax_deduction_items?: PreTaxDeductionItem[];
   include_in_budget?: boolean;
   sort_order?: number;
+  linked_non_cash_asset_id?: number | null;
 }
 
 // API request/response types

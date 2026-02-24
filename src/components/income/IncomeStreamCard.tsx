@@ -11,6 +11,7 @@ import { Pencil, Trash2, Save, X } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import PreTaxDeductionsSection from './PreTaxDeductionsSection';
 import type { IncomeStream, PayFrequency, PreTaxDeductionItem } from '@/lib/types';
+import type { NonCashAsset } from '@/lib/types';
 import {
   calculateStreamMonthlyNet,
   calculateStreamPreTaxDeductions,
@@ -23,6 +24,8 @@ interface IncomeStreamCardProps {
   disabled?: boolean;
   /** When true, edits are for scenario planning only - not persisted.*/
   scenarioMode?: boolean;
+  /** Non-cash assets for linking (retirement planning: income stops when asset is liquidated) */
+  assets?: NonCashAsset[];
 }
 
 export default function IncomeStreamCard({
@@ -31,6 +34,7 @@ export default function IncomeStreamCard({
   onDelete,
   disabled = false,
   scenarioMode = false,
+  assets = [],
 }: IncomeStreamCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -42,6 +46,7 @@ export default function IncomeStreamCard({
     include_extra_paychecks: stream.include_extra_paychecks,
     pre_tax_deduction_items: stream.pre_tax_deduction_items,
     include_in_budget: stream.include_in_budget,
+    linked_non_cash_asset_id: stream.linked_non_cash_asset_id ?? null,
   });
 
   const monthlyNet = calculateStreamMonthlyNet(stream);
@@ -71,6 +76,7 @@ export default function IncomeStreamCard({
       include_extra_paychecks: stream.include_extra_paychecks,
       pre_tax_deduction_items: stream.pre_tax_deduction_items,
       include_in_budget: stream.include_in_budget,
+      linked_non_cash_asset_id: stream.linked_non_cash_asset_id ?? null,
     });
     setIsEditing(false);
   };
@@ -200,6 +206,35 @@ export default function IncomeStreamCard({
                   Include in budget calculations
                 </Label>
               </div>
+              {assets.length > 0 && (
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Linked Asset (Retirement Planning)</Label>
+                  <Select
+                    value={formData.linked_non_cash_asset_id?.toString() ?? 'none'}
+                    onValueChange={(v) =>
+                      setFormData({
+                        ...formData,
+                        linked_non_cash_asset_id: v === 'none' ? null : parseInt(v, 10),
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="No linked asset" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No linked asset</SelectItem>
+                      {assets.map((asset) => (
+                        <SelectItem key={asset.id} value={asset.id.toString()}>
+                          {asset.name} ({formatCurrency(asset.current_value || 0)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    When this asset is liquidated in the retirement forecast, income from this stream stops.
+                  </p>
+                </div>
+              )}
             </div>
 
             <PreTaxDeductionsSection
@@ -227,6 +262,11 @@ export default function IncomeStreamCard({
           </>
         ) : (
           <div className="text-sm space-y-1 text-muted-foreground">
+            {stream.linked_non_cash_asset_id && assets.length > 0 && (
+              <p>
+                Linked to: {assets.find((a) => a.id === stream.linked_non_cash_asset_id)?.name ?? 'Asset'}
+              </p>
+            )}
             <p>
               Gross: {formatCurrency(stream.annual_income / 12)}/mo · Tax: {stream.tax_rate * 100}%
             </p>

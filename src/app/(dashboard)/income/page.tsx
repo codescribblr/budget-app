@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import { DollarSign, Plus, Calculator, Save } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import IncomeStreamCard from '@/components/income/IncomeStreamCard';
-import type { IncomeStream, PayFrequency, CreateIncomeStreamRequest } from '@/lib/types';
+import type { IncomeStream, PayFrequency, CreateIncomeStreamRequest, NonCashAsset } from '@/lib/types';
 import {
   calculateAggregateMonthlyNetIncome,
   calculateAggregateMonthlyGrossIncome,
@@ -65,6 +65,7 @@ export default function IncomePage() {
     [router, searchParams]
   );
   const [streams, setStreams] = useState<IncomeStream[]>([]);
+  const [assets, setAssets] = useState<NonCashAsset[]>([]);
   const [monthlyBudget, setMonthlyBudget] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -76,6 +77,7 @@ export default function IncomePage() {
     include_extra_paychecks: true,
     pre_tax_deduction_items: [],
     include_in_budget: true,
+    linked_non_cash_asset_id: null,
   });
 
   // Scenario planning state - copies of streams for "what if" editing (never persisted)
@@ -109,12 +111,17 @@ export default function IncomePage() {
     fetchingRef.current = true;
     try {
       setIsLoading(true);
-      const [streamsRes, categoriesRes, scenarioRes] = await Promise.all([
+      const [streamsRes, categoriesRes, scenarioRes, assetsRes] = await Promise.all([
         fetch('/api/income-streams'),
         fetch('/api/categories'),
         fetch('/api/income-streams/scenario'),
+        fetch('/api/non-cash-assets'),
       ]);
 
+      if (assetsRes.ok) {
+        const assetsData = await assetsRes.json();
+        setAssets(Array.isArray(assetsData) ? assetsData : []);
+      }
       if (streamsRes.ok) {
         const streamsData = await streamsRes.json();
         setStreams(streamsData);
@@ -220,6 +227,7 @@ export default function IncomePage() {
         include_extra_paychecks: true,
         pre_tax_deduction_items: [],
         include_in_budget: true,
+        linked_non_cash_asset_id: null,
       });
     } catch (error: any) {
       toast.error(error.message || 'Failed to add income stream');
@@ -424,6 +432,7 @@ export default function IncomePage() {
                       onUpdate={handleUpdateStream}
                       onDelete={handleDeleteStream}
                       disabled={!isEditor || permissionsLoading}
+                      assets={assets}
                     />
                   ))}
                 </div>
@@ -564,6 +573,7 @@ export default function IncomePage() {
                       onUpdate={handleScenarioUpdate}
                       onDelete={handleScenarioDelete}
                       scenarioMode
+                      assets={assets}
                     />
                   ))}
                 </div>
@@ -768,6 +778,35 @@ export default function IncomePage() {
                 Include in budget calculations
               </Label>
             </div>
+            {assets.length > 0 && (
+              <div className="space-y-2">
+                <Label>Linked Asset (Retirement Planning)</Label>
+                <Select
+                  value={newStreamData.linked_non_cash_asset_id?.toString() ?? 'none'}
+                  onValueChange={(v) =>
+                    setNewStreamData({
+                      ...newStreamData,
+                      linked_non_cash_asset_id: v === 'none' ? null : parseInt(v, 10),
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="No linked asset" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No linked asset</SelectItem>
+                    {assets.map((asset) => (
+                      <SelectItem key={asset.id} value={asset.id.toString()}>
+                        {asset.name} ({formatCurrency(asset.current_value || 0)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  When this asset is liquidated in the retirement forecast, income from this stream stops.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>

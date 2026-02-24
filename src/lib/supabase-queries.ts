@@ -1091,6 +1091,7 @@ function parseIncomeStreamFromRow(row: any): IncomeStream {
     pre_tax_deduction_items: preTaxDeductionItems,
     include_in_budget: row.include_in_budget ?? true,
     sort_order: row.sort_order ?? 0,
+    linked_non_cash_asset_id: row.linked_non_cash_asset_id != null ? Number(row.linked_non_cash_asset_id) : null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -1176,6 +1177,7 @@ export async function createIncomeStream(data: CreateIncomeStreamRequest): Promi
       pre_tax_deduction_items: JSON.stringify(data.pre_tax_deduction_items ?? []),
       include_in_budget: data.include_in_budget ?? true,
       sort_order: data.sort_order ?? ((maxOrder?.sort_order ?? -1) + 1),
+      linked_non_cash_asset_id: data.linked_non_cash_asset_id ?? null,
     })
     .select()
     .single();
@@ -1198,6 +1200,7 @@ export async function updateIncomeStream(id: number, data: UpdateIncomeStreamReq
   if (data.pre_tax_deduction_items !== undefined) updateData.pre_tax_deduction_items = JSON.stringify(data.pre_tax_deduction_items);
   if (data.include_in_budget !== undefined) updateData.include_in_budget = data.include_in_budget;
   if (data.sort_order !== undefined) updateData.sort_order = data.sort_order;
+  if (data.linked_non_cash_asset_id !== undefined) updateData.linked_non_cash_asset_id = data.linked_non_cash_asset_id;
 
   const { data: row, error } = await supabase
     .from('income_streams')

@@ -26,6 +26,7 @@ type ViewMode = 'cards' | 'list';
 export default function NonCashAssetsPage() {
   const router = useRouter();
   const [assets, setAssets] = useState<NonCashAsset[]>([]);
+  const [linkedAssetIds, setLinkedAssetIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<NonCashAsset | null>(null);
@@ -34,10 +35,24 @@ export default function NonCashAssetsPage() {
   const fetchAssets = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/non-cash-assets');
-      if (!response.ok) throw new Error('Failed to fetch assets');
-      const data = await response.json();
+      const [assetsRes, streamsRes] = await Promise.all([
+        fetch('/api/non-cash-assets'),
+        fetch('/api/income-streams'),
+      ]);
+      if (!assetsRes.ok) throw new Error('Failed to fetch assets');
+      const data = await assetsRes.json();
       setAssets(data);
+      if (streamsRes.ok) {
+        const streams = await streamsRes.json();
+        const ids = new Set<number>(
+          (streams || [])
+            .filter((s: { linked_non_cash_asset_id?: number | null }) => s.linked_non_cash_asset_id != null)
+            .map((s: { linked_non_cash_asset_id: number }) => s.linked_non_cash_asset_id)
+        );
+        setLinkedAssetIds(ids);
+      } else {
+        setLinkedAssetIds(new Set());
+      }
     } catch (error) {
       console.error('Error fetching assets:', error);
       toast.error('Failed to load assets');
@@ -144,9 +159,16 @@ export default function NonCashAssetsPage() {
                     {getAssetTypeLabel(asset.asset_type)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={asset.is_liquid ? 'secondary' : 'outline'} className="text-xs">
-                      {asset.is_liquid ? 'Liquid' : 'Fixed'}
-                    </Badge>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Badge variant={asset.is_liquid ? 'secondary' : 'outline'} className="text-xs">
+                        {asset.is_liquid ? 'Liquid' : 'Fixed'}
+                      </Badge>
+                      {linkedAssetIds.has(asset.id) && (
+                        <Badge variant="default" className="text-xs bg-blue-600 hover:bg-blue-600">
+                          Linked
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right font-semibold">
                     {formatCurrency(asset.current_value)}
@@ -196,6 +218,11 @@ export default function NonCashAssetsPage() {
                       <Badge variant={asset.is_liquid ? 'secondary' : 'outline'} className="text-xs">
                         {asset.is_liquid ? 'Liquid' : 'Fixed'}
                       </Badge>
+                      {linkedAssetIds.has(asset.id) && (
+                        <Badge variant="default" className="text-xs bg-blue-600 hover:bg-blue-600">
+                          Linked
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   <Button
