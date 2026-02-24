@@ -29,6 +29,9 @@ import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
 import { Info, AlertTriangle } from 'lucide-react';
 
+// Epsilon for currency comparison - avoid false "over-allocating" when amount equals available (floating-point)
+const OVER_ALLOCATION_EPSILON = 0.01;
+
 interface AddToBufferDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -88,7 +91,7 @@ export function AddToBufferDialog({
     }
 
     // If amount exceeds available funds, show confirmation dialog
-    if (amountNum > availableToSave) {
+    if (amountNum > availableToSave + OVER_ALLOCATION_EPSILON) {
       setPendingAmount(amountNum);
       setShowConfirmation(true);
       return;
@@ -161,7 +164,7 @@ export function AddToBufferDialog({
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Remaining available:</span>
                     <span className={`font-semibold ${
-                      parseFloat(amount) > availableToSave ? 'text-destructive' : ''
+                      parseFloat(amount) > availableToSave + OVER_ALLOCATION_EPSILON ? 'text-destructive' : ''
                     }`}>
                       {formatCurrency(availableToSave - parseFloat(amount))}
                     </span>
@@ -169,7 +172,7 @@ export function AddToBufferDialog({
                 </div>
               </div>
               
-              {parseFloat(amount) > availableToSave && (
+              {parseFloat(amount) > availableToSave + OVER_ALLOCATION_EPSILON && (
                 <Alert>
                   <Info className="h-4 w-4" />
                   <AlertDescription>

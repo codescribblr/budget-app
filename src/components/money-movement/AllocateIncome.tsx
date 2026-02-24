@@ -45,9 +45,11 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
   const envelopeCategories = categories.filter(cat => !cat.is_system && !cat.is_goal);
   
   // Separate envelope goals, account-linked goals, and debt-paydown goals
-  const envelopeGoals = allGoals.filter(g => g.goal_type === 'envelope' && g.status === 'active');
-  const accountLinkedGoals = allGoals.filter(g => g.goal_type === 'account-linked' && g.status === 'active');
-  const debtPaydownGoals = allGoals.filter(g => g.goal_type === 'debt-paydown' && g.status === 'active');
+  // Exclude goals that have reached 100% - no need to recommend allocating to completed goals
+  const isGoalReached = (g: GoalWithDetails) => (g.progress_percentage ?? 0) >= 100;
+  const envelopeGoals = allGoals.filter(g => g.goal_type === 'envelope' && g.status === 'active' && !isGoalReached(g));
+  const accountLinkedGoals = allGoals.filter(g => g.goal_type === 'account-linked' && g.status === 'active' && !isGoalReached(g));
+  const debtPaydownGoals = allGoals.filter(g => g.goal_type === 'debt-paydown' && g.status === 'active' && !isGoalReached(g));
   
   // Function to fetch monthly funding data
   const fetchMonthlyFunding = async () => {

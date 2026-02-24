@@ -1,296 +1,354 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { DollarSign, TrendingUp, Calculator, Save } from 'lucide-react';
+import { DollarSign, Plus, Calculator, Save } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-import PreTaxDeductionsSection from '@/components/income/PreTaxDeductionsSection';
-import type { PreTaxDeductionItem } from '@/lib/types';
+import IncomeStreamCard from '@/components/income/IncomeStreamCard';
+import type { IncomeStream, PayFrequency, CreateIncomeStreamRequest } from '@/lib/types';
+import {
+  calculateAggregateMonthlyNetIncome,
+  calculateAggregateMonthlyGrossIncome,
+  calculateStreamPreTaxDeductions,
+} from '@/lib/income-calculations';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { handleApiError } from '@/lib/api-error-handler';
 
-type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly' | 'quarterly' | 'annually';
-
-interface IncomeSettings {
-  annual_income: number;
-  tax_rate: number;
-  pay_frequency: PayFrequency;
-  include_extra_paychecks: boolean;
-}
-
 interface BudgetSummary {
   monthly_gross_income: number;
+  pre_tax_deductions_monthly: number;
   taxes_per_month: number;
   monthly_net_income: number;
   monthly_budget: number;
   excess_deficit: number;
 }
 
+const VALID_TABS = ['current', 'scenario'] as const;
+type TabValue = (typeof VALID_TABS)[number];
+
 export default function IncomePage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
 
-  // Current settings
-  const [currentSettings, setCurrentSettings] = useState<IncomeSettings>({
-    annual_income: 0,
-    tax_rate: 0,
-    pay_frequency: 'monthly',
-    include_extra_paychecks: true,
-  });
+  const tabParam = searchParams.get('tab');
+  const activeTab: TabValue = tabParam === 'scenario' ? 'scenario' : 'current';
 
-  // Scenario settings (for playing with numbers)
-  const [scenarioSettings, setScenarioSettings] = useState<IncomeSettings>({
-    annual_income: 0,
-    tax_rate: 0,
-    pay_frequency: 'monthly',
-    include_extra_paychecks: true,
-  });
-
-  // Pre-tax deduction items
-  const [preTaxDeductionItems, setPreTaxDeductionItems] = useState<PreTaxDeductionItem[]>([]);
-
-  const [monthlyBudget, setMonthlyBudget] = useState(0);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Only fetch once on mount
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      loadData();
-    }
-  }, []);
-
-  // Calculate paychecks per month based on pay frequency
-  const getPaychecksPerMonth = (payFrequency: PayFrequency, includeExtra: boolean): number => {
-    switch (payFrequency) {
-      case 'weekly':
-        return 52 / 12;
-      case 'bi-weekly':
-        return includeExtra ? 26 / 12 : 24 / 12;
-      case 'semi-monthly':
-        return 2;
-      case 'monthly':
-        return 1;
-      case 'quarterly':
-        return 4 / 12;
-      case 'annually':
-        return 1 / 12;
-      default:
-        return 1;
-    }
-  };
-
-  // Calculate actual paychecks per year (for percentage calculations)
-  const getActualPaychecksPerYear = (payFrequency: PayFrequency): number => {
-    switch (payFrequency) {
-      case 'weekly':
-        return 52;
-      case 'bi-weekly':
-        return 26;
-      case 'semi-monthly':
-        return 24;
-      case 'monthly':
-        return 12;
-      case 'quarterly':
-        return 4;
-      case 'annually':
-        return 1;
-      default:
-        return 12;
-    }
-  };
-
-  // Calculate total monthly pre-tax deductions from items
-  const calculateTotalPreTaxDeductions = (
-    items: PreTaxDeductionItem[],
-    annualIncome: number,
-    payFrequency: PayFrequency,
-    includeExtra: boolean
-  ): number => {
-    const paychecksPerMonth = getPaychecksPerMonth(payFrequency, includeExtra);
-    const actualPaychecksPerYear = getActualPaychecksPerYear(payFrequency);
-
-    return items.reduce((total, item) => {
-      if (item.type === 'fixed') {
-        return total + (item.value * paychecksPerMonth);
+  const setActiveTab = useCallback(
+    (tab: TabValue) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (tab === 'current') {
+        params.delete('tab');
       } else {
-        const grossPerPaycheck = annualIncome / actualPaychecksPerYear;
-        const deductionPerPaycheck = grossPerPaycheck * (item.value / 100);
-        return total + (deductionPerPaycheck * paychecksPerMonth);
+        params.set('tab', tab);
       }
-    }, 0);
-  };
+      const qs = params.toString();
+      router.replace(qs ? `/income?${qs}` : '/income', { scroll: false });
+    },
+    [router, searchParams]
+  );
+  const [streams, setStreams] = useState<IncomeStream[]>([]);
+  const [monthlyBudget, setMonthlyBudget] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [newStreamData, setNewStreamData] = useState<CreateIncomeStreamRequest>({
+    name: '',
+    annual_income: 0,
+    tax_rate: 0,
+    pay_frequency: 'monthly',
+    include_extra_paychecks: true,
+    pre_tax_deduction_items: [],
+    include_in_budget: true,
+  });
 
-  // Track if fetch is in progress to prevent duplicate calls
-  const fetchingRef = useRef(false);
+  // Scenario planning state - copies of streams for "what if" editing (never persisted)
+  const [scenarioStreams, setScenarioStreams] = useState<IncomeStream[]>([]);
+  const nextTempIdRef = useRef(-1);
+
   const hasMountedRef = useRef(false);
+  const fetchingRef = useRef(false);
+
+  /** Merge saved scenario with current streams: use saved values for matching ids, include hypotheticals, drop orphaned */
+  const mergeScenarioWithCurrent = useCallback(
+    (currentStreams: IncomeStream[], savedScenario: IncomeStream[] | null): IncomeStream[] => {
+      if (!savedScenario?.length) return currentStreams.map((s) => ({ ...s }));
+
+      const currentIds = new Set(currentStreams.map((s) => s.id));
+      const savedById = new Map(savedScenario.map((s) => [s.id, s]));
+
+      const merged = currentStreams.map((s) => {
+        const saved = savedById.get(s.id);
+        return saved ? { ...s, ...saved } : { ...s };
+      });
+
+      const hypotheticals = savedScenario.filter((s) => s.id < 0);
+      return [...merged, ...hypotheticals].sort((a, b) => a.sort_order - b.sort_order);
+    },
+    []
+  );
 
   const loadData = async () => {
-    // Prevent duplicate calls
-    if (fetchingRef.current) {
-      return;
-    }
+    if (fetchingRef.current) return;
     fetchingRef.current = true;
-
     try {
       setIsLoading(true);
-
-      // Fetch settings and categories in parallel
-      const [settingsRes, categoriesRes] = await Promise.all([
-        fetch('/api/settings'),
+      const [streamsRes, categoriesRes, scenarioRes] = await Promise.all([
+        fetch('/api/income-streams'),
         fetch('/api/categories'),
+        fetch('/api/income-streams/scenario'),
       ]);
 
-      const settingsData = await settingsRes.json();
-      const categoriesData = await categoriesRes.json();
+      if (streamsRes.ok) {
+        const streamsData = await streamsRes.json();
+        setStreams(streamsData);
 
-      const settings: IncomeSettings = {
-        annual_income: parseFloat(settingsData.annual_salary || settingsData.annual_income || '0'),
-        tax_rate: parseFloat(settingsData.tax_rate || '0'),
-        pay_frequency: (settingsData.pay_frequency || 'monthly') as PayFrequency,
-        include_extra_paychecks: settingsData.include_extra_paychecks === 'true' || settingsData.include_extra_paychecks === true,
-      };
-
-      // Load pre-tax deduction items
-      let deductionItems: PreTaxDeductionItem[] = [];
-      if (settingsData.pre_tax_deduction_items) {
-        try {
-          deductionItems = JSON.parse(settingsData.pre_tax_deduction_items);
-        } catch (e) {
-          console.error('Error parsing pre_tax_deduction_items:', e);
+        let initialScenario = streamsData;
+        if (scenarioRes.ok) {
+          const { scenario } = await scenarioRes.json();
+          if (scenario?.length) {
+            initialScenario = mergeScenarioWithCurrent(streamsData, scenario);
+            const hypotheticalIds = initialScenario.filter((s: IncomeStream) => s.id < 0).map((s: IncomeStream) => s.id);
+            nextTempIdRef.current = hypotheticalIds.length ? Math.min(...hypotheticalIds) - 1 : -1;
+          }
         }
+        setScenarioStreams(initialScenario);
       }
 
-      setCurrentSettings(settings);
-      setScenarioSettings(settings);
-      setPreTaxDeductionItems(deductionItems);
-
-      // Calculate monthly budget from categories
-      const categories = Array.isArray(categoriesData) ? categoriesData : [];
-      const totalBudget = categories
-        .filter((cat: any) => !cat.is_system)
-        .reduce((sum: number, cat: any) => sum + parseFloat(cat.monthly_amount || '0'), 0);
-
-      setMonthlyBudget(totalBudget);
+      if (categoriesRes.ok) {
+        const categoriesData = await categoriesRes.json();
+        const categories = Array.isArray(categoriesData) ? categoriesData : [];
+        const total = categories
+          .filter((c: any) => !c.is_system)
+          .reduce((sum: number, c: any) => sum + parseFloat(c.monthly_amount || '0'), 0);
+        setMonthlyBudget(total);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
-      toast.error('Failed to load income settings');
+      toast.error('Failed to load income data');
     } finally {
       setIsLoading(false);
       fetchingRef.current = false;
     }
   };
 
-  const calculateBudget = (settings: IncomeSettings): BudgetSummary => {
-    // Calculate monthly gross income based on pay frequency
-    let monthly_gross_income: number;
-
-    switch (settings.pay_frequency) {
-      case 'weekly':
-        // 52 weeks per year
-        monthly_gross_income = (settings.annual_income / 52) * (52 / 12);
-        break;
-      case 'bi-weekly':
-        // 26 pay periods per year
-        if (settings.include_extra_paychecks) {
-          // Include all 26 paychecks in budget (average over 12 months)
-          monthly_gross_income = settings.annual_income / 12;
-        } else {
-          // Only budget for 24 paychecks (2 per month)
-          // The 2 extra paychecks per year are "bonus" money
-          monthly_gross_income = (settings.annual_income / 26) * 2;
-        }
-        break;
-      case 'semi-monthly':
-        // 24 pay periods per year (2 per month)
-        monthly_gross_income = (settings.annual_income / 24) * 2;
-        break;
-      case 'monthly':
-        // 12 pay periods per year
-        monthly_gross_income = settings.annual_income / 12;
-        break;
-      case 'quarterly':
-        // 4 pay periods per year
-        monthly_gross_income = (settings.annual_income / 4) / 3;
-        break;
-      case 'annually':
-        // 1 pay period per year
-        monthly_gross_income = settings.annual_income / 12;
-        break;
-      default:
-        monthly_gross_income = settings.annual_income / 12;
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      loadData();
     }
+  }, []);
 
-    // Calculate total monthly pre-tax deductions from items
-    const pre_tax_deductions_monthly = calculateTotalPreTaxDeductions(
-      preTaxDeductionItems,
-      settings.annual_income,
-      settings.pay_frequency,
-      settings.include_extra_paychecks
-    );
+  const scenarioStreamsRef = useRef(scenarioStreams);
+  scenarioStreamsRef.current = scenarioStreams;
 
-    const annual_taxable_income = settings.annual_income - (pre_tax_deductions_monthly * 12);
-    const taxes_per_month = (annual_taxable_income * settings.tax_rate) / 12;
-    const monthly_net_income = monthly_gross_income - taxes_per_month - pre_tax_deductions_monthly;
-    const excess_deficit = monthly_net_income - monthlyBudget;
+  const calculateBudget = (streamList: IncomeStream[]): BudgetSummary => {
+    const monthlyNet = calculateAggregateMonthlyNetIncome(streamList);
+    const monthlyGross = calculateAggregateMonthlyGrossIncome(streamList);
+
+    // Approximate taxes from net vs gross (simplified)
+    let totalTaxes = 0;
+    let totalPreTax = 0;
+    streamList
+      .filter((s) => s.include_in_budget)
+      .forEach((s) => {
+        const preTax = calculateStreamPreTaxDeductions(
+          s.pre_tax_deduction_items || [],
+          s.annual_income,
+          s.pay_frequency,
+          s.include_extra_paychecks
+        );
+        totalPreTax += preTax;
+        const annualTaxable = s.annual_income - preTax * 12;
+        totalTaxes += (annualTaxable * s.tax_rate) / 12;
+      });
 
     return {
-      monthly_gross_income,
-      taxes_per_month,
-      monthly_net_income,
+      monthly_gross_income: monthlyGross,
+      pre_tax_deductions_monthly: totalPreTax,
+      taxes_per_month: totalTaxes,
+      monthly_net_income: monthlyNet,
       monthly_budget: monthlyBudget,
-      excess_deficit,
+      excess_deficit: monthlyNet - monthlyBudget,
     };
   };
 
-  const currentBudget = calculateBudget(currentSettings);
-  const scenarioBudget = calculateBudget(scenarioSettings);
+  const currentBudget = calculateBudget(streams);
+  const scenarioBudget = calculateBudget(scenarioStreams);
 
-  const handleSaveSettings = async () => {
+  const handleAddStream = async () => {
+    if (!newStreamData.name.trim()) {
+      toast.error('Please enter a name for the income stream');
+      return;
+    }
     try {
-      setIsSaving(true);
-
-      const updates = [
-        { key: 'annual_income', value: currentSettings.annual_income.toString() },
-        { key: 'annual_salary', value: currentSettings.annual_income.toString() }, // Keep for backwards compatibility
-        { key: 'tax_rate', value: currentSettings.tax_rate.toString() },
-        { key: 'pay_frequency', value: currentSettings.pay_frequency },
-        { key: 'include_extra_paychecks', value: currentSettings.include_extra_paychecks.toString() },
-        { key: 'pre_tax_deduction_items', value: JSON.stringify(preTaxDeductionItems) },
-      ];
-
-      const response = await fetch('/api/settings', {
+      const res = await fetch('/api/income-streams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings: updates }),
+        body: JSON.stringify(newStreamData),
       });
-
-      if (!response.ok) {
-        const errorMessage = await handleApiError(response, 'Failed to save income settings');
-        throw new Error(errorMessage || 'Failed to save income settings');
+      if (!res.ok) {
+        const msg = await handleApiError(res, 'Failed to add income stream');
+        throw new Error(msg || 'Failed to add income stream');
       }
-
-      toast.success('Income settings saved successfully');
-      setScenarioSettings(currentSettings);
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      // Error toast already shown by handleApiError
-    } finally {
-      setIsSaving(false);
+      const created = await res.json();
+      setStreams((prev) => [...prev, created].sort((a, b) => a.sort_order - b.sort_order));
+      setScenarioStreams((prev) => [...prev, created].sort((a, b) => a.sort_order - b.sort_order));
+      toast.success('Income stream added');
+      setIsAddDialogOpen(false);
+      setNewStreamData({
+        name: '',
+        annual_income: 0,
+        tax_rate: 0,
+        pay_frequency: 'monthly',
+        include_extra_paychecks: true,
+        pre_tax_deduction_items: [],
+        include_in_budget: true,
+      });
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to add income stream');
     }
   };
 
-  const handleResetScenario = () => {
-    setScenarioSettings(currentSettings);
+  const handleUpdateStream = async (id: number, data: Partial<IncomeStream>) => {
+    try {
+      const res = await fetch(`/api/income-streams/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const msg = await handleApiError(res, 'Failed to update income stream');
+        throw new Error(msg || 'Failed to update income stream');
+      }
+      const updated = await res.json();
+      setStreams((prev) =>
+        prev.map((s) => (s.id === id ? updated : s)).sort((a, b) => a.sort_order - b.sort_order)
+      );
+      setScenarioStreams((prev) =>
+        prev.map((s) => (s.id === id ? updated : s)).sort((a, b) => a.sort_order - b.sort_order)
+      );
+      toast.success('Income stream updated');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update income stream');
+      throw error;
+    }
   };
+
+  const handleDeleteStream = async (id: number) => {
+    try {
+      const res = await fetch(`/api/income-streams/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const msg = await handleApiError(res, 'Failed to delete income stream');
+        throw new Error(msg || 'Failed to delete income stream');
+      }
+      setStreams((prev) => prev.filter((s) => s.id !== id));
+      setScenarioStreams((prev) => prev.filter((s) => s.id !== id));
+      toast.success('Income stream deleted');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete income stream');
+    }
+  };
+
+  const saveScenarioRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveScenario = useCallback(async (data: IncomeStream[]) => {
+    try {
+      await fetch('/api/income-streams/scenario', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenario: data }),
+      });
+    } catch (e) {
+      console.error('Failed to save scenario:', e);
+    }
+  }, []);
+
+  const handleResetScenario = async () => {
+    setScenarioStreams(streams.map((s) => ({ ...s })));
+    try {
+      await fetch('/api/income-streams/scenario', { method: 'DELETE' });
+    } catch (e) {
+      console.error('Failed to clear scenario:', e);
+    }
+  };
+
+  const scheduleScenarioSave = useCallback(
+    (data: IncomeStream[]) => {
+      if (saveScenarioRef.current) clearTimeout(saveScenarioRef.current);
+      saveScenarioRef.current = setTimeout(() => saveScenario(data), 500);
+    },
+    [saveScenario]
+  );
+
+  const handleScenarioUpdate = async (id: number, data: Partial<IncomeStream>) => {
+    setScenarioStreams((prev) => {
+      const next = prev
+        .map((s) => (s.id === id ? { ...s, ...data } : s))
+        .sort((a, b) => a.sort_order - b.sort_order);
+      scheduleScenarioSave(next);
+      return next;
+    });
+  };
+
+  const handleScenarioDelete = async (id: number) => {
+    setScenarioStreams((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      scheduleScenarioSave(next);
+      return next;
+    });
+  };
+
+  const handleAddHypotheticalStream = () => {
+    const tempId = nextTempIdRef.current;
+    nextTempIdRef.current -= 1;
+    const newStream: IncomeStream = {
+      id: tempId,
+      account_id: 0,
+      name: 'Hypothetical income',
+      annual_income: 0,
+      tax_rate: 0,
+      pay_frequency: 'monthly',
+      include_extra_paychecks: true,
+      pre_tax_deduction_items: [],
+      include_in_budget: true,
+      sort_order: 0,
+      created_at: '',
+      updated_at: '',
+    };
+    setScenarioStreams((prev) => {
+      const stream = { ...newStream, sort_order: prev.length };
+      const next = [...prev, stream].sort((a, b) => a.sort_order - b.sort_order);
+      scheduleScenarioSave(next);
+      return next;
+    });
+  };
+
+  // Flush pending scenario save on unmount (e.g. user navigates away)
+  useEffect(() => {
+    return () => {
+      if (saveScenarioRef.current) {
+        clearTimeout(saveScenarioRef.current);
+        saveScenarioRef.current = null;
+        saveScenario(scenarioStreamsRef.current);
+      }
+    };
+  }, [saveScenario]);
 
   if (isLoading) {
     return (
@@ -305,164 +363,75 @@ export default function IncomePage() {
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">Income Planning</h1>
         <p className="text-muted-foreground mt-1">
-          Manage your income settings and explore budget scenarios
+          Manage multiple income streams with different pay schedules and tax rates
         </p>
       </div>
 
-      <Tabs defaultValue="current" className="space-y-6">
+      {!isEditor && !permissionsLoading && (
+        <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md">
+          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            You only have read access. Only account owners and editors can modify income streams.
+          </p>
+        </div>
+      )}
+
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 max-w-md">
           <TabsTrigger value="current">Current Settings</TabsTrigger>
           <TabsTrigger value="scenario">Scenario Planning</TabsTrigger>
         </TabsList>
 
-        {/* Current Settings Tab */}
         <TabsContent value="current" className="space-y-6">
-          {!isEditor && !permissionsLoading && (
-            <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md">
-              <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                You only have read access to this account. Only account owners and editors can modify income settings.
-              </p>
-            </div>
-          )}
-
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Income Settings
-              </CardTitle>
-              <CardDescription>
-                Configure your annual income and tax rate
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="annual_income">Annual Income</Label>
-                  <Input
-                    id="annual_income"
-                    type="number"
-                    step="0.01"
-                    value={currentSettings.annual_income}
-                    onChange={(e) =>
-                      setCurrentSettings({
-                        ...currentSettings,
-                        annual_income: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    disabled={!isEditor || permissionsLoading}
-                  />
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5" />
+                    Income Streams
+                  </CardTitle>
+                  <CardDescription>
+                    Add each source of income (job, side hustle, rental, etc.) with its own pay schedule
+                  </CardDescription>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="tax_rate">Tax Rate (decimal)</Label>
-                  <Input
-                    id="tax_rate"
-                    type="number"
-                    step="0.0001"
-                    value={currentSettings.tax_rate}
-                    onChange={(e) =>
-                      setCurrentSettings({
-                        ...currentSettings,
-                        tax_rate: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    disabled={!isEditor || permissionsLoading}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    e.g., 0.2122 for 21.22%
-                  </p>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Pay Frequency Settings */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium">Pay Frequency</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="pay_frequency">How often are you paid?</Label>
-                    <Select
-                      value={currentSettings.pay_frequency}
-                      onValueChange={(value: PayFrequency) =>
-                        setCurrentSettings({
-                          ...currentSettings,
-                          pay_frequency: value,
-                        })
-                      }
-                      disabled={!isEditor || permissionsLoading}
-                    >
-                      <SelectTrigger id="pay_frequency">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="weekly">Weekly (52 paychecks/year)</SelectItem>
-                        <SelectItem value="bi-weekly">Bi-Weekly (26 paychecks/year)</SelectItem>
-                        <SelectItem value="semi-monthly">Semi-Monthly (24 paychecks/year)</SelectItem>
-                        <SelectItem value="monthly">Monthly (12 paychecks/year)</SelectItem>
-                        <SelectItem value="quarterly">Quarterly (4 paychecks/year)</SelectItem>
-                        <SelectItem value="annually">Annually (1 paycheck/year)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {currentSettings.pay_frequency === 'bi-weekly' && (
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Bi-Weekly Budget Options</Label>
-                      <div className="flex items-start space-x-2 pt-2">
-                        <Checkbox
-                          id="include_extra_paychecks"
-                          checked={currentSettings.include_extra_paychecks}
-                          onCheckedChange={(checked) =>
-                            setCurrentSettings({
-                              ...currentSettings,
-                              include_extra_paychecks: checked === true,
-                            })
-                          }
-                          disabled={!isEditor || permissionsLoading}
-                        />
-                        <div className="grid gap-1.5 leading-none">
-                          <label
-                            htmlFor="include_extra_paychecks"
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                          >
-                            Include extra paychecks in budget
-                          </label>
-                          <p className="text-xs text-muted-foreground">
-                            {currentSettings.include_extra_paychecks
-                              ? 'Budget includes all 26 paychecks averaged over 12 months'
-                              : 'Budget only includes 24 paychecks (2/month). The 2 extra paychecks per year are bonus money.'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Button 
-                  onClick={handleSaveSettings} 
-                  disabled={isSaving || !isEditor || permissionsLoading}
+                <Button
+                  onClick={() => setIsAddDialogOpen(true)}
+                  disabled={!isEditor || permissionsLoading}
                 >
-                  <Save className="mr-2 h-4 w-4" />
-                  {isSaving ? 'Saving...' : 'Save Settings'}
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Stream
                 </Button>
               </div>
+            </CardHeader>
+            <CardContent>
+              {streams.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground border rounded-lg border-dashed">
+                  <p className="mb-4">No income streams configured yet.</p>
+                  <Button
+                    onClick={() => setIsAddDialogOpen(true)}
+                    disabled={!isEditor || permissionsLoading}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add your first income stream
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {streams.map((stream) => (
+                    <IncomeStreamCard
+                      key={stream.id}
+                      stream={stream}
+                      onUpdate={handleUpdateStream}
+                      onDelete={handleDeleteStream}
+                      disabled={!isEditor || permissionsLoading}
+                    />
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Pre-Tax Deductions Section */}
-          <PreTaxDeductionsSection
-            items={preTaxDeductionItems}
-            annualIncome={currentSettings.annual_income}
-            payFrequency={currentSettings.pay_frequency}
-            includeExtraPaychecks={currentSettings.include_extra_paychecks}
-            onChange={setPreTaxDeductionItems}
-            disabled={!isEditor || permissionsLoading}
-          />
-
-          {/* Current Budget Summary */}
+          {/* Budget Summary */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <Card>
               <CardHeader className="pb-3">
@@ -474,9 +443,23 @@ export default function IncomePage() {
                 <div className="text-2xl font-bold">
                   {formatCurrency(currentBudget.monthly_gross_income)}
                 </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  From {streams.filter((s) => s.include_in_budget).length} stream(s)
+                </p>
               </CardContent>
             </Card>
-
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Pre-Tax Deductions
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  -{formatCurrency(currentBudget.pre_tax_deductions_monthly)}
+                </div>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -489,25 +472,6 @@ export default function IncomePage() {
                 </div>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Pre-Tax Deductions
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">
-                  -{formatCurrency(calculateTotalPreTaxDeductions(
-                    preTaxDeductionItems,
-                    currentSettings.annual_income,
-                    currentSettings.pay_frequency,
-                    currentSettings.include_extra_paychecks
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -520,7 +484,6 @@ export default function IncomePage() {
                 </div>
               </CardContent>
             </Card>
-
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -528,155 +491,88 @@ export default function IncomePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(currentBudget.monthly_budget)}
-                </div>
+                <div className="text-2xl font-bold">{formatCurrency(currentBudget.monthly_budget)}</div>
               </CardContent>
             </Card>
-
-            <Card className={currentBudget.excess_deficit >= 0 ? 'border-green-200' : 'border-red-200'}>
+            <Card
+              className={
+                currentBudget.excess_deficit >= 0 ? 'border-green-200' : 'border-red-200'
+              }
+            >
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {currentBudget.excess_deficit >= 0 ? 'Monthly Excess' : 'Monthly Deficit'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${currentBudget.excess_deficit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {currentBudget.excess_deficit >= 0 ? '+' : ''}{formatCurrency(currentBudget.excess_deficit)}
+                <div
+                  className={`text-2xl font-bold ${
+                    currentBudget.excess_deficit >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}
+                >
+                  {currentBudget.excess_deficit >= 0 ? '+' : ''}
+                  {formatCurrency(currentBudget.excess_deficit)}
                 </div>
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
-        {/* Scenario Planning Tab */}
         <TabsContent value="scenario" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calculator className="h-5 w-5" />
-                Scenario Planning
-              </CardTitle>
-              <CardDescription>
-                Adjust the numbers below to see how changes would affect your budget
-              </CardDescription>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calculator className="h-5 w-5" />
+                    Scenario Planning
+                  </CardTitle>
+                  <CardDescription>
+                    Edit income streams below to see how changes would affect your budget. Nothing is saved—your actual
+                    income data stays unchanged. Use Reset to discard scenario changes.
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={handleResetScenario}>
+                    Reset to Current
+                  </Button>
+                  <Button variant="outline" onClick={handleAddHypotheticalStream}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add hypothetical stream
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="scenario_annual_income">Annual Income</Label>
-                  <Input
-                    id="scenario_annual_income"
-                    type="number"
-                    step="0.01"
-                    value={scenarioSettings.annual_income}
-                    onChange={(e) =>
-                      setScenarioSettings({
-                        ...scenarioSettings,
-                        annual_income: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="scenario_tax_rate">Tax Rate (decimal)</Label>
-                  <Input
-                    id="scenario_tax_rate"
-                    type="number"
-                    step="0.0001"
-                    value={scenarioSettings.tax_rate}
-                    onChange={(e) =>
-                      setScenarioSettings({
-                        ...scenarioSettings,
-                        tax_rate: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    e.g., 0.2122 for 21.22%
+            <CardContent>
+              {scenarioStreams.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground border rounded-lg border-dashed">
+                  <p className="mb-4">No income streams to plan with.</p>
+                  <p className="text-sm mb-4">
+                    Add income streams in Current Settings first, or add a hypothetical stream above.
                   </p>
+                  <Button variant="outline" onClick={handleAddHypotheticalStream}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add hypothetical stream
+                  </Button>
                 </div>
-              </div>
-
-              <p className="text-sm text-muted-foreground">
-                Note: Scenario planning uses the same pre-tax deduction items configured in the Current Settings tab.
-              </p>
-
-              <Separator />
-
-              {/* Pay Frequency Settings */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium">Pay Frequency</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="scenario_pay_frequency">How often are you paid?</Label>
-                    <Select
-                      value={scenarioSettings.pay_frequency}
-                      onValueChange={(value: PayFrequency) =>
-                        setScenarioSettings({
-                          ...scenarioSettings,
-                          pay_frequency: value,
-                        })
-                      }
-                    >
-                      <SelectTrigger id="scenario_pay_frequency">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="weekly">Weekly (52 paychecks/year)</SelectItem>
-                        <SelectItem value="bi-weekly">Bi-Weekly (26 paychecks/year)</SelectItem>
-                        <SelectItem value="semi-monthly">Semi-Monthly (24 paychecks/year)</SelectItem>
-                        <SelectItem value="monthly">Monthly (12 paychecks/year)</SelectItem>
-                        <SelectItem value="quarterly">Quarterly (4 paychecks/year)</SelectItem>
-                        <SelectItem value="annually">Annually (1 paycheck/year)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {scenarioSettings.pay_frequency === 'bi-weekly' && (
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Bi-Weekly Budget Options</Label>
-                      <div className="flex items-start space-x-2 pt-2">
-                        <Checkbox
-                          id="scenario_include_extra_paychecks"
-                          checked={scenarioSettings.include_extra_paychecks}
-                          onCheckedChange={(checked) =>
-                            setScenarioSettings({
-                              ...scenarioSettings,
-                              include_extra_paychecks: checked === true,
-                            })
-                          }
-                        />
-                        <div className="grid gap-1.5 leading-none">
-                          <label
-                            htmlFor="scenario_include_extra_paychecks"
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                          >
-                            Include extra paychecks in budget
-                          </label>
-                          <p className="text-xs text-muted-foreground">
-                            {scenarioSettings.include_extra_paychecks
-                              ? 'Budget includes all 26 paychecks averaged over 12 months'
-                              : 'Budget only includes 24 paychecks (2/month). The 2 extra paychecks per year are bonus money.'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+              ) : (
+                <div className="space-y-4">
+                  {scenarioStreams.map((stream) => (
+                    <IncomeStreamCard
+                      key={stream.id}
+                      stream={stream}
+                      onUpdate={handleScenarioUpdate}
+                      onDelete={handleScenarioDelete}
+                      scenarioMode
+                    />
+                  ))}
                 </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Button variant="outline" onClick={handleResetScenario}>
-                  Reset to Current
-                </Button>
-              </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Scenario Results */}
+          {/* Current vs Scenario comparison */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Current Column */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Current</h3>
               <Card>
@@ -686,22 +582,23 @@ export default function IncomePage() {
                     <span className="font-medium">{formatCurrency(currentBudget.monthly_gross_income)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Taxes</span>
-                    <span className="font-medium text-red-600">-{formatCurrency(currentBudget.taxes_per_month)}</span>
+                    <span className="text-sm text-muted-foreground">Pre-Tax Deductions</span>
+                    <span className="font-medium text-red-600">
+                      -{formatCurrency(currentBudget.pre_tax_deductions_monthly)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Pre-Tax Deductions</span>
-                    <span className="font-medium text-red-600">-{formatCurrency(calculateTotalPreTaxDeductions(
-                      preTaxDeductionItems,
-                      currentSettings.annual_income,
-                      currentSettings.pay_frequency,
-                      currentSettings.include_extra_paychecks
-                    ))}</span>
+                    <span className="text-sm text-muted-foreground">Taxes</span>
+                    <span className="font-medium text-red-600">
+                      -{formatCurrency(currentBudget.taxes_per_month)}
+                    </span>
                   </div>
                   <Separator />
                   <div className="flex justify-between">
                     <span className="font-medium">Net Income</span>
-                    <span className="font-bold text-green-600">{formatCurrency(currentBudget.monthly_net_income)}</span>
+                    <span className="font-bold text-green-600">
+                      {formatCurrency(currentBudget.monthly_net_income)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium">Budget</span>
@@ -709,21 +606,23 @@ export default function IncomePage() {
                   </div>
                   <Separator />
                   <div className="flex justify-between">
-                    <span className="font-bold">{currentBudget.excess_deficit >= 0 ? 'Excess' : 'Deficit'}</span>
-                    <span className={`font-bold text-lg ${currentBudget.excess_deficit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {currentBudget.excess_deficit >= 0 ? '+' : ''}{formatCurrency(currentBudget.excess_deficit)}
+                    <span className="font-bold">
+                      {currentBudget.excess_deficit >= 0 ? 'Excess' : 'Deficit'}
+                    </span>
+                    <span
+                      className={`font-bold text-lg ${
+                        currentBudget.excess_deficit >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}
+                    >
+                      {currentBudget.excess_deficit >= 0 ? '+' : ''}
+                      {formatCurrency(currentBudget.excess_deficit)}
                     </span>
                   </div>
                 </CardContent>
               </Card>
             </div>
-
-            {/* Scenario Column */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                Scenario
-                <TrendingUp className="h-4 w-4" />
-              </h3>
+              <h3 className="text-lg font-semibold">Scenario</h3>
               <Card className="border-blue-200">
                 <CardContent className="pt-6 space-y-3">
                   <div className="flex justify-between">
@@ -731,22 +630,23 @@ export default function IncomePage() {
                     <span className="font-medium">{formatCurrency(scenarioBudget.monthly_gross_income)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Taxes</span>
-                    <span className="font-medium text-red-600">-{formatCurrency(scenarioBudget.taxes_per_month)}</span>
+                    <span className="text-sm text-muted-foreground">Pre-Tax Deductions</span>
+                    <span className="font-medium text-red-600">
+                      -{formatCurrency(scenarioBudget.pre_tax_deductions_monthly)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Pre-Tax Deductions</span>
-                    <span className="font-medium text-red-600">-{formatCurrency(calculateTotalPreTaxDeductions(
-                      preTaxDeductionItems,
-                      scenarioSettings.annual_income,
-                      scenarioSettings.pay_frequency,
-                      scenarioSettings.include_extra_paychecks
-                    ))}</span>
+                    <span className="text-sm text-muted-foreground">Taxes</span>
+                    <span className="font-medium text-red-600">
+                      -{formatCurrency(scenarioBudget.taxes_per_month)}
+                    </span>
                   </div>
                   <Separator />
                   <div className="flex justify-between">
                     <span className="font-medium">Net Income</span>
-                    <span className="font-bold text-green-600">{formatCurrency(scenarioBudget.monthly_net_income)}</span>
+                    <span className="font-bold text-green-600">
+                      {formatCurrency(scenarioBudget.monthly_net_income)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium">Budget</span>
@@ -754,34 +654,133 @@ export default function IncomePage() {
                   </div>
                   <Separator />
                   <div className="flex justify-between">
-                    <span className="font-bold">{scenarioBudget.excess_deficit >= 0 ? 'Excess' : 'Deficit'}</span>
-                    <span className={`font-bold text-lg ${scenarioBudget.excess_deficit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {scenarioBudget.excess_deficit >= 0 ? '+' : ''}{formatCurrency(scenarioBudget.excess_deficit)}
+                    <span className="font-bold">
+                      {scenarioBudget.excess_deficit >= 0 ? 'Excess' : 'Deficit'}
+                    </span>
+                    <span
+                      className={`font-bold text-lg ${
+                        scenarioBudget.excess_deficit >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}
+                    >
+                      {scenarioBudget.excess_deficit >= 0 ? '+' : ''}
+                      {formatCurrency(scenarioBudget.excess_deficit)}
                     </span>
                   </div>
                 </CardContent>
               </Card>
-              
-              {/* Comparison */}
-              {scenarioBudget.excess_deficit !== currentBudget.excess_deficit && (
-                <Card className="bg-blue-50 border-blue-200">
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">Change in Excess/Deficit:</span>
-                      <span className={`font-bold text-lg ${(scenarioBudget.excess_deficit - currentBudget.excess_deficit) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {(scenarioBudget.excess_deficit - currentBudget.excess_deficit) >= 0 ? '+' : ''}
-                        {formatCurrency(scenarioBudget.excess_deficit - currentBudget.excess_deficit)}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </div>
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Add Stream Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Income Stream</DialogTitle>
+            <DialogDescription>
+              Add a new source of income (e.g., primary job, side hustle, rental income)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Name *</Label>
+              <Input
+                value={newStreamData.name}
+                onChange={(e) => setNewStreamData({ ...newStreamData, name: e.target.value })}
+                placeholder="e.g., Primary Job"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Annual Income</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newStreamData.annual_income || ''}
+                  onChange={(e) =>
+                    setNewStreamData({
+                      ...newStreamData,
+                      annual_income: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Tax Rate (decimal)</Label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  value={newStreamData.tax_rate ?? ''}
+                  onChange={(e) =>
+                    setNewStreamData({
+                      ...newStreamData,
+                      tax_rate: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Pay Frequency</Label>
+              <Select
+                value={newStreamData.pay_frequency}
+                onValueChange={(v: PayFrequency) =>
+                  setNewStreamData({ ...newStreamData, pay_frequency: v })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="bi-weekly">Bi-Weekly</SelectItem>
+                  <SelectItem value="semi-monthly">Semi-Monthly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                  <SelectItem value="annually">Annually</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {newStreamData.pay_frequency === 'bi-weekly' && (
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="new-include-extra"
+                  checked={newStreamData.include_extra_paychecks ?? true}
+                  onCheckedChange={(c) =>
+                    setNewStreamData({ ...newStreamData, include_extra_paychecks: c === true })
+                  }
+                />
+                <Label htmlFor="new-include-extra" className="cursor-pointer">
+                  Include extra paychecks in budget
+                </Label>
+              </div>
+            )}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="new-include-budget"
+                checked={newStreamData.include_in_budget ?? true}
+                onCheckedChange={(c) =>
+                  setNewStreamData({ ...newStreamData, include_in_budget: c === true })
+                }
+              />
+              <Label htmlFor="new-include-budget" className="cursor-pointer">
+                Include in budget calculations
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddStream}>
+              <Save className="h-4 w-4 mr-2" />
+              Add Stream
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-
 
