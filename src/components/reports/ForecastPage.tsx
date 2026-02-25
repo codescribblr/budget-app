@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatCurrencyAbbreviated } from '@/lib/utils';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart, ReferenceLine, ComposedChart, Scatter } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Calendar, Info, Palmtree } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Calendar, Info, Palmtree, ChevronDown } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { HelpPanel, HelpSection } from '@/components/ui/help-panel';
@@ -62,6 +63,18 @@ interface TimelineEvent {
   description?: string;
 }
 
+/** Calculate projected asset value at liquidation year with compound growth */
+function getProjectedAssetValueAtYear(
+  asset: NonCashAsset,
+  liquidationYear: number
+): number {
+  const currentValue = asset.current_value || 0;
+  const returnRate = (asset.estimated_return_percentage || 0) / 100;
+  const currentYear = new Date().getFullYear();
+  const yearsUntilLiquidation = Math.max(0, liquidationYear - currentYear);
+  return currentValue * Math.pow(1 + returnRate, yearsUntilLiquidation);
+}
+
 export default function ForecastPage() {
   const [snapshots, setSnapshots] = useState<NetWorthSnapshot[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -93,6 +106,9 @@ export default function ForecastPage() {
   const [showEventDialog, setShowEventDialog] = useState(false);
   const [selectedYearForEvent, setSelectedYearForEvent] = useState<number | null>(null);
   const [editingEvent, setEditingEvent] = useState<TimelineEvent | null>(null);
+  const [presetLiquidationAssetId, setPresetLiquidationAssetId] = useState<number | null>(null);
+  const [parametersPanelOpen, setParametersPanelOpen] = useState(false);
+  const [parametersPanelScrollTo, setParametersPanelScrollTo] = useState<string | undefined>(undefined);
   
   // Calculate forecast years based on current age and desired forecast age
   const forecastYears = useMemo(() => {
@@ -581,9 +597,9 @@ export default function ForecastPage() {
     const incomeGrowthDecimal = incomeGrowthRate / 100;
     const inflationDecimal = inflationRate / 100;
     
-    // Calculate retirement income (SS + other)
+    // Calculate retirement income (SS + other + asset-linked streams)
     // Social Security starts at socialSecurityStartAge, not retirement age
-    // Social Security doesn't grow after starting, but other retirement income can grow
+    // Social Security doesn't grow after starting, but other retirement income and asset-linked income can grow
     const annualSocialSecurity = calculateSocialSecurityBenefit;
     let otherRetirementIncomeValue = otherRetirementIncome;
     
@@ -607,6 +623,10 @@ export default function ForecastPage() {
     // Track base expenses for expense_change events
     let baseAnnualExpenses = currentAnnualExpenses;
     let expenseChangeYear = 0; // Track when expenses last changed
+
+    // Track cumulative loan payments removed - subtract from inflated base each year
+    // (Don't modify base - budget may or may not include loan payments; this works either way)
+    let cumulativeLoanPaymentsRemoved = 0;
 
     // Track assets liquidated via timeline events - income from linked streams stops from that year onward
     const liquidatedAssetIds = new Set<number>();
@@ -634,8 +654,7 @@ export default function ForecastPage() {
             };
           }
         } else if (event.type === 'windfall' && event.amount) {
-          // Add windfall to available cash (liquid assets)
-          forecastAccounts += event.amount;
+          // Windfall is added to forecastIncome below so it flows through net cash flow
         } else if (event.type === 'expense_change' && event.amount !== undefined) {
           // Update base expenses from this year forward
           baseAnnualExpenses = event.amount;
@@ -652,16 +671,19 @@ export default function ForecastPage() {
         ? baseAnnualExpenses 
         : baseAnnualExpenses * Math.pow(1 + inflationDecimal, yearsSinceExpenseChange);
       
-      // Track loans paid off this year and remove their payments from expenses
+      // Loan payoffs: add to cumulative and subtract from inflated expenses each year
+      // Cumulative is subtracted from inflated base - permanent reduction without modifying base
       const loansPaidOffThisYear = loansPaidOffByYear.get(forecastYear) || [];
       let totalLoanPaymentsRemoved = 0;
       loansPaidOffThisYear.forEach(({ paymentAmount }) => {
         totalLoanPaymentsRemoved += paymentAmount;
       });
-      // Remove loan payments from expenses after payoff (payments stop after maturity)
-      annualExpenses -= totalLoanPaymentsRemoved;
+      if (totalLoanPaymentsRemoved > 0) {
+        cumulativeLoanPaymentsRemoved += totalLoanPaymentsRemoved;
+      }
+      annualExpenses -= cumulativeLoanPaymentsRemoved;
       
-      // Compute work income from streams not linked to liquidated assets
+      // Compute income from streams: include all include_in_budget streams not linked to liquidated assets
       const activeStreams = incomeStreams?.length
         ? incomeStreams.filter(
             (s: IncomeStream) =>
@@ -673,12 +695,20 @@ export default function ForecastPage() {
         activeStreams.length > 0 ? calculateAggregateMonthlyNetIncome(activeStreams) : monthlyNetIncome;
       let workIncomeForYear = effectiveMonthlyNet * 12;
       
+      // Asset-linked streams continue in retirement until the asset is liquidated
+      const assetLinkedStreams = activeStreams.filter(
+        (s: IncomeStream) => s.linked_non_cash_asset_id != null
+      );
+      const assetLinkedAnnualIncome = assetLinkedStreams.length > 0
+        ? calculateAggregateMonthlyNetIncome(assetLinkedStreams) * 12
+        : 0;
+      
       // Determine income for this year
       const isSocialSecurityStarted = socialSecurityStartYear ? forecastYear >= socialSecurityStartYear : false;
       
       if (isYearRetired) {
-        // After retirement: work income stops, retirement income begins
-        // Social Security only starts at socialSecurityStartAge (not retirement age)
+        // After retirement: work income stops, but asset-linked income continues until liquidation
+        // Retirement income = Social Security + other retirement income + asset-linked streams
         let annualRetirementIncome = 0;
         
         if (isSocialSecurityStarted) {
@@ -686,15 +716,22 @@ export default function ForecastPage() {
           annualRetirementIncome += annualSocialSecurity;
         }
         
-        // Other retirement income can grow after retirement starts
+        // Other retirement income and asset-linked income can grow after retirement starts
         // For current year, don't apply growth
         if (!isCurrentYear && (yearOffset > 1 || (retirementYear && forecastYear > retirementYear))) {
-          // Apply growth only to other retirement income
           otherRetirementIncomeValue *= (1 + incomeGrowthDecimal);
         }
         annualRetirementIncome += otherRetirementIncomeValue;
         
+        // Asset-linked income streams continue until asset is liquidated (recalculated each year as assets may liquidate)
+        annualRetirementIncome += assetLinkedAnnualIncome;
+        
         forecastIncome = annualRetirementIncome;
+        // Add windfall to income so it flows through net cash flow and displays correctly
+        const totalWindfallThisYear = eventsThisYear
+          .filter(e => e.type === 'windfall' && e.amount)
+          .reduce((sum, e) => sum + (e.amount || 0), 0);
+        forecastIncome += totalWindfallThisYear;
         // Calculate net cash flow after expenses
         const netCashFlow = forecastIncome - annualExpenses;
         // For current year, don't apply cash flow changes (show current values)
@@ -718,6 +755,11 @@ export default function ForecastPage() {
         } else {
           forecastIncome *= 1 + incomeGrowthDecimal;
         }
+        // Add windfall to income so it flows through net cash flow and displays correctly
+        const totalWindfallThisYear = eventsThisYear
+          .filter(e => e.type === 'windfall' && e.amount)
+          .reduce((sum, e) => sum + (e.amount || 0), 0);
+        forecastIncome += totalWindfallThisYear;
         // Calculate net cash flow after expenses
         const netCashFlow = forecastIncome - annualExpenses;
         // For current year, don't apply cash flow changes (show current values)
@@ -777,8 +819,10 @@ export default function ForecastPage() {
       }
       
       // Determine if distributions are needed for cash flow
-      const cashFlowNeeded = forecastAccounts < 0;
-      const shortfall = cashFlowNeeded ? Math.abs(forecastAccounts) : 0;
+      // Keep a small cash buffer (3 months of expenses) - take from liquid assets before depleting cash
+      const cashBuffer = annualExpenses * 0.25; // 3 months of expenses
+      const cashFlowNeeded = forecastAccounts < cashBuffer;
+      const shortfall = cashFlowNeeded ? Math.max(0, cashBuffer - forecastAccounts) : 0;
       
       // Determine final distribution amount based on RMD and cash flow needs
       // Distributions from RMD accounts allowed starting at age 59.5 (no penalty)
@@ -1227,43 +1271,6 @@ export default function ForecastPage() {
     });
   }, [forecastData, retirementYearForChart, timelineEvents, cashRunsOutYear, liquidAssetsRunOutYear]);
 
-  // Debug logging for ReferenceLine
-  useEffect(() => {
-    console.log('=== ReferenceLine Debug Info ===');
-    console.log('birthYear:', birthYear);
-    console.log('retirementAge:', retirementAge);
-    console.log('retirementYearForChart:', retirementYearForChart);
-    console.log('retirementYearForChart type:', typeof retirementYearForChart);
-    console.log('retirementYearForChart.toString():', retirementYearForChart?.toString());
-    
-    if (chartData && chartData.length > 0) {
-      console.log('chartData length:', chartData.length);
-      console.log('First 3 chartData labels:', chartData.slice(0, 3).map(d => d.label));
-      console.log('Last 3 chartData labels:', chartData.slice(-3).map(d => d.label));
-      console.log('All chartData labels:', chartData.map(d => d.label));
-      
-      if (retirementYearForChart) {
-        const retirementLabel = retirementYearForChart.toString();
-        const foundInChartData = chartData.find(d => d.label === retirementLabel);
-        console.log('Looking for retirement year in chartData:', retirementLabel);
-        console.log('Found in chartData:', foundInChartData ? 'YES' : 'NO');
-        if (foundInChartData) {
-          console.log('Found data point:', foundInChartData);
-        } else {
-          console.log('Retirement year NOT found in chartData labels!');
-          console.log('Closest labels:', chartData
-            .map(d => ({ label: d.label, diff: Math.abs(parseInt(d.label) - retirementYearForChart) }))
-            .sort((a, b) => a.diff - b.diff)
-            .slice(0, 5));
-        }
-      }
-    } else {
-      console.log('chartData is empty or undefined');
-    }
-    console.log('Will render ReferenceLine?', !!retirementYearForChart);
-    console.log('================================');
-  }, [birthYear, retirementAge, retirementYearForChart, chartData]);
-
   // Retirement line position state (manual overlay due to ReferenceLine issues with ComposedChart)
   const [linePosition, setLinePosition] = useState({ x: 0, height: 0, topOffset: 20 });
   const lineContainerRef = useRef<HTMLDivElement>(null);
@@ -1381,28 +1388,86 @@ export default function ForecastPage() {
     };
   }, [accounts, assets, creditCards, loans]);
 
-  // Calculate key metrics
+  // Calculate retirement year for metrics
+  const retirementYearForMetrics = useMemo(() => {
+    if (!birthYear) return null;
+    return birthYear + retirementAge;
+  }, [birthYear, retirementAge]);
+
+  // Calculate key metrics - emphasize net worth at retirement, not at forecast end
   const metrics = useMemo(() => {
     const firstForecast = forecastData.find(p => p.forecast !== null);
     const lastForecast = forecastData[forecastData.length - 1];
     
     if (!lastForecast || !firstForecast) return null;
     
-    const netWorthChange = lastForecast.netWorth - firstForecast.netWorth;
+    // Find the data point at retirement year (or last forecast if retirement is beyond forecast)
+    const retirementPoint = retirementYearForMetrics
+      ? forecastData.find(p => p.year === retirementYearForMetrics)
+      : null;
+    const projectedAtRetirement = retirementPoint ?? lastForecast;
+    
+    const netWorthChangeToRetirement = projectedAtRetirement.netWorth - firstForecast.netWorth;
     const netWorthChangePercent = firstForecast.netWorth 
-      ? ((netWorthChange / firstForecast.netWorth) * 100)
+      ? ((netWorthChangeToRetirement / firstForecast.netWorth) * 100)
       : 0;
     
     return {
       currentNetWorth,
-      projectedNetWorth: lastForecast.netWorth,
-      netWorthChange,
+      projectedNetWorth: projectedAtRetirement.netWorth,
+      projectedNetWorthAtForecastEnd: lastForecast.netWorth,
+      netWorthChange: netWorthChangeToRetirement,
       netWorthChangePercent,
       yearsToProject: forecastYears,
       forecastAge,
       currentAge: birthYear ? new Date().getFullYear() - birthYear : null,
+      retirementYear: retirementYearForMetrics,
+      isRetirementInForecast: retirementPoint !== null,
     };
-  }, [forecastData, currentNetWorth, forecastYears, forecastAge, birthYear]);
+  }, [forecastData, currentNetWorth, forecastYears, forecastAge, birthYear, retirementYearForMetrics, retirementAge]);
+
+  // Calculate affordability status for retirement at current age
+  const affordability = useMemo(() => {
+    if (!forecastData.length || !birthYear) return null;
+    
+    const hasCashShortfall = cashRunsOutYear !== null;
+    const hasLiquidShortfall = liquidAssetsRunOutYear !== null;
+    
+    // Find peak distribution rate (as % of total assets) - sustainable is typically < 4%
+    let maxDistributionRate = 0;
+    for (const point of forecastData) {
+      if (point.distributionAmount > 0 && point.assets > 0) {
+        const rate = (point.distributionAmount / (point.assets + point.accounts)) * 100;
+        maxDistributionRate = Math.max(maxDistributionRate, rate);
+      }
+    }
+    
+    let status: 'affordable' | 'at_risk' | 'not_recommended';
+    let summary: string;
+    
+    if (hasCashShortfall || hasLiquidShortfall) {
+      if (hasCashShortfall && cashRunsOutYear && (birthYear + retirementAge) >= cashRunsOutYear - 5) {
+        status = 'not_recommended';
+        summary = `Retiring at age ${retirementAge} may not be sustainable. Cash runs out in ${cashRunsOutYear} (age ${cashRunsOutYear - birthYear}).`;
+      } else {
+        status = 'at_risk';
+        summary = hasLiquidShortfall
+          ? `Liquid assets run out in ${liquidAssetsRunOutYear}. Consider adding liquidation events for illiquid assets.`
+          : `Cash runs out in ${cashRunsOutYear}. Distributions from investments will be needed.`;
+      }
+    } else if (maxDistributionRate > 6) {
+      status = 'at_risk';
+      summary = `Distribution rate peaks at ${maxDistributionRate.toFixed(1)}% of assets. Monitor sustainability.`;
+    } else if (maxDistributionRate > 4) {
+      status = 'at_risk';
+      summary = `Distribution rate peaks at ${maxDistributionRate.toFixed(1)}%. Generally sustainable but worth monitoring.`;
+    } else {
+      status = 'affordable';
+      summary = `Retiring at age ${retirementAge} appears sustainable. Projected to stay solvent through age ${forecastAge}.`;
+    }
+    
+    return { status, summary };
+  }, [forecastData, birthYear, retirementAge, forecastAge, cashRunsOutYear, liquidAssetsRunOutYear]);
 
   // Show birth year dialog if needed
   if (showBirthYearDialog) {
@@ -1506,6 +1571,31 @@ export default function ForecastPage() {
         </p>
       </div>
 
+      {/* Affordability Summary */}
+      {affordability && birthYear && (
+        <Alert className={
+          affordability.status === 'affordable' ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/20' :
+          affordability.status === 'at_risk' ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20' :
+          'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20'
+        }>
+          <Palmtree className={`h-4 w-4 ${
+            affordability.status === 'affordable' ? 'text-green-600 dark:text-green-400' :
+            affordability.status === 'at_risk' ? 'text-amber-600 dark:text-amber-400' :
+            'text-red-600 dark:text-red-400'
+          }`} />
+          <AlertDescription className={
+            affordability.status === 'affordable' ? 'text-green-900 dark:text-green-100' :
+            affordability.status === 'at_risk' ? 'text-amber-900 dark:text-amber-100' :
+            'text-red-900 dark:text-red-100'
+          }>
+            <strong className="font-semibold">
+              {affordability.status === 'affordable' ? 'Affordable' : affordability.status === 'at_risk' ? 'At Risk' : 'Not Recommended'}
+            </strong>
+            {' — '}{affordability.summary}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Key Metrics */}
       {metrics && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1523,11 +1613,14 @@ export default function ForecastPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Projected Net Worth (Age {forecastAge})
+                Projected Net Worth at Retirement
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-primary">{formatCurrency(metrics.projectedNetWorth)}</div>
+              <div className="text-xs text-muted-foreground mt-2">
+                Age {retirementAge} (Year {metrics.retirementYear})
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -1544,13 +1637,58 @@ export default function ForecastPage() {
                   <TrendingDown className="h-6 w-6" />
                 )}
                 {formatCurrency(Math.abs(metrics.netWorthChange))}
-                <span className="text-lg text-muted-foreground">
-                  ({metrics.netWorthChangePercent.toFixed(1)}%)
-                </span>
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">
+                ({metrics.netWorthChangePercent.toFixed(1)}%)
               </div>
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Retirement Summary Report */}
+      {metrics && birthYear && forecastData.length > 0 && (
+        <Collapsible defaultOpen={true} className="group">
+          <Card>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                <CardTitle className="flex items-center justify-between">
+                  Retirement Summary
+                  <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </CardTitle>
+                <CardDescription>
+                  Key dates and milestones for retiring at age {retirementAge}
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="pt-0 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-2">
+                    <p><strong>Retirement Year:</strong> {metrics.retirementYear} (Age {retirementAge})</p>
+                    <p><strong>Years Until Retirement:</strong> {Math.max(0, (metrics.retirementYear ?? 0) - new Date().getFullYear())}</p>
+                    <p><strong>Years of Retirement in Forecast:</strong> {Math.max(0, forecastAge - retirementAge)}</p>
+                  </div>
+                  <div className="space-y-2">
+                    {cashRunsOutYear ? (
+                      <p className="text-amber-600 dark:text-amber-400"><strong>Cash Runs Out:</strong> {cashRunsOutYear} (Age {cashRunsOutYear - birthYear})</p>
+                    ) : (
+                      <p className="text-green-600 dark:text-green-400"><strong>Cash:</strong> Stays positive through forecast</p>
+                    )}
+                    {liquidAssetsRunOutYear ? (
+                      <p className="text-amber-600 dark:text-amber-400"><strong>Liquid Assets Run Out:</strong> {liquidAssetsRunOutYear} (Age {liquidAssetsRunOutYear - birthYear})</p>
+                    ) : (
+                      <p className="text-green-600 dark:text-green-400"><strong>Liquid Assets:</strong> Available through forecast</p>
+                    )}
+                    {forecastData.find(p => p.distributionStartYear !== null) && (
+                      <p><strong>Distributions Start:</strong> Year {forecastData.find(p => p.distributionStartYear !== null)?.distributionStartYear}</p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       )}
 
       {/* Assumptions Callout */}
@@ -1765,7 +1903,7 @@ export default function ForecastPage() {
 
                     <HelpSection title="Distributions & Cash Flow">
                       <p>
-                        When your available cash runs out (goes to $0 or negative), distributions are automatically taken from investment accounts to maintain solvency.
+                        When your available cash falls below a 3-month expense buffer, distributions are automatically taken from liquid investment assets to maintain the buffer. This helps avoid running cash to zero before tapping investments.
                       </p>
                       <p className="mt-2">
                         Distribution priority:
@@ -1831,7 +1969,7 @@ export default function ForecastPage() {
                                 <li key={event.id}>
                                   <strong>Year {event.year}</strong> (Age {birthYear ? event.year - birthYear : 'N/A'}):{' '}
                                   {event.type === 'liquidation' && eventAsset && (
-                                    <>Liquidation of {eventAsset.name} ({formatCurrency(eventAsset.current_value || 0)})</>
+                                    <>Liquidation of {eventAsset.name} ({formatCurrency(getProjectedAssetValueAtYear(eventAsset, event.year))} projected)</>
                                   )}
                                   {event.type === 'windfall' && (
                                     <>Windfall of {formatCurrency(event.amount || 0)}</>
@@ -1900,6 +2038,12 @@ export default function ForecastPage() {
                   Modify Parameters →
                 </Button>
               }
+              open={parametersPanelOpen}
+              onOpenChange={(open) => {
+                setParametersPanelOpen(open);
+                if (!open) setParametersPanelScrollTo(undefined);
+              }}
+              scrollToId={parametersPanelScrollTo}
             >
               <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2115,11 +2259,38 @@ export default function ForecastPage() {
           )}
 
           {/* Timeline Events */}
-          <div className="pt-4 border-t">
+          <div id="timeline-events-section" className="pt-4 border-t">
             <h3 className="text-lg font-semibold mb-4">Timeline Events</h3>
             <p className="text-sm text-muted-foreground mb-4">
               Add events to your forecast timeline to account for major financial changes. Click on any year in the chart to add an event for that year.
             </p>
+            {(() => {
+              const illiquidAssets = assets.filter(a => a.is_liquid === false);
+              const assetsWithLiquidationEvent = new Set(timelineEvents.filter(e => e.type === 'liquidation' && e.assetId).map(e => e.assetId!));
+              const assetsNeedingLiquidationPlan = illiquidAssets.filter(a => !assetsWithLiquidationEvent.has(a.id));
+              return assetsNeedingLiquidationPlan.length > 0 ? (
+                <div className="mb-4">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Plan liquidation for illiquid assets:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {assetsNeedingLiquidationPlan.map((asset) => (
+                      <Button
+                        key={asset.id}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setPresetLiquidationAssetId(asset.id);
+                          setSelectedYearForEvent(liquidAssetsRunOutYear ?? retirementYearForChart ?? new Date().getFullYear() + 5);
+                          setEditingEvent(null);
+                          setShowEventDialog(true);
+                        }}
+                      >
+                        Plan: {asset.name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null;
+            })()}
             {timelineEvents.length > 0 && (
               <div className="mb-4 space-y-2">
                 {timelineEvents.map((event) => {
@@ -2138,7 +2309,7 @@ export default function ForecastPage() {
                         </div>
                         {event.type === 'liquidation' && eventAsset && (
                           <p className="text-sm text-muted-foreground">
-                            Liquidate: {eventAsset.name} ({formatCurrency(eventAsset.current_value || 0)})
+                            Liquidate: {eventAsset.name} ({formatCurrency(getProjectedAssetValueAtYear(eventAsset, event.year))} projected at liquidation)
                           </p>
                         )}
                         {event.type === 'windfall' && (
@@ -2332,13 +2503,26 @@ export default function ForecastPage() {
         <CardHeader>
           <CardTitle>Retirement Planning Forecast</CardTitle>
           <CardDescription>
-            Projected future net worth based on your current financial situation, starting from this year. Timeline events are shown as white vertical lines on the chart.
+            Projected future net worth based on your current financial situation, starting from this year. Click any year on the chart to add a timeline event. Events are shown as dots on the chart.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-[500px] w-full relative">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData}>
+              <ComposedChart
+                data={chartData}
+                onClick={(data: { activeLabel?: string }) => {
+                  if (data?.activeLabel && birthYear) {
+                    const year = parseInt(data.activeLabel);
+                    const currentYear = new Date().getFullYear();
+                    if (!isNaN(year) && year >= currentYear) {
+                      setSelectedYearForEvent(year);
+                      setEditingEvent(null);
+                      setShowEventDialog(true);
+                    }
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis 
                   dataKey="label" 
@@ -2375,7 +2559,7 @@ export default function ForecastPage() {
                     
                     const labelStr = String(label || '');
                     const year = parseInt(labelStr);
-                    const dataPoint = chartData.find(p => p.label === labelStr);
+                    const dataPoint = chartData.find(p => p.label === labelStr) ?? chartData.find(p => p.label === String(year));
                     const income = dataPoint?.['Estimated Income'] ?? 0;
                     const expenses = dataPoint?.['Estimated Expenses'] ?? 0;
                     const distributions = dataPoint?.['Distributions'] ?? 0;
@@ -2413,6 +2597,10 @@ export default function ForecastPage() {
                             );
                           })}
                         </div>
+                        <p className="text-sm text-red-700 dark:text-red-300 mb-2">
+                          <span className="font-medium">Available Cash:</span>{' '}
+                          {formatCurrency(dataPoint?.['Available Cash'] ?? 0)}
+                        </p>
                         {(income > 0 || expenses > 0 || distributions > 0) && (
                           <div className="pt-2 mt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">
                             <p className="text-sm text-green-700 dark:text-green-300">
@@ -2454,7 +2642,7 @@ export default function ForecastPage() {
                                     {event.type === 'liquidation' && eventAsset && (
                                       <p>
                                         <span className="font-medium text-white bg-gray-600 dark:bg-gray-500 px-1 rounded">Liquidation:</span>{' '}
-                                        {eventAsset.name} ({formatCurrency(eventAsset.current_value || 0)})
+                                        {eventAsset.name} ({formatCurrency(getProjectedAssetValueAtYear(eventAsset, event.year))} projected)
                                       </p>
                                     )}
                                     {event.type === 'windfall' && (
@@ -2499,13 +2687,6 @@ export default function ForecastPage() {
                   stroke="#10b981"
                   fill="#10b981"
                   fillOpacity={0.4}
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="Available Cash"
-                  stroke="#ef4444"
                   strokeWidth={2}
                   dot={false}
                 />
@@ -2599,6 +2780,18 @@ export default function ForecastPage() {
               />
             )}
           </div>
+          <div className="flex justify-end mt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setParametersPanelScrollTo('timeline-events-section');
+                setParametersPanelOpen(true);
+              }}
+              className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors"
+            >
+              Events →
+            </button>
+          </div>
         </CardContent>
       </Card>
 
@@ -2650,7 +2843,7 @@ export default function ForecastPage() {
                     
                     const labelStr = String(label || '');
                     const year = parseInt(labelStr);
-                    const dataPoint = chartData.find(p => p.label === labelStr);
+                    const dataPoint = chartData.find(p => p.label === labelStr) ?? chartData.find(p => p.label === String(year));
                     const income = dataPoint?.['Estimated Income'] ?? 0;
                     const expenses = dataPoint?.['Estimated Expenses'] ?? 0;
                     const distributions = dataPoint?.['Distributions'] ?? 0;
@@ -2688,6 +2881,10 @@ export default function ForecastPage() {
                             );
                           })}
                         </div>
+                        <p className="text-sm text-red-700 dark:text-red-300 mb-2">
+                          <span className="font-medium">Available Cash:</span>{' '}
+                          {formatCurrency(dataPoint?.['Available Cash'] ?? 0)}
+                        </p>
                         {(income > 0 || expenses > 0 || distributions > 0) && (
                           <div className="pt-2 mt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">
                             <p className="text-sm text-green-700 dark:text-green-300">
@@ -2729,7 +2926,7 @@ export default function ForecastPage() {
                                     {event.type === 'liquidation' && eventAsset && (
                                       <p>
                                         <span className="font-medium text-white bg-gray-600 dark:bg-gray-500 px-1 rounded">Liquidation:</span>{' '}
-                                        {eventAsset.name} ({formatCurrency(eventAsset.current_value || 0)})
+                                        {eventAsset.name} ({formatCurrency(getProjectedAssetValueAtYear(eventAsset, event.year))} projected)
                                       </p>
                                     )}
                                     {event.type === 'windfall' && (
@@ -2786,17 +2983,23 @@ export default function ForecastPage() {
           if (!open) {
             setEditingEvent(null);
             setSelectedYearForEvent(null);
+            setPresetLiquidationAssetId(null);
           }
         }}
         year={selectedYearForEvent || editingEvent?.year || null}
         event={editingEvent}
+        presetAssetId={presetLiquidationAssetId}
         assets={assets}
         birthYear={birthYear}
-        onSubmit={handleEventFormSubmit}
+        onSubmit={(data) => {
+          handleEventFormSubmit(data);
+          setPresetLiquidationAssetId(null);
+        }}
         onCancel={() => {
           setShowEventDialog(false);
           setEditingEvent(null);
           setSelectedYearForEvent(null);
+          setPresetLiquidationAssetId(null);
         }}
       />
     </div>
@@ -2809,13 +3012,14 @@ interface EventDialogProps {
   onOpenChange: (open: boolean) => void;
   year: number | null;
   event: TimelineEvent | null;
+  presetAssetId?: number | null;
   assets: NonCashAsset[];
   birthYear: number | null;
   onSubmit: (eventData: Partial<TimelineEvent>) => void;
   onCancel: () => void;
 }
 
-function EventDialog({ open, onOpenChange, year, event, assets, birthYear, onSubmit, onCancel }: EventDialogProps) {
+function EventDialog({ open, onOpenChange, year, event, presetAssetId, assets, birthYear, onSubmit, onCancel }: EventDialogProps) {
   // Calculate age from year if provided, otherwise use current age or event's age
   const getInitialAge = () => {
     if (event && birthYear) {
@@ -2839,10 +3043,22 @@ function EventDialog({ open, onOpenChange, year, event, assets, birthYear, onSub
   // Reset form when dialog opens/closes or event changes
   useEffect(() => {
     if (open) {
-      setEventType(event?.type || 'windfall');
-      setSelectedAssetId(event?.assetId);
-      setAmount(event?.amount?.toString() || '');
-      setDescription(event?.description || '');
+      if (event) {
+        setEventType(event.type);
+        setSelectedAssetId(event.assetId);
+        setAmount(event.amount?.toString() || '');
+        setDescription(event.description || '');
+      } else if (presetAssetId) {
+        setEventType('liquidation');
+        setSelectedAssetId(presetAssetId);
+        setAmount('');
+        setDescription('');
+      } else {
+        setEventType('windfall');
+        setSelectedAssetId(undefined);
+        setAmount('');
+        setDescription('');
+      }
       // Calculate age from year if provided, otherwise use current age or event's age
       let initialAge: number;
       if (event && birthYear) {
@@ -2855,7 +3071,7 @@ function EventDialog({ open, onOpenChange, year, event, assets, birthYear, onSub
       }
       setEventAge(initialAge.toString());
     }
-  }, [open, event, year, birthYear]);
+  }, [open, event, year, birthYear, presetAssetId]);
 
   const illiquidAssets = assets.filter(a => !a.is_liquid);
 
@@ -2977,18 +3193,32 @@ function EventDialog({ open, onOpenChange, year, event, assets, birthYear, onSub
                   No illiquid assets available. All your assets are already liquid.
                 </p>
               ) : (
-                <Select value={selectedAssetId?.toString()} onValueChange={(value) => setSelectedAssetId(parseInt(value))}>
-                  <SelectTrigger id="asset-select">
-                    <SelectValue placeholder="Select an asset" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {illiquidAssets.map((asset) => (
-                      <SelectItem key={asset.id} value={asset.id.toString()}>
-                        {asset.name} ({formatCurrency(asset.current_value || 0)})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <>
+                  <Select value={selectedAssetId?.toString()} onValueChange={(value) => setSelectedAssetId(parseInt(value))}>
+                    <SelectTrigger id="asset-select">
+                      <SelectValue placeholder="Select an asset" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {illiquidAssets.map((asset) => (
+                        <SelectItem key={asset.id} value={asset.id.toString()}>
+                          {asset.name} ({formatCurrency(asset.current_value || 0)} today)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedAssetId && birthYear && (() => {
+                    const effectiveYear = year ?? (eventAge ? birthYear + parseInt(eventAge) : null);
+                    if (!effectiveYear || effectiveYear < new Date().getFullYear()) return null;
+                    const asset = illiquidAssets.find(a => a.id === selectedAssetId);
+                    if (!asset) return null;
+                    const projectedValue = getProjectedAssetValueAtYear(asset, effectiveYear);
+                    return (
+                      <p className="text-sm text-muted-foreground">
+                        Projected value at liquidation (Year {effectiveYear}): {formatCurrency(projectedValue)}
+                      </p>
+                    );
+                  })()}
+                </>
               )}
             </div>
           )}
