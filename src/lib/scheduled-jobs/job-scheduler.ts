@@ -18,7 +18,8 @@ export interface ScheduledJob {
 }
 
 /**
- * Schedule a job to run at a specific time
+ * Schedule a job to run at a specific time.
+ * If a row with this job_type already exists (e.g. unique constraint), update it to pending instead of inserting.
  */
 export async function scheduleJob(
   jobType: string,
@@ -26,6 +27,25 @@ export async function scheduleJob(
   metadata?: Record<string, any>
 ): Promise<number> {
   const supabase = createServiceRoleClient();
+  const payload = {
+    status: 'pending',
+    scheduled_for: scheduledFor.toISOString(),
+    started_at: null,
+    completed_at: null,
+    error_message: null,
+    metadata: metadata || {},
+  };
+
+  const { data: updated, error: updateError } = await supabase
+    .from('scheduled_jobs')
+    .update(payload)
+    .eq('job_type', jobType)
+    .select('id')
+    .maybeSingle();
+
+  if (!updateError && updated) {
+    return updated.id;
+  }
 
   const { data, error } = await supabase
     .from('scheduled_jobs')
@@ -155,6 +175,13 @@ export async function scheduleNextRun(jobType: string, metadata?: Record<string,
     nextRun = new Date();
     nextRun.setDate(nextRun.getDate() + 1);
     nextRun.setHours(8, 0, 0, 0);
+  } else if (schedule === '0 8 * * 1') {
+    // Weekly: Monday at 8 AM UTC
+    nextRun = new Date();
+    const dayOfWeek = nextRun.getUTCDay();
+    const daysUntilMonday = dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 7 : 8 - dayOfWeek;
+    nextRun.setUTCDate(nextRun.getUTCDate() + daysUntilMonday);
+    nextRun.setUTCHours(8, 0, 0, 0);
   } else {
     // Default: daily at 8 AM
     nextRun = new Date();

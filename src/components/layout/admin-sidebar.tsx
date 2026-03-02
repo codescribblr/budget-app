@@ -12,6 +12,7 @@ import {
   Link2,
   Users,
   BookOpen,
+  Sparkles,
 } from "lucide-react"
 
 import {
@@ -41,6 +42,7 @@ const adminNavigationItems = [
 
 const merchantNavigationItems = [
   { label: "Global Merchants", path: "/admin/merchants", icon: Store },
+  { label: "AI Merchant Suggestions", path: "/admin/merchant-suggestions", icon: Sparkles },
   { label: "Merchant Recommendations", path: "/admin/merchant-recommendations", icon: MessageSquare },
   { label: "Merchant Patterns", path: "/admin/merchant-patterns", icon: Link2 },
 ]

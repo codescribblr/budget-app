@@ -516,6 +516,109 @@ export async function handleCheckTrialPeriods(): Promise<JobResult> {
 }
 
 /**
+ * Handler for suggest_merchant_groupings job
+ * Loads ungrouped patterns, calls Gemini to suggest groupings, post-filters by rejections, persists suggestions.
+ */
+export async function handleSuggestMerchantGroupings(): Promise<JobResult> {
+  try {
+    const supabase = createServiceRoleClient();
+    const { generateMerchantSuggestions, rejectionKey } = await import('@/lib/ai/merchant-suggestions');
+
+    const LIMIT = 500;
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const sixMonthsAgoStr = sixMonthsAgo.toISOString();
+
+    const { data: ungrouped, error: patternsError } = await supabase
+      .from('global_merchant_patterns')
+      .select('id, pattern, normalized_pattern, usage_count')
+      .is('global_merchant_id', null)
+      .gte('last_seen_at', sixMonthsAgoStr)
+      .order('usage_count', { ascending: false })
+      .limit(LIMIT);
+
+    if (patternsError) {
+      console.error('Error fetching ungrouped patterns:', patternsError);
+      return { success: false, error: patternsError.message };
+    }
+    if (!ungrouped || ungrouped.length === 0) {
+      return { success: true, message: 'No ungrouped patterns to suggest' };
+    }
+
+    const { data: rejections } = await supabase
+      .from('global_merchant_pattern_rejections')
+      .select('pattern_id, rejected_global_merchant_id, rejected_suggested_display_name');
+
+    const rejectionSet = new Set<string>();
+    for (const r of rejections || []) {
+      if (r.rejected_global_merchant_id != null) {
+        rejectionSet.add(rejectionKey(r.pattern_id, r.rejected_global_merchant_id, null));
+      }
+      if (r.rejected_suggested_display_name) {
+        rejectionSet.add(rejectionKey(r.pattern_id, null, r.rejected_suggested_display_name));
+      }
+    }
+
+    const { data: merchants } = await supabase
+      .from('global_merchants')
+      .select('id, display_name')
+      .in('status', ['active', 'draft']);
+
+    const { suggestions } = await generateMerchantSuggestions(
+      ungrouped,
+      merchants || [],
+      rejectionSet
+    );
+
+    if (suggestions.length === 0) {
+      return { success: true, message: 'No new suggestions after filtering' };
+    }
+
+    const batchId = `suggest_${new Date().toISOString().slice(0, 10)}`;
+    let created = 0;
+    for (const s of suggestions) {
+      const validMerchantId = s.suggested_merchant_id != null && (merchants || []).some(m => m.id === s.suggested_merchant_id)
+        ? s.suggested_merchant_id
+        : null;
+      const validName = (s.suggested_display_name || '').trim() || null;
+      if (validMerchantId === null && validName === null) continue;
+
+      const { data: row, error: insertError } = await supabase
+        .from('global_merchant_suggestions')
+        .insert({
+          suggested_global_merchant_id: validMerchantId,
+          suggested_display_name: validName,
+          status: 'pending',
+          batch_id: batchId,
+          metadata: {},
+        })
+        .select('id')
+        .single();
+
+      if (insertError || !row) {
+        console.error('Error inserting suggestion:', insertError);
+        continue;
+      }
+      for (const pid of s.pattern_ids) {
+        await supabase.from('global_merchant_suggestion_patterns').insert({
+          suggestion_id: row.id,
+          pattern_id: pid,
+        });
+      }
+      created++;
+    }
+
+    return {
+      success: true,
+      message: `Created ${created} suggestion(s) in batch ${batchId}`,
+    };
+  } catch (error: any) {
+    console.error('Error in suggest_merchant_groupings job:', error);
+    return { success: false, error: error.message || 'Job failed' };
+  }
+}
+
+/**
  * Get handler function for a job type
  */
 export function getJobHandler(jobType: string): (() => Promise<JobResult>) | null {
@@ -530,6 +633,8 @@ export function getJobHandler(jobType: string): (() => Promise<JobResult>) | nul
       return handleNetWorthSnapshot;
     case 'check_trial_periods':
       return handleCheckTrialPeriods;
+    case 'suggest_merchant_groupings':
+      return handleSuggestMerchantGroupings;
     default:
       return null;
   }
