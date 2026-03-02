@@ -96,6 +96,7 @@ export interface Loan {
   institution: string | null;
   maturity_date: string | null; // ISO date string - when loan will be fully paid off
   include_in_net_worth: boolean;
+  linked_non_cash_asset_id?: number | null; // When this asset is liquidated in forecast, loan is paid off from proceeds
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -386,6 +387,7 @@ export interface CreateLoanRequest {
   starting_balance?: number;
   institution?: string;
   include_in_net_worth?: boolean;
+  linked_non_cash_asset_id?: number | null;
 }
 
 export interface UpdateLoanRequest {
@@ -399,6 +401,7 @@ export interface UpdateLoanRequest {
   starting_balance?: number;
   institution?: string;
   include_in_net_worth?: boolean;
+  linked_non_cash_asset_id?: number | null;
 }
 
 // View models with joined data

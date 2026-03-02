@@ -56,10 +56,10 @@ interface ForecastDataPoint {
 
 interface TimelineEvent {
   id: string;
-  type: 'liquidation' | 'windfall' | 'expense_change';
+  type: 'liquidation' | 'windfall' | 'expense_change' | 'one_time_expense';
   year: number;
   assetId?: number; // For liquidation events
-  amount?: number; // For windfall and expense_change events
+  amount?: number; // For windfall, expense_change, and one_time_expense events
   description?: string;
 }
 
@@ -556,7 +556,33 @@ export default function ForecastPage() {
     
     // Track which loans are paid off each year (for expense reduction)
     const loansPaidOffByYear = new Map<number, Array<{ loanId: number; loanName: string; paymentAmount: number }>>();
+    // Loans paid off by asset liquidation (so we use 0 balance from that year and don't double-count at maturity)
+    const loansPaidOffByLiquidation = new Map<number, number>(); // loanId -> year
+
+    // First: add payoffs from liquidation events (asset sold -> linked loan paid off from proceeds)
+    timelineEvents.forEach((event) => {
+      if (event.type !== 'liquidation' || event.assetId == null) return;
+      const liquidationYear = event.year;
+      const linkedLoans = loanSchedules.filter(
+        ({ loan }) => loan.linked_non_cash_asset_id === event.assetId
+      );
+      linkedLoans.forEach(({ loan, schedule }) => {
+        const annualPayment = (loan.minimum_payment || 0) * 12;
+        if (!loansPaidOffByYear.has(liquidationYear)) {
+          loansPaidOffByYear.set(liquidationYear, []);
+        }
+        loansPaidOffByYear.get(liquidationYear)!.push({
+          loanId: loan.id,
+          loanName: loan.name,
+          paymentAmount: annualPayment,
+        });
+        loansPaidOffByLiquidation.set(loan.id, liquidationYear);
+      });
+    });
+
+    // Then: add payoffs from maturity (skip loans already paid off by liquidation)
     loanSchedules.forEach(({ loan, maturityYear }) => {
+      if (loansPaidOffByLiquidation.has(loan.id)) return;
       if (maturityYear && maturityYear >= startYear && maturityYear <= startYear + forecastYears) {
         const annualPayment = (loan.minimum_payment || 0) * 12;
         if (!loansPaidOffByYear.has(maturityYear)) {
@@ -647,9 +673,22 @@ export default function ForecastPage() {
           liquidatedAssetIds.add(event.assetId);
           // Convert illiquid asset to liquid
           const assetIndex = assetValues.findIndex(a => a.id === event.assetId);
-          if (assetIndex !== -1 && !assetValues[assetIndex].isLiquid) {
+          if (assetIndex !== -1) {
+            // Deduct linked loan balance(s) from liquidation proceeds (pay off loan from sale)
+            const linkedEntries = loanSchedules.filter(
+              ({ loan }) => loan.linked_non_cash_asset_id === event.assetId
+            );
+            let totalLinkedLoanBalance = 0;
+            linkedEntries.forEach(({ loan, schedule }) => {
+              const balanceAtLiquidation = yearOffset === 0
+                ? loan.balance
+                : (schedule[yearOffset - 1] ?? 0);
+              totalLinkedLoanBalance += balanceAtLiquidation;
+            });
+            const newValue = Math.max(0, assetValues[assetIndex].value - totalLinkedLoanBalance);
             assetValues[assetIndex] = {
               ...assetValues[assetIndex],
+              value: newValue,
               isLiquid: true,
             };
           }
@@ -682,6 +721,12 @@ export default function ForecastPage() {
         cumulativeLoanPaymentsRemoved += totalLoanPaymentsRemoved;
       }
       annualExpenses -= cumulativeLoanPaymentsRemoved;
+
+      // Add one-time expenses for this year (wedding, college, car, etc.)
+      const totalOneTimeExpenseThisYear = eventsThisYear
+        .filter(e => e.type === 'one_time_expense' && e.amount && e.amount > 0)
+        .reduce((sum, e) => sum + (e.amount || 0), 0);
+      annualExpenses += totalOneTimeExpenseThisYear;
       
       // Compute income from streams: include all include_in_budget streams not linked to liquidated assets
       const activeStreams = incomeStreams?.length
@@ -966,11 +1011,16 @@ export default function ForecastPage() {
       
       // Pay down loans (sum all loan balances for this year)
       // For current year, use current loan balances
+      // Loans paid off by asset liquidation have 0 balance from that year onward
       if (isCurrentYear) {
         forecastLoans = currentLoans;
         forecastCreditCards = currentCreditCards;
       } else {
-        forecastLoans = loanSchedules.reduce((sum, { schedule }) => {
+        forecastLoans = loanSchedules.reduce((sum, { loan, schedule }) => {
+          const paidOffByLiquidationYear = loansPaidOffByLiquidation.get(loan.id);
+          if (paidOffByLiquidationYear != null && forecastYear >= paidOffByLiquidationYear) {
+            return sum + 0;
+          }
           const yearBalance = schedule[yearOffset - 1];
           return sum + (yearBalance !== undefined ? yearBalance : 0);
         }, 0);
@@ -1977,6 +2027,9 @@ export default function ForecastPage() {
                                   {event.type === 'expense_change' && (
                                     <>Expense change to {formatCurrency(event.amount || 0)}/year</>
                                   )}
+                                  {event.type === 'one_time_expense' && (
+                                    <>One-time expense of {formatCurrency(event.amount || 0)}</>
+                                  )}
                                 </li>
                               );
                             })}
@@ -1984,7 +2037,7 @@ export default function ForecastPage() {
                         </div>
                       ) : (
                         <p className="text-muted-foreground">
-                          No timeline events configured. You can add events like asset liquidations, windfalls, or expense changes 
+                          No timeline events configured. You can add events like asset liquidations, windfalls, one-time expenses, or expense changes 
                           by clicking on any year in the forecast chart.
                         </p>
                       )}
@@ -2300,7 +2353,7 @@ export default function ForecastPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-semibold px-2 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
-                            {event.type === 'liquidation' ? 'Liquidation' : event.type === 'windfall' ? 'Windfall' : 'Expense Change'}
+                            {event.type === 'liquidation' ? 'Liquidation' : event.type === 'windfall' ? 'Windfall' : event.type === 'one_time_expense' ? 'One-Time Expense' : 'Expense Change'}
                           </span>
                           <span className="text-sm font-medium">Year {event.year}</span>
                           {birthYear && (
@@ -2320,6 +2373,11 @@ export default function ForecastPage() {
                         {event.type === 'expense_change' && (
                           <p className="text-sm text-muted-foreground">
                             New base expenses: {formatCurrency(event.amount || 0)}/year
+                          </p>
+                        )}
+                        {event.type === 'one_time_expense' && (
+                          <p className="text-sm text-muted-foreground">
+                            One-time expense: {formatCurrency(event.amount || 0)}
                           </p>
                         )}
                         {event.description && (
@@ -2657,6 +2715,12 @@ export default function ForecastPage() {
                                         New base: {formatCurrency(event.amount || 0)}/year
                                       </p>
                                     )}
+                                    {event.type === 'one_time_expense' && (
+                                      <p>
+                                        <span className="font-medium text-white bg-amber-600 dark:bg-amber-500 px-1 rounded">One-Time Expense:</span>{' '}
+                                        {formatCurrency(event.amount || 0)}
+                                      </p>
+                                    )}
                                     {event.description && (
                                       <p className="text-xs text-muted-foreground ml-2">{event.description}</p>
                                     )}
@@ -2941,6 +3005,12 @@ export default function ForecastPage() {
                                         New base: {formatCurrency(event.amount || 0)}/year
                                       </p>
                                     )}
+                                    {event.type === 'one_time_expense' && (
+                                      <p>
+                                        <span className="font-medium text-white bg-amber-600 dark:bg-amber-500 px-1 rounded">One-Time Expense:</span>{' '}
+                                        {formatCurrency(event.amount || 0)}
+                                      </p>
+                                    )}
                                     {event.description && (
                                       <p className="text-xs text-muted-foreground ml-2">{event.description}</p>
                                     )}
@@ -3032,7 +3102,7 @@ function EventDialog({ open, onOpenChange, year, event, presetAssetId, assets, b
     return birthYear ? currentYear - birthYear + 1 : 30; // Default to current age + 1 or 30
   };
   
-  const [eventType, setEventType] = useState<'liquidation' | 'windfall' | 'expense_change'>(
+  const [eventType, setEventType] = useState<'liquidation' | 'windfall' | 'expense_change' | 'one_time_expense'>(
     event?.type || 'windfall'
   );
   const [selectedAssetId, setSelectedAssetId] = useState<number | undefined>(event?.assetId);
@@ -3131,6 +3201,18 @@ function EventDialog({ open, onOpenChange, year, event, presetAssetId, assets, b
         amount: amountNum,
         description: description || undefined,
       });
+    } else if (eventType === 'one_time_expense') {
+      const amountNum = parseFloat(amount);
+      if (!amountNum || amountNum <= 0) {
+        toast.error('Please enter a valid expense amount');
+        return;
+      }
+      onSubmit({
+        type: 'one_time_expense',
+        year: yearNum,
+        amount: amountNum,
+        description: description || undefined,
+      });
     }
   };
 
@@ -3173,13 +3255,14 @@ function EventDialog({ open, onOpenChange, year, event, presetAssetId, assets, b
 
           <div className="space-y-2">
             <Label htmlFor="event-type">Event Type</Label>
-            <Select value={eventType} onValueChange={(value: 'liquidation' | 'windfall' | 'expense_change') => setEventType(value)}>
+            <Select value={eventType} onValueChange={(value: 'liquidation' | 'windfall' | 'expense_change' | 'one_time_expense') => setEventType(value)}>
               <SelectTrigger id="event-type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="liquidation">Liquidation (Convert Illiquid Asset to Liquid)</SelectItem>
                 <SelectItem value="windfall">Windfall (Inheritance, Gift, etc.)</SelectItem>
+                <SelectItem value="one_time_expense">One-Time Expense (Wedding, College, Car, etc.)</SelectItem>
                 <SelectItem value="expense_change">Expense Change (New Base Expense Amount)</SelectItem>
               </SelectContent>
             </Select>
@@ -3223,10 +3306,10 @@ function EventDialog({ open, onOpenChange, year, event, presetAssetId, assets, b
             </div>
           )}
 
-          {(eventType === 'windfall' || eventType === 'expense_change') && (
+          {(eventType === 'windfall' || eventType === 'expense_change' || eventType === 'one_time_expense') && (
             <div className="space-y-2">
               <Label htmlFor="event-amount">
-                {eventType === 'windfall' ? 'Windfall Amount' : 'New Annual Expense Amount'}
+                {eventType === 'windfall' ? 'Windfall Amount' : eventType === 'one_time_expense' ? 'Expense Amount' : 'New Annual Expense Amount'}
               </Label>
               <Input
                 id="event-amount"
@@ -3235,12 +3318,14 @@ function EventDialog({ open, onOpenChange, year, event, presetAssetId, assets, b
                 step="1000"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder={eventType === 'windfall' ? '0.00' : '0.00'}
+                placeholder="0.00"
               />
               <p className="text-xs text-muted-foreground">
                 {eventType === 'windfall' 
                   ? 'The amount of liquid assets added to your accounts.'
-                  : 'The new base annual expense amount. This will grow with inflation from this year forward.'}
+                  : eventType === 'one_time_expense'
+                    ? 'A one-time expense added to your annual expenses for that year only (e.g. wedding, college tuition, car purchase).'
+                    : 'The new base annual expense amount. This will grow with inflation from this year forward.'}
               </p>
             </div>
           )}

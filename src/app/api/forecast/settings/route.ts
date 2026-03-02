@@ -18,7 +18,7 @@ interface ForecastSettings {
   }>;
   timeline_events?: Array<{
     id: string;
-    type: 'liquidation' | 'windfall' | 'expense_change';
+    type: 'liquidation' | 'windfall' | 'expense_change' | 'one_time_expense';
     year: number;
     assetId?: number;
     amount?: number;

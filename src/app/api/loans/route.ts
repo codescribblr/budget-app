@@ -70,6 +70,7 @@ export async function POST(request: Request) {
       starting_balance: body.starting_balance,
       institution: body.institution,
       include_in_net_worth: body.include_in_net_worth ?? true,
+      linked_non_cash_asset_id: body.linked_non_cash_asset_id ?? null,
     });
 
     return NextResponse.json(loan, { status: 201 });

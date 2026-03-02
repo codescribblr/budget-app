@@ -849,6 +849,7 @@ export async function createLoan(loan: {
   starting_balance?: number;
   institution?: string;
   include_in_net_worth?: boolean;
+  linked_non_cash_asset_id?: number | null;
 }): Promise<Loan> {
   const { supabase, user } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
@@ -892,6 +893,7 @@ export async function updateLoan(
     starting_balance?: number;
     institution?: string;
     include_in_net_worth?: boolean;
+    linked_non_cash_asset_id?: number | null;
   }
 ): Promise<Loan> {
   const { supabase } = await getAuthenticatedUser();

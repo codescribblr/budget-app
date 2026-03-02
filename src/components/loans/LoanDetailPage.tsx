@@ -113,6 +113,15 @@ export default function LoanDetailPage({ loanId }: { loanId: string }) {
               Institution: <span className="font-medium">{loan.institution}</span>
             </p>
           )}
+          {loan.linked_non_cash_asset_id != null && (
+            <p className="text-muted-foreground text-sm">
+              Linked to asset for retirement forecast — when that asset is liquidated, this loan is paid off from the proceeds.
+              {' '}
+              <Link href={`/non-cash-assets/${loan.linked_non_cash_asset_id}`} className="underline hover:no-underline">
+                View asset
+              </Link>
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

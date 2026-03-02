@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { Loan } from '@/lib/types';
+import type { Loan, NonCashAsset } from '@/lib/types';
 import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
 import { parseLocalDate } from '@/lib/date-utils';
@@ -36,6 +37,8 @@ export default function LoanDialog({ isOpen, onClose, loan, onSuccess }: LoanDia
   const [startingBalance, setStartingBalance] = useState('');
   const [institution, setInstitution] = useState('');
   const [includeInNetWorth, setIncludeInNetWorth] = useState(true);
+  const [linkedNonCashAssetId, setLinkedNonCashAssetId] = useState<number | null>(null);
+  const [assets, setAssets] = useState<NonCashAsset[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -52,6 +55,7 @@ export default function LoanDialog({ isOpen, onClose, loan, onSuccess }: LoanDia
         setStartingBalance(loan.starting_balance?.toString() || '');
         setInstitution(loan.institution || '');
         setIncludeInNetWorth(loan.include_in_net_worth);
+        setLinkedNonCashAssetId(loan.linked_non_cash_asset_id ?? null);
       } else {
         // Add mode
         setLoanName('');
@@ -64,9 +68,19 @@ export default function LoanDialog({ isOpen, onClose, loan, onSuccess }: LoanDia
         setStartingBalance('');
         setInstitution('');
         setIncludeInNetWorth(true);
+        setLinkedNonCashAssetId(null);
       }
     }
   }, [isOpen, loan]);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/non-cash-assets')
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data: NonCashAsset[]) => setAssets(Array.isArray(data) ? data : []))
+        .catch(() => setAssets([]));
+    }
+  }, [isOpen]);
 
   const handleSave = async () => {
     if (!loanName.trim()) {
@@ -87,6 +101,7 @@ export default function LoanDialog({ isOpen, onClose, loan, onSuccess }: LoanDia
         starting_balance: startingBalance ? parseFloat(startingBalance) : null,
         institution: institution.trim() || null,
         include_in_net_worth: includeInNetWorth,
+        linked_non_cash_asset_id: linkedNonCashAssetId ?? null,
       };
 
       if (loan) {
@@ -222,6 +237,28 @@ export default function LoanDialog({ isOpen, onClose, loan, onSuccess }: LoanDia
             />
             <p className="text-xs text-muted-foreground mt-1">
               The date when this loan will be fully paid off. Used in forecast calculations to remove loan payments from expenses after this date.
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="linked-asset">Linked asset (retirement forecast)</Label>
+            <Select
+              value={linkedNonCashAssetId?.toString() ?? 'none'}
+              onValueChange={(v) => setLinkedNonCashAssetId(v === 'none' ? null : parseInt(v, 10))}
+            >
+              <SelectTrigger id="linked-asset">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {assets.map((a) => (
+                  <SelectItem key={a.id} value={a.id.toString()}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              If this loan is secured by an asset (e.g. mortgage on home), link it. When that asset is liquidated in the retirement forecast, the loan is paid off from the proceeds and the payment is removed from expenses.
             </p>
           </div>
           <div>
