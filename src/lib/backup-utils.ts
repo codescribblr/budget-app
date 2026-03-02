@@ -39,6 +39,7 @@ export interface AccountBackupData {
   categories: any[];
   credit_cards: any[];
   loans?: any[];
+  non_cash_assets?: any[];
   transactions: any[];
   transaction_splits: any[];
   imported_transactions: any[];
@@ -81,6 +82,7 @@ export interface UserBackupData {
   categories: any[];
   credit_cards: any[];
   loans?: any[];
+  non_cash_assets?: any[];
   transactions: any[];
   transaction_splits: any[];
   imported_transactions: any[];
@@ -211,6 +213,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     categories,
     credit_cards,
     loans,
+    non_cash_assets,
     transactions,
     transaction_splits,
     imported_transactions,
@@ -248,6 +251,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     fetchAllRecords((limit, offset) => supabase.from('categories').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
     fetchAllRecords((limit, offset) => supabase.from('credit_cards').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
     fetchAllRecords((limit, offset) => supabase.from('loans').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('non_cash_assets').select('*').eq('account_id', accountId).range(offset, offset + limit - 1), 'non_cash_assets'),
     fetchAllRecords((limit, offset) => supabase.from('transactions').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1)),
     fetchAllRecords((limit, offset) => supabase
       .from('transaction_splits')
@@ -355,6 +359,7 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     categories: categories,
     credit_cards: credit_cards,
     loans: loans,
+    non_cash_assets: non_cash_assets || [],
     transactions: transactions,
     transaction_splits: transaction_splits,
     imported_transactions: imported_transactions,
@@ -405,6 +410,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     categories: accountData.categories,
     credit_cards: accountData.credit_cards,
     loans: accountData.loans,
+    non_cash_assets: accountData.non_cash_assets,
     transactions: accountData.transactions,
     transaction_splits: accountData.transaction_splits,
     imported_transactions: accountData.imported_transactions,
@@ -541,6 +547,13 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     }
   }
   try {
+    await supabase.from('non_cash_assets').delete().eq('account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
+  try {
     await supabase.from('net_worth_snapshots').delete().eq('budget_account_id', accountId);
   } catch (error: any) {
     if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
@@ -597,6 +610,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   const categoryIdMap = new Map<number, number>();
   const creditCardIdMap = new Map<number, number>();
   const loanIdMap = new Map<number, number>();
+  const assetIdMap = new Map<number, number>();
   const transactionIdMap = new Map<number, number>();
   const merchantGroupIdMap = new Map<number, number>();
   const importedTransactionIdMap = new Map<number, number>();
@@ -677,12 +691,41 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     console.log('[Import] Inserted', data.length, 'credit cards');
   }
 
-  // Insert loans (batch)
+  // Insert non_cash_assets (batch) - before loans/income_streams so linked_non_cash_asset_id can be remapped
+  if (backupData.non_cash_assets && backupData.non_cash_assets.length > 0) {
+    try {
+      const nonCashAssetsToInsert = backupData.non_cash_assets.map(({ id, account_id, ...asset }) => ({
+        ...asset,
+        account_id: accountId,
+      }));
+
+      const { data, error } = await supabase
+        .from('non_cash_assets')
+        .insert(nonCashAssetsToInsert)
+        .select('id');
+
+      if (error) throw error;
+
+      backupData.non_cash_assets.forEach((oldAsset, index) => {
+        if (data[index]) assetIdMap.set(oldAsset.id, data[index].id);
+      });
+      console.log('[Import] Inserted', data.length, 'non-cash assets');
+    } catch (error: any) {
+      if (error?.message?.includes('Could not find the table') || error?.message?.includes('does not exist') || error?.code === 'PGRST204') {
+        console.warn('[Import] non_cash_assets table does not exist, skipping');
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  // Insert loans (batch) - remap linked_non_cash_asset_id when non_cash_assets are in backup
   if (backupData.loans && backupData.loans.length > 0) {
-    const loansToInsert = backupData.loans.map(({ id, account_id, user_id, ...loan }) => ({
+    const loansToInsert = backupData.loans.map(({ id, account_id, user_id, linked_non_cash_asset_id, ...loan }) => ({
       ...loan,
       user_id: user.id,
       account_id: accountId,
+      linked_non_cash_asset_id: linked_non_cash_asset_id != null && assetIdMap.has(linked_non_cash_asset_id) ? assetIdMap.get(linked_non_cash_asset_id)! : null,
     }));
 
     const { data, error } = await supabase
@@ -1265,15 +1308,14 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     }
   }
 
-  // Insert income streams (batch)
+  // Insert income streams (batch) - remap linked_non_cash_asset_id when non_cash_assets are in backup
   const incomeStreams = backupData.income_streams || [];
   if (incomeStreams.length > 0) {
     try {
       const incomeStreamsToInsert = incomeStreams.map(({ id, account_id, linked_non_cash_asset_id, ...stream }: any) => ({
         ...stream,
         account_id: accountId,
-        // Clear linked asset on restore - assets may not exist in target account
-        linked_non_cash_asset_id: null,
+        linked_non_cash_asset_id: linked_non_cash_asset_id != null && assetIdMap.has(linked_non_cash_asset_id) ? assetIdMap.get(linked_non_cash_asset_id)! : null,
       }));
 
       const { error } = await supabase
@@ -1360,12 +1402,14 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     console.log('[Import] Inserted', settingsToInsert.length, 'settings');
   }
 
-  // Insert CSV import templates (batch)
+  // Insert CSV import templates (batch) - remap target_account_id and target_credit_card_id
   if (backupData.csv_import_templates && backupData.csv_import_templates.length > 0) {
-    const csvImportTemplatesToInsert = backupData.csv_import_templates.map(({ id, account_id, user_id, ...template }) => ({
+    const csvImportTemplatesToInsert = backupData.csv_import_templates.map(({ id, account_id, user_id, target_account_id, target_credit_card_id, ...template }) => ({
       ...template,
       user_id: user.id,
       account_id: accountId,
+      target_account_id: target_account_id != null && accountIdMap.has(target_account_id) ? accountIdMap.get(target_account_id)! : null,
+      target_credit_card_id: target_credit_card_id != null && creditCardIdMap.has(target_credit_card_id) ? creditCardIdMap.get(target_credit_card_id)! : null,
     }));
 
     const { data, error } = await supabase
@@ -1807,14 +1851,45 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     }
   }
 
-  // Insert asset_value_audit (after assets are inserted, if they exist)
-  // Note: non_cash_assets table is not currently included in backups, so asset_id mappings may not exist
-  // We'll filter out records with invalid asset_id mappings
-  if (backupData.asset_value_audit && backupData.asset_value_audit.length > 0) {
-    // Since non_cash_assets aren't in backups, we can't remap asset_id
-    // We'll skip all asset_value_audit records for backwards compatibility
-    // If assets are added to backups in the future, this can be updated to remap asset_id
-    console.warn('[Import] Skipping asset_value_audit records - non_cash_assets table not included in backups (backwards compatibility)');
+  // Insert asset_value_audit (after non_cash_assets are inserted; remap asset_id via assetIdMap)
+  if (backupData.asset_value_audit && backupData.asset_value_audit.length > 0 && assetIdMap.size > 0) {
+    try {
+      const assetValueAuditToInsert = backupData.asset_value_audit
+        .map(({ id, asset_id, budget_account_id, user_id, ...audit }: any) => ({
+          ...audit,
+          asset_id: asset_id != null ? (assetIdMap.get(asset_id) ?? null) : null,
+          budget_account_id: accountId,
+          user_id: user.id,
+        }))
+        .filter((audit: any) => audit.asset_id != null);
+
+      if (assetValueAuditToInsert.length > 0) {
+        const { error } = await supabase
+          .from('asset_value_audit')
+          .insert(assetValueAuditToInsert);
+
+        if (error) {
+          if (error.message?.includes('Could not find the table') || error.message?.includes('does not exist') || error.code === 'PGRST204') {
+            console.warn('[Import] asset_value_audit table does not exist, skipping');
+          } else {
+            throw error;
+          }
+        } else {
+          console.log('[Import] Inserted', assetValueAuditToInsert.length, 'asset value audit records');
+        }
+      }
+      if (backupData.asset_value_audit.length > assetValueAuditToInsert.length) {
+        console.warn('[Import] Skipped', backupData.asset_value_audit.length - assetValueAuditToInsert.length, 'asset_value_audit records (no matching asset in backup)');
+      }
+    } catch (error: any) {
+      if (error?.message?.includes('Could not find the table') || error?.message?.includes('does not exist') || error?.code === 'PGRST204') {
+        console.warn('[Import] asset_value_audit table does not exist, skipping');
+      } else {
+        throw error;
+      }
+    }
+  } else if (backupData.asset_value_audit?.length && assetIdMap.size === 0) {
+    console.warn('[Import] Skipping asset_value_audit records - backup has no non_cash_assets (backwards compatibility)');
   }
 
   // Insert net_worth_snapshots (no foreign key dependencies except budget_account_id)
