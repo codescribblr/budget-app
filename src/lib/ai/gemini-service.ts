@@ -723,12 +723,13 @@ Only return the JSON object, no other text.`;
       };
     });
 
-    // Build transaction list text (limit to most relevant)
+    // Build transaction list text (limit to most relevant); include tags when present
     const transactionListText = relevantTransactions
       .slice(0, 100) // Limit to 100 most recent for token efficiency
       .map((t, idx) => {
         const merchantInfo = t.merchantGroup ? `${t.merchant} (${t.merchantGroup})` : t.merchant;
-        return `${idx + 1}. ${t.date} | ${merchantInfo} | $${t.amount.toFixed(2)} | ${t.category}${t.description ? ` | ${t.description}` : ''}`;
+        const tagStr = t.tags && t.tags.length > 0 ? ` | Tags: ${t.tags.join(', ')}` : '';
+        return `${idx + 1}. ${t.date} | ${merchantInfo} | $${t.amount.toFixed(2)} | ${t.category}${tagStr}${t.description ? ` | ${t.description}` : ''}`;
       })
       .join('\n');
 
@@ -777,6 +778,13 @@ CURRENT BALANCE vs MONTHLY AMOUNT:
 - current_balance = money currently available in the envelope
 - monthly_amount = target to fund each month (for monthly_expense) OR monthly contribution (for accumulation)
 - For accumulation categories, spending can exceed monthly_amount as long as current_balance remains positive
+
+RETIREMENT & NET WORTH CONTEXT (use when the user asks about retirement, forecasting, or net worth):
+- The app has a retirement/forecast feature. User assumptions (birth year, retirement age, Social Security, savings rate, etc.) are provided when available. Use these to give relevant suggestions (e.g. "Based on your retirement age of 67...").
+- Net worth is tracked over time via snapshots. Use recent net worth history to comment on trajectory, progress, or predictions. Latest snapshot is the most recent; older snapshots show trend.
+- Income streams can be linked to a non-cash asset (e.g. rental property). When that asset is liquidated in a forecast, that income stops. Mention this when discussing retirement or selling assets.
+- Loans can be linked to an asset (e.g. mortgage on home). When the asset is liquidated, the loan is typically paid off from proceeds. Use this when discussing home equity, downsizing, or retirement.
+- Non-cash assets may be RMD-qualified (e.g. IRA/401k – subject to Required Minimum Distributions at 73+), and liquid vs illiquid (affects how quickly they can be used for income).
 `;
 
     const prompt = `You are a helpful financial assistant for a budgeting app. You have access to the user's detailed financial data.
@@ -828,11 +836,41 @@ ${context.loans.length > 0 ? context.loans.map((l) => {
   const interestStr = l.interest_rate !== null ? `${l.interest_rate}%` : 'N/A';
   const paymentStr = l.minimum_payment !== null ? `$${l.minimum_payment.toFixed(2)}` : 'N/A';
   const dueDateStr = l.payment_due_date !== null ? `Due day: ${l.payment_due_date}` : '';
-  return `- ${l.name}: Balance $${l.balance.toFixed(2)} | Interest: ${interestStr} | Min Payment: ${paymentStr}${dueDateStr ? ` | ${dueDateStr}` : ''}`;
+  const linkedStr = l.linked_asset_name ? ` | Linked to asset: ${l.linked_asset_name}` : '';
+  return `- ${l.name}: Balance $${l.balance.toFixed(2)} | Interest: ${interestStr} | Min Payment: ${paymentStr}${dueDateStr ? ` | ${dueDateStr}` : ''}${linkedStr}`;
 }).join('\n') : 'No loans'}
 
 Bank Accounts (${context.accounts.length} total):
 ${context.accounts.length > 0 ? context.accounts.map((a) => `- ${a.name}: $${a.balance.toFixed(2)}`).join('\n') : 'No accounts'}
+
+${context.creditCards && context.creditCards.length > 0 ? `Credit Cards (${context.creditCards.length} total):
+${context.creditCards.map((cc) => `- ${cc.name}: Balance $${cc.current_balance.toFixed(2)} / Limit $${cc.credit_limit.toFixed(2)} (Available: $${cc.available_credit.toFixed(2)})`).join('\n')}` : ''}
+
+${context.nonCashAssets && context.nonCashAssets.length > 0 ? `Non-Cash Assets (${context.nonCashAssets.length} total):
+${context.nonCashAssets.map((a) => {
+  const parts = [`- ${a.name} (${a.asset_type}): $${a.current_value.toFixed(2)}`];
+  if (a.estimated_return_percentage != null) parts.push(`Est. return: ${a.estimated_return_percentage}%`);
+  if (a.is_rmd_qualified) parts.push('RMD-qualified');
+  if (a.is_liquid === false) parts.push('Illiquid');
+  return parts.join(' | ');
+}).join('\n')}` : ''}
+
+${context.incomeStreamsDetail && context.incomeStreamsDetail.length > 0 ? `Income Streams (detailed):
+${context.incomeStreamsDetail.map((s) => `- ${s.name}: $${s.annual_income.toFixed(2)}/yr | ${s.pay_frequency} | Tax rate ${((s.tax_rate || 0) * 100).toFixed(2)}%${s.linked_asset_name ? ` | Linked to asset: ${s.linked_asset_name}` : ''}`).join('\n')}` : ''}
+
+${context.retirementForecast ? `Retirement / Forecast Assumptions:
+- Birth year: ${context.retirementForecast.birth_year ?? 'Not set'}
+- Forecast to age: ${context.retirementForecast.forecast_age} | Retirement age: ${context.retirementForecast.retirement_age}
+- Income growth: ${context.retirementForecast.income_growth_rate}%/yr | Savings rate: ${context.retirementForecast.savings_rate}% | After retirement savings rate: ${context.retirementForecast.retirement_savings_rate}%
+- Social Security: start age ${context.retirementForecast.social_security_start_age}, benefit level: ${context.retirementForecast.social_security_benefit_level} | Other retirement income: $${context.retirementForecast.other_retirement_income.toFixed(2)}/yr
+- Inflation: ${context.retirementForecast.inflation_rate}%/yr | RMD age: ${context.retirementForecast.rmd_age}
+${(context.retirementForecast.timeline_events?.length ?? 0) > 0 ? `- Timeline events: ${context.retirementForecast.timeline_events!.map((e: any) => `${e.type} in year ${e.year}${e.description ? ` (${e.description})` : ''}`).join('; ')}` : ''}
+${(context.retirementForecast.repeatable_events?.length ?? 0) > 0 ? `- Repeatable events: ${context.retirementForecast.repeatable_events!.map((e: any) => `${e.name} (${e.frequency})`).join('; ')}` : ''}` : ''}
+
+${context.netWorthSnapshots && context.netWorthSnapshots.length > 0 ? `Net Worth History (most recent first, up to 24 snapshots):
+${context.netWorthSnapshots.slice(0, 12).map((s) => `- ${s.snapshot_date}: Net worth $${s.net_worth.toFixed(2)} (Accounts: $${s.total_accounts.toFixed(2)} | Assets: $${s.total_assets.toFixed(2)} | Credit cards: -$${s.total_credit_cards.toFixed(2)} | Loans: -$${s.total_loans.toFixed(2)})`).join('\n')}${context.netWorthSnapshots.length > 12 ? `\n... and ${context.netWorthSnapshots.length - 12} more snapshot(s)` : ''}` : ''}
+
+${context.tags && context.tags.length > 0 ? `Tags in use: ${context.tags.map((t) => t.name).join(', ')}` : ''}
 
 ${context.incomeBuffer ? `Income Buffer: $${context.incomeBuffer.current_balance.toFixed(2)} (Monthly allocation: $${context.incomeBuffer.monthly_amount.toFixed(2)})` : 'Income Buffer: Not configured'}
 

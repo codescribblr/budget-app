@@ -167,7 +167,9 @@ export async function POST(request: NextRequest) {
     const ytdTransactionIds = (ytdTransactions || []).map((t: any) => t.id);
     const allTransactionIds = [...new Set([...transactionIds, ...ytdTransactionIds])];
 
-    let splitsByTransaction: Map<number, Array<{ category_name: string; amount: number }>> = new Map();
+    // Splits include category flags so we can exclude system/archived from insights
+    type SplitWithCategory = { category_name: string; amount: number; is_system?: boolean; is_archived?: boolean };
+    let splitsByTransaction: Map<number, Array<SplitWithCategory>> = new Map();
     if (allTransactionIds.length > 0) {
       const { data: splits, error: splitsError } = await supabase
         .from('transaction_splits')
@@ -175,7 +177,9 @@ export async function POST(request: NextRequest) {
           transaction_id,
           amount,
           categories (
-            name
+            name,
+            is_system,
+            is_archived
           )
         `)
         .in('transaction_id', allTransactionIds);
@@ -185,48 +189,60 @@ export async function POST(request: NextRequest) {
           if (!splitsByTransaction.has(split.transaction_id)) {
             splitsByTransaction.set(split.transaction_id, []);
           }
+          const cat = split.categories;
           splitsByTransaction.get(split.transaction_id)!.push({
-            category_name: split.categories?.name || 'Uncategorized',
+            category_name: cat?.name || 'Uncategorized',
             amount: split.amount || 0,
+            is_system: cat?.is_system ?? false,
+            is_archived: cat?.is_archived ?? false,
           });
         });
       }
     }
 
+    // Helper: only count splits that are not system and not archived (user-facing spending)
+    const isUserCategory = (s: SplitWithCategory) => !s.is_system && !s.is_archived;
+    const userSplitsOnly = (splits: SplitWithCategory[]) => splits.filter(isUserCategory);
+
     // Get budget/categories with type information
+    // Exclude system, archived, and buffer so insights reflect user-managed categories only
     // SECURITY: Filtered by account_id = accountId
     const { data: categories } = await supabase
       .from('categories')
       .select('id, name, monthly_amount, current_balance, category_type, annual_target, target_balance')
       .eq('account_id', accountId)
-      .eq('is_goal', false);
+      .eq('is_goal', false)
+      .eq('is_system', false)
+      .eq('is_archived', false)
+      .eq('is_buffer', false);
 
-    // Spend maps for current month and year-to-date
-    // Use splits to get accurate category spending
+    // Spend maps for current month and year-to-date (only user categories, exclude system/archived)
     const monthCategorySpend: Record<string, number> = {};
     (transactions || []).forEach((t: any) => {
       const splits = splitsByTransaction.get(t.id) || [];
-      if (splits.length > 0) {
-        splits.forEach((split) => {
+      const userSplits = userSplitsOnly(splits);
+      if (userSplits.length > 0) {
+        userSplits.forEach((split) => {
           const catName = split.category_name || 'Uncategorized';
           monthCategorySpend[catName] = (monthCategorySpend[catName] || 0) + Math.abs(split.amount || 0);
         });
-      } else {
-        // Fallback: if no splits, use total_amount as Uncategorized
+      } else if (splits.length === 0) {
+        // No splits at all: treat as Uncategorized (legacy)
         monthCategorySpend['Uncategorized'] = (monthCategorySpend['Uncategorized'] || 0) + Math.abs(t.total_amount || 0);
       }
+      // If splits exist but all are system/archived, we do not count toward any category
     });
 
     const ytdCategorySpend: Record<string, number> = {};
     (ytdTransactions || []).forEach((t: any) => {
       const splits = splitsByTransaction.get(t.id) || [];
-      if (splits.length > 0) {
-        splits.forEach((split) => {
+      const userSplits = userSplitsOnly(splits);
+      if (userSplits.length > 0) {
+        userSplits.forEach((split) => {
           const catName = split.category_name || 'Uncategorized';
           ytdCategorySpend[catName] = (ytdCategorySpend[catName] || 0) + Math.abs(split.amount || 0);
         });
-      } else {
-        // Fallback: if no splits, use total_amount as Uncategorized
+      } else if (splits.length === 0) {
         ytdCategorySpend['Uncategorized'] = (ytdCategorySpend['Uncategorized'] || 0) + Math.abs(t.total_amount || 0);
       }
     });
@@ -311,19 +327,6 @@ export async function POST(request: NextRequest) {
         'pre_tax_deduction_items'
       ]);
 
-    // Track metadata about accessed data
-    const transactionCount = transactions?.length || 0;
-    const transactionTotal = transactions?.reduce((sum, t) => sum + Math.abs(t.total_amount || 0), 0) || 0;
-    const ytdTransactionCount = ytdTransactions?.length || 0;
-    const ytdTransactionTotal = ytdTransactions?.reduce((sum, t) => sum + Math.abs(t.total_amount || 0), 0) || 0;
-    const categoriesSearched = categories?.length || 0;
-    const goalsAccessed = goals?.length || 0;
-    const accountsAccessed = accounts?.length || 0;
-    const creditCardsAccessed = creditCards?.length || 0;
-    const loansAccessed = loans?.length || 0;
-    const incomeBufferAccessed = !!incomeBufferCategory;
-    const incomeSettingsAccessed = (settings?.length || 0) > 0;
-
     // Get previous month data
     // SECURITY: Filtered by budget_account_id = accountId
     const prevMonth = new Date(year, monthNum - 2, 1);
@@ -337,9 +340,9 @@ export async function POST(request: NextRequest) {
       .gte('date', prevMonth.toISOString().split('T')[0])
       .lte('date', prevMonthEnd.toISOString().split('T')[0]);
 
-    // Get splits for previous month transactions
+    // Get splits for previous month (with category flags to exclude system/archived)
     const prevTransactionIds = (prevTransactions || []).map((t: any) => t.id);
-    let prevSplitsByTransaction: Map<number, Array<{ category_name: string; amount: number }>> = new Map();
+    let prevSplitsByTransaction: Map<number, Array<SplitWithCategory>> = new Map();
     if (prevTransactionIds.length > 0) {
       const { data: prevSplits } = await supabase
         .from('transaction_splits')
@@ -347,7 +350,9 @@ export async function POST(request: NextRequest) {
           transaction_id,
           amount,
           categories (
-            name
+            name,
+            is_system,
+            is_archived
           )
         `)
         .in('transaction_id', prevTransactionIds);
@@ -357,9 +362,12 @@ export async function POST(request: NextRequest) {
           if (!prevSplitsByTransaction.has(split.transaction_id)) {
             prevSplitsByTransaction.set(split.transaction_id, []);
           }
+          const cat = split.categories;
           prevSplitsByTransaction.get(split.transaction_id)!.push({
-            category_name: split.categories?.name || 'Uncategorized',
+            category_name: cat?.name || 'Uncategorized',
             amount: split.amount || 0,
+            is_system: cat?.is_system ?? false,
+            is_archived: cat?.is_archived ?? false,
           });
         });
       }
@@ -368,53 +376,82 @@ export async function POST(request: NextRequest) {
     const prevCategoryBreakdown: Record<string, number> = {};
     prevTransactions?.forEach((t: any) => {
       const splits = prevSplitsByTransaction.get(t.id) || [];
-      if (splits.length > 0) {
-        splits.forEach((split) => {
+      const userSplits = userSplitsOnly(splits);
+      if (userSplits.length > 0) {
+        userSplits.forEach((split) => {
           const catName = split.category_name || 'Uncategorized';
           prevCategoryBreakdown[catName] = (prevCategoryBreakdown[catName] || 0) + Math.abs(split.amount || 0);
         });
-      } else {
-        // Fallback: if no splits, use total_amount as Uncategorized
+      } else if (splits.length === 0) {
         prevCategoryBreakdown['Uncategorized'] = (prevCategoryBreakdown['Uncategorized'] || 0) + Math.abs(t.total_amount || 0);
       }
     });
 
-    const prevTotal = prevTransactions?.reduce((sum, t) => sum + (t.total_amount || 0), 0) || 0;
+    const prevTotal = Object.values(prevCategoryBreakdown).reduce((sum, amt) => sum + amt, 0);
 
     const totalBudget = categories?.reduce((sum, cat) => sum + (cat.monthly_amount || 0), 0) || 0;
     const totalSpent = Object.values(monthCategorySpend).reduce((sum, amt) => sum + amt, 0);
     const totalYtdSpent = Object.values(ytdCategorySpend).reduce((sum, amt) => sum + amt, 0);
 
-    // Generate insights
-    // Map transactions to only essential fields for AI context
+    // Generate insights: only include transactions that have at least one user (non-system, non-archived) split
     const mapTransaction = (t: any) => {
-      // Determine account name from account_id or credit_card_id
       const accountName = t.account_id 
         ? (t.accounts as any)?.name || 'Unknown Account'
         : t.credit_card_id 
           ? (t.credit_cards as any)?.name || 'Unknown Credit Card'
           : 'Unknown';
-      
-      // Get merchant name from merchant_groups or use description
       const merchantName = (t.merchant_groups as any)?.display_name || t.description || 'Unknown';
-      
-      // Get category from splits (use first split's category, or 'Uncategorized' if no splits)
       const splits = splitsByTransaction.get(t.id) || [];
-      const category = splits.length > 0 ? splits[0].category_name : 'Uncategorized';
-      
+      const userSplits = userSplitsOnly(splits);
+      const category = userSplits.length > 0 ? userSplits[0].category_name : 'Uncategorized';
+      const amount = userSplits.length > 0
+        ? userSplits.reduce((sum, s) => sum + Math.abs(s.amount || 0), 0)
+        : Math.abs(t.total_amount || 0);
       return {
         date: t.date,
         merchant: merchantName,
-        amount: Math.abs(t.total_amount || 0),
-        type: t.transaction_type || 'expense', // 'income' or 'expense'
-        category: category,
+        amount,
+        type: t.transaction_type || 'expense',
+        category,
         account: accountName,
       };
     };
 
+    const filteredMonthTransactions = (transactions || []).filter((t: any) => {
+      const splits = splitsByTransaction.get(t.id) || [];
+      return userSplitsOnly(splits).length > 0 || splits.length === 0;
+    });
+    const filteredYtdTransactions = (ytdTransactions || []).filter((t: any) => {
+      const splits = splitsByTransaction.get(t.id) || [];
+      return userSplitsOnly(splits).length > 0 || splits.length === 0;
+    });
+
+    // Track metadata about accessed data (filtered to user categories only)
+    const transactionCount = filteredMonthTransactions.length;
+    const transactionTotal = filteredMonthTransactions.reduce((sum, t) => {
+      const splits = splitsByTransaction.get(t.id) || [];
+      const userSplits = userSplitsOnly(splits);
+      const amt = userSplits.length > 0 ? userSplits.reduce((s, sp) => s + Math.abs(sp.amount || 0), 0) : Math.abs(t.total_amount || 0);
+      return sum + amt;
+    }, 0);
+    const ytdTransactionCount = filteredYtdTransactions.length;
+    const ytdTransactionTotal = filteredYtdTransactions.reduce((sum, t) => {
+      const splits = splitsByTransaction.get(t.id) || [];
+      const userSplits = userSplitsOnly(splits);
+      const amt = userSplits.length > 0 ? userSplits.reduce((s, sp) => s + Math.abs(sp.amount || 0), 0) : Math.abs(t.total_amount || 0);
+      return sum + amt;
+    }, 0);
+    const categoriesSearched = categories?.length || 0;
+    const goalsAccessed = goals?.length || 0;
+    const accountsAccessed = accounts?.length || 0;
+    const creditCardsAccessed = creditCards?.length || 0;
+    const loansAccessed = loans?.length || 0;
+    const incomeBufferAccessed = !!incomeBufferCategory;
+    const incomeSettingsAccessed = (settings?.length || 0) > 0;
+
     const result = await geminiService.generateInsights({
-      transactions: (transactions || []).map(mapTransaction),
-      ytdTransactions: (ytdTransactions || []).map(mapTransaction),
+      transactions: filteredMonthTransactions.map(mapTransaction),
+      ytdTransactions: filteredYtdTransactions.map(mapTransaction),
       budget: {
         total: totalBudget,
         spent: totalSpent,

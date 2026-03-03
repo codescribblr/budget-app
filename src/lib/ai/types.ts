@@ -76,6 +76,7 @@ export interface UserContext {
     category: string;
     description?: string;
     transactionType?: 'income' | 'expense';
+    tags?: string[];
   }>;
   categoryTotals: Record<string, number>;
   categories: Array<{
@@ -111,6 +112,62 @@ export interface UserContext {
     interest_rate: number | null;
     minimum_payment: number | null;
     payment_due_date: number | null;
+    linked_asset_name?: string | null;
+  }>;
+  creditCards?: Array<{
+    id: number;
+    name: string;
+    current_balance: number;
+    credit_limit: number;
+    available_credit: number;
+  }>;
+  tags?: Array<{ id: number; name: string }>;
+  nonCashAssets?: Array<{
+    id: number;
+    name: string;
+    asset_type: string;
+    current_value: number;
+    estimated_return_percentage?: number;
+    is_rmd_qualified?: boolean;
+    is_liquid?: boolean;
+  }>;
+  /** Detailed income streams with linked asset (for retirement/forecast context) */
+  incomeStreamsDetail?: Array<{
+    id: number;
+    name: string;
+    annual_income: number;
+    tax_rate: number;
+    pay_frequency: string;
+    include_in_budget: boolean;
+    linked_asset_name?: string | null;
+  }>;
+  /** Retirement/forecast assumptions and settings (for chat suggestions) */
+  retirementForecast?: {
+    birth_year: number | null;
+    forecast_age: number;
+    retirement_age: number;
+    income_growth_rate: number;
+    savings_rate: number;
+    retirement_savings_rate: number;
+    social_security_start_age: number;
+    social_security_benefit_level: 'full' | 'half' | 'none';
+    other_retirement_income: number;
+    inflation_rate: number;
+    rmd_age: number;
+    distribution_type?: 'amount' | 'percentage';
+    distribution_amount?: number;
+    distribution_increase_rate?: number;
+    repeatable_events?: Array<{ id: string; name: string; type: string; amount: number; start_year: number; frequency: string; description?: string }>;
+    timeline_events?: Array<{ id: string; type: string; year: number; assetId?: number; amount?: number; description?: string }>;
+  } | null;
+  /** Net worth snapshots (recent history for trend and predictions) */
+  netWorthSnapshots?: Array<{
+    snapshot_date: string;
+    total_accounts: number;
+    total_credit_cards: number;
+    total_loans: number;
+    total_assets: number;
+    net_worth: number;
   }>;
   incomeBuffer: {
     id: number;
