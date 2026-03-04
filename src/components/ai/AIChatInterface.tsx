@@ -16,6 +16,11 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { ChatMessage } from '@/lib/ai/types';
 
+function messageTimestampKey(ts: ChatMessage['timestamp']): number | string {
+  if (ts == null) return '';
+  return ts instanceof Date ? ts.getTime() : new Date(ts).getTime();
+}
+
 interface AIChatInterfaceProps {
   conversationId?: string | null;
   onConversationUpdate?: (conversationId: string, messages: ChatMessage[]) => void;
@@ -153,7 +158,7 @@ export function AIChatInterface({
                 <>
                   {messages.map((msg, i) => (
                     <div
-                      key={`${msg.role}-${i}-${msg.timestamp?.getTime() || i}`}
+                      key={`${msg.role}-${i}-${messageTimestampKey(msg.timestamp) || i}`}
                       className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div

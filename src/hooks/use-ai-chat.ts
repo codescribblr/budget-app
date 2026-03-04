@@ -142,10 +142,15 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         throw new Error('Failed to load conversation');
       }
       const data = await response.json();
+      // Normalize messages: timestamp comes back as ISO string from API, convert to Date
+      const normalizedMessages = (data.messages || []).map((m: ChatMessage & { timestamp?: Date | string }) => ({
+        ...m,
+        timestamp: m.timestamp instanceof Date ? m.timestamp : (m.timestamp ? new Date(m.timestamp) : undefined),
+      }));
       // Only update messages if we're actually loading a different conversation
       // Don't overwrite if we have messages and are loading the same conversation
       if (id !== currentConversationId || messages.length === 0) {
-        setMessages(data.messages || []);
+        setMessages(normalizedMessages);
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load conversation'));
