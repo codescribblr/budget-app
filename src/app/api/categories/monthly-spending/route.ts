@@ -2,30 +2,58 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 
+const MONTH_PARAM = /^(\d{4})-(\d{2})$/;
+
+function parseRequestedMonth(monthParam: string | null): { year: number; month: number } | null {
+  if (!monthParam) return null;
+  const m = MONTH_PARAM.exec(monthParam.trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  return { year, month };
+}
+
 /**
  * GET /api/categories/monthly-spending
- * Returns current month's spending for each category
+ * Returns spending per category for a month. Defaults to the current calendar month.
+ * Optional query: month=YYYY-MM
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const { supabase, user } = await getAuthenticatedUser();
+    const { supabase } = await getAuthenticatedUser();
     const accountId = await getActiveAccountId();
     
     if (!accountId) {
       return NextResponse.json({ error: 'No active account' }, { status: 400 });
     }
 
-    // Get current month's date range (YYYY-MM-DD format)
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const { searchParams } = new URL(request.url);
+    const monthRaw = searchParams.get('month');
+    const requested = parseRequestedMonth(monthRaw);
+    if (monthRaw !== null && monthRaw !== '' && !requested) {
+      return NextResponse.json({ error: 'Invalid month (use YYYY-MM)' }, { status: 400 });
+    }
+
+    let year: number;
+    let monthIndex0: number; // 0–11
+
+    if (requested) {
+      year = requested.year;
+      monthIndex0 = requested.month - 1;
+    } else {
+      const now = new Date();
+      year = now.getFullYear();
+      monthIndex0 = now.getMonth();
+    }
+
+    const month = String(monthIndex0 + 1).padStart(2, '0');
     const startDate = `${year}-${month}-01`;
-    
-    // Calculate last day of current month
-    const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+
+    const lastDay = new Date(year, monthIndex0 + 1, 0).getDate();
     const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
 
-    // Fetch all transactions for current month with splits
+    // Fetch all transactions for the requested month with splits
     const { data: transactions, error: transactionsError } = await supabase
       .from('transactions')
       .select(`
