@@ -1,21 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatCurrencyAbbreviated } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { buildNetWorthChartSeries, NET_WORTH_MONTHLY_CHART_MAX_SPAN_MONTHS } from '@/lib/net-worth';
 import {
-  LineChart,
-  Line,
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  LabelList,
 } from 'recharts';
 import { ArrowRight, TrendingDown, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -46,7 +49,10 @@ interface SnapshotRow {
   total_assets: number;
 }
 
+type NetWorthChartPoint = { date: string; netWorth: number };
+
 export default function NetWorthTrackingPage() {
+  const areaFillGradientId = useId().replace(/:/g, '');
   const [summary, setSummary] = useState<NetWorthSummaryResponse | null>(null);
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,8 +120,39 @@ export default function NetWorthTrackingPage() {
     chartData.length === 0
       ? null
       : chartGranularity === 'month'
-        ? `By month (last snapshot in each month). With less than ${NET_WORTH_MONTHLY_CHART_MAX_SPAN_MONTHS} months of history, the chart uses monthly points.`
-        : 'By day from daily snapshots.';
+        ? `Bars show the last snapshot in each month (history under ${NET_WORTH_MONTHLY_CHART_MAX_SPAN_MONTHS} months). Axis labels are abbreviated.`
+        : 'Area shows daily snapshots. Axis labels are abbreviated.';
+
+  const showBarValueLabels = chartGranularity === 'month' && chartData.length <= 24;
+
+  const yAxisTickFormatter = (v: number) => formatCurrencyAbbreviated(Number(v));
+
+  const tooltipContent = ({
+    active,
+    payload,
+  }: {
+    active?: boolean;
+    payload?: { payload: NetWorthChartPoint }[];
+  }) => {
+    if (!active || !payload?.length) return null;
+    const row = payload[0].payload;
+    const title =
+      chartGranularity === 'month'
+        ? format(parseISO(row.date), 'MMMM yyyy')
+        : format(parseISO(row.date), 'MMM d, yyyy');
+    return (
+      <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-sm">
+        <div className="font-medium">{title}</div>
+        {chartGranularity === 'month' && (
+          <div className="text-xs text-muted-foreground">Last snapshot in month</div>
+        )}
+        <div className="tabular-nums">Net worth: {formatCurrency(row.netWorth)}</div>
+      </div>
+    );
+  };
+
+  const xAxisTickFormatter = (v: string) =>
+    chartGranularity === 'month' ? format(parseISO(v), 'MMM yyyy') : format(parseISO(v), 'MMM d');
 
   return (
     <div className="space-y-6">
@@ -222,54 +259,89 @@ export default function NetWorthTrackingPage() {
               This chart will become available as we capture your net worth history over time. Values come from
               automated snapshots when account, card, loan, or asset balances change.
             </p>
+          ) : chartGranularity === 'month' ? (
+            <ResponsiveContainer width="100%" height={showBarValueLabels ? 400 : 360}>
+              <BarChart
+                data={chartData}
+                margin={{ top: showBarValueLabels ? 28 : 12, right: 12, left: 4, bottom: 4 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={xAxisTickFormatter}
+                  minTickGap={8}
+                  angle={chartData.length > 10 ? -32 : 0}
+                  textAnchor={chartData.length > 10 ? 'end' : 'middle'}
+                  height={chartData.length > 10 ? 56 : 32}
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={yAxisTickFormatter}
+                  width={56}
+                  tickMargin={6}
+                />
+                <Tooltip
+                  content={tooltipContent}
+                  cursor={{ fill: 'var(--muted)', fillOpacity: 0.35 }}
+                />
+                <Bar
+                  dataKey="netWorth"
+                  name="Net worth"
+                  fill="var(--chart-1)"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={56}
+                >
+                  {showBarValueLabels && (
+                    <LabelList
+                      position="top"
+                      offset={6}
+                      className="fill-muted-foreground"
+                      fontSize={10}
+                      valueAccessor={(entry) => {
+                        const row = entry.payload as NetWorthChartPoint;
+                        return formatCurrencyAbbreviated(Number(row.netWorth));
+                      }}
+                    />
+                  )}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           ) : (
             <ResponsiveContainer width="100%" height={360}>
-              <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <AreaChart data={chartData} margin={{ top: 12, right: 12, left: 4, bottom: 4 }}>
+                <defs>
+                  <linearGradient id={areaFillGradientId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.45} />
+                    <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0.04} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 11 }}
-                  tickFormatter={(v) =>
-                    chartGranularity === 'month'
-                      ? format(parseISO(v), 'MMM yyyy')
-                      : format(parseISO(v), 'MMM d')
-                  }
-                  minTickGap={chartGranularity === 'month' ? 8 : 20}
+                  tickFormatter={xAxisTickFormatter}
+                  minTickGap={20}
                 />
                 <YAxis
                   tick={{ fontSize: 11 }}
-                  tickFormatter={(v) => formatCurrency(Number(v))}
-                  width={72}
+                  tickFormatter={yAxisTickFormatter}
+                  width={56}
+                  tickMargin={6}
                 />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const row = payload[0].payload as (typeof chartData)[0];
-                    const title =
-                      chartGranularity === 'month'
-                        ? format(parseISO(row.date), 'MMMM yyyy')
-                        : format(parseISO(row.date), 'MMM d, yyyy');
-                    return (
-                      <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-sm">
-                        <div className="font-medium">{title}</div>
-                        {chartGranularity === 'month' && (
-                          <div className="text-xs text-muted-foreground">Last snapshot in month</div>
-                        )}
-                        <div className="tabular-nums">Net worth: {formatCurrency(row.netWorth)}</div>
-                      </div>
-                    );
-                  }}
-                />
-                <Line
+                <Tooltip content={tooltipContent} />
+                <Area
                   type="monotone"
                   dataKey="netWorth"
                   name="Net worth"
-                  stroke="hsl(var(--primary))"
+                  stroke="var(--chart-1)"
                   strokeWidth={2}
+                  fill={`url(#${areaFillGradientId})`}
+                  fillOpacity={1}
                   dot={false}
-                  activeDot={{ r: 4 }}
+                  activeDot={{ r: 5, fill: 'var(--chart-1)', stroke: 'var(--background)' }}
                 />
-              </LineChart>
+              </AreaChart>
             </ResponsiveContainer>
           )}
         </CardContent>
