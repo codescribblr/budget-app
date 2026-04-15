@@ -38,6 +38,7 @@ import {
   Bell,
   Palmtree,
   Scale,
+  LayoutGrid,
 } from "lucide-react"
 import { useFeatures } from "@/contexts/FeatureContext"
 import { shouldShowNavItem } from "@/lib/feature-flags"
@@ -56,6 +57,7 @@ import type { Category, Account, CreditCard, Loan, TransactionWithSplits, GoalWi
 
 // Settings items for search
 const settingsItems = [
+  { label: "Dashboard layout", path: "/settings/dashboard", icon: LayoutGrid, section: "features", keywords: "dashboard cards layout customize hide show widgets" },
   { label: "Features", path: "/settings", icon: Sparkles, section: "features", keywords: "features enable disable advanced power user" },
   { label: "Subscription", path: "/settings/subscription", icon: Crown, section: null, keywords: "subscription premium upgrade billing payment" },
   { label: "Password", path: "/settings/password", icon: Key, section: null, keywords: "password change reset security" },

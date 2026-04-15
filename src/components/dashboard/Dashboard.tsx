@@ -16,9 +16,8 @@ import type {
   DashboardSummary,
 } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
-import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, Mail, ChevronUp, TrendingUp, ArrowRight, Settings } from 'lucide-react';
+import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, Mail, ChevronUp, TrendingUp, ArrowRight, LayoutGrid } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import CategoryList from './CategoryList';
 import AccountList from './AccountList';
 import CreditCardList from './CreditCardList';
@@ -32,10 +31,17 @@ import NetWorthSummaryCard from '@/components/net-worth/NetWorthSummaryCard';
 import { AIInsightsWidget } from '@/components/ai/AIInsightsWidget';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { useFeature } from '@/contexts/FeatureContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { SetupWizardBanner } from '@/components/wizards/SetupWizardBanner';
 import { WizardCompletionDialog } from '@/components/wizards/WizardCompletionDialog';
 import { WizardCompletionBanner } from '@/components/wizards/WizardCompletionBanner';
+import {
+  parseDashboardCardVisibility,
+  DASHBOARD_CARD_VISIBILITY_KEY,
+  DEFAULT_DASHBOARD_CARD_VISIBILITY,
+  type DashboardCardVisibility,
+} from '@/lib/dashboard-card-visibility';
 
 // Helper function to calculate summary from local state
 function calculateSummary(
@@ -96,10 +102,14 @@ function calculateSummary(
 }
 
 export default function Dashboard() {
-  const router = useRouter();
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
+  const { isPremium } = useSubscription();
   const loansEnabled = useFeature('loans');
   const nonCashAssetsEnabled = useFeature('non_cash_assets');
+  const retirementPlanningEnabled = useFeature('retirement_planning');
+  const aiChatEnabled = useFeature('ai_chat');
+  const goalsEnabled = useFeature('goals');
+  const incomeBufferFeatureEnabled = useFeature('income_buffer');
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
@@ -121,7 +131,10 @@ export default function Dashboard() {
   const [completionTime, setCompletionTime] = useState<string | null>(null);
   const [incomeSettings, setIncomeSettings] = useState<{ annual_income?: string; annual_salary?: string }>({});
   const [hasIncomeStreams, setHasIncomeStreams] = useState(false);
-  
+  const [cardVisibility, setCardVisibility] = useState<DashboardCardVisibility>(() => ({
+    ...DEFAULT_DASHBOARD_CARD_VISIBILITY,
+  }));
+
   // Wrapper to safely set the edit dialog function
   const handleEditDialogReady = useCallback((fn: (category: Category) => void) => {
     // Only update if we have a valid function
@@ -192,6 +205,8 @@ export default function Dashboard() {
       setMonthlyNetIncome(summaryData?.monthly_net_income || 0);
       setBufferStatus(bufferData);
       setIncomeSettings(settingsData || {});
+      const settingsRecord = (settingsData || {}) as Record<string, string>;
+      setCardVisibility(parseDashboardCardVisibility(settingsRecord[DASHBOARD_CARD_VISIBILITY_KEY]));
       const streams = Array.isArray(incomeStreamsData) ? incomeStreamsData : [];
       setHasIncomeStreams(streams.some((s: any) => s.include_in_budget && (s.annual_income || 0) > 0));
 
@@ -203,7 +218,7 @@ export default function Dashboard() {
       }
 
       // Check if wizard was just completed (within last 5 minutes)
-      const wizardCompletionTime = (settingsData as Record<string, string>)?.budget_wizard_completed;
+      const wizardCompletionTime = settingsRecord?.budget_wizard_completed;
       if (wizardCompletionTime) {
         setCompletionTime(wizardCompletionTime);
         const completedAt = new Date(wizardCompletionTime);
@@ -328,6 +343,37 @@ export default function Dashboard() {
     }
   }, [nonCashAssetsEnabled, updateAssets]);
 
+  const hasRightColumnContent = useMemo(() => {
+    const showAi = cardVisibility.ai_insights && isPremium && aiChatEnabled;
+    const showAccounts = cardVisibility.accounts;
+    const showCreditCards = cardVisibility.credit_cards;
+    const showPendingChecks = cardVisibility.pending_checks;
+    const showLoans = loansEnabled && cardVisibility.loans;
+    const showAssets = cardVisibility.non_cash_assets && nonCashAssetsEnabled;
+    const showIncomeBuffer =
+      incomeBufferFeatureEnabled && bufferStatus?.enabled === true && cardVisibility.income_buffer;
+    const showGoals = cardVisibility.goals && goalsEnabled && isPremium;
+    return (
+      showAi ||
+      showAccounts ||
+      showCreditCards ||
+      showPendingChecks ||
+      showLoans ||
+      showAssets ||
+      showIncomeBuffer ||
+      showGoals
+    );
+  }, [
+    cardVisibility,
+    isPremium,
+    aiChatEnabled,
+    loansEnabled,
+    nonCashAssetsEnabled,
+    goalsEnabled,
+    incomeBufferFeatureEnabled,
+    bufferStatus?.enabled,
+  ]);
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -342,6 +388,18 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-4 md:space-y-6">
+      <div className="flex justify-end -mt-1 min-h-[1.25rem]">
+        <Link
+          href="/settings/dashboard"
+          aria-label="Customize dashboard layout"
+          className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground/70 hover:bg-muted/50 hover:text-muted-foreground transition-colors"
+          title="Customize dashboard"
+        >
+          <LayoutGrid className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="hidden sm:inline">Customize</span>
+        </Link>
+      </div>
+
       {/* Wizard Completion Dialog */}
       {showCompletionDialog && categories.length > 0 && (
         <WizardCompletionDialog
@@ -388,12 +446,22 @@ export default function Dashboard() {
         </Alert>
       )}
 
-      <NetWorthSummaryCard />
+      {cardVisibility.net_worth && retirementPlanningEnabled && isPremium && <NetWorthSummaryCard />}
 
-      {summary && <SummaryCards summary={summary} />}
+      {cardVisibility.summary && summary && <SummaryCards summary={summary} />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[calc(100vh-400px)]">
-        <Collapsible open={isCategoriesOpen} onOpenChange={setIsCategoriesOpen} className="lg:col-span-2">
+      <div
+        className={
+          hasRightColumnContent
+            ? 'grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[calc(100vh-400px)]'
+            : 'grid grid-cols-1 gap-6 min-h-[calc(100vh-400px)]'
+        }
+      >
+        <Collapsible
+          open={isCategoriesOpen}
+          onOpenChange={setIsCategoriesOpen}
+          className={hasRightColumnContent ? 'lg:col-span-2' : undefined}
+        >
           <Card className="flex flex-col relative">
             <CardHeader>
               <CollapsibleTrigger asChild>
@@ -429,9 +497,11 @@ export default function Dashboard() {
           </Card>
         </Collapsible>
 
+        {hasRightColumnContent && (
         <div className="space-y-6">
-          <AIInsightsWidget />
+          {cardVisibility.ai_insights && isPremium && aiChatEnabled && <AIInsightsWidget />}
 
+          {cardVisibility.accounts && (
           <Collapsible open={isAccountsOpen} onOpenChange={setIsAccountsOpen}>
             <Card id="accounts-section" className="relative">
               <CardHeader>
@@ -473,7 +543,9 @@ export default function Dashboard() {
               </CollapsibleContent>
             </Card>
           </Collapsible>
+          )}
 
+          {cardVisibility.credit_cards && (
           <Collapsible open={isCreditCardsOpen} onOpenChange={setIsCreditCardsOpen}>
             <Card id="credit-cards-section" className="relative">
               <CardHeader>
@@ -515,7 +587,9 @@ export default function Dashboard() {
               </CollapsibleContent>
             </Card>
           </Collapsible>
+          )}
 
+          {cardVisibility.pending_checks && (
           <Collapsible open={isPendingChecksOpen} onOpenChange={setIsPendingChecksOpen}>
             <Card className="relative">
               <CardHeader>
@@ -560,8 +634,9 @@ export default function Dashboard() {
               </CollapsibleContent>
             </Card>
           </Collapsible>
+          )}
 
-          {loansEnabled && (
+          {loansEnabled && cardVisibility.loans && (
             <Collapsible open={isLoansOpen} onOpenChange={setIsLoansOpen}>
               <Card id="loans-section" className="relative">
                 <CardHeader>
@@ -604,69 +679,58 @@ export default function Dashboard() {
             </Collapsible>
           )}
 
-          <Collapsible open={isAssetsOpen} onOpenChange={setIsAssetsOpen}>
-            <Card id="assets-section" className="relative">
-              <CardHeader>
-                <div className="flex flex-wrap items-start gap-2">
-                  <CollapsibleTrigger asChild>
-                    <div className="flex-1 min-w-[200px] cursor-pointer">
-                      <CardTitle className="flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5" />
-                        Non-Cash Assets
-                      </CardTitle>
-                    </div>
-                  </CollapsibleTrigger>
-                  {nonCashAssetsEnabled && (
+          {cardVisibility.non_cash_assets && nonCashAssetsEnabled && (
+            <Collapsible open={isAssetsOpen} onOpenChange={setIsAssetsOpen}>
+              <Card id="assets-section" className="relative">
+                <CardHeader>
+                  <div className="flex flex-wrap items-start gap-2">
+                    <CollapsibleTrigger asChild>
+                      <div className="flex-1 min-w-[200px] cursor-pointer">
+                        <CardTitle className="flex items-center gap-2">
+                          <TrendingUp className="h-5 w-5" />
+                          Non-Cash Assets
+                        </CardTitle>
+                      </div>
+                    </CollapsibleTrigger>
                     <Link href="/non-cash-assets" className="ml-auto">
                       <Button variant="ghost" size="sm" className="shrink-0">
                         View All
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </Link>
-                  )}
-                </div>
-              </CardHeader>
-              <CollapsibleContent>
-                <CardContent className="pb-8">
-                  {nonCashAssetsEnabled ? (
-                    <AssetList 
-                      assets={assets} 
+                  </div>
+                </CardHeader>
+                <CollapsibleContent>
+                  <CardContent className="pb-8">
+                    <AssetList
+                      assets={assets}
                       onUpdate={(updatedAssets) => setAssets(updatedAssets)}
                       disabled={!isEditor || permissionsLoading}
                     />
-                  ) : (
-                    <div className="text-center py-4 space-y-4">
-                      <p className="text-muted-foreground">
-                        Non-Cash Assets feature is not enabled
-                      </p>
-                      <Button
-                        onClick={() => router.push('/settings')}
-                        size="sm"
-                        variant="outline"
-                      >
-                        <Settings className="mr-2 h-4 w-4" />
-                        Enable Feature
-                      </Button>
-                    </div>
+                  </CardContent>
+                  {isAssetsOpen && (
+                    <button
+                      onClick={() => setIsAssetsOpen(false)}
+                      className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                      aria-label="Collapse card"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </button>
                   )}
-                </CardContent>
-                {isAssetsOpen && (
-                  <button
-                    onClick={() => setIsAssetsOpen(false)}
-                    className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
-                    aria-label="Collapse card"
-                  >
-                    <ChevronUp className="h-4 w-4" />
-                  </button>
-                )}
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+          )}
 
-          {bufferStatus?.enabled && <IncomeBufferCard />}
+          {incomeBufferFeatureEnabled && bufferStatus?.enabled && cardVisibility.income_buffer && (
+            <IncomeBufferCard />
+          )}
 
-          <GoalsWidget disabled={!isEditor || permissionsLoading} />
+          {cardVisibility.goals && goalsEnabled && isPremium && (
+            <GoalsWidget disabled={!isEditor || permissionsLoading} />
+          )}
         </div>
+        )}
       </div>
     </div>
   );

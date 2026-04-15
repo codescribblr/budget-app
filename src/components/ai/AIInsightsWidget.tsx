@@ -1,12 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Brain, RefreshCw, Loader2, Sparkles, Crown, ChevronUp, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Brain, RefreshCw, Loader2, Sparkles, ChevronUp, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAIUsage } from '@/hooks/use-ai-usage';
 import { useRotatingLoadingMessage } from '@/hooks/use-rotating-loading-message';
@@ -18,7 +17,6 @@ import { DataSummary } from '@/components/ai/DataSummary';
 import type { MonthlyInsights } from '@/lib/ai/types';
 
 export function AIInsightsWidget() {
-  const router = useRouter();
   const aiChatEnabled = useFeature('ai_chat');
   const { isPremium, loading: subscriptionLoading } = useSubscription();
   const [insights, setInsights] = useState<MonthlyInsights | null>(null);
@@ -176,36 +174,7 @@ export function AIInsightsWidget() {
     }
   };
 
-  // If feature is disabled, hide widget completely (don't show upgrade prompt for premium users who disabled it)
   if (!canAccess) {
-    // Only show upgrade prompt if user doesn't have premium
-    if (!isPremium) {
-      return (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Brain className="h-5 w-5 text-purple-500" />
-              AI Insights
-            </CardTitle>
-            <CardDescription>Get intelligent insights about your finances</CardDescription>
-          </CardHeader>
-          <CardContent className="text-center py-4 space-y-4">
-            <p className="text-muted-foreground">
-              AI Insights is a premium feature
-            </p>
-            <Button
-              onClick={() => router.push('/settings/subscription')}
-              size="sm"
-              className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
-            >
-              <Crown className="mr-2 h-4 w-4" />
-              Upgrade to Premium
-            </Button>
-          </CardContent>
-        </Card>
-      );
-    }
-    // Premium user disabled the feature - hide widget completely
     return null;
   }
 

@@ -1,10 +1,8 @@
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFeature } from '@/contexts/FeatureContext';
-import { useSubscription } from '@/contexts/SubscriptionContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +22,7 @@ import {
 import { formatCurrency } from '@/lib/utils';
 import type { Loan } from '@/lib/types';
 import { toast } from 'sonner';
-import { Check, X, MoreVertical, Edit, Trash2, Crown } from 'lucide-react';
+import { Check, X, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
 import Link from 'next/link';
 import LoanDialog from '@/components/loans/LoanDialog';
@@ -36,9 +34,7 @@ interface LoanListProps {
 }
 
 export default function LoanList({ loans, onUpdate, disabled = false }: LoanListProps) {
-  const router = useRouter();
   const loansEnabled = useFeature('loans');
-  const { isPremium } = useSubscription();
   const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
   const [isLoanDialogOpen, setIsLoanDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -154,27 +150,7 @@ export default function LoanList({ loans, onUpdate, disabled = false }: LoanList
     }
   };
 
-  // If feature is disabled, hide widget completely (don't show upgrade prompt for premium users who disabled it)
   if (!loansEnabled) {
-    // Only show upgrade prompt if user doesn't have premium
-    if (!isPremium) {
-      return (
-        <div className="text-center py-8 space-y-4">
-          <p className="text-muted-foreground">
-            Loans Management is a premium feature
-          </p>
-          <Button
-            onClick={() => router.push('/settings/subscription')}
-            size="sm"
-            className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
-          >
-            <Crown className="mr-2 h-4 w-4" />
-            Upgrade to Premium
-          </Button>
-        </div>
-      );
-    }
-    // Premium user disabled the feature - hide widget completely
     return null;
   }
 

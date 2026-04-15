@@ -16,7 +16,8 @@ import {
   UserPlus,
   RefreshCw,
   FileText,
-  Bell
+  Bell,
+  LayoutGrid,
 } from 'lucide-react';
 
 const settingsNavItems = [
@@ -25,6 +26,12 @@ const settingsNavItems = [
     href: '/settings',
     icon: Sparkles,
     description: 'Explore and enable optional features',
+  },
+  {
+    title: 'Dashboard',
+    href: '/settings/dashboard',
+    icon: LayoutGrid,
+    description: 'Choose which cards appear on the main dashboard',
   },
   {
     title: 'Subscription',
