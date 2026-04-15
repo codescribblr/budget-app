@@ -444,19 +444,24 @@ export default function TransactionsPage() {
     }
   }, [searchQueryParam]);
 
-  // Update URL when debounced search query changes
+  // Update URL when debounced search query changes (and reset to page 1 for a new search).
+  // Do not run when only other params (e.g. page) change: searchParams is in deps so we must
+  // bail out when `q` already matches, otherwise every pagination navigation resets page to 1.
   useEffect(() => {
-    if (hasMountedRef.current) {
-      const params = new URLSearchParams(searchParams.toString());
-      if (debouncedSearchQuery.trim()) {
-        params.set('q', debouncedSearchQuery.trim());
-      } else {
-        params.delete('q');
-      }
-      // Reset to page 1 when search changes
-      params.set('page', '1');
-      router.replace(`/transactions?${params.toString()}`);
+    if (!hasMountedRef.current) return;
+
+    const qFromUrl = (searchParams.get('q') ?? '').trim();
+    const qDebounced = debouncedSearchQuery.trim();
+    if (qFromUrl === qDebounced) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (qDebounced) {
+      params.set('q', qDebounced);
+    } else {
+      params.delete('q');
     }
+    params.set('page', '1');
+    router.replace(`/transactions?${params.toString()}`);
   }, [debouncedSearchQuery, searchParams, router]);
 
   // Open edit dialog if editId is in URL
