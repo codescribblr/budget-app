@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
+import { requireRetirementPlanningNetWorthAccess } from '@/lib/net-worth-api-guard';
 
 export async function GET(request: NextRequest) {
+  const denied = await requireRetirementPlanningNetWorthAccess();
+  if (denied) return denied;
+
   try {
     const { supabase } = await getAuthenticatedUser();
     const budgetAccountId = await getActiveAccountId();

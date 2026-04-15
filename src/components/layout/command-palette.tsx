@@ -37,6 +37,7 @@ import {
   RefreshCw,
   Bell,
   Palmtree,
+  Scale,
 } from "lucide-react"
 import { useFeatures } from "@/contexts/FeatureContext"
 import { shouldShowNavItem } from "@/lib/feature-flags"
@@ -108,6 +109,7 @@ const navigationItems = [
   { label: "Trends", path: "/reports/trends", icon: TrendingUp, featureKey: "advanced_reporting" },
   { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
   { label: "Retirement Planning", path: "/reports/retirement-planning", icon: Palmtree, featureKey: "retirement_planning" },
+  { label: "Net Worth", path: "/net-worth", icon: Scale, featureKey: "retirement_planning", keywords: "net worth tracking history snapshots" },
   { label: "Income", path: "/income", icon: DollarSign },
   { label: "Goals", path: "/goals", icon: Target, featureKey: "goals" },
   { label: "AI Assistant", path: "/dashboard/ai-assistant", icon: Sparkles, featureKey: "ai_chat" },

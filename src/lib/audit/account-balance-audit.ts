@@ -1,5 +1,6 @@
 import { getAuthenticatedUser } from '../supabase-queries';
 import { getActiveAccountId } from '../account-context';
+import { computeNetWorthBreakdown } from '../net-worth';
 
 export type AccountChangeType =
   | 'manual_edit'
@@ -269,23 +270,13 @@ export async function createNetWorthSnapshot(): Promise<void> {
       .select('current_value')
       .eq('account_id', budgetAccountId);
 
-    // Calculate totals
-    const totalAccounts = (accounts || [])
-      .filter(acc => acc.include_in_totals === true)
-      .reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
-
-    const totalCreditCards = (creditCards || [])
-      .reduce((sum, cc) => sum + Number(cc.current_balance || 0), 0);
-
-    const totalLoans = (loans || [])
-      .filter(loan => loan.include_in_net_worth === true)
-      .reduce((sum, loan) => sum + Number(loan.balance || 0), 0);
-
-    const totalAssets = (assets || [])
-      .reduce((sum, asset) => sum + Number(asset.current_value || 0), 0);
-
-    // Net worth = accounts + assets - credit cards - loans
-    const netWorth = totalAccounts + totalAssets - totalCreditCards - totalLoans;
+    const { totalAccounts, totalCreditCards, totalLoans, totalAssets, netWorth } =
+      computeNetWorthBreakdown(
+        accounts || [],
+        creditCards || [],
+        loans || [],
+        assets || []
+      );
 
     const today = new Date().toISOString().split('T')[0];
 

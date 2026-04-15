@@ -28,6 +28,7 @@ import AssetList from './AssetList';
 import SummaryCards from './SummaryCards';
 import GoalsWidget from './GoalsWidget';
 import IncomeBufferCard from './IncomeBufferCard';
+import NetWorthSummaryCard from '@/components/net-worth/NetWorthSummaryCard';
 import { AIInsightsWidget } from '@/components/ai/AIInsightsWidget';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { useFeature } from '@/contexts/FeatureContext';
@@ -386,6 +387,8 @@ export default function Dashboard() {
           </AlertDescription>
         </Alert>
       )}
+
+      <NetWorthSummaryCard />
 
       {summary && <SummaryCards summary={summary} />}
 

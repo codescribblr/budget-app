@@ -26,6 +26,7 @@ import {
   Landmark,
   Banknote,
   Palmtree,
+  Scale,
 } from "lucide-react"
 
 import {
@@ -98,6 +99,7 @@ const navigationSections = [
       { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
       { label: "Tag Reports", path: "/reports/tags", icon: Tag, featureKey: "tags" },
       { label: "Retirement Planning", path: "/reports/retirement-planning", icon: Palmtree, featureKey: "retirement_planning" },
+      { label: "Net Worth", path: "/net-worth", icon: Scale, featureKey: "retirement_planning" },
     ],
   },
   {

@@ -38,6 +38,7 @@ export function PremiumFeatureGate({
     'Income Buffer': 'income_buffer',
     'Automatic Imports': 'automatic_imports',
     'Retirement Planning': 'retirement_planning',
+    'Net Worth Tracking': 'retirement_planning',
     'Recurring Transactions': 'recurring_transactions',
   };
 
@@ -80,7 +81,7 @@ export function PremiumFeatureGate({
             <p className="text-sm text-muted-foreground mb-4">
               To access {featureName}, please enable the feature in your settings.
             </p>
-            <Button onClick={() => router.push('/settings')}>
+            <Button onClick={() => router.push('/settings/features')}>
               Go to Feature Settings
             </Button>
           </CardContent>

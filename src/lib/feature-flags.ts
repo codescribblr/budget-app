@@ -5,7 +5,7 @@
  * When adding a new gated feature:
  * 1. Add the key to FEATURE_KEYS above.
  * 2. Add the feature definition to src/app/api/features/route.ts (FEATURES).
- * 3. Add the nav item with featureKey in app-sidebar.tsx navigationSections and command-palette.tsx navigationItems.
+ * 3. Add the nav item with featureKey in app-sidebar.tsx navigationSections and command-palette.tsx navigationItems (e.g. Net Worth uses the same featureKey as Retirement Planning when it is bundled there).
  * 4. On gated pages, pass featureKey explicitly to PremiumFeatureGate (e.g. featureKey="loans").
  */
 export const FEATURE_KEYS = [
