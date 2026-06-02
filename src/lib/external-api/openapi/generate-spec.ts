@@ -4,12 +4,29 @@ import { OPENAPI_COMPONENT_SCHEMAS } from './schemas';
 import { resolveOperationResponses } from './response-registry';
 import { resolveOperationRequestBody } from './request-body-registry';
 import {
+  REPORTING_API_OPERATIONS,
+  REPORTING_API_OPERATION_COUNT,
+} from './reporting-endpoints';
+import {
   EXTERNAL_API_RATE_LIMIT_PER_DAY,
   EXTERNAL_API_RATE_LIMIT_PER_MINUTE,
   IDEMPOTENCY_HEADER,
 } from '../constants';
 
 type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
+
+export type OpenApiEndpointEntry = {
+  method: string;
+  path: string;
+  scope: string;
+};
+
+export type GenerateOpenApiSpecOptions = {
+  endpoints?: ReadonlyArray<OpenApiEndpointEntry>;
+  title?: string;
+  version?: string;
+  descriptionLines?: string[];
+};
 
 interface OperationDetail {
   summary?: string;
@@ -48,6 +65,36 @@ const OPERATION_DETAILS: Record<string, OperationDetail> = {
       { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
       { name: 'q', in: 'query', schema: { type: 'string' }, description: 'Search description or merchant' },
     ],
+  },
+  'GET /api/v1/dashboard': {
+    summary: 'Dashboard summary',
+    description: 'High-level budget totals: cash, envelopes, credit cards, pending checks, savings, and income.',
+  },
+  'GET /api/v1/reports/dashboard': {
+    summary: 'Reports dashboard summary',
+    description: 'Aggregate counts and balances for accounts, credit cards, categories, and recent activity.',
+  },
+  'GET /api/v1/reports/net-worth': {
+    summary: 'Net worth report',
+    description: 'Current net worth breakdown and optional 30-day change from snapshots.',
+  },
+  'GET /api/v1/net-worth/snapshots': {
+    summary: 'List net worth snapshots',
+    description: 'Historical net worth snapshots for trend analysis.',
+  },
+  'GET /api/v1/categories/monthly-funding': {
+    summary: 'Category monthly funding',
+    parameters: [
+      { name: 'month', in: 'query', schema: { type: 'string' }, description: 'YYYY-MM' },
+    ],
+  },
+  'GET /api/v1/goals/{id}/progress': {
+    summary: 'Goal progress',
+    description: 'Progress metrics for a savings or debt payoff goal.',
+  },
+  'GET /api/v1/income-buffer/status': {
+    summary: 'Income buffer status',
+    description: 'Current buffer balance, monthly budget, and runway months.',
   },
   'POST /api/v1/transactions': {
     summary: 'Create a transaction',
@@ -216,10 +263,10 @@ function parseScopeRequirement(scope: string): string {
   return `Required scope: \`${scope}\`. Write implies read for the same section.`;
 }
 
-function buildPaths(): Record<string, Record<string, unknown>> {
+function buildPaths(endpoints: ReadonlyArray<OpenApiEndpointEntry>): Record<string, Record<string, unknown>> {
   const paths: Record<string, Record<string, unknown>> = {};
 
-  for (const entry of EXTERNAL_API_ENDPOINTS) {
+  for (const entry of endpoints) {
     const openApiPath = toOpenApiPath(entry.path);
     const methods = entry.method.toLowerCase().split('|') as HttpMethod[];
 
@@ -260,105 +307,179 @@ function buildPaths(): Record<string, Record<string, unknown>> {
   return paths;
 }
 
-export function generateOpenApiSpec(baseUrl: string) {
+function buildOpenApiComponents() {
+  return {
+    securitySchemes: {
+      BearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        description:
+          'API key created in Settings → API Keys. Format: bud_test_... (dev) or bud_live_... (production).',
+      },
+    },
+    schemas: {
+      ...OPENAPI_COMPONENT_SCHEMAS,
+      ApiScope: {
+        type: 'string',
+        enum: ALL_API_SCOPES,
+      },
+    },
+    responses: {
+      InvalidApiKey: {
+        description: 'Missing or invalid API key',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
+      },
+      Forbidden: {
+        description: 'Premium required or insufficient scope',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
+      },
+      ValidationError: {
+        description: 'Invalid request parameters or body',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
+      },
+      NotFound: {
+        description: 'Resource not found',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
+      },
+      InternalError: {
+        description: 'Unexpected server error',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
+      },
+      RateLimitExceeded: {
+        description: 'Rate limit exceeded',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
+      },
+    },
+  };
+}
+
+function buildFullDescriptionLines(): string[] {
   const scopeDocs = API_SCOPE_SECTIONS.map(
     (s) => `- **${s.section}**: ${s.description} (\`${s.section}:read\`, \`${s.section}:write\`)`
   ).join('\n');
 
+  return [
+    'REST API for programmatic access to budget account data via scoped API keys.',
+    '',
+    '## Authentication',
+    'Send your API key as a Bearer token:',
+    '```',
+    'Authorization: Bearer bud_test_...',
+    '```',
+    '',
+    'Keys are created in **Settings → API Keys** (premium account owners only).',
+    'Development keys use the `bud_test_` prefix; production keys use `bud_live_`.',
+    '',
+    '## Permissions',
+    'Each key has granular read/write scopes per section:',
+    scopeDocs,
+    '',
+    '## Response format',
+    'Successful responses wrap payloads in a standard envelope:',
+    '```json',
+    '{ "data": { ... }, "meta": { "account_id": 1, "api_key_id": "..." } }',
+    '```',
+    'List endpoints that paginate also include `page`, `pageSize`, `total`, and `totalPages` in `meta`.',
+    'Each operation documents the exact `data` schema returned.',
+    '',
+    '## Premium',
+    'External API access requires an active premium subscription. If premium lapses, existing keys remain visible but all API requests return `403 premium_required`.',
+    '',
+    '## Rate limits',
+    `Default limits per API key: ${EXTERNAL_API_RATE_LIMIT_PER_MINUTE} requests/minute and ${EXTERNAL_API_RATE_LIMIT_PER_DAY} requests/day. Exceeded limits return \`429 rate_limit_exceeded\` with a \`Retry-After\` header.`,
+    '',
+    '## Idempotency',
+    `Send \`${IDEMPOTENCY_HEADER}\` on POST, PUT, and PATCH requests to safely retry writes. Replays within 24 hours return the original response.`,
+    '',
+    '## Errors',
+    'All error responses use `{ "error": { "code", "message", ... } }`.',
+    '',
+    '## Related specs',
+    '- Reporting subset (30 read operations for AI tools): `/api/v1/openapi-reporting.json`',
+  ];
+}
+
+function buildReportingDescriptionLines(): string[] {
+  return [
+    `Read-only subset of the Budget App API with exactly ${REPORTING_API_OPERATION_COUNT} GET operations for budget reporting and AI assistants.`,
+    '',
+    'Use this spec when your tool limits OpenAPI operation count (e.g. ChatGPT custom actions).',
+    'The full API including writes is at `/api/v1/openapi.json`.',
+    '',
+    '## Authentication',
+    'Send your API key as a Bearer token:',
+    '```',
+    'Authorization: Bearer bud_live_...',
+    '```',
+    '',
+    'Create keys in **Settings → API Keys** with read scopes for the sections you need.',
+    'The **Read-only assistant** preset covers most endpoints in this spec.',
+    '',
+    '## Response format',
+    '```json',
+    '{ "data": { ... }, "meta": { "account_id": 1, "api_key_id": "..." } }',
+    '```',
+    '',
+    '## Typical workflow',
+    '1. `GET /me` — verify key and scopes',
+    '2. `GET /dashboard` or `GET /reports/net-worth` — overview',
+    '3. `GET /categories`, `GET /accounts`, `GET /transactions` — detail',
+    '4. `GET /export?sections=...` — bulk export when needed',
+    '',
+    '## Rate limits',
+    `Default limits per API key: ${EXTERNAL_API_RATE_LIMIT_PER_MINUTE} requests/minute and ${EXTERNAL_API_RATE_LIMIT_PER_DAY} requests/day.`,
+    '',
+    '## Full API',
+    '- OpenAPI: `/api/v1/openapi.json`',
+    '- Interactive docs: `/api/v1/docs`',
+  ];
+}
+
+export function generateOpenApiSpec(baseUrl: string, options: GenerateOpenApiSpecOptions = {}) {
+  const endpoints = options.endpoints ?? EXTERNAL_API_ENDPOINTS;
+  const descriptionLines = options.descriptionLines ?? buildFullDescriptionLines();
+
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Budget App External API',
-      version: '1.0.0',
-      description: [
-        'REST API for programmatic access to budget account data via scoped API keys.',
-        '',
-        '## Authentication',
-        'Send your API key as a Bearer token:',
-        '```',
-        'Authorization: Bearer bud_test_...',
-        '```',
-        '',
-        'Keys are created in **Settings → API Keys** (premium account owners only).',
-        'Development keys use the `bud_test_` prefix; production keys use `bud_live_`.',
-        '',
-        '## Permissions',
-        'Each key has granular read/write scopes per section:',
-        scopeDocs,
-        '',
-        '## Response format',
-        'Successful responses wrap payloads in a standard envelope:',
-        '```json',
-        '{ "data": { ... }, "meta": { "account_id": 1, "api_key_id": "..." } }',
-        '```',
-        'List endpoints that paginate also include `page`, `pageSize`, `total`, and `totalPages` in `meta`.',
-        'Each operation documents the exact `data` schema returned.',
-        '',
-        '## Premium',
-        'External API access requires an active premium subscription. If premium lapses, existing keys remain visible but all API requests return `403 premium_required`.',
-        '',
-        '## Rate limits',
-        `Default limits per API key: ${EXTERNAL_API_RATE_LIMIT_PER_MINUTE} requests/minute and ${EXTERNAL_API_RATE_LIMIT_PER_DAY} requests/day. Exceeded limits return \`429 rate_limit_exceeded\` with a \`Retry-After\` header.`,
-        '',
-        '## Idempotency',
-        `Send \`${IDEMPOTENCY_HEADER}\` on POST, PUT, and PATCH requests to safely retry writes. Replays within 24 hours return the original response.`,
-        '',
-        '## Errors',
-        'All error responses use `{ "error": { "code", "message", ... } }`.',
-      ].join('\n'),
+      title: options.title ?? 'Budget App External API',
+      version: options.version ?? '1.0.0',
+      description: descriptionLines.join('\n'),
       contact: {
         name: 'Budget App Support',
       },
     },
     servers: [{ url: baseUrl, description: 'Current environment' }],
-    tags: [
-      ...new Set(EXTERNAL_API_ENDPOINTS.map((e) => inferTag(e.path))),
-    ].sort().map((name) => ({ name })),
-    paths: buildPaths(),
-    components: {
-      securitySchemes: {
-        BearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          description:
-            'API key created in Settings → API Keys. Format: bud_test_... (dev) or bud_live_... (production).',
-        },
-      },
-      schemas: {
-        ...OPENAPI_COMPONENT_SCHEMAS,
-        ApiScope: {
-          type: 'string',
-          enum: ALL_API_SCOPES,
-        },
-      },
-      responses: {
-        InvalidApiKey: {
-          description: 'Missing or invalid API key',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
-        },
-        Forbidden: {
-          description: 'Premium required or insufficient scope',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
-        },
-        ValidationError: {
-          description: 'Invalid request parameters or body',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
-        },
-        NotFound: {
-          description: 'Resource not found',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
-        },
-        InternalError: {
-          description: 'Unexpected server error',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
-        },
-        RateLimitExceeded: {
-          description: 'Rate limit exceeded',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
-        },
-      },
-    },
+    tags: [...new Set(endpoints.map((e) => inferTag(e.path)))].sort().map((name) => ({ name })),
+    paths: buildPaths(endpoints),
+    components: buildOpenApiComponents(),
   };
+}
+
+export function generateReportingOpenApiSpec(baseUrl: string) {
+  return generateOpenApiSpec(baseUrl, {
+    endpoints: REPORTING_API_OPERATIONS,
+    title: 'Budget App Reporting API',
+    version: '1.0.0-reporting',
+    descriptionLines: buildReportingDescriptionLines(),
+  });
+}
+
+export function renderOpenApiDocsPage(specUrl: string, title: string, description: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <meta name="description" content="${description}" />
+  <style>body { margin: 0; }</style>
+</head>
+<body>
+  <script id="api-reference" data-url="${specUrl}"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.91/dist/browser/standalone.js"></script>
+</body>
+</html>`;
 }
 
 export function getOpenApiBaseUrl(request: Request): string {

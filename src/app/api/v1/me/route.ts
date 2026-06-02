@@ -19,6 +19,8 @@ export const GET = withExternalApiAuth(async (_request, context) => {
         documentation: {
           openapi: '/api/v1/openapi.json',
           interactive: '/api/v1/docs',
+          reporting_openapi: '/api/v1/openapi-reporting.json',
+          reporting_interactive: '/api/v1/docs-reporting',
         },
       },
       context

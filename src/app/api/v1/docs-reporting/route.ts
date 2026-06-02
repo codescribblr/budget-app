@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server';
 import { renderOpenApiDocsPage } from '@/lib/external-api/openapi/generate-spec';
 
 /**
- * GET /api/v1/docs
- * Interactive API documentation powered by Scalar (reads /api/v1/openapi.json)
+ * GET /api/v1/docs-reporting
+ * Interactive docs for the 30-operation reporting API subset
  */
 export async function GET() {
   const html = renderOpenApiDocsPage(
-    '/api/v1/openapi.json',
-    'Budget App API Documentation',
-    'External API documentation for Budget App — scoped API keys for AI and third-party integrations.'
+    '/api/v1/openapi-reporting.json',
+    'Budget App Reporting API',
+    'Read-only API documentation for budget reporting — optimized for AI assistants.'
   );
 
   return new NextResponse(html, {

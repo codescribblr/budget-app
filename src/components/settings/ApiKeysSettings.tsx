@@ -301,11 +301,21 @@ export default function ApiKeysSettings() {
             <p>
               <strong>Documentation:</strong>{' '}
               <a href="/api/v1/docs" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                Interactive API docs
+                Full API docs
               </a>
               {' · '}
               <a href="/api/v1/openapi.json" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                OpenAPI 3.1 spec
+                Full OpenAPI spec
+              </a>
+            </p>
+            <p>
+              <strong>Reporting subset (30 read endpoints for AI tools):</strong>{' '}
+              <a href="/api/v1/docs-reporting" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                Reporting docs
+              </a>
+              {' · '}
+              <a href="/api/v1/openapi-reporting.json" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                Reporting OpenAPI spec
               </a>
             </p>
             <p>

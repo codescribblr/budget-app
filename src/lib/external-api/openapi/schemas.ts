@@ -70,10 +70,12 @@ export const OPENAPI_COMPONENT_SCHEMAS: Record<string, Record<string, unknown>> 
       endpoints: { type: 'array', items: { $ref: '#/components/schemas/ApiEndpoint' } },
       documentation: {
         type: 'object',
-        required: ['openapi', 'interactive'],
+        required: ['openapi', 'interactive', 'reporting_openapi', 'reporting_interactive'],
         properties: {
           openapi: { type: 'string', example: '/api/v1/openapi.json' },
           interactive: { type: 'string', example: '/api/v1/docs' },
+          reporting_openapi: { type: 'string', example: '/api/v1/openapi-reporting.json' },
+          reporting_interactive: { type: 'string', example: '/api/v1/docs-reporting' },
         },
       },
     },
