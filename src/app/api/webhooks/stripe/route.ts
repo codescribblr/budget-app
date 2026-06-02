@@ -5,10 +5,7 @@ import { setupPremiumFeatures } from '@/lib/premium-feature-setup';
 import { createPaymentFailedNotification } from '@/lib/notifications/subscription-helpers';
 import { disablePremiumAccess } from '@/lib/subscription-access-control';
 import { getPriceInfoFromStripe } from '@/lib/subscription-price-utils';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+import { getStripe, getStripeWebhookSecret } from '@/lib/stripe';
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -18,6 +15,17 @@ export async function POST(request: Request) {
   if (!signature) {
     console.error('❌ Webhook rejected: Missing stripe-signature header');
     return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
+  }
+
+  let stripe: Stripe;
+  let webhookSecret: string;
+
+  try {
+    stripe = getStripe();
+    webhookSecret = getStripeWebhookSecret();
+  } catch (error: any) {
+    console.error('❌ Stripe webhook misconfigured:', error.message);
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
   }
 
   let event: Stripe.Event;

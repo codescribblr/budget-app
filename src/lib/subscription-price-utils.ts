@@ -1,4 +1,4 @@
-import Stripe from 'stripe';
+import { getStripe } from './stripe';
 import { createServiceRoleClient } from './supabase/server';
 import { UserSubscription } from './subscription-utils';
 
@@ -11,7 +11,7 @@ export async function getPriceInfoFromStripe(priceId: string): Promise<{
   currency: string;
 } | null> {
   try {
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+    const stripe = getStripe();
     const price = await stripe.prices.retrieve(priceId);
 
     if (!price.unit_amount || !price.recurring) {
