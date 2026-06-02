@@ -263,6 +263,61 @@ function parseScopeRequirement(scope: string): string {
   return `Required scope: \`${scope}\`. Write implies read for the same section.`;
 }
 
+function capitalizeWord(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+function pathSegmentToPascal(segment: string): string {
+  if (segment.startsWith('{') && segment.endsWith('}')) {
+    const param = segment.slice(1, -1).replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+    return `By${capitalizeWord(param)}`;
+  }
+
+  return segment.split('-').map(capitalizeWord).join('');
+}
+
+/** Stable operationId required by ChatGPT Actions and other strict OpenAPI clients. */
+export function toOperationId(method: HttpMethod, openApiPath: string): string {
+  const relativePath = openApiPath.replace(/^\/api\/v1\/?/, '');
+  const resource = relativePath
+    .split('/')
+    .filter(Boolean)
+    .map(pathSegmentToPascal)
+    .join('');
+  return `${method}${resource}`;
+}
+
+/**
+ * ChatGPT Actions rejects object schemas without a `properties` key.
+ * Recursively adds `properties: {}` where missing.
+ */
+export function sanitizeOpenApiSpec<T extends Record<string, unknown>>(spec: T): T {
+  return sanitizeOpenApiValue(spec) as T;
+}
+
+function sanitizeOpenApiValue(value: unknown): unknown {
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(sanitizeOpenApiValue);
+  }
+
+  const obj = value as Record<string, unknown>;
+  const result: Record<string, unknown> = {};
+
+  for (const [key, nested] of Object.entries(obj)) {
+    result[key] = sanitizeOpenApiValue(nested);
+  }
+
+  if (result.type === 'object' && !('properties' in result)) {
+    result.properties = {};
+  }
+
+  return result;
+}
+
 function buildPaths(endpoints: ReadonlyArray<OpenApiEndpointEntry>): Record<string, Record<string, unknown>> {
   const paths: Record<string, Record<string, unknown>> = {};
 
@@ -281,6 +336,7 @@ function buildPaths(endpoints: ReadonlyArray<OpenApiEndpointEntry>): Record<stri
         resolveOperationRequestBody(method, openApiPath) ?? details.requestBody;
 
       paths[openApiPath][method] = {
+        operationId: toOperationId(method, openApiPath),
         tags: [inferTag(entry.path)],
         summary: details.summary ?? `${method.toUpperCase()} ${openApiPath}`,
         description: [details.description, parseScopeRequirement(entry.scope)].filter(Boolean).join('\n\n'),
@@ -439,7 +495,7 @@ export function generateOpenApiSpec(baseUrl: string, options: GenerateOpenApiSpe
   const endpoints = options.endpoints ?? EXTERNAL_API_ENDPOINTS;
   const descriptionLines = options.descriptionLines ?? buildFullDescriptionLines();
 
-  return {
+  return sanitizeOpenApiSpec({
     openapi: '3.1.0',
     info: {
       title: options.title ?? 'Budget App External API',
@@ -453,7 +509,7 @@ export function generateOpenApiSpec(baseUrl: string, options: GenerateOpenApiSpe
     tags: [...new Set(endpoints.map((e) => inferTag(e.path)))].sort().map((name) => ({ name })),
     paths: buildPaths(endpoints),
     components: buildOpenApiComponents(),
-  };
+  });
 }
 
 export function generateReportingOpenApiSpec(baseUrl: string) {
