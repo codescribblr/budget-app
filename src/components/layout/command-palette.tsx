@@ -39,6 +39,7 @@ import {
   Palmtree,
   Scale,
   LayoutGrid,
+  Code2,
 } from "lucide-react"
 import { useFeatures } from "@/contexts/FeatureContext"
 import { shouldShowNavItem } from "@/lib/feature-flags"
@@ -60,6 +61,7 @@ const settingsItems = [
   { label: "Dashboard layout", path: "/settings/dashboard", icon: LayoutGrid, section: "features", keywords: "dashboard cards layout customize hide show widgets" },
   { label: "Features", path: "/settings", icon: Sparkles, section: "features", keywords: "features enable disable advanced power user" },
   { label: "Subscription", path: "/settings/subscription", icon: Crown, section: null, keywords: "subscription premium upgrade billing payment" },
+  { label: "API Keys", path: "/settings/api-keys", icon: Code2, section: null, keywords: "api keys external integration developer" },
   { label: "Password", path: "/settings/password", icon: Key, section: null, keywords: "password change reset security" },
   { label: "Notifications", path: "/settings/notifications", icon: Bell, section: null, keywords: "notifications alerts preferences" },
   { label: "Automatic Imports", path: "/settings/automatic-imports", icon: RefreshCw, section: null, keywords: "automatic imports teller plaid yodlee email", featureKey: "automatic_imports" },

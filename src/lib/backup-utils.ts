@@ -1,5 +1,48 @@
 import { getAuthenticatedUser } from './supabase-queries';
 import { getActiveAccountId, userHasAccountWriteAccess, userHasOwnAccount } from './account-context';
+import { createServiceRoleClient } from './supabase/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+type BackupOperationContext = {
+  supabase: SupabaseClient;
+  userId: string;
+  accountId: number;
+};
+
+let backupOperationContext: BackupOperationContext | null = null;
+
+export async function exportAccountDataForAccount(
+  accountId: number,
+  createdByUserId: string
+): Promise<AccountBackupData> {
+  backupOperationContext = {
+    supabase: createServiceRoleClient(),
+    userId: createdByUserId,
+    accountId,
+  };
+  try {
+    return await exportAccountData();
+  } finally {
+    backupOperationContext = null;
+  }
+}
+
+export async function importAccountDataForAccount(
+  accountId: number,
+  userId: string,
+  backupData: UserBackupData | AccountBackupData
+): Promise<void> {
+  backupOperationContext = {
+    supabase: createServiceRoleClient(),
+    userId,
+    accountId,
+  };
+  try {
+    await importUserDataFromFile(backupData as UserBackupData);
+  } finally {
+    backupOperationContext = null;
+  }
+}
 
 export interface AccountBackupData {
   version: string; // "2.0" for account-based backups
@@ -122,14 +165,27 @@ export interface UserBackupData {
  * Only account owners can create backups
  */
 export async function exportAccountData(): Promise<AccountBackupData> {
-  const { supabase, user } = await getAuthenticatedUser();
-  const accountId = await getActiveAccountId();
-  if (!accountId) throw new Error('No active account');
+  let supabase: SupabaseClient;
+  let user: { id: string };
+  let accountId: number;
 
-  // Verify user has write access (owners and editors can create backups)
-  const hasWriteAccess = await userHasAccountWriteAccess(accountId);
-  if (!hasWriteAccess) {
-    throw new Error('Unauthorized: Only account owners and editors can create backups');
+  if (backupOperationContext) {
+    supabase = backupOperationContext.supabase;
+    user = { id: backupOperationContext.userId };
+    accountId = backupOperationContext.accountId;
+  } else {
+    const auth = await getAuthenticatedUser();
+    supabase = auth.supabase;
+    user = auth.user;
+    const activeAccountId = await getActiveAccountId();
+    if (!activeAccountId) throw new Error('No active account');
+    accountId = activeAccountId;
+
+    // Verify user has write access (owners and editors can create backups)
+    const hasWriteAccess = await userHasAccountWriteAccess(accountId);
+    if (!hasWriteAccess) {
+      throw new Error('Unauthorized: Only account owners and editors can create backups');
+    }
   }
 
   // Fetch account structure
@@ -466,9 +522,22 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
  * WARNING: This will DELETE all existing account data and replace it with the backup
  */
 export async function importUserDataFromFile(backupData: UserBackupData): Promise<void> {
-  const { supabase, user } = await getAuthenticatedUser();
-  const accountId = await getActiveAccountId();
-  if (!accountId) throw new Error('No active account');
+  let supabase: SupabaseClient;
+  let user: { id: string };
+  let accountId: number;
+
+  if (backupOperationContext) {
+    supabase = backupOperationContext.supabase;
+    user = { id: backupOperationContext.userId };
+    accountId = backupOperationContext.accountId;
+  } else {
+    const auth = await getAuthenticatedUser();
+    supabase = auth.supabase;
+    user = auth.user;
+    const activeAccountId = await getActiveAccountId();
+    if (!activeAccountId) throw new Error('No active account');
+    accountId = activeAccountId;
+  }
 
   console.log('[Import] Starting import for user:', user.id, 'account:', accountId);
 

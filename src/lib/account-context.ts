@@ -1,4 +1,5 @@
 import { getAuthenticatedUser } from './supabase-queries';
+import { getExternalApiAccountOverride } from './external-api-overrides';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
 import { createServiceRoleClient } from './supabase/server';
@@ -19,6 +20,11 @@ const ACTIVE_ACCOUNT_COOKIE = 'active_account_id';
  * within the same request
  */
 export const getActiveAccountId = cache(async (): Promise<number | null> => {
+  const accountOverride = getExternalApiAccountOverride();
+  if (accountOverride !== null) {
+    return accountOverride;
+  }
+
   const { supabase, user } = await getAuthenticatedUser();
   
   // Try to read from cookie first

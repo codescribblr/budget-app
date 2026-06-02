@@ -21,6 +21,7 @@ import type {
 import { calculateAggregateMonthlyNetIncome } from './income-calculations';
 import { calculateGoalProgress, calculateGoalStatus } from './goals/calculations';
 import { getActiveAccountId } from './account-context';
+import { getExternalApiAuthOverride } from './external-api-overrides';
 import { cache } from 'react';
 import { logBalanceChange, logBalanceChanges } from './audit/category-balance-audit';
 
@@ -29,6 +30,20 @@ import { logBalanceChange, logBalanceChanges } from './audit/category-balance-au
 // =====================================================
 // Cache the authenticated user per request to avoid repeated auth calls
 export const getAuthenticatedUser = cache(async () => {
+  const authOverride = getExternalApiAuthOverride();
+  if (authOverride) {
+    const { data, error } = await authOverride.supabase.auth.admin.getUserById(
+      authOverride.userId
+    );
+    if (error || !data.user) {
+      throw new Error('Unauthorized');
+    }
+    return {
+      supabase: authOverride.supabase,
+      user: data.user,
+    };
+  }
+
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
 

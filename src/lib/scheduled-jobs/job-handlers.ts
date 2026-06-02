@@ -3,6 +3,12 @@
  */
 
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { cleanupApiKeyUsageLogs } from '@/lib/external-api/auth';
+import { cleanupIdempotencyRecords } from '@/lib/external-api/idempotency';
+import {
+  EXTERNAL_API_IDEMPOTENCY_TTL_HOURS,
+  EXTERNAL_API_USAGE_LOG_RETENTION_DAYS,
+} from '@/lib/external-api/constants';
 import { NotificationService } from '@/lib/notifications/notification-service';
 import { createRecurringTransactionNotification } from '@/lib/notifications/helpers';
 import { getUsersNeedingTrialNotifications, createTrialEndingNotification } from '@/lib/notifications/subscription-helpers';
@@ -619,6 +625,25 @@ export async function handleSuggestMerchantGroupings(): Promise<JobResult> {
 }
 
 /**
+ * Handler for cleanup_api_key_logs job
+ * Deletes usage logs older than 90 days and stale idempotency records
+ */
+export async function handleCleanupApiKeyLogs(): Promise<JobResult> {
+  try {
+    const usageDeleted = await cleanupApiKeyUsageLogs(EXTERNAL_API_USAGE_LOG_RETENTION_DAYS);
+    const idempotencyDeleted = await cleanupIdempotencyRecords(EXTERNAL_API_IDEMPOTENCY_TTL_HOURS);
+
+    return {
+      success: true,
+      message: `Deleted ${usageDeleted} usage log(s) and ${idempotencyDeleted} idempotency record(s)`,
+    };
+  } catch (error: any) {
+    console.error('Error in cleanup_api_key_logs job:', error);
+    return { success: false, error: error.message || 'Job failed' };
+  }
+}
+
+/**
  * Get handler function for a job type
  */
 export function getJobHandler(jobType: string): (() => Promise<JobResult>) | null {
@@ -635,6 +660,8 @@ export function getJobHandler(jobType: string): (() => Promise<JobResult>) | nul
       return handleCheckTrialPeriods;
     case 'suggest_merchant_groupings':
       return handleSuggestMerchantGroupings;
+    case 'cleanup_api_key_logs':
+      return handleCleanupApiKeyLogs;
     default:
       return null;
   }

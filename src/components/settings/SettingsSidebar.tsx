@@ -18,6 +18,7 @@ import {
   FileText,
   Bell,
   LayoutGrid,
+  Code2,
 } from 'lucide-react';
 
 const settingsNavItems = [
@@ -38,6 +39,12 @@ const settingsNavItems = [
     href: '/settings/subscription',
     icon: Crown,
     description: 'Manage your subscription',
+  },
+  {
+    title: 'API Keys',
+    href: '/settings/api-keys',
+    icon: Code2,
+    description: 'Manage external API access',
   },
   {
     title: 'Password',
