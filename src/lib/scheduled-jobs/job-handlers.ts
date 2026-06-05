@@ -5,6 +5,7 @@
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { cleanupApiKeyUsageLogs } from '@/lib/external-api/auth';
 import { cleanupIdempotencyRecords } from '@/lib/external-api/idempotency';
+import { syncAllRentCastAssetsForAccount } from '@/lib/integrations/rentcast/sync';
 import {
   EXTERNAL_API_IDEMPOTENCY_TTL_HOURS,
   EXTERNAL_API_USAGE_LOG_RETENTION_DAYS,
@@ -644,6 +645,51 @@ export async function handleCleanupApiKeyLogs(): Promise<JobResult> {
 }
 
 /**
+ * Handler for rentcast_sync job
+ * Syncs RentCast valuations for all enabled real estate assets
+ */
+export async function handleRentCastSync(): Promise<JobResult> {
+  try {
+    const supabase = createServiceRoleClient();
+
+    const { data: integrations, error } = await supabase
+      .from('integration_settings')
+      .select('account_id')
+      .eq('integration_type', 'rentcast')
+      .eq('is_enabled', true)
+      .not('encrypted_api_key', 'is', null);
+
+    if (error) {
+      console.error('Error fetching RentCast integrations:', error);
+      return { success: false, error: error.message };
+    }
+
+    if (!integrations || integrations.length === 0) {
+      return { success: true, message: 'No active RentCast integrations to sync' };
+    }
+
+    let totalSynced = 0;
+    let totalSkipped = 0;
+    let totalFailed = 0;
+
+    for (const integration of integrations) {
+      const result = await syncAllRentCastAssetsForAccount(supabase, integration.account_id);
+      totalSynced += result.synced;
+      totalSkipped += result.skipped;
+      totalFailed += result.failed;
+    }
+
+    return {
+      success: true,
+      message: `RentCast sync completed: ${totalSynced} synced, ${totalSkipped} skipped, ${totalFailed} failed`,
+    };
+  } catch (error: any) {
+    console.error('Error in rentcast_sync job:', error);
+    return { success: false, error: error.message || 'Job failed' };
+  }
+}
+
+/**
  * Get handler function for a job type
  */
 export function getJobHandler(jobType: string): (() => Promise<JobResult>) | null {
@@ -662,6 +708,8 @@ export function getJobHandler(jobType: string): (() => Promise<JobResult>) | nul
       return handleSuggestMerchantGroupings;
     case 'cleanup_api_key_logs':
       return handleCleanupApiKeyLogs;
+    case 'rentcast_sync':
+      return handleRentCastSync;
     default:
       return null;
   }

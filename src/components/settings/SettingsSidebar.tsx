@@ -19,6 +19,7 @@ import {
   Bell,
   LayoutGrid,
   Code2,
+  Plug,
 } from 'lucide-react';
 
 const settingsNavItems = [
@@ -45,6 +46,12 @@ const settingsNavItems = [
     href: '/settings/api-keys',
     icon: Code2,
     description: 'Manage external API access',
+  },
+  {
+    title: 'Integrations',
+    href: '/settings/integrations',
+    icon: Plug,
+    description: 'Connect third-party services with your API keys',
   },
   {
     title: 'Password',

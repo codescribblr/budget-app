@@ -19,7 +19,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import type { NonCashAsset } from '@/lib/types';
+import type { NonCashAsset, RentCastPropertyType } from '@/lib/types';
+import { RENTCAST_PROPERTY_TYPES } from '@/lib/integrations/rentcast/types';
+import { validateRentCastAssetReadiness } from '@/lib/integrations/rentcast/validation';
 import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
 
@@ -39,6 +41,12 @@ export default function AssetDialog({ isOpen, onClose, asset, onSuccess }: Asset
   const [vin, setVin] = useState('');
   const [isRmdQualified, setIsRmdQualified] = useState(false);
   const [isLiquid, setIsLiquid] = useState(true);
+  const [rentcastEnabled, setRentcastEnabled] = useState(false);
+  const [propertyType, setPropertyType] = useState<RentCastPropertyType | ''>('');
+  const [bedrooms, setBedrooms] = useState('');
+  const [bathrooms, setBathrooms] = useState('');
+  const [squareFootage, setSquareFootage] = useState('');
+  const [integrationEnabled, setIntegrationEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -53,6 +61,11 @@ export default function AssetDialog({ isOpen, onClose, asset, onSuccess }: Asset
         setVin(asset.vin || '');
         setIsRmdQualified(asset.is_rmd_qualified ?? false);
         setIsLiquid(asset.is_liquid ?? true);
+        setRentcastEnabled(asset.rentcast_enabled ?? false);
+        setPropertyType(asset.property_type ?? '');
+        setBedrooms(asset.bedrooms != null ? String(asset.bedrooms) : '');
+        setBathrooms(asset.bathrooms != null ? String(asset.bathrooms) : '');
+        setSquareFootage(asset.square_footage != null ? String(asset.square_footage) : '');
       } else {
         // Add mode
         setAssetName('');
@@ -63,14 +76,48 @@ export default function AssetDialog({ isOpen, onClose, asset, onSuccess }: Asset
         setVin('');
         setIsRmdQualified(false);
         setIsLiquid(true);
+        setRentcastEnabled(false);
+        setPropertyType('');
+        setBedrooms('');
+        setBathrooms('');
+        setSquareFootage('');
       }
     }
   }, [isOpen, asset]);
+
+  useEffect(() => {
+    if (!isOpen || assetType !== 'real_estate') return;
+
+    const fetchIntegration = async () => {
+      try {
+        const response = await fetch('/api/integrations/rentcast/status');
+        if (!response.ok) return;
+        const data = await response.json();
+        setIntegrationEnabled(Boolean(data.is_enabled));
+      } catch {
+        setIntegrationEnabled(false);
+      }
+    };
+
+    fetchIntegration();
+  }, [isOpen, assetType]);
 
   const handleSave = async () => {
     if (!assetName.trim()) {
       toast.error('Please enter an asset name');
       return;
+    }
+
+    if (rentcastEnabled) {
+      const readiness = validateRentCastAssetReadiness({
+        asset_type: assetType,
+        address: address.trim() || null,
+        rentcast_enabled: true,
+      });
+      if (!readiness.ready) {
+        toast.error(readiness.messages[0] || 'Complete required fields before enabling RentCast tracking');
+        return;
+      }
     }
 
     setLoading(true);
@@ -84,6 +131,11 @@ export default function AssetDialog({ isOpen, onClose, asset, onSuccess }: Asset
         vin: assetType === 'vehicle' ? (vin.trim().toUpperCase() || null) : null,
         is_rmd_qualified: isRmdQualified,
         is_liquid: isLiquid,
+        rentcast_enabled: assetType === 'real_estate' ? rentcastEnabled : false,
+        property_type: assetType === 'real_estate' && propertyType ? propertyType : null,
+        bedrooms: assetType === 'real_estate' && bedrooms ? parseFloat(bedrooms) : null,
+        bathrooms: assetType === 'real_estate' && bathrooms ? parseFloat(bathrooms) : null,
+        square_footage: assetType === 'real_estate' && squareFootage ? parseInt(squareFootage, 10) : null,
       };
 
       if (asset) {
@@ -162,7 +214,14 @@ export default function AssetDialog({ isOpen, onClose, asset, onSuccess }: Asset
               value={assetType}
               onValueChange={(value: NonCashAsset['asset_type']) => {
                 setAssetType(value);
-                if (value !== 'real_estate') setAddress('');
+                if (value !== 'real_estate') {
+                  setAddress('');
+                  setRentcastEnabled(false);
+                  setPropertyType('');
+                  setBedrooms('');
+                  setBathrooms('');
+                  setSquareFootage('');
+                }
                 if (value !== 'vehicle') setVin('');
               }}
             >
@@ -192,8 +251,90 @@ export default function AssetDialog({ isOpen, onClose, asset, onSuccess }: Asset
                 placeholder="e.g., 123 Main St, City, State ZIP"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Used for potential integration with real estate value APIs
+                Required for RentCast valuations. Use format: Street, City, State, Zip
               </p>
+            </div>
+          )}
+          {assetType === 'real_estate' && (
+            <div className="space-y-4 rounded-md border p-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="property-type">Property Type</Label>
+                  <Select
+                    value={propertyType || undefined}
+                    onValueChange={(value: RentCastPropertyType) => setPropertyType(value)}
+                  >
+                    <SelectTrigger id="property-type">
+                      <SelectValue placeholder="Optional" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RENTCAST_PROPERTY_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="bedrooms">Bedrooms</Label>
+                  <Input
+                    id="bedrooms"
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={bedrooms}
+                    onChange={(e) => setBedrooms(e.target.value)}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="bathrooms">Bathrooms</Label>
+                  <Input
+                    id="bathrooms"
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={bathrooms}
+                    onChange={(e) => setBathrooms(e.target.value)}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="square-footage">Square Footage</Label>
+                  <Input
+                    id="square-footage"
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={squareFootage}
+                    onChange={(e) => setSquareFootage(e.target.value)}
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-2">
+                <Checkbox
+                  id="rentcast-enabled"
+                  checked={rentcastEnabled}
+                  disabled={!integrationEnabled}
+                  onCheckedChange={(checked) => setRentcastEnabled(checked === true)}
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <Label
+                    htmlFor="rentcast-enabled"
+                    className="text-sm font-medium leading-none cursor-pointer"
+                  >
+                    Track value with RentCast.io
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {integrationEnabled
+                      ? 'Requires a property address. Values update automatically each month and can be synced manually.'
+                      : 'Enable the RentCast integration in Settings → Integrations first.'}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
           {assetType === 'vehicle' && (

@@ -44,6 +44,15 @@ export interface CreditCard {
   updated_at: string;
 }
 
+export type RentCastPropertyType =
+  | 'Single Family'
+  | 'Condo'
+  | 'Townhouse'
+  | 'Manufactured'
+  | 'Multi-Family'
+  | 'Apartment'
+  | 'Land';
+
 export interface NonCashAsset {
   id: number;
   name: string;
@@ -54,6 +63,13 @@ export interface NonCashAsset {
   vin?: string | null; // For vehicle assets
   is_rmd_qualified: boolean; // Whether this asset is subject to RMDs (IRA/401K type accounts)
   is_liquid: boolean; // Whether this asset can be easily converted to cash
+  rentcast_enabled?: boolean;
+  property_type?: RentCastPropertyType | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  square_footage?: number | null;
+  rentcast_last_sync_at?: string | null;
+  rentcast_last_error?: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -68,6 +84,11 @@ export interface CreateNonCashAssetRequest {
   vin?: string | null;
   is_rmd_qualified?: boolean;
   is_liquid?: boolean;
+  rentcast_enabled?: boolean;
+  property_type?: RentCastPropertyType | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  square_footage?: number | null;
   sort_order?: number;
 }
 
@@ -80,7 +101,38 @@ export interface UpdateNonCashAssetRequest {
   vin?: string | null;
   is_rmd_qualified?: boolean;
   is_liquid?: boolean;
+  rentcast_enabled?: boolean;
+  property_type?: RentCastPropertyType | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  square_footage?: number | null;
   sort_order?: number;
+}
+
+export interface RentCastIntegrationSettingsResponse {
+  integration_type: 'rentcast';
+  is_enabled: boolean;
+  has_api_key: boolean;
+  api_key_hint: string | null;
+  config: {
+    enforce_monthly_limit: boolean;
+    monthly_request_limit: number;
+  };
+  requests_this_month: number;
+  usage_month: string | null;
+  monthly_limit_reached: boolean;
+  last_sync_at: string | null;
+  last_error: string | null;
+}
+
+export interface RentCastValuationSummary {
+  id: number;
+  estimated_value: number;
+  price_range_low: number | null;
+  price_range_high: number | null;
+  subject_property: Record<string, unknown> | null;
+  comparables: Record<string, unknown>[] | null;
+  fetched_at: string;
 }
 
 export interface Loan {

@@ -13,6 +13,7 @@ import { ArrowLeft, TrendingUp, Edit, DollarSign } from 'lucide-react';
 import AssetValueChart from './AssetValueChart';
 import AssetValueAudit from './AssetValueAudit';
 import AssetDialog from './AssetDialog';
+import RentCastPropertySection from './RentCastPropertySection';
 
 export default function AssetDetailPage({ assetId }: { assetId: string }) {
   const [loading, setLoading] = useState(true);
@@ -164,6 +165,9 @@ export default function AssetDetailPage({ assetId }: { assetId: string }) {
 
       {asset.id && (
         <>
+          {asset.asset_type === 'real_estate' && (
+            <RentCastPropertySection asset={asset} onAssetUpdated={fetchAsset} />
+          )}
           <AssetValueChart assetId={asset.id} />
           <AssetValueAudit assetId={asset.id} />
         </>

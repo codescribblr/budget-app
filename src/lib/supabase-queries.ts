@@ -719,12 +719,29 @@ export async function createNonCashAsset(data: {
   vin?: string | null;
   is_rmd_qualified?: boolean;
   is_liquid?: boolean;
+  rentcast_enabled?: boolean;
+  property_type?: NonCashAsset['property_type'];
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  square_footage?: number | null;
   sort_order?: number;
 }): Promise<NonCashAsset> {
   const { supabase, user } = await getAuthenticatedUser();
 
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
+
+  if (data.rentcast_enabled) {
+    const { validateRentCastAssetReadiness } = await import('./integrations/rentcast/validation');
+    const readiness = validateRentCastAssetReadiness({
+      asset_type: data.asset_type,
+      address: data.address ?? null,
+      rentcast_enabled: true,
+    });
+    if (!readiness.ready) {
+      throw new Error(readiness.messages.join(' '));
+    }
+  }
 
   const { data: asset, error } = await supabase
     .from('non_cash_assets')
@@ -738,6 +755,11 @@ export async function createNonCashAsset(data: {
       vin: data.vin ?? null,
       is_rmd_qualified: data.is_rmd_qualified ?? false,
       is_liquid: data.is_liquid ?? true,
+      rentcast_enabled: data.rentcast_enabled ?? false,
+      property_type: data.property_type ?? null,
+      bedrooms: data.bedrooms ?? null,
+      bathrooms: data.bathrooms ?? null,
+      square_footage: data.square_footage ?? null,
       sort_order: data.sort_order ?? 0,
     })
     .select()
@@ -758,10 +780,33 @@ export async function updateNonCashAsset(
     vin: string | null;
     is_rmd_qualified: boolean;
     is_liquid: boolean;
+    rentcast_enabled: boolean;
+    property_type: NonCashAsset['property_type'];
+    bedrooms: number | null;
+    bathrooms: number | null;
+    square_footage: number | null;
     sort_order: number;
   }>
 ): Promise<NonCashAsset | null> {
   const { supabase } = await getAuthenticatedUser();
+
+  if (data.rentcast_enabled) {
+    const { data: existingAsset } = await supabase
+      .from('non_cash_assets')
+      .select('asset_type, address')
+      .eq('id', id)
+      .single();
+
+    const { validateRentCastAssetReadiness } = await import('./integrations/rentcast/validation');
+    const readiness = validateRentCastAssetReadiness({
+      asset_type: data.asset_type ?? existingAsset?.asset_type ?? 'other',
+      address: data.address !== undefined ? data.address : existingAsset?.address ?? null,
+      rentcast_enabled: true,
+    });
+    if (!readiness.ready) {
+      throw new Error(readiness.messages.join(' '));
+    }
+  }
   
   // Get old value if current_value is being updated
   let oldValue: number | undefined;
