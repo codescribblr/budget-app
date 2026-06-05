@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,9 +39,10 @@ import {
   Package 
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Badge } from '@/components/ui/badge';
-import Link from 'next/link';
 import AssetDialog from '@/components/assets/AssetDialog';
+import AssetLinkBadges from '@/components/assets/AssetLinkBadges';
+import { useAssetLinks } from '@/hooks/use-asset-links';
+import { getAssetTypeLabel } from '@/lib/non-cash-asset-types';
 
 interface AssetListProps {
   assets: NonCashAsset[];
@@ -49,22 +51,8 @@ interface AssetListProps {
 }
 
 export default function AssetList({ assets, onUpdate, disabled = false }: AssetListProps) {
-  const [linkedAssetIds, setLinkedAssetIds] = useState<Set<number>>(new Set());
+  const { getLinksForAsset } = useAssetLinks();
   const [editingAsset, setEditingAsset] = useState<NonCashAsset | null>(null);
-
-  useEffect(() => {
-    fetch('/api/income-streams')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((streams: { linked_non_cash_asset_id?: number | null }[]) => {
-        const ids = new Set(
-          (streams || [])
-            .filter((s) => s.linked_non_cash_asset_id != null)
-            .map((s) => s.linked_non_cash_asset_id as number)
-        );
-        setLinkedAssetIds(ids);
-      })
-      .catch(() => setLinkedAssetIds(new Set()));
-  }, []);
   const [isAssetDialogOpen, setIsAssetDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [assetToDelete, setAssetToDelete] = useState<NonCashAsset | null>(null);
@@ -196,10 +184,6 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
     }
   };
 
-  const getAssetTypeLabel = (type: NonCashAsset['asset_type']) => {
-    return type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-  };
-
   return (
     <>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -247,11 +231,7 @@ export default function AssetList({ assets, onUpdate, disabled = false }: AssetL
                     <Link href={`/non-cash-assets/${asset.id}`} className="font-medium hover:underline">
                       {asset.name}
                     </Link>
-                    {linkedAssetIds.has(asset.id) && (
-                      <Badge variant="default" className="text-xs bg-blue-600 hover:bg-blue-600">
-                        Linked
-                      </Badge>
-                    )}
+                    <AssetLinkBadges asset={asset} links={getLinksForAsset(asset.id)} />
                   </div>
                 </TableCell>
                 <TableCell className="text-right font-semibold">

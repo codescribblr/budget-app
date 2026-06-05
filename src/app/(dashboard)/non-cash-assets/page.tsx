@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,40 +19,34 @@ import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { TrendingUp, Plus, Edit, Grid3X3, List } from 'lucide-react';
 import AssetDialog from '@/components/assets/AssetDialog';
+import AssetTypeFilter from '@/components/assets/AssetTypeFilter';
+import AssetLinkBadges from '@/components/assets/AssetLinkBadges';
 import { useLocalStorage } from '@/hooks/use-local-storage';
+import { useAssetLinks } from '@/hooks/use-asset-links';
+import { filterAssetsByType, getAssetTypeLabel } from '@/lib/non-cash-asset-types';
 
 type ViewMode = 'cards' | 'list';
 
 export default function NonCashAssetsPage() {
   const router = useRouter();
   const [assets, setAssets] = useState<NonCashAsset[]>([]);
-  const [linkedAssetIds, setLinkedAssetIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<NonCashAsset | null>(null);
   const [viewMode, setViewMode] = useLocalStorage<ViewMode>('non-cash-assets-view', 'cards');
+  const [selectedTypes, setSelectedTypes] = useLocalStorage<NonCashAsset['asset_type'][]>(
+    'non-cash-assets-type-filter',
+    []
+  );
+  const { getLinksForAsset } = useAssetLinks();
 
   const fetchAssets = async () => {
     try {
       setLoading(true);
-      const [assetsRes, streamsRes] = await Promise.all([
-        fetch('/api/non-cash-assets'),
-        fetch('/api/income-streams'),
-      ]);
+      const assetsRes = await fetch('/api/non-cash-assets');
       if (!assetsRes.ok) throw new Error('Failed to fetch assets');
       const data = await assetsRes.json();
       setAssets(data);
-      if (streamsRes.ok) {
-        const streams = await streamsRes.json();
-        const ids = new Set<number>(
-          (streams || [])
-            .filter((s: { linked_non_cash_asset_id?: number | null }) => s.linked_non_cash_asset_id != null)
-            .map((s: { linked_non_cash_asset_id: number }) => s.linked_non_cash_asset_id)
-        );
-        setLinkedAssetIds(ids);
-      } else {
-        setLinkedAssetIds(new Set());
-      }
     } catch (error) {
       console.error('Error fetching assets:', error);
       toast.error('Failed to load assets');
@@ -65,12 +59,10 @@ export default function NonCashAssetsPage() {
     fetchAssets();
   }, []);
 
-  const getAssetTypeLabel = (assetType: NonCashAsset['asset_type']) => {
-    return assetType
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
+  const filteredAssets = useMemo(
+    () => filterAssetsByType(assets, selectedTypes),
+    [assets, selectedTypes]
+  );
 
   if (loading) {
     return (
@@ -88,7 +80,6 @@ export default function NonCashAssetsPage() {
           <p className="text-muted-foreground mt-1">Manage your non-cash assets</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* View toggle - visible on desktop, optional on smaller screens */}
           <div className="hidden md:flex items-center border rounded-md p-0.5">
             <Button
               variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
@@ -123,6 +114,22 @@ export default function NonCashAssetsPage() {
         </div>
       </div>
 
+      {assets.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <AssetTypeFilter selectedTypes={selectedTypes} onChange={setSelectedTypes} />
+          {selectedTypes.length > 0 && (
+            <>
+              <span className="text-sm text-muted-foreground">
+                Showing {filteredAssets.length} of {assets.length}
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedTypes([])}>
+                Clear filters
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
       {assets.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
@@ -131,6 +138,18 @@ export default function NonCashAssetsPage() {
             <p className="text-muted-foreground">
               Assets will appear here once you add them from the dashboard
             </p>
+          </CardContent>
+        </Card>
+      ) : filteredAssets.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <h3 className="text-lg font-semibold mb-2">No matching assets</h3>
+            <p className="text-muted-foreground mb-4">
+              Try selecting different asset types or clear your filters.
+            </p>
+            <Button variant="outline" onClick={() => setSelectedTypes([])}>
+              Clear filters
+            </Button>
           </CardContent>
         </Card>
       ) : viewMode === 'list' ? (
@@ -148,7 +167,7 @@ export default function NonCashAssetsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {assets.map((asset) => (
+              {filteredAssets.map((asset) => (
                 <TableRow
                   key={asset.id}
                   className="cursor-pointer hover:bg-muted/50"
@@ -163,11 +182,7 @@ export default function NonCashAssetsPage() {
                       <Badge variant={asset.is_liquid ? 'secondary' : 'outline'} className="text-xs">
                         {asset.is_liquid ? 'Liquid' : 'Fixed'}
                       </Badge>
-                      {linkedAssetIds.has(asset.id) && (
-                        <Badge variant="default" className="text-xs bg-blue-600 hover:bg-blue-600">
-                          Linked
-                        </Badge>
-                      )}
+                      <AssetLinkBadges asset={asset} links={getLinksForAsset(asset.id)} />
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-semibold">
@@ -200,7 +215,7 @@ export default function NonCashAssetsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {assets.map((asset) => (
+          {filteredAssets.map((asset) => (
             <Card
               key={asset.id}
               className="cursor-pointer hover:shadow-md transition-shadow h-full"
@@ -218,11 +233,7 @@ export default function NonCashAssetsPage() {
                       <Badge variant={asset.is_liquid ? 'secondary' : 'outline'} className="text-xs">
                         {asset.is_liquid ? 'Liquid' : 'Fixed'}
                       </Badge>
-                      {linkedAssetIds.has(asset.id) && (
-                        <Badge variant="default" className="text-xs bg-blue-600 hover:bg-blue-600">
-                          Linked
-                        </Badge>
-                      )}
+                      <AssetLinkBadges asset={asset} links={getLinksForAsset(asset.id)} />
                     </div>
                   </div>
                   <Button
