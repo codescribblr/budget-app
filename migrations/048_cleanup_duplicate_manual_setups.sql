@@ -29,3 +29,4 @@ DELETE FROM automatic_import_setups
 WHERE id IN (SELECT id FROM setups_to_delete);
 
 COMMIT;
+

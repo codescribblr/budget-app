@@ -87,3 +87,4 @@ export function ComparisonTable({ columns }: ComparisonTableProps) {
   );
 }
 
+

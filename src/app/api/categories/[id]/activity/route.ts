@@ -31,22 +31,69 @@ export async function GET(
     const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
     const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
 
-    // Last activity: newest transaction date that references this category
-    const { data: lastSplit, error: lastError } = await supabase
-      .from('transaction_splits')
-      .select('transactions!inner(date, budget_account_id)')
+    // Last activity: Get the most recent audit log entry for this category
+    // This captures all activity types (transactions, manual edits, allocations, transfers, etc.)
+    const { data: lastAuditRecord, error: lastAuditError } = await supabase
+      .from('category_balance_audit')
+      .select('created_at, transaction_id, metadata')
       .eq('category_id', categoryId)
-      .eq('transactions.budget_account_id', accountId)
-      .order('date', { ascending: false, referencedTable: 'transactions' })
+      .eq('account_id', accountId)
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (lastError) throw lastError;
+    if (lastAuditError) {
+      console.error('Error fetching last audit record:', lastAuditError);
+      // Fall back to transaction-based lookup if audit log fails
+    }
 
-    // Count transactions this month for this category
-    const { count, error: countError } = await supabase
+    // Determine last activity date from audit log
+    let lastTransactionDate: string | null = null;
+    if (lastAuditRecord) {
+      // Prefer transaction_date from metadata if available (for proper chronological ordering)
+      // Otherwise use created_at
+      if (lastAuditRecord.metadata?.transaction_date) {
+        lastTransactionDate = lastAuditRecord.metadata.transaction_date;
+      } else if (lastAuditRecord.transaction_id) {
+        // If it's a transaction-based change, get the transaction date
+        const { data: transaction } = await supabase
+          .from('transactions')
+          .select('date')
+          .eq('id', lastAuditRecord.transaction_id)
+          .eq('budget_account_id', accountId)
+          .single();
+        
+        if (transaction) {
+          lastTransactionDate = transaction.date;
+        } else {
+          // Fallback to created_at if transaction not found
+          lastTransactionDate = lastAuditRecord.created_at.split('T')[0];
+        }
+      } else {
+        // For non-transaction changes (manual edits, allocations, etc.), use created_at date
+        lastTransactionDate = lastAuditRecord.created_at.split('T')[0];
+      }
+    } else {
+      // Fallback: If no audit records exist, use transaction-based lookup
+      const { data: lastSplit, error: lastError } = await supabase
+        .from('transaction_splits')
+        .select('transactions!inner(date, budget_account_id)')
+        .eq('category_id', categoryId)
+        .eq('transactions.budget_account_id', accountId)
+        .order('date', { ascending: false, referencedTable: 'transactions' })
+        .limit(1)
+        .maybeSingle();
+
+      if (!lastError && lastSplit) {
+        lastTransactionDate = (lastSplit as any)?.transactions?.date ?? null;
+      }
+    }
+
+    // Count distinct transactions this month for this category
+    // We need to count transactions, not splits, to match the report view
+    const { data: transactionData, error: countError } = await supabase
       .from('transaction_splits')
-      .select('id, transactions!inner(id, date, budget_account_id)', { count: 'exact', head: true })
+      .select('transaction_id, transactions!inner(id, date, budget_account_id)')
       .eq('category_id', categoryId)
       .eq('transactions.budget_account_id', accountId)
       .gte('transactions.date', startDate)
@@ -54,7 +101,11 @@ export async function GET(
 
     if (countError) throw countError;
 
-    const lastTransactionDate = (lastSplit as any)?.transactions?.date ?? null;
+    // Count distinct transactions (a transaction may have multiple splits for the same category)
+    const distinctTransactionIds = new Set(
+      transactionData?.map((split: any) => split.transaction_id) || []
+    );
+    const count = distinctTransactionIds.size;
 
     return NextResponse.json({
       lastTransactionDate,
@@ -68,4 +119,5 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to fetch category activity' }, { status: 500 });
   }
 }
+
 

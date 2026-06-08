@@ -178,3 +178,4 @@ CREATE POLICY "Users can delete their own imported transactions" ON imported_tra
 -- Transaction splits inherit permissions from transactions (no user_id column)
 -- Imported transaction links inherit permissions from imported_transactions (no user_id column)
 
+

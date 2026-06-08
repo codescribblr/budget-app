@@ -18,3 +18,4 @@ COMMENT ON COLUMN imported_transactions.metadata IS
 
 COMMIT;
 
+

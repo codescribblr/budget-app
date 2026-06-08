@@ -211,3 +211,4 @@ export async function applyTagRulesToTransaction(transactionId: number): Promise
 
   return Array.from(matchingTagIds);
 }
+

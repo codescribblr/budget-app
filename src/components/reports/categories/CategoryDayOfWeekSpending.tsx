@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { formatCurrency } from '@/lib/utils';
+import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -62,10 +63,10 @@ export default function CategoryDayOfWeekSpending({ transactions, category }: Ca
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white border border-gray-300 rounded-lg shadow-lg p-3">
-          <div className="font-semibold mb-2">{data.day}</div>
+        <div className="bg-background border rounded-lg shadow-lg p-3">
+          <div className="font-semibold mb-2 text-foreground">{data.day}</div>
           <div className="text-sm space-y-1">
-            <div className="font-medium">Total: {formatCurrency(data.total)}</div>
+            <div className="font-medium text-foreground">Total: {formatCurrency(data.total)}</div>
             <div className="text-xs text-muted-foreground">
               Average: {formatCurrency(data.average)}
             </div>
@@ -108,10 +109,7 @@ export default function CategoryDayOfWeekSpending({ transactions, category }: Ca
             textAnchor="end"
             height={80}
           />
-          <YAxis
-            tick={{ fontSize: 12 }}
-            tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
-          />
+          <YAxis tick={{ fontSize: 12 }} {...chartCurrencyYAxisDefaults} />
           <Tooltip content={<CustomTooltip />} />
           <Bar
             dataKey="total"
@@ -124,4 +122,5 @@ export default function CategoryDayOfWeekSpending({ transactions, category }: Ca
     </div>
   );
 }
+
 

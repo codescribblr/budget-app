@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { formatCurrency } from '@/lib/utils';
+import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
@@ -119,9 +120,9 @@ export default function CategoryMonthlyTrend({ transactions, category, startDate
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white border border-gray-300 rounded-lg shadow-lg p-3">
-          <div className="font-semibold mb-2">{isDaily ? data.day : data.month}</div>
-          <div className="font-medium">{formatCurrency(data.total)}</div>
+        <div className="bg-background border rounded-lg shadow-lg p-3">
+          <div className="font-semibold mb-2 text-foreground">{isDaily ? data.day : data.month}</div>
+          <div className="font-medium text-foreground">{formatCurrency(data.total)}</div>
         </div>
       );
     }
@@ -160,10 +161,7 @@ export default function CategoryMonthlyTrend({ transactions, category, startDate
             textAnchor="end"
             height={80}
           />
-          <YAxis
-            tick={{ fontSize: 12 }}
-            tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
-          />
+          <YAxis tick={{ fontSize: 12 }} {...chartCurrencyYAxisDefaults} />
           <Tooltip content={<CustomTooltip />} />
           <Legend />
           <Line
@@ -180,4 +178,5 @@ export default function CategoryMonthlyTrend({ transactions, category, startDate
     </div>
   );
 }
+
 

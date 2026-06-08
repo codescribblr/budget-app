@@ -109,3 +109,4 @@ export function generateAutomaticMappingName(analysis: CSVAnalysisResult, fileNa
 
   return 'Automatic Mapping';
 }
+

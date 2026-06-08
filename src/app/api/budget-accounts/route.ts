@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getUserAccounts, getActiveAccountId, userHasOwnAccount } from '@/lib/account-context';
+import { isAdmin } from '@/lib/admin';
 
 /**
  * GET /api/budget-accounts
@@ -8,14 +9,36 @@ import { getUserAccounts, getActiveAccountId, userHasOwnAccount } from '@/lib/ac
  */
 export async function GET() {
   try {
-    const accounts = await getUserAccounts();
+    // CRITICAL: Call getActiveAccountId FIRST - it will create an account if none exists
+    // This ensures that when we call getUserAccounts() next, it will see the newly created account
     const activeAccountId = await getActiveAccountId();
+    
+    // Now fetch accounts (this will include any account that was just created)
+    const accounts = await getUserAccounts();
     const hasOwnAccount = await userHasOwnAccount();
+    const userIsAdmin = await isAdmin();
+
+    // If activeAccountId exists but accounts list is empty, there's a sync issue
+    // This can happen if account was just created - refresh accounts
+    if (activeAccountId && accounts.length === 0) {
+      // Wait a moment and re-fetch accounts to ensure we see the newly created account
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const refreshedAccounts = await getUserAccounts();
+      if (refreshedAccounts.length > 0) {
+        return NextResponse.json({
+          accounts: refreshedAccounts,
+          activeAccountId,
+          hasOwnAccount: await userHasOwnAccount(),
+          isAdmin: userIsAdmin,
+        });
+      }
+    }
 
     return NextResponse.json({
       accounts,
       activeAccountId,
       hasOwnAccount,
+      isAdmin: userIsAdmin,
     });
   } catch (error: any) {
     console.error('Error fetching budget accounts:', error);
@@ -83,4 +106,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
 

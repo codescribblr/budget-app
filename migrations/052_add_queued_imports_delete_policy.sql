@@ -14,3 +14,4 @@ CREATE POLICY "Editors can delete queued imports"
       AND au.role IN ('owner', 'editor')
     )
   );
+

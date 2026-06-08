@@ -8,3 +8,4 @@ CREATE INDEX idx_goals_linked_loan_id ON goals(linked_loan_id);
 -- Add comment
 COMMENT ON COLUMN goals.linked_loan_id IS 'For debt-paydown goals: links to a loan that this goal is tracking';
 
+

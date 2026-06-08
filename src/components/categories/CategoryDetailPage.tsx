@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -41,6 +41,7 @@ import { useFeature } from '@/contexts/FeatureContext';
 import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
 import { ArrowLeft, Archive, ArchiveRestore, Edit, Trash2, FileText } from 'lucide-react';
+import CategoryBalanceAudit from './CategoryBalanceAudit';
 
 function canArchiveCategory(category: Category) {
   if (category.is_system) return false;
@@ -330,7 +331,7 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
           <div className="text-xs text-muted-foreground">Activity</div>
           <div className="mt-2 space-y-1 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Transactions (mo)</span>
+              <span className="text-muted-foreground">Transactions (MTD)</span>
               <span className="font-medium">{monthTransactionCount ?? '—'}</span>
             </div>
             <div className="flex items-center justify-between">
@@ -347,6 +348,8 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
           <div className="text-sm">{category.notes}</div>
         </Card>
       ) : null}
+
+      <CategoryBalanceAudit categoryId={category.id} />
 
       {/* Edit dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -476,4 +479,5 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
     </div>
   );
 }
+
 

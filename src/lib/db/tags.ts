@@ -565,3 +565,4 @@ export async function searchTags(query: string): Promise<Tag[]> {
   if (error) throw error;
   return data || [];
 }
+

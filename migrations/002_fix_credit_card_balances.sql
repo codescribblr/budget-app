@@ -8,3 +8,4 @@ UPDATE credit_cards
 SET current_balance = credit_limit - available_credit
 WHERE current_balance != (credit_limit - available_credit);
 
+

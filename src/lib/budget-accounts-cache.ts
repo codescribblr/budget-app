@@ -12,6 +12,7 @@ interface BudgetAccountsData {
   }>;
   activeAccountId: number | null;
   hasOwnAccount: boolean;
+  isAdmin: boolean;
 }
 
 interface CacheEntry {
@@ -57,13 +58,23 @@ export async function fetchBudgetAccounts(): Promise<BudgetAccountsData> {
   const fetchPromise = fetch('/api/budget-accounts')
     .then(async (response) => {
       if (!response.ok) {
-        throw new Error('Failed to fetch budget accounts');
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || 'Failed to fetch budget accounts';
+        
+        // If unauthorized, redirect to login
+        if (response.status === 401) {
+          window.location.href = '/login';
+          throw new Error('Unauthorized');
+        }
+        
+        throw new Error(errorMessage);
       }
       const data = await response.json();
       const result: BudgetAccountsData = {
         accounts: data.accounts || [],
         activeAccountId: data.activeAccountId,
         hasOwnAccount: data.hasOwnAccount || false,
+        isAdmin: data.isAdmin || false,
       };
 
       // Update cache
@@ -94,6 +105,11 @@ export function clearBudgetAccountsCache(): void {
     promise: null,
   };
 }
+
+
+
+
+
 
 
 

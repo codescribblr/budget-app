@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ChevronRight, ExternalLink } from 'lucide-react';
+import { MerchantLogo } from '@/components/admin/MerchantLogo';
 
 interface TransactionsByMerchantProps {
   transactions: TransactionWithSplits[];
@@ -35,6 +36,8 @@ interface MerchantGroupStat {
   total_amount: number;
   average_amount: number;
   patterns: string[];
+  logo_url?: string | null;
+  icon_name?: string | null;
 }
 
 export default function TransactionsByMerchant({
@@ -77,15 +80,17 @@ export default function TransactionsByMerchant({
 
 
 
-  // Group transactions by description (merchant) - fallback for ungrouped
+  // Group transactions by merchant name - fallback for ungrouped
   const merchantSpending = new Map<string, { count: number; total: number }>();
 
   filteredTransactions.forEach(transaction => {
-    const current = merchantSpending.get(transaction.description) || { count: 0, total: 0 };
+    // Use merchant_name if available, otherwise fall back to description
+    const merchantName = transaction.merchant_name || transaction.description;
+    const current = merchantSpending.get(merchantName) || { count: 0, total: 0 };
     const amount = transaction.transaction_type === 'expense'
       ? transaction.total_amount
       : -transaction.total_amount;
-    merchantSpending.set(transaction.description, {
+    merchantSpending.set(merchantName, {
       count: current.count + 1,
       total: current.total + amount,
     });
@@ -93,8 +98,8 @@ export default function TransactionsByMerchant({
 
   // Convert to array and sort by total spending
   const ungroupedMerchants = Array.from(merchantSpending.entries())
-    .map(([description, data]) => ({
-      description,
+    .map(([merchantName, data]) => ({
+      description: merchantName,
       count: data.count,
       total: data.total,
       average: data.total / data.count,
@@ -179,7 +184,17 @@ export default function TransactionsByMerchant({
                   >
                     <TableCell className="font-medium">
                       <div className="flex items-center justify-between">
-                        <span>{group.display_name}</span>
+                        <div className="flex items-center gap-2">
+                          {(group.logo_url || group.icon_name) && (
+                            <MerchantLogo
+                              logoUrl={group.logo_url}
+                              iconName={group.icon_name}
+                              displayName={group.display_name}
+                              size="sm"
+                            />
+                          )}
+                          <span>{group.display_name}</span>
+                        </div>
                         <span className="text-muted-foreground ml-2 font-semibold">
                           {formatCurrency(group.total_amount)}
                         </span>
@@ -282,4 +297,5 @@ export default function TransactionsByMerchant({
     </>
   );
 }
+
 

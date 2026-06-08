@@ -48,3 +48,4 @@ We only support the latest version deployed to production. Please ensure you're 
 
 We appreciate your help in keeping Budget App secure. Responsible disclosure helps protect all users.
 
+

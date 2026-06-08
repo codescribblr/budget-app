@@ -32,6 +32,8 @@ import { useFeature } from '@/contexts/FeatureContext';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import { MoreVertical, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
+import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
+import { TruncatedTextWithTooltip } from '@/components/ui/truncated-text-with-tooltip';
 
 interface TransactionListProps {
   transactions: TransactionWithSplits[];
@@ -67,6 +69,14 @@ export default function TransactionList({
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [localTransactions, setLocalTransactions] = useState<TransactionWithSplits[]>(transactions);
   const tagsEnabled = useFeature('tags');
+
+  // Shift-click selection handler
+  const handleCheckboxClick = useShiftClickSelection(
+    localTransactions,
+    (transaction) => transaction.id,
+    selectedTransactions,
+    setSelectedTransactions
+  );
 
   // Sync local transactions with prop changes
   useEffect(() => {
@@ -126,6 +136,7 @@ export default function TransactionList({
     return date?.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
+      year: '2-digit',
     }) || dateString;
   };
 
@@ -308,6 +319,10 @@ export default function TransactionList({
 
         if (updates.isHistorical !== undefined) {
           updated.is_historical = updates.isHistorical;
+        }
+
+        if (updates.transactionType !== undefined) {
+          updated.transaction_type = updates.transactionType;
         }
 
         return updated;
@@ -601,15 +616,11 @@ export default function TransactionList({
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={isSelected}
-                    onCheckedChange={(checked) => {
-                      const newSelected = new Set(selectedTransactions);
-                      if (checked) {
-                        newSelected.add(transaction.id);
-                      } else {
-                        newSelected.delete(transaction.id);
-                      }
-                      setSelectedTransactions(newSelected);
+                    onClick={(e) => {
+                      const checked = !isSelected;
+                      handleCheckboxClick(transaction.id, e, checked);
                     }}
+                    onCheckedChange={() => {}} // Required for controlled checkbox
                   />
                 </TableCell>
                 {/* Date Cell - Inline Editable */}
@@ -634,9 +645,7 @@ export default function TransactionList({
                   )}
                 </TableCell>
                 <TableCell className="font-medium text-sm max-w-[250px]">
-                  <div className="truncate" title={transaction.description}>
-                    {transaction.description}
-                  </div>
+                  <TruncatedTextWithTooltip text={transaction.description} />
                   {tagsEnabled && transaction.tags && transaction.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {transaction.tags.slice(0, 3).map((tag) => (
@@ -669,8 +678,8 @@ export default function TransactionList({
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
                   {transaction.merchant_name ? (
-                    <Badge variant="outline" className="text-xs max-w-[120px] truncate" title={transaction.merchant_name}>
-                      {transaction.merchant_name}
+                    <Badge variant="outline" className="text-xs max-w-[120px] block">
+                      <TruncatedTextWithTooltip text={transaction.merchant_name} />
                     </Badge>
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
@@ -917,4 +926,5 @@ export default function TransactionList({
     </>
   );
 }
+
 

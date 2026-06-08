@@ -19,3 +19,4 @@ COMMENT ON COLUMN automatic_import_setups.csv_mapping_template_id IS 'CSV import
 
 COMMIT;
 
+

@@ -81,3 +81,4 @@ FROM auth.users
 WHERE id NOT IN (SELECT user_id FROM user_subscriptions)
 ON CONFLICT (user_id) DO NOTHING;
 
+

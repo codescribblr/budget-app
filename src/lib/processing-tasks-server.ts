@@ -84,3 +84,4 @@ export async function markTaskCompleteForBatchServer(
     // Task completion tracking is not critical - fail silently
   }
 }
+

@@ -26,13 +26,23 @@ import {
 import { formatCurrency } from '@/lib/utils';
 import type { Category, DashboardSummary } from '@/lib/types';
 import { toast } from 'sonner';
-import { Check, X, Settings, GripVertical, Save, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { Check, X, Settings, GripVertical, Save, MoreVertical, Edit, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { handleApiError } from '@/lib/api-error-handler';
 import { useFeature } from '@/contexts/FeatureContext';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { FundingProgressIndicator } from '@/components/categories/FundingProgressIndicator';
+import {
+  formatBudgetMonthLabel,
+  monthKeyFromDate,
+  nextMonthKey,
+  previousMonthKey,
+  persistBudgetViewMonthChoice,
+  resolveBudgetViewMonthOnMount,
+} from '@/lib/budget-view-month';
 import {
   DndContext,
   closestCenter,
@@ -57,6 +67,7 @@ interface CategoryListProps {
   onUpdate: (updatedCategories: Category[]) => void;
   onUpdateSummary?: () => void;
   disabled?: boolean;
+  onEditDialogReady?: (openEditDialog: (category: Category) => void) => void;
 }
 
 interface SortableRowProps {
@@ -129,7 +140,7 @@ function SortableRow({
       )}
       <TableCell className="font-medium">
         <a
-          href={`/reports?category=${category.id}`}
+          href={`/categories/${category.id}`}
           className="hover:underline cursor-pointer"
         >
           {category.name}
@@ -165,7 +176,20 @@ function SortableRow({
             </div>
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground">No budget set</span>
+          <div>
+            {disabled ? (
+              <span className="text-xs text-muted-foreground">No budget set</span>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openEditDialog(category)}
+                className="h-7 text-xs"
+              >
+                Set Budget
+              </Button>
+            )}
+          </div>
         )}
       </TableCell>
       <TableCell className="text-right">
@@ -303,7 +327,7 @@ function CategoryCard({
         {/* Header: Category name and action button */}
         <div className="flex items-start justify-between gap-2">
           <a
-            href={`/reports?category=${category.id}`}
+            href={`/categories/${category.id}`}
             className="hover:underline cursor-pointer font-medium text-sm flex-1 min-w-0"
           >
             {category.name}
@@ -359,7 +383,20 @@ function CategoryCard({
             </div>
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground">No budget set</span>
+          <div>
+            {disabled ? (
+              <span className="text-xs text-muted-foreground">No budget set</span>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openEditDialog(category)}
+                className="h-7 text-xs w-full"
+              >
+                Set Budget
+              </Button>
+            )}
+          </div>
         )}
 
         {/* Monthly and Balance */}
@@ -439,7 +476,7 @@ function CategoryCard({
   );
 }
 
-export default function CategoryList({ categories, summary, onUpdate, onUpdateSummary, disabled = false }: CategoryListProps) {
+export default function CategoryList({ categories, summary, onUpdate, onUpdateSummary, disabled = false, onEditDialogReady }: CategoryListProps) {
   // Feature flags
   const categoryTypesEnabled = useFeature('category_types');
   const prioritySystemEnabled = useFeature('priority_system');
@@ -463,10 +500,40 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
   const [editingBalanceId, setEditingBalanceId] = useState<number | null>(null);
   const [editingBalanceValue, setEditingBalanceValue] = useState('');
 
-  // Monthly spending state
+  // Monthly spending state (month selector: which calendar month drives progress bars)
+  const [budgetViewMonth, setBudgetViewMonth] = useState<string | null>(null);
   const [monthlySpending, setMonthlySpending] = useState<Record<number, number>>({});
   const [ytdSpending, setYtdSpending] = useState<Record<number, number>>({});
   const [loadingSpending, setLoadingSpending] = useState(true);
+
+  const calendarMonthKey = monthKeyFromDate(new Date());
+  const isViewingCurrentCalendarMonth = budgetViewMonth === calendarMonthKey;
+  const canGoToNextMonth =
+    budgetViewMonth !== null && budgetViewMonth < calendarMonthKey;
+
+  useEffect(() => {
+    setBudgetViewMonth(resolveBudgetViewMonthOnMount());
+  }, []);
+
+  const goToMonth = (ym: string) => {
+    persistBudgetViewMonthChoice(ym);
+    setBudgetViewMonth(ym);
+  };
+
+  const goToPreviousMonth = () => {
+    if (!budgetViewMonth) return;
+    goToMonth(previousMonthKey(budgetViewMonth));
+  };
+
+  const goToNextMonth = () => {
+    if (!budgetViewMonth || !canGoToNextMonth) return;
+    const n = nextMonthKey(budgetViewMonth);
+    if (n <= calendarMonthKey) goToMonth(n);
+  };
+
+  const goToThisCalendarMonth = () => {
+    goToMonth(calendarMonthKey);
+  };
 
   // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -477,22 +544,25 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
   const [reorderedCategories, setReorderedCategories] = useState<Category[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch monthly and YTD spending on mount and when categories change
+  // Fetch monthly (for selected budget month) and YTD spending when month or categories change
   useEffect(() => {
+    if (budgetViewMonth === null) return;
+
     const fetchSpending = async () => {
       try {
         setLoadingSpending(true);
+        const monthParam = encodeURIComponent(budgetViewMonth);
         const [monthlyResponse, ytdResponse] = await Promise.all([
-          fetch('/api/categories/monthly-spending'),
+          fetch(`/api/categories/monthly-spending?month=${monthParam}`),
           fetch('/api/categories/ytd-spending'),
         ]);
-        
+
         if (!monthlyResponse.ok) throw new Error('Failed to fetch monthly spending');
         if (!ytdResponse.ok) throw new Error('Failed to fetch YTD spending');
-        
+
         const monthlyData = await monthlyResponse.json();
         const ytdData = await ytdResponse.json();
-        
+
         setMonthlySpending(monthlyData);
         setYtdSpending(ytdData);
       } catch (error) {
@@ -503,7 +573,7 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
     };
 
     fetchSpending();
-  }, [categories]);
+  }, [categories, budgetViewMonth]);
 
   // Filter out system categories (like Transfer) and buffer category from envelope display
   // Include goal categories in envelope list (they work like envelopes)
@@ -699,6 +769,10 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
   };
 
   const openEditDialog = (category: Category) => {
+    if (!category) {
+      console.error('openEditDialog called with null or undefined category');
+      return;
+    }
     setEditingCategory(category);
     setNewName(category.name);
     setNewMonthlyAmount(category.monthly_amount.toString());
@@ -712,6 +786,41 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
     setNewTargetBalance(category.target_balance?.toString() || '');
     setIsEditDialogOpen(true);
   };
+
+  // Expose openEditDialog to parent component
+  useEffect(() => {
+    if (!onEditDialogReady) return;
+    
+    // Only expose the function if we have categories loaded
+    if (categories.length === 0) {
+      return;
+    }
+
+    // Create a stable reference to the current categories
+    const currentCategories = categories;
+
+    // Wrap in a function that validates the category before calling
+    const wrappedOpenEditDialog = (category: Category | null | undefined) => {
+      // Silently handle null/undefined - this is expected in some cases
+      if (!category) {
+        return;
+      }
+      // Double-check category exists in our list using the captured categories
+      const categoryExists = currentCategories.some(c => c.id === category.id);
+      if (!categoryExists) {
+        return;
+      }
+      openEditDialog(category);
+    };
+    
+    // Defer setting the function to avoid React calling it during state update
+    const timeoutId = setTimeout(() => {
+      onEditDialogReady(wrappedOpenEditDialog);
+    }, 0);
+    
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onEditDialogReady, categories.length]);
 
   const openAddDialog = () => {
     resetFormFields();
@@ -843,6 +952,67 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
   return (
     <>
       <div className="flex flex-col h-full">
+        {budgetViewMonth && !isViewingCurrentCalendarMonth && (
+          <Alert className="mb-3 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+            <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-blue-900 dark:text-blue-100">
+              <span>
+                Figures below reflect spending dated in{' '}
+                <span className="font-medium">{formatBudgetMonthLabel(budgetViewMonth)}</span>.
+                Switch to {formatBudgetMonthLabel(calendarMonthKey)} when you want this month&apos;s
+                progress.
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                className="shrink-0 w-full sm:w-auto"
+                onClick={goToThisCalendarMonth}
+              >
+                View {formatBudgetMonthLabel(calendarMonthKey)}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {budgetViewMonth && (
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">Spending for</span>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={goToPreviousMonth}
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm font-medium tabular-nums min-w-[9rem] text-center">
+                  {formatBudgetMonthLabel(budgetViewMonth)}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={goToNextMonth}
+                  disabled={!canGoToNextMonth}
+                  aria-label="Next month"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              {!isViewingCurrentCalendarMonth && (
+                <Button type="button" variant="secondary" size="sm" onClick={goToThisCalendarMonth}>
+                  This month
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="mb-3 flex gap-2 justify-between">
           <Button onClick={openAddDialog} size="sm" disabled={isReorderMode || disabled}>
@@ -886,7 +1056,13 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
         </div>
 
         {/* Scrollable categories section */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto min-h-[120px]">
+          {budgetViewMonth === null || loadingSpending ? (
+            <div className="flex justify-center py-12">
+              <LoadingSpinner />
+            </div>
+          ) : (
+            <>
           {/* Mobile Card View */}
           <div className="md:hidden space-y-2">
             {(isReorderMode ? reorderedCategories : envelopeCategories).map((category) => {
@@ -981,6 +1157,8 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
               </SortableContext>
             </DndContext>
           </div>
+            </>
+          )}
         </div>
 
         {/* Fixed totals row at bottom */}
@@ -1545,4 +1723,5 @@ export default function CategoryList({ categories, summary, onUpdate, onUpdateSu
     </>
   );
 }
+
 

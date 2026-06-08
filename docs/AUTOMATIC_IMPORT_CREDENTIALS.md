@@ -399,3 +399,4 @@ For issues with:
 - **Email Import:** Check SMTP configuration and webhook setup
 - **API Integrations:** Contact provider support or check their status pages
 - **Implementation:** See `docs/AUTOMATIC_TRANSACTION_IMPORT_PLAN.md`
+

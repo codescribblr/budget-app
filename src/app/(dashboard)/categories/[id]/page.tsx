@@ -5,3 +5,4 @@ export default async function CategoryDetail({ params }: { params: Promise<{ id:
   return <CategoryDetailPage categoryId={id} />;
 }
 
+

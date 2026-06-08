@@ -29,3 +29,4 @@ console.log('3. Add them to your local .env.local file for development');
 console.log('4. The public key (NEXT_PUBLIC_VAPID_PUBLIC_KEY) is safe to expose');
 console.log('5. The private key (VAPID_PRIVATE_KEY) must be kept secret\n');
 
+

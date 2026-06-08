@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
+import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart } from 'recharts';
 
@@ -20,11 +21,11 @@ export default function SpendingVelocityTrend({ transactions, categories }: Spen
       const date = new Date(transaction.date);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-      // Sum only splits that are NOT in system categories
+      // Sum only splits that are NOT in system or buffer categories
       // Expenses add, income subtracts
       const nonSystemTotal = transaction.splits.reduce((sum, split) => {
         const category = categories.find(c => c.id === split.category_id);
-        if (category && !category.is_system) {
+        if (category && !category.is_system && !category.is_buffer) {
           const amount = transaction.transaction_type === 'expense'
             ? split.amount
             : -split.amount;
@@ -114,13 +115,25 @@ export default function SpendingVelocityTrend({ transactions, categories }: Spen
               textAnchor="end"
               height={80}
             />
-            <YAxis
-              tick={{ fontSize: 12 }}
-              tickFormatter={(value) => `$${value.toFixed(0)}`}
-            />
+            <YAxis tick={{ fontSize: 12 }} {...chartCurrencyYAxisDefaults} />
             <Tooltip
-              formatter={(value: number) => formatCurrency(value)}
-              labelStyle={{ color: '#000' }}
+              content={({ active, payload, label }) => {
+                if (active && payload && payload.length) {
+                  return (
+                    <div className="bg-background border rounded-lg shadow-lg p-3">
+                      <div className="font-semibold mb-2 text-foreground">{label}</div>
+                      <div className="text-sm space-y-1">
+                        {payload.map((entry: any, index: number) => (
+                          <div key={index} className="text-foreground">
+                            {entry.name}: {formatCurrency(entry.value)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              }}
             />
             <Legend />
             <Area
@@ -146,4 +159,5 @@ export default function SpendingVelocityTrend({ transactions, categories }: Spen
     </Card>
   );
 }
+
 

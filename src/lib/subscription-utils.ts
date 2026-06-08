@@ -20,6 +20,9 @@ export interface UserSubscription {
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   stripe_price_id: string | null;
+  billing_amount: number | null;
+  billing_interval: 'month' | 'year' | 'day' | 'week' | null;
+  billing_currency: string | null;
   trial_start: string | null;
   trial_end: string | null;
   current_period_start: string | null;
@@ -152,4 +155,5 @@ export async function getOrCreateStripeCustomer(
   
   return customer.id;
 }
+
 

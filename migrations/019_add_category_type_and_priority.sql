@@ -40,3 +40,4 @@ COMMENT ON COLUMN categories.monthly_target IS 'Target amount to fund each month
 COMMENT ON COLUMN categories.annual_target IS 'Annual target amount. For accumulation categories.';
 COMMENT ON COLUMN categories.target_balance IS 'Target balance to maintain. For target_balance categories.';
 
+

@@ -21,3 +21,4 @@ if (fs.existsSync(dbPath)) {
   process.exit(1);
 }
 
+

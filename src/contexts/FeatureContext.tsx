@@ -1,20 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import type { FeatureName } from '@/lib/feature-flags';
 
-export type FeatureName =
-  | 'monthly_funding_tracking'
-  | 'category_types'
-  | 'priority_system'
-  | 'smart_allocation'
-  | 'income_buffer'
-  | 'goals'
-  | 'loans'
-  | 'advanced_reporting'
-  | 'ai_chat'
-  | 'automatic_imports'
-  | 'tags'
-  | 'recurring_transactions';
+export type { FeatureName } from '@/lib/feature-flags';
 
 export interface Feature {
   key: FeatureName;
@@ -143,4 +132,5 @@ export function useFeature(featureName: FeatureName): boolean {
   const { isFeatureEnabled } = useFeatures();
   return isFeatureEnabled(featureName);
 }
+
 

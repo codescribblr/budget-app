@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { useDebounceValue, useDebounceCallback } from '@/hooks/use-debounce';
 import { Search, X, Upload, Filter, CalendarIcon, Copy, ArrowUpDown, ArrowUp, ArrowDown, Tag as TagIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -35,10 +36,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { TransactionWithSplits, Category, MerchantGroup, Tag } from '@/lib/types';
+import type { TransactionWithSplits, Category, MerchantGroup, Tag, Account, CreditCard } from '@/lib/types';
 import TransactionList from './TransactionList';
 import AddTransactionDialog from './AddTransactionDialog';
 import EditTransactionDialog from './EditTransactionDialog';
+import { FeatureTeaser } from '@/components/FeatureTeaser';
 import { format } from 'date-fns';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import { useFeature } from '@/contexts/FeatureContext';
@@ -79,6 +81,15 @@ export default function TransactionsPage() {
     ? categoryIdParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
     : [];
   
+  // Debug: Log when searchParams changes
+  useEffect(() => {
+    console.log('[TransactionsPage] searchParams changed', {
+      categoryIdParam,
+      categoryIds: categoryIds.join(','),
+      allParams: searchParams.toString(),
+    });
+  }, [searchParams, categoryIdParam, categoryIds.join(',')]);
+  
   const transactionTypeParam = searchParams.get('transactionType');
   const transactionTypes = transactionTypeParam 
     ? transactionTypeParam.split(',').filter(t => t === 'income' || t === 'expense') as ('income' | 'expense')[]
@@ -87,6 +98,23 @@ export default function TransactionsPage() {
   const tagsParam = searchParams.get('tags');
   const tagIds = tagsParam 
     ? tagsParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
+    : [];
+  
+  // Parse account filter (supports both account IDs and credit card IDs)
+  // Format: "account-1,account-2,card-3" where account-X is account ID and card-X is credit card ID
+  const accountFilterParam = searchParams.get('accountId');
+  const accountFilterIds = accountFilterParam 
+    ? accountFilterParam.split(',').map(item => {
+        const trimmed = item.trim();
+        if (trimmed.startsWith('account-')) {
+          const id = parseInt(trimmed.replace('account-', ''));
+          return !isNaN(id) ? { type: 'account' as const, id } : null;
+        } else if (trimmed.startsWith('card-')) {
+          const id = parseInt(trimmed.replace('card-', ''));
+          return !isNaN(id) ? { type: 'card' as const, id } : null;
+        }
+        return null;
+      }).filter((item): item is { type: 'account' | 'card'; id: number } => item !== null)
     : [];
   
   const startDateParam = searchParams.get('startDate');
@@ -100,7 +128,12 @@ export default function TransactionsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [merchantGroups, setMerchantGroups] = useState<MerchantGroup[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [totalTransactions, setTotalTransactions] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [startDateObj, setStartDateObj] = useState<Date | undefined>(undefined);
@@ -130,51 +163,220 @@ export default function TransactionsPage() {
   // Track if fetch is in progress to prevent duplicate calls
   const fetchingRef = useRef(false);
 
-  const fetchData = async () => {
+  const fetchData = async (overrideParams?: {
+    categoryIds?: number[];
+    merchantGroupIds?: number[];
+    transactionTypes?: ('income' | 'expense')[];
+    tagIds?: number[];
+    accountFilterIds?: Array<{ type: 'account' | 'card'; id: number }>;
+    startDate?: string | null;
+    endDate?: string | null;
+    page?: number;
+  }) => {
     // Prevent duplicate calls
     if (fetchingRef.current) {
+      console.log('[TransactionsPage] fetchData() called but already fetching, skipping');
       return;
     }
+    console.log('[TransactionsPage] fetchData() called', { overrideParams });
     fetchingRef.current = true;
     try {
-      setLoading(true);
-      // Use regular fetch - the cache will be handled at a higher level
-      // We'll prevent duplicate calls by using a ref to track if fetch is in progress
-      const fetchPromises = [
-        fetch('/api/transactions'),
-        fetch('/api/categories?excludeGoals=true'),
-        fetch('/api/merchant-groups'),
+      // Only show table loading if we've already loaded once
+      if (hasMountedRef.current) {
+        setTableLoading(true);
+      } else {
+        setLoading(true);
+      }
+      
+      // Build transactions URL with all filters and pagination
+      // Use overrideParams if provided, otherwise use state values
+      const params = new URLSearchParams();
+      const pageToUse = overrideParams?.page ?? currentPage;
+      params.set('page', pageToUse.toString());
+      params.set('pageSize', pageSize.toString());
+      
+      const startDateToUse = overrideParams?.startDate !== undefined ? overrideParams.startDate : startDateParam;
+      const endDateToUse = overrideParams?.endDate !== undefined ? overrideParams.endDate : endDateParam;
+      const categoryIdsToUse = overrideParams?.categoryIds ?? debouncedCategoryIds;
+      const merchantGroupIdsToUse = overrideParams?.merchantGroupIds ?? debouncedMerchantGroupIds;
+      const transactionTypesToUse = overrideParams?.transactionTypes ?? debouncedTransactionTypes;
+      const tagIdsToUse = overrideParams?.tagIds ?? debouncedTagIds;
+      const accountFilterIdsToUse = overrideParams?.accountFilterIds ?? debouncedAccountFilterIds;
+      
+      if (startDateToUse) params.set('startDate', startDateToUse);
+      if (endDateToUse) params.set('endDate', endDateToUse);
+      if (debouncedSearchQuery.trim()) params.set('q', debouncedSearchQuery.trim());
+      if (categoryIdsToUse.length > 0) params.set('categoryId', categoryIdsToUse.join(','));
+      if (merchantGroupIdsToUse.length > 0) params.set('merchantGroupId', merchantGroupIdsToUse.join(','));
+      if (transactionTypesToUse.length > 0) params.set('transactionType', transactionTypesToUse.join(','));
+      if (tagIdsToUse.length > 0) params.set('tags', tagIdsToUse.join(','));
+      if (accountFilterIdsToUse.length > 0) {
+        const accountFilterString = accountFilterIdsToUse.map(item => 
+          item.type === 'account' ? `account-${item.id}` : `card-${item.id}`
+        ).join(',');
+        params.set('accountId', accountFilterString);
+      }
+      params.set('sortBy', sortBy);
+      params.set('sortDirection', sortDirection);
+      
+      // Use absolute URL to avoid routing issues (only in browser)
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      const transactionsUrl = `${baseUrl}/api/transactions?${params.toString()}`;
+      
+      // Log the URL to debug routing issues
+      console.log('[TransactionsPage] Fetching transactions from:', transactionsUrl);
+      console.log('[TransactionsPage] Current URL params:', params.toString());
+      
+      // Fetch transactions and other data in parallel
+      // Use cache: 'no-store' and explicit method to prevent Next.js from intercepting as RSC
+      const fetchOptions: RequestInit = {
+        method: 'GET',
+        cache: 'no-store',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        // Explicitly mark as API call, not page navigation
+        credentials: 'include',
+      };
+      
+      // Only fetch other data if we haven't loaded it yet (initial load)
+      const shouldFetchOtherData = !hasMountedRef.current || categories.length === 0;
+      
+      const fetchPromises: Promise<Response>[] = [
+        fetch(transactionsUrl, fetchOptions).then(async response => {
+          console.log('[TransactionsPage] API response status:', response.status);
+          console.log('[TransactionsPage] API response URL:', response.url);
+          console.log('[TransactionsPage] API response Content-Type:', response.headers.get('content-type'));
+          console.log('[TransactionsPage] Response OK:', response.ok);
+          
+          // Clone the response so we can read it multiple times for debugging
+          const clonedResponse = response.clone();
+          const text = await clonedResponse.text();
+          console.log('[TransactionsPage] Response text preview:', text.substring(0, 200));
+          
+          return response;
+        }),
       ];
       
-      if (tagsEnabled) {
-        fetchPromises.push(fetch('/api/tags'));
+      // Only fetch other data on initial load or if data is missing
+      if (shouldFetchOtherData) {
+        fetchPromises.push(
+          fetch('/api/categories?excludeGoals=true'),
+          fetch('/api/merchant-groups'),
+          fetch('/api/accounts'),
+          fetch('/api/credit-cards'),
+        );
+        
+        if (tagsEnabled) {
+          fetchPromises.push(fetch('/api/tags'));
+        }
       }
 
       const responses = await Promise.all(fetchPromises);
-      const [transactionsRes, categoriesRes, merchantGroupsRes, ...tagResArray] = responses;
+      const transactionsRes = responses[0];
+      const [categoriesRes, merchantGroupsRes, accountsRes, creditCardsRes, ...tagResArray] = shouldFetchOtherData 
+        ? responses.slice(1) 
+        : [null, null, null, null, []];
 
-      const [transactionsData, categoriesData, merchantGroupsData] = await Promise.all([
-        transactionsRes.ok ? transactionsRes.json() : [],
-        categoriesRes.ok ? categoriesRes.json() : [],
-        merchantGroupsRes.ok ? merchantGroupsRes.json() : [],
-      ]);
-
-      let tagsData: Tag[] = [];
-      if (tagsEnabled && tagResArray.length > 0) {
-        tagsData = tagResArray[0].ok ? await tagResArray[0].json() : [];
+      // Check if transactions response is OK and has JSON content type
+      let transactionsResult: any = null;
+      console.log('[TransactionsPage] Processing transactions response...');
+      console.log('[TransactionsPage] Response OK:', transactionsRes.ok);
+      console.log('[TransactionsPage] Response status:', transactionsRes.status);
+      
+      if (transactionsRes.ok) {
+        const contentType = transactionsRes.headers.get('content-type');
+        console.log('[TransactionsPage] Content-Type:', contentType);
+        
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            transactionsResult = await transactionsRes.json();
+            console.log('[TransactionsPage] Parsed transactions result:', {
+              hasTransactions: !!transactionsResult?.transactions,
+              transactionsCount: Array.isArray(transactionsResult?.transactions) ? transactionsResult.transactions.length : 'not an array',
+              total: transactionsResult?.total,
+              isArray: Array.isArray(transactionsResult),
+            });
+          } catch (error) {
+            console.error('[TransactionsPage] Error parsing transactions JSON:', error);
+            const text = await transactionsRes.text();
+            console.error('[TransactionsPage] Response text:', text.substring(0, 500));
+          }
+        } else {
+          console.error('[TransactionsPage] Transactions API returned non-JSON response. Content-Type:', contentType);
+          const text = await transactionsRes.text();
+          console.error('[TransactionsPage] Response text:', text.substring(0, 500));
+        }
+      } else {
+        console.error('[TransactionsPage] Transactions API request failed:', transactionsRes.status, transactionsRes.statusText);
+        const text = await transactionsRes.text().catch(() => 'Unable to read error response');
+        console.error('[TransactionsPage] Error response:', text.substring(0, 500));
       }
 
-      setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
+      // Only parse other data if we fetched it
+      let categoriesData: Category[] = categories;
+      let merchantGroupsData: MerchantGroup[] = merchantGroups;
+      let accountsData: Account[] = accounts;
+      let creditCardsData: CreditCard[] = creditCards;
+      let tagsData: Tag[] = tags;
+      
+      if (shouldFetchOtherData) {
+        [categoriesData, merchantGroupsData, accountsData, creditCardsData] = await Promise.all([
+          categoriesRes?.ok ? categoriesRes.json() : categories,
+          merchantGroupsRes?.ok ? merchantGroupsRes.json() : merchantGroups,
+          accountsRes?.ok ? accountsRes.json() : accounts,
+          creditCardsRes?.ok ? creditCardsRes.json() : creditCards,
+        ]);
+
+        if (tagsEnabled && tagResArray.length > 0 && tagResArray[0] && 'ok' in tagResArray[0]) {
+          tagsData = tagResArray[0].ok ? await tagResArray[0].json() : tags;
+        }
+      }
+
+      // Handle paginated response
+      console.log('[TransactionsPage] Setting transactions state...');
+      console.log('[TransactionsPage] transactionsResult type:', typeof transactionsResult);
+      console.log('[TransactionsPage] transactionsResult keys:', transactionsResult ? Object.keys(transactionsResult) : 'null');
+      
+      if (transactionsResult && transactionsResult.transactions) {
+        console.log('[TransactionsPage] Using paginated response format');
+        const transactionsArray = Array.isArray(transactionsResult.transactions) ? transactionsResult.transactions : [];
+        console.log('[TransactionsPage] Setting', transactionsArray.length, 'transactions');
+        setTransactions(transactionsArray);
+        setTotalTransactions(transactionsResult.total || 0);
+        setTotalPages(transactionsResult.totalPages || 0);
+      } else if (Array.isArray(transactionsResult)) {
+        console.log('[TransactionsPage] Using legacy array response format');
+        console.log('[TransactionsPage] Setting', transactionsResult.length, 'transactions');
+        setTransactions(transactionsResult);
+        setTotalTransactions(transactionsResult.length);
+        setTotalPages(Math.ceil(transactionsResult.length / pageSize));
+      } else if (transactionsResult === null) {
+        // If we got null (error case), don't update transactions - keep existing ones
+        // This prevents clearing the list when there's an error
+        console.warn('[TransactionsPage] Transactions API returned null, keeping existing transactions');
+        // Still update pagination to reflect that we couldn't fetch new data
+        // Keep existing pagination state
+      } else {
+        console.warn('[TransactionsPage] Unexpected transactionsResult format:', transactionsResult);
+      }
+      
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
       setMerchantGroups(Array.isArray(merchantGroupsData) ? merchantGroupsData : []);
+      setAccounts(Array.isArray(accountsData) ? accountsData : []);
+      setCreditCards(Array.isArray(creditCardsData) ? creditCardsData : []);
       setTags(Array.isArray(tagsData) ? tagsData : []);
     } catch (error) {
       console.error('Error fetching data:', error);
       setTransactions([]);
       setCategories([]);
       setMerchantGroups([]);
+      setTotalTransactions(0);
+      setTotalPages(0);
     } finally {
       setLoading(false);
+      setTableLoading(false);
       fetchingRef.current = false;
     }
   };
@@ -182,13 +384,58 @@ export default function TransactionsPage() {
   // Track if component has mounted to prevent duplicate calls
   const hasMountedRef = useRef(false);
 
+  // Debounce search query (500ms delay)
+  const debouncedSearchQuery = useDebounceValue(searchQuery, 500);
+  
+  // Debounce filter arrays (300ms delay for rapid filter changes)
+  const debouncedCategoryIds = useDebounceValue(categoryIds, 300);
+  const debouncedMerchantGroupIds = useDebounceValue(merchantGroupIds, 300);
+  const debouncedTransactionTypes = useDebounceValue(transactionTypes, 300);
+  const debouncedTagIds = useDebounceValue(tagIds, 300);
+  const debouncedAccountFilterIds = useDebounceValue(accountFilterIds, 300);
+
   useEffect(() => {
-    // Only fetch once on mount
+    // Fetch data on mount
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
       fetchData();
     }
   }, []);
+
+  // Track if filters were updated via updateFilters() to prevent duplicate fetch
+  const filtersUpdatedViaUpdateFiltersRef = useRef(false);
+  
+  // Refetch when debounced filters, search, pagination, or sorting change
+  useEffect(() => {
+    console.log('[TransactionsPage] useEffect triggered for filter changes', {
+      hasMounted: hasMountedRef.current,
+      categoryIds: categoryIds.join(','),
+      debouncedCategoryIds: debouncedCategoryIds.join(','),
+      categoryIdParam,
+      startDateParam,
+      endDateParam,
+      currentPage,
+      pageSize,
+      filtersUpdatedViaUpdateFilters: filtersUpdatedViaUpdateFiltersRef.current,
+    });
+    
+    // Skip if filters were just updated via updateFilters() - it already called fetchData()
+    if (filtersUpdatedViaUpdateFiltersRef.current) {
+      console.log('[TransactionsPage] Skipping fetchData() - filters updated via updateFilters()');
+      filtersUpdatedViaUpdateFiltersRef.current = false;
+      return;
+    }
+    
+    if (hasMountedRef.current) {
+      console.log('[TransactionsPage] Calling fetchData() from useEffect');
+      // Reset fetching ref to allow refetch
+      fetchingRef.current = false;
+      fetchData();
+    } else {
+      console.log('[TransactionsPage] Skipping fetchData() - not mounted yet');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDateParam, endDateParam, debouncedSearchQuery, debouncedCategoryIds.join(','), debouncedMerchantGroupIds.join(','), debouncedTransactionTypes.join(','), debouncedTagIds.join(','), debouncedAccountFilterIds.map(f => `${f.type}-${f.id}`).join(','), sortBy, sortDirection, currentPage, pageSize]);
 
   // Initialize search query from URL parameter
   useEffect(() => {
@@ -196,6 +443,26 @@ export default function TransactionsPage() {
       setSearchQuery(searchQueryParam);
     }
   }, [searchQueryParam]);
+
+  // Update URL when debounced search query changes (and reset to page 1 for a new search).
+  // Do not run when only other params (e.g. page) change: searchParams is in deps so we must
+  // bail out when `q` already matches, otherwise every pagination navigation resets page to 1.
+  useEffect(() => {
+    if (!hasMountedRef.current) return;
+
+    const qFromUrl = (searchParams.get('q') ?? '').trim();
+    const qDebounced = debouncedSearchQuery.trim();
+    if (qFromUrl === qDebounced) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (qDebounced) {
+      params.set('q', qDebounced);
+    } else {
+      params.delete('q');
+    }
+    params.set('page', '1');
+    router.replace(`/transactions?${params.toString()}`);
+  }, [debouncedSearchQuery, searchParams, router]);
 
   // Open edit dialog if editId is in URL
   useEffect(() => {
@@ -250,158 +517,9 @@ export default function TransactionsPage() {
 
   // No longer needed - we use merchantGroups array directly
 
-  // Filter transactions based on all filters and search query
-  const filteredTransactions = useMemo(() => {
-    // Ensure transactions is always an array
-    if (!Array.isArray(transactions)) {
-      return [];
-    }
-    let filtered = transactions;
-
-    // Apply merchant filter if present
-    if (merchantFilter) {
-      filtered = filtered.filter(transaction => {
-        // Compare with null check
-        if (!transaction.merchant_name) return false;
-        return transaction.merchant_name === merchantFilter;
-      });
-    }
-
-    // Apply merchant group filter if present (multi-select)
-    if (merchantGroupIds.length > 0) {
-      filtered = filtered.filter(transaction => {
-        return transaction.merchant_group_id !== null && 
-               transaction.merchant_group_id !== undefined &&
-               merchantGroupIds.includes(transaction.merchant_group_id);
-      });
-    }
-
-    // Apply category filter if present (multi-select)
-    if (categoryIds.length > 0) {
-      filtered = filtered.filter(transaction => {
-        return transaction.splits.some(split => categoryIds.includes(split.category_id));
-      });
-    }
-
-    // Apply transaction type filter if present (multi-select)
-    if (transactionTypes.length > 0) {
-      filtered = filtered.filter(transaction => {
-        return transactionTypes.includes(transaction.transaction_type);
-      });
-    }
-
-    // Apply tag filter if present (multi-select - transaction must have all selected tags)
-    if (tagIds.length > 0) {
-      filtered = filtered.filter(transaction => {
-        const transactionTagIds = transaction.tags?.map(t => t.id) || [];
-        // Transaction must have all selected tags (AND logic)
-        return tagIds.every(tagId => transactionTagIds.includes(tagId));
-      });
-    }
-
-    // Apply date range filter if present (inclusive of both start and end dates)
-    if (startDateParam || endDateParam) {
-      filtered = filtered.filter(transaction => {
-        const transactionDate = transaction.date; // YYYY-MM-DD format
-        if (startDateParam && transactionDate < startDateParam) return false;
-        if (endDateParam && transactionDate > endDateParam) return false;
-        return true;
-      });
-    }
-
-    // Then apply search query filter
-    if (!searchQuery.trim()) {
-      return filtered;
-    }
-
-    return filtered.filter(transaction => {
-      // Search in description
-      if (fuzzyMatch(transaction.description, searchQuery)) {
-        return true;
-      }
-
-      // Search in merchant name
-      if (transaction.merchant_name && fuzzyMatch(transaction.merchant_name, searchQuery)) {
-        return true;
-      }
-
-      // Search in category names
-      const categoryNames = transaction.splits
-        .map(split => {
-          const category = categories.find(c => c.id === split.category_id);
-          return category?.name || '';
-        })
-        .join(' ');
-
-      if (fuzzyMatch(categoryNames, searchQuery)) {
-        return true;
-      }
-
-      // Search in tag names
-      const tagNames = (transaction.tags || [])
-        .map(tag => tag.name)
-        .join(' ');
-
-      if (fuzzyMatch(tagNames, searchQuery)) {
-        return true;
-      }
-
-      // Search in amount (convert to string)
-      const amountStr = transaction.total_amount.toString();
-      if (fuzzyMatch(amountStr, searchQuery)) {
-        return true;
-      }
-
-      // Search in date
-      if (fuzzyMatch(transaction.date, searchQuery)) {
-        return true;
-      }
-
-      return false;
-    });
-  }, [transactions, categories, searchQuery, merchantFilter, merchantGroupIds, categoryIds, transactionTypes, startDateParam, endDateParam]);
-
-  // Sort filtered transactions
-  const sortedTransactions = useMemo(() => {
-    const sorted = [...filteredTransactions];
-    
-    sorted.sort((a, b) => {
-      let comparison = 0;
-      
-      switch (sortBy) {
-        case 'date':
-          // Compare dates (YYYY-MM-DD format sorts correctly as strings)
-          comparison = a.date.localeCompare(b.date);
-          // If same date, sort by ID for consistency
-          if (comparison === 0) {
-            comparison = a.id - b.id;
-          }
-          break;
-        case 'description':
-          comparison = a.description.localeCompare(b.description, undefined, { sensitivity: 'base' });
-          break;
-        case 'merchant':
-          const merchantA = a.merchant_name || '';
-          const merchantB = b.merchant_name || '';
-          comparison = merchantA.localeCompare(merchantB, undefined, { sensitivity: 'base' });
-          break;
-        case 'amount':
-          comparison = a.total_amount - b.total_amount;
-          break;
-      }
-      
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
-    
-    return sorted;
-  }, [filteredTransactions, sortBy, sortDirection]);
-
-  // Calculate pagination
-  const totalTransactions = sortedTransactions.length;
-  const totalPages = Math.ceil(totalTransactions / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedTransactions = sortedTransactions.slice(startIndex, endIndex);
+  // Transactions are now filtered and sorted server-side
+  // No need for client-side filtering/sorting/pagination
+  const paginatedTransactions = transactions;
 
   // Handle sort change
   const handleSort = (column: 'date' | 'description' | 'merchant' | 'amount') => {
@@ -422,7 +540,8 @@ export default function TransactionsPage() {
     }
   }, [currentPage, totalPages]);
 
-  if (loading) {
+  // Show full page loading only on initial mount
+  if (loading && !hasMountedRef.current) {
     return <LoadingSpinner />;
   }
 
@@ -441,6 +560,7 @@ export default function TransactionsPage() {
     merchantGroupId?: number[] | null;
     transactionType?: ('income' | 'expense')[] | null;
     tags?: number[] | null;
+    accountId?: Array<{ type: 'account' | 'card'; id: number }> | null;
     startDate?: string | null;
     endDate?: string | null;
   }) => {
@@ -475,6 +595,16 @@ export default function TransactionsPage() {
         params.delete('tags');
       }
     }
+    if (updates.accountId !== undefined) {
+      if (updates.accountId && updates.accountId.length > 0) {
+        const accountFilterString = updates.accountId.map(item => 
+          item.type === 'account' ? `account-${item.id}` : `card-${item.id}`
+        ).join(',');
+        params.set('accountId', accountFilterString);
+      } else {
+        params.delete('accountId');
+      }
+    }
     if (updates.startDate !== undefined) {
       if (updates.startDate) {
         params.set('startDate', updates.startDate);
@@ -493,7 +623,29 @@ export default function TransactionsPage() {
     // Reset to page 1 when filters change
     params.set('page', '1');
 
-    router.push(`/transactions?${params.toString()}`);
+    const newUrl = `/transactions?${params.toString()}`;
+    console.log('[TransactionsPage] updateFilters calling router.replace with URL:', newUrl);
+    
+    // Mark that filters were updated via updateFilters to prevent duplicate fetch from useEffect
+    filtersUpdatedViaUpdateFiltersRef.current = true;
+    
+    // Update URL
+    router.replace(newUrl);
+    
+    // Manually trigger fetchData with the new filter values
+    // This ensures we fetch immediately even if searchParams hasn't updated yet
+    fetchingRef.current = false;
+    console.log('[TransactionsPage] updateFilters calling fetchData() directly with new filters');
+    fetchData({
+      categoryIds: updates.categoryId ?? undefined,
+      merchantGroupIds: updates.merchantGroupId ?? undefined,
+      transactionTypes: updates.transactionType ?? undefined,
+      tagIds: updates.tags ?? undefined,
+      accountFilterIds: updates.accountId ?? undefined,
+      startDate: updates.startDate ?? undefined,
+      endDate: updates.endDate ?? undefined,
+      page: 1, // Always reset to page 1 when filters change
+    });
   };
 
   const updatePagination = (page: number, size?: number) => {
@@ -506,9 +658,11 @@ export default function TransactionsPage() {
   };
 
   const handleCategoryToggle = (categoryId: number) => {
+    console.log('[TransactionsPage] handleCategoryToggle called', { categoryId, currentCategoryIds: categoryIds });
     const newCategoryIds = categoryIds.includes(categoryId)
       ? categoryIds.filter(id => id !== categoryId)
       : [...categoryIds, categoryId];
+    console.log('[TransactionsPage] Calling updateFilters with newCategoryIds:', newCategoryIds);
     updateFilters({ categoryId: newCategoryIds.length > 0 ? newCategoryIds : null });
   };
 
@@ -533,6 +687,15 @@ export default function TransactionsPage() {
     updateFilters({ tags: newTagIds.length > 0 ? newTagIds : null });
   };
 
+  const handleAccountToggle = (type: 'account' | 'card', id: number) => {
+    const filterKey = type === 'account' ? { type: 'account' as const, id } : { type: 'card' as const, id };
+    const isSelected = accountFilterIds.some(f => f.type === filterKey.type && f.id === filterKey.id);
+    const newAccountFilterIds = isSelected
+      ? accountFilterIds.filter(f => !(f.type === filterKey.type && f.id === filterKey.id))
+      : [...accountFilterIds, filterKey];
+    updateFilters({ accountId: newAccountFilterIds.length > 0 ? newAccountFilterIds : null });
+  };
+
   const handleDateRangeChange = (start: Date | undefined, end: Date | undefined) => {
     setStartDateObj(start);
     setEndDateObj(end);
@@ -542,13 +705,20 @@ export default function TransactionsPage() {
     });
   };
 
-  const hasFilters = merchantFilter || merchantGroupIds.length > 0 || categoryIds.length > 0 || transactionTypes.length > 0 || tagIds.length > 0 || startDateParam || endDateParam;
+  const hasFilters = merchantFilter || merchantGroupIds.length > 0 || categoryIds.length > 0 || transactionTypes.length > 0 || tagIds.length > 0 || accountFilterIds.length > 0 || startDateParam || endDateParam;
   const selectedCategories = categoryIds.map(id => categories.find(c => c.id === id)).filter(Boolean) as Category[];
   const selectedMerchantGroups = merchantGroupIds.map(id => merchantGroups.find(g => g.id === id)).filter(Boolean) as MerchantGroup[];
   const selectedTags = tagIds.map(id => tags.find(t => t.id === id)).filter(Boolean) as Tag[];
+  const selectedAccounts = accountFilterIds.filter(f => f.type === 'account').map(f => accounts.find(a => a.id === f.id)).filter(Boolean) as Account[];
+  const selectedCreditCards = accountFilterIds.filter(f => f.type === 'card').map(f => creditCards.find(c => c.id === f.id)).filter(Boolean) as CreditCard[];
 
   return (
     <div className="space-y-6">
+      <FeatureTeaser
+        storageKey="recurring-transactions"
+        featureKey="recurring_transactions"
+        message="Recurring Transactions can track subscriptions and bills. See Settings → Features."
+      />
       <div className="flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
@@ -587,6 +757,24 @@ export default function TransactionsPage() {
                     <X className="ml-1 h-3 w-3" />
                   </Badge>
                 ))}
+                {selectedAccounts.map((account) => {
+                  const filterId = accountFilterIds.find(f => f.type === 'account' && f.id === account.id);
+                  return filterId ? (
+                    <Badge key={`account-${account.id}`} variant="secondary" className="cursor-pointer" onClick={() => handleAccountToggle('account', account.id)}>
+                      Account: {account.name}
+                      <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  ) : null;
+                })}
+                {selectedCreditCards.map((card) => {
+                  const filterId = accountFilterIds.find(f => f.type === 'card' && f.id === card.id);
+                  return filterId ? (
+                    <Badge key={`card-${card.id}`} variant="secondary" className="cursor-pointer" onClick={() => handleAccountToggle('card', card.id)}>
+                      Card: {card.name}
+                      <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  ) : null;
+                })}
                 {(startDateParam || endDateParam) && (
                   <Badge variant="secondary">
                     Date: {startDateParam || '...'} to {endDateParam || '...'}
@@ -792,6 +980,67 @@ export default function TransactionsPage() {
                 </DropdownMenu>
               )}
 
+              {/* Account Filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Account</span>
+                    <span className="sm:hidden">Acct.</span>
+                    {accountFilterIds.length > 0 && <Badge variant="secondary" className="ml-2">{accountFilterIds.length}</Badge>}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[200px]">
+                  <DropdownMenuLabel>Filter by account</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    checked={accountFilterIds.length === 0}
+                    onCheckedChange={() => {
+                      if (accountFilterIds.length > 0) {
+                        updateFilters({ accountId: null });
+                      }
+                    }}
+                  >
+                    All Accounts
+                  </DropdownMenuCheckboxItem>
+                  {accounts.length > 0 && (
+                    <>
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Accounts</DropdownMenuLabel>
+                      {accounts.map((account) => {
+                        const isSelected = accountFilterIds.some(f => f.type === 'account' && f.id === account.id);
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={`account-${account.id}`}
+                            checked={isSelected}
+                            onCheckedChange={() => handleAccountToggle('account', account.id)}
+                          >
+                            {account.name}
+                          </DropdownMenuCheckboxItem>
+                        );
+                      })}
+                    </>
+                  )}
+                  {creditCards.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Credit Cards</DropdownMenuLabel>
+                      {creditCards.map((card) => {
+                        const isSelected = accountFilterIds.some(f => f.type === 'card' && f.id === card.id);
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={`card-${card.id}`}
+                            checked={isSelected}
+                            onCheckedChange={() => handleAccountToggle('card', card.id)}
+                          >
+                            {card.name}
+                          </DropdownMenuCheckboxItem>
+                        );
+                      })}
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               {/* Date Range Filter */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -836,20 +1085,47 @@ export default function TransactionsPage() {
             </div>
           </div>
 
-          {(searchQuery || hasFilters) && (
+          {(debouncedSearchQuery || hasFilters) && (
             <p className="text-sm text-muted-foreground mb-4">
-              Found {filteredTransactions.length} of {transactions.length} transactions
+              Found {totalTransactions} transaction{totalTransactions !== 1 ? 's' : ''}
             </p>
           )}
 
-          <TransactionList
-            transactions={paginatedTransactions}
-            categories={categories}
-            onUpdate={fetchData}
-            sortBy={sortBy}
-            sortDirection={sortDirection}
-            onSort={handleSort}
-          />
+          {totalTransactions === 0 && !tableLoading && !loading && !debouncedSearchQuery && !hasFilters && (
+            <Card className="py-12">
+              <CardContent className="flex flex-col items-center justify-center gap-4 text-center">
+                <p className="text-muted-foreground">
+                  No transactions yet. Add your first transaction or import from your bank to get started.
+                </p>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  <Button onClick={() => setIsAddDialogOpen(true)}>
+                    Add transaction
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link href="/import">Import from CSV</Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="relative">
+            {tableLoading && (
+              <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+                <LoadingSpinner />
+              </div>
+            )}
+            {(totalTransactions > 0 || debouncedSearchQuery || hasFilters) && (
+            <TransactionList
+              transactions={paginatedTransactions}
+              categories={categories}
+              onUpdate={fetchData}
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            )}
+          </div>
 
           {/* Pagination Controls */}
           {totalTransactions > 0 && (
@@ -857,7 +1133,7 @@ export default function TransactionsPage() {
               {/* Pagination Info and Page Size Selector */}
               <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-sm text-muted-foreground w-full sm:w-auto">
                 <div className="text-center sm:text-left">
-                  Showing {startIndex + 1}-{Math.min(endIndex, totalTransactions)} of {totalTransactions}
+                  Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, totalTransactions)} of {totalTransactions}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="hidden sm:inline">Rows per page:</span>
@@ -990,4 +1266,5 @@ export default function TransactionsPage() {
     </div>
   );
 }
+
 

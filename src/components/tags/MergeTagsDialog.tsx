@@ -131,3 +131,4 @@ export default function MergeTagsDialog({ isOpen, onClose, sourceTagIds, onSucce
     </Dialog>
   );
 }
+

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
-import { importUserData, UserBackupData } from '@/lib/backup-utils';
+import { importUserDataFromFile, isBackupDataType, validateImportSelection, type UserBackupData, type BackupDataType } from '@/lib/backup-utils';
 import { getActiveAccountId } from '@/lib/account-context';
 import { checkWriteAccess } from '@/lib/api-helpers';
+import { downloadBackupFromStorage, decompressBackup } from '@/lib/backup-storage';
 
 /**
  * POST /api/backups/[id]/restore
@@ -31,10 +32,10 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid backup ID' }, { status: 400 });
     }
 
-    // Fetch the backup data (check account_id instead of user_id)
+    // Fetch the backup record (check account_id instead of user_id)
     const { data: backup, error: fetchError } = await supabase
       .from('user_backups')
-      .select('backup_data')
+      .select('storage_path, backup_data')
       .eq('id', backupId)
       .eq('account_id', accountId)
       .single();
@@ -45,8 +46,66 @@ export async function POST(
       return NextResponse.json({ error: 'Backup not found' }, { status: 404 });
     }
 
+    let backupData: UserBackupData;
+
+    // Support both new (storage) and legacy (JSONB) backups
+    if (backup.storage_path) {
+      // New format: download and decompress from Storage
+      const compressedData = await downloadBackupFromStorage(backup.storage_path);
+      const decompressed = await decompressBackup(compressedData);
+      backupData = decompressed as UserBackupData;
+    } else if (backup.backup_data) {
+      // Legacy format: use JSONB data directly
+      backupData = backup.backup_data as UserBackupData;
+    } else {
+      return NextResponse.json({ error: 'Backup data not found' }, { status: 404 });
+    }
+
+    let selectedTypes: BackupDataType[] | undefined;
+    try {
+      const body = await request.json();
+      if (body?.selectedTypes) {
+        if (!Array.isArray(body.selectedTypes)) {
+          return NextResponse.json(
+            { error: 'selectedTypes must be an array' },
+            { status: 400 }
+          );
+        }
+        const invalid = body.selectedTypes.filter(
+          (type: string) => !isBackupDataType(type)
+        );
+        if (invalid.length > 0) {
+          return NextResponse.json(
+            { error: `Invalid data types: ${invalid.join(', ')}` },
+            { status: 400 }
+          );
+        }
+        selectedTypes = body.selectedTypes as BackupDataType[];
+
+        if (selectedTypes.length === 0) {
+          return NextResponse.json(
+            { error: 'Select at least one data type to restore' },
+            { status: 400 }
+          );
+        }
+
+        const validation = validateImportSelection(backupData, selectedTypes);
+        if (!validation.valid) {
+          return NextResponse.json(
+            {
+              error: 'Backup is missing required related data for the selected types',
+              missingDependencies: validation.missingDependencies,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    } catch {
+      // Empty body restores all data
+    }
+
     // Restore the data
-    await importUserData(backup.backup_data as UserBackupData);
+    await importUserDataFromFile(backupData, selectedTypes ? { selectedTypes } : undefined);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -70,4 +129,5 @@ export async function POST(
     );
   }
 }
+
 

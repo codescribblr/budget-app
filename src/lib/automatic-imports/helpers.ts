@@ -24,3 +24,4 @@ export function getDecryptedAccessToken(setup: AutomaticImportSetup): string | n
     return null;
   }
 }
+

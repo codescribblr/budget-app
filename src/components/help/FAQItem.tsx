@@ -36,3 +36,4 @@ export function FAQItem({ question, answer, defaultOpen = false }: FAQItemProps)
   );
 }
 
+

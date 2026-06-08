@@ -13,3 +13,4 @@ CREATE INDEX IF NOT EXISTS idx_transactions_transaction_type ON transactions(tra
 -- Add comment for documentation
 COMMENT ON COLUMN transactions.transaction_type IS 'Type of transaction: income adds to category balances, expense subtracts from category balances';
 
+

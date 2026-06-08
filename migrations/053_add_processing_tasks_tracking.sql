@@ -15,3 +15,4 @@ CREATE INDEX IF NOT EXISTS idx_queued_imports_processing_tasks ON queued_imports
 COMMENT ON COLUMN queued_imports.processing_tasks IS 'JSONB object tracking completion status of processing tasks. Format: {"pdf_to_csv": true, "csv_mapping": true, "duplicate_detection": false, "categorization": false, "default_account_assignment": false, "historical_flag_assignment": false}';
 
 COMMIT;
+

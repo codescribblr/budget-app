@@ -180,16 +180,6 @@ export default function AppHeader({
                       Income
                     </button>
                     <button
-                      onClick={() => handleNavigation('/merchants')}
-                      className={`w-full text-left px-4 py-3 transition-colors border-b ${
-                        isActive('/merchants')
-                          ? 'bg-gray-800 text-white hover:bg-gray-700'
-                          : 'hover:bg-accent'
-                      }`}
-                    >
-                      Merchants
-                    </button>
-                    <button
                       onClick={() => handleNavigation('/category-rules')}
                       className={`w-full text-left px-4 py-3 transition-colors border-b ${
                         isActive('/category-rules')
@@ -326,14 +316,6 @@ export default function AppHeader({
                 Income
               </Button>
               <Button
-                variant={getButtonVariant('/merchants')}
-                onClick={() => window.location.href = '/merchants'}
-                size="sm"
-                className="md:size-default"
-              >
-                Merchants
-              </Button>
-              <Button
                 variant={getButtonVariant('/category-rules')}
                 onClick={() => window.location.href = '/category-rules'}
                 size="sm"
@@ -392,4 +374,5 @@ export default function AppHeader({
     </>
   );
 }
+
 

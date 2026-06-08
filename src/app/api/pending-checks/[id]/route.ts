@@ -88,3 +88,4 @@ export async function DELETE(
     return NextResponse.json({ error: 'Failed to delete pending check' }, { status: 500 });
   }
 }
+

@@ -390,3 +390,4 @@ export async function deleteCategoryRule(id: number): Promise<void> {
     .eq('user_id', user.id);
 }
 
+

@@ -18,14 +18,32 @@ import {
   Wallet,
   CreditCard as CreditCardIcon,
   Building2,
+  Landmark,
+  Banknote,
   Mail,
   HelpCircle,
   Sparkles,
   Inbox,
   Tag,
   Repeat,
+  User,
+  Key,
+  Copy,
+  Users,
+  Download,
+  Trash2,
+  Crown,
+  UserPlus,
+  RefreshCw,
+  Bell,
+  Palmtree,
+  Scale,
+  LayoutGrid,
+  Code2,
 } from "lucide-react"
-import { useFeature } from "@/contexts/FeatureContext"
+import { useFeatures } from "@/contexts/FeatureContext"
+import { shouldShowNavItem } from "@/lib/feature-flags"
+import { FEATURE_KEYS, type FeatureName } from "@/lib/feature-flags"
 
 import {
   CommandDialog,
@@ -40,13 +58,20 @@ import type { Category, Account, CreditCard, Loan, TransactionWithSplits, GoalWi
 
 // Settings items for search
 const settingsItems = [
-  { label: "Features", path: "/settings", section: "features", keywords: "features enable disable advanced power user" },
-  { label: "Data Backup & Restore", path: "/settings", section: "backup", keywords: "backup restore export import data" },
-  { label: "Merchant Groups", path: "/merchants", section: null, keywords: "merchant groups manage" },
-  { label: "Category Rules", path: "/category-rules", section: null, keywords: "category rules auto categorize" },
-  { label: "Duplicate Transactions", path: "/settings", section: "duplicates", keywords: "duplicate transactions find delete" },
-  { label: "Clear All Data", path: "/settings", section: "clear-data", keywords: "clear delete all data reset" },
-  { label: "Delete Account", path: "/settings", section: "delete-account", keywords: "delete account close" },
+  { label: "Dashboard layout", path: "/settings/dashboard", icon: LayoutGrid, section: "features", keywords: "dashboard cards layout customize hide show widgets" },
+  { label: "Features", path: "/settings", icon: Sparkles, section: "features", keywords: "features enable disable advanced power user" },
+  { label: "Subscription", path: "/settings/subscription", icon: Crown, section: null, keywords: "subscription premium upgrade billing payment" },
+  { label: "API Keys", path: "/settings/api-keys", icon: Code2, section: null, keywords: "api keys external integration developer" },
+  { label: "Password", path: "/settings/password", icon: Key, section: null, keywords: "password change reset security" },
+  { label: "Notifications", path: "/settings/notifications", icon: Bell, section: null, keywords: "notifications alerts preferences" },
+  { label: "Automatic Imports", path: "/settings/automatic-imports", icon: RefreshCw, section: null, keywords: "automatic imports teller plaid yodlee email", featureKey: "automatic_imports" },
+  { label: "Import Templates", path: "/settings/import-templates", icon: FileText, section: null, keywords: "import templates csv mapping" },
+  { label: "Duplicate Transactions", path: "/settings/duplicates", icon: Copy, section: null, keywords: "duplicate transactions find delete" },
+  { label: "Merchant Settings", path: "/settings/merchants", icon: Store, section: null, keywords: "merchant groups manage" },
+  { label: "Category Rules", path: "/category-rules", icon: FolderTree, section: null, keywords: "category rules auto categorize" },
+  { label: "Backup & Restore", path: "/settings/backup", icon: Download, section: null, keywords: "backup restore export import data" },
+  { label: "Collaborators", path: "/settings/collaborators", icon: UserPlus, section: null, keywords: "collaborators team members share account" },
+  { label: "Delete Account", path: "/settings/account", icon: Trash2, section: null, keywords: "delete account close remove" },
 ]
 
 // Simple debounce hook
@@ -70,6 +95,7 @@ function useDebounce<T extends (...args: any[]) => any>(
 }
 
 const navigationItems = [
+  { label: "Explore features", path: "/settings", icon: Sparkles, keywords: "features enable optional premium discover" },
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Budgets", path: "/categories", icon: Mail },
   { label: "Transactions", path: "/transactions", icon: Receipt },
@@ -78,13 +104,19 @@ const navigationItems = [
   { label: "Import Queue", path: "/imports/queue", icon: Inbox },
   { label: "Money Movement", path: "/money-movement", icon: ArrowLeftRight },
   { label: "Income Buffer", path: "/income-buffer", icon: Wallet, featureKey: "income_buffer" },
+  { label: "Cash Accounts", path: "/accounts", icon: Banknote },
+  { label: "Credit Cards", path: "/credit-cards", icon: CreditCardIcon },
+  { label: "Loans", path: "/loans", icon: Landmark, featureKey: "loans" },
+  { label: "Non-cash Assets", path: "/non-cash-assets", icon: TrendingUp, featureKey: "non_cash_assets" },
+  { label: "Pending Checks", path: "/pending-checks", icon: FileText },
   { label: "Reports", path: "/reports", icon: FileText },
   { label: "Trends", path: "/reports/trends", icon: TrendingUp, featureKey: "advanced_reporting" },
   { label: "Category Reports", path: "/reports/categories", icon: Mail, featureKey: "advanced_reporting" },
+  { label: "Retirement Planning", path: "/reports/retirement-planning", icon: Palmtree, featureKey: "retirement_planning" },
+  { label: "Net Worth", path: "/net-worth", icon: Scale, featureKey: "retirement_planning", keywords: "net worth tracking history snapshots" },
   { label: "Income", path: "/income", icon: DollarSign },
   { label: "Goals", path: "/goals", icon: Target, featureKey: "goals" },
   { label: "AI Assistant", path: "/dashboard/ai-assistant", icon: Sparkles, featureKey: "ai_chat" },
-  { label: "Merchants", path: "/merchants", icon: Store },
   { label: "Tags", path: "/tags", icon: Tag, featureKey: "tags" },
   { label: "Category Rules", path: "/category-rules", icon: FolderTree },
   { label: "Settings", path: "/settings", icon: Settings },
@@ -106,12 +138,16 @@ export function CommandPalette() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [transactionsLoading, setTransactionsLoading] = React.useState(false)
   const router = useRouter()
-  const incomeBufferEnabled = useFeature('income_buffer')
-  const goalsEnabled = useFeature('goals')
-  const aiChatEnabled = useFeature('ai_chat')
-  const advancedReportingEnabled = useFeature('advanced_reporting')
-  const tagsEnabled = useFeature('tags')
-  const recurringTransactionsEnabled = useFeature('recurring_transactions')
+  const { isFeatureEnabled } = useFeatures()
+  const featureFlags = React.useMemo(
+    () =>
+      Object.fromEntries(
+        FEATURE_KEYS.map((k) => [k, isFeatureEnabled(k as FeatureName)])
+      ) as Partial<Record<FeatureName, boolean>>,
+    [isFeatureEnabled]
+  )
+  const automaticImportsEnabled = isFeatureEnabled('automatic_imports' as FeatureName)
+  const tagsEnabled = isFeatureEnabled('tags' as FeatureName)
   const scrollTimeoutsRef = React.useRef<NodeJS.Timeout[]>([])
 
   React.useEffect(() => {
@@ -239,34 +275,12 @@ export function CommandPalette() {
           </CommandEmpty>
           <CommandGroup heading="Navigation">
             {navigationItems
-              .filter((item) => {
-                // If item has a featureKey, check if feature is enabled
-                if ('featureKey' in item && item.featureKey) {
-                  const featureKey = item.featureKey as string
-                  switch (featureKey) {
-                    case 'income_buffer':
-                      return incomeBufferEnabled
-                    case 'goals':
-                      return goalsEnabled
-                    case 'ai_chat':
-                      return aiChatEnabled
-                    case 'advanced_reporting':
-                      return advancedReportingEnabled
-                    case 'tags':
-                      return tagsEnabled
-                    case 'recurring_transactions':
-                      return recurringTransactionsEnabled
-                    default:
-                      return true
-                  }
-                }
-                // Legacy support for featureFlag
-                if ('featureFlag' in item && item.featureFlag) {
-                  return item.featureFlag === 'income_buffer' && incomeBufferEnabled
-                }
-                // No feature requirement, show item
-                return true
-              })
+              .filter((item) =>
+                shouldShowNavItem(
+                  'featureKey' in item ? { featureKey: item.featureKey } : {},
+                  featureFlags
+                )
+              )
               .map((item) => {
                 const Icon = item.icon
                 return (
@@ -414,6 +428,7 @@ export function CommandPalette() {
                     const date = new Date(transaction.date).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
+                      year: '2-digit',
                     })
                     const amountClass = transaction.transaction_type === 'income' ? 'text-green-500' : 'text-red-500'
                     const formattedAmount = `$${transaction.total_amount.toFixed(2)}`
@@ -470,28 +485,45 @@ export function CommandPalette() {
           )}
           {settingsItems.length > 0 && (
             <CommandGroup heading="Settings">
-              {settingsItems.map((item) => (
-                <CommandItem
-                  key={item.path + item.section}
-                  value={`${item.label} ${item.keywords}`}
-                  onSelect={() => {
-                    runCommand(() => {
-                      router.push(item.path)
-                      // Scroll to section if specified
-                      if (item.section) {
-                        const timeout = setTimeout(() => {
-                          const element = document.getElementById(item.section)
-                          element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                        }, 100)
-                        scrollTimeoutsRef.current.push(timeout)
-                      }
-                    })
-                  }}
-                >
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>{item.label}</span>
-                </CommandItem>
-              ))}
+              {settingsItems
+                .filter((item) => {
+                  // If item has a featureKey, check if feature is enabled
+                  if ('featureKey' in item && item.featureKey) {
+                    switch (item.featureKey) {
+                      case 'automatic_imports':
+                        return automaticImportsEnabled
+                      default:
+                        return true
+                    }
+                  }
+                  // No feature requirement, show item
+                  return true
+                })
+                .map((item) => {
+                  const Icon = item.icon || Settings
+                  return (
+                    <CommandItem
+                      key={item.path + (item.section || '')}
+                      value={`${item.label} ${item.keywords}`}
+                      onSelect={() => {
+                        runCommand(() => {
+                          router.push(item.path)
+                          // Scroll to section if specified (for main settings page)
+                          if (item.section) {
+                            const timeout = setTimeout(() => {
+                              const element = document.getElementById(item.section)
+                              element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                            }, 100)
+                            scrollTimeoutsRef.current.push(timeout)
+                          }
+                        })
+                      }}
+                    >
+                      <Icon className="mr-2 h-4 w-4" />
+                      <span>{item.label}</span>
+                    </CommandItem>
+                  )
+                })}
             </CommandGroup>
           )}
         </CommandList>
@@ -499,4 +531,5 @@ export function CommandPalette() {
     </>
   )
 }
+
 

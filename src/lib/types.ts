@@ -44,6 +44,97 @@ export interface CreditCard {
   updated_at: string;
 }
 
+export type RentCastPropertyType =
+  | 'Single Family'
+  | 'Condo'
+  | 'Townhouse'
+  | 'Manufactured'
+  | 'Multi-Family'
+  | 'Apartment'
+  | 'Land';
+
+export interface NonCashAsset {
+  id: number;
+  name: string;
+  asset_type: 'investment' | 'real_estate' | 'vehicle' | 'art' | 'insurance' | 'collectibles' | 'cryptocurrency' | 'other';
+  current_value: number;
+  estimated_return_percentage: number;
+  address?: string | null; // For real estate assets
+  vin?: string | null; // For vehicle assets
+  is_rmd_qualified: boolean; // Whether this asset is subject to RMDs (IRA/401K type accounts)
+  is_liquid: boolean; // Whether this asset can be easily converted to cash
+  rentcast_enabled?: boolean;
+  property_type?: RentCastPropertyType | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  square_footage?: number | null;
+  rentcast_last_sync_at?: string | null;
+  rentcast_last_error?: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateNonCashAssetRequest {
+  name: string;
+  asset_type: NonCashAsset['asset_type'];
+  current_value?: number;
+  estimated_return_percentage?: number;
+  address?: string | null;
+  vin?: string | null;
+  is_rmd_qualified?: boolean;
+  is_liquid?: boolean;
+  rentcast_enabled?: boolean;
+  property_type?: RentCastPropertyType | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  square_footage?: number | null;
+  sort_order?: number;
+}
+
+export interface UpdateNonCashAssetRequest {
+  name?: string;
+  asset_type?: NonCashAsset['asset_type'];
+  current_value?: number;
+  estimated_return_percentage?: number;
+  address?: string | null;
+  vin?: string | null;
+  is_rmd_qualified?: boolean;
+  is_liquid?: boolean;
+  rentcast_enabled?: boolean;
+  property_type?: RentCastPropertyType | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  square_footage?: number | null;
+  sort_order?: number;
+}
+
+export interface RentCastIntegrationSettingsResponse {
+  integration_type: 'rentcast';
+  is_enabled: boolean;
+  has_api_key: boolean;
+  api_key_hint: string | null;
+  config: {
+    enforce_monthly_limit: boolean;
+    monthly_request_limit: number;
+  };
+  requests_this_month: number;
+  usage_month: string | null;
+  monthly_limit_reached: boolean;
+  last_sync_at: string | null;
+  last_error: string | null;
+}
+
+export interface RentCastValuationSummary {
+  id: number;
+  estimated_value: number;
+  price_range_low: number | null;
+  price_range_high: number | null;
+  subject_property: Record<string, unknown> | null;
+  comparables: Record<string, unknown>[] | null;
+  fetched_at: string;
+}
+
 export interface Loan {
   id: number;
   user_id: string;
@@ -55,7 +146,9 @@ export interface Loan {
   open_date: string | null;
   starting_balance: number | null;
   institution: string | null;
+  maturity_date: string | null; // ISO date string - when loan will be fully paid off
   include_in_net_worth: boolean;
+  linked_non_cash_asset_id?: number | null; // When this asset is liquidated in forecast, loan is paid off from proceeds
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -68,6 +161,7 @@ export interface Transaction {
   total_amount: number; // Always positive
   transaction_type: 'income' | 'expense'; // NEW FIELD
   merchant_group_id?: number | null;
+  merchant_override_id?: number | null; // User override for merchant assignment
   account_id?: number | null;
   credit_card_id?: number | null;
   is_historical: boolean;
@@ -79,6 +173,7 @@ export interface MerchantGroup {
   id: number;
   user_id: string;
   display_name: string;
+  global_merchant_id?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -100,6 +195,8 @@ export interface MerchantGroupWithStats extends MerchantGroup {
   total_amount: number;
   unique_patterns: number;
   has_manual_mappings: boolean;
+  logo_url?: string | null; // From global merchant if linked
+  icon_name?: string | null; // From global merchant if linked
 }
 
 export interface Tag {
@@ -185,6 +282,48 @@ export interface PreTaxDeductionItem {
   value: number; // Percentage (e.g., 10 for 10%) or fixed amount per paycheck
 }
 
+export type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly' | 'quarterly' | 'annually';
+
+export interface IncomeStream {
+  id: number;
+  account_id: number;
+  name: string;
+  annual_income: number;
+  tax_rate: number;
+  pay_frequency: PayFrequency;
+  include_extra_paychecks: boolean;
+  pre_tax_deduction_items: PreTaxDeductionItem[];
+  include_in_budget: boolean;
+  sort_order: number;
+  linked_non_cash_asset_id?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateIncomeStreamRequest {
+  name: string;
+  annual_income: number;
+  tax_rate?: number;
+  pay_frequency?: PayFrequency;
+  include_extra_paychecks?: boolean;
+  pre_tax_deduction_items?: PreTaxDeductionItem[];
+  include_in_budget?: boolean;
+  sort_order?: number;
+  linked_non_cash_asset_id?: number | null;
+}
+
+export interface UpdateIncomeStreamRequest {
+  name?: string;
+  annual_income?: number;
+  tax_rate?: number;
+  pay_frequency?: PayFrequency;
+  include_extra_paychecks?: boolean;
+  pre_tax_deduction_items?: PreTaxDeductionItem[];
+  include_in_budget?: boolean;
+  sort_order?: number;
+  linked_non_cash_asset_id?: number | null;
+}
+
 // API request/response types
 export interface CreateCategoryRequest {
   name: string;
@@ -267,6 +406,7 @@ export interface UpdateTransactionRequest {
   description?: string;
   transaction_type?: 'income' | 'expense'; // NEW FIELD
   merchant_group_id?: number | null;
+  merchant_override_id?: number | null; // User override for merchant assignment
   account_id?: number | null;
   credit_card_id?: number | null;
   tag_ids?: number[]; // Optional tag IDs to assign to transaction
@@ -289,6 +429,7 @@ export interface UpdatePendingCheckRequest {
 }
 
 export interface CreateLoanRequest {
+  maturity_date?: string | null;
   name: string;
   balance: number;
   interest_rate?: number;
@@ -298,9 +439,11 @@ export interface CreateLoanRequest {
   starting_balance?: number;
   institution?: string;
   include_in_net_worth?: boolean;
+  linked_non_cash_asset_id?: number | null;
 }
 
 export interface UpdateLoanRequest {
+  maturity_date?: string | null;
   name?: string;
   balance?: number;
   interest_rate?: number;
@@ -310,6 +453,7 @@ export interface UpdateLoanRequest {
   starting_balance?: number;
   institution?: string;
   include_in_net_worth?: boolean;
+  linked_non_cash_asset_id?: number | null;
 }
 
 // View models with joined data
@@ -317,6 +461,9 @@ export interface TransactionWithSplits extends Transaction {
   splits: (TransactionSplit & { category_name: string })[];
   tags?: Tag[]; // Tags associated with this transaction
   merchant_name?: string | null;
+  merchant_override_id?: number | null; // User override for merchant assignment
+  merchant_logo_url?: string | null; // From global merchant if linked
+  merchant_icon_name?: string | null; // From global merchant if linked
   account_name?: string | null;
   credit_card_name?: string | null;
 }
@@ -328,6 +475,7 @@ export interface DuplicateTransaction {
   total_amount: number;
   transaction_type: 'income' | 'expense';
   merchant_group_id: number | null;
+  merchant_name?: string | null;
   is_historical: boolean;
   account_id: number | null;
   credit_card_id: number | null;
@@ -436,6 +584,7 @@ export interface UpdateGoalRequest {
   status?: 'active' | 'completed' | 'overdue' | 'paused';
   notes?: string | null;
   sort_order?: number;
+  linked_account_id?: number | null;
 }
 
 export interface GoalProgress {
@@ -446,4 +595,5 @@ export interface GoalProgress {
   projected_completion_date: string | null;
   is_on_track: boolean;
 }
+
 

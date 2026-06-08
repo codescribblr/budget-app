@@ -7,7 +7,6 @@ import { useFeature } from '@/contexts/FeatureContext';
 import {
   User,
   Key,
-  Database,
   Sparkles,
   Copy,
   Users,
@@ -17,7 +16,10 @@ import {
   UserPlus,
   RefreshCw,
   FileText,
-  Bell
+  Bell,
+  LayoutGrid,
+  Code2,
+  Plug,
 } from 'lucide-react';
 
 const settingsNavItems = [
@@ -25,13 +27,31 @@ const settingsNavItems = [
     title: 'Features',
     href: '/settings',
     icon: Sparkles,
-    description: 'Manage optional features',
+    description: 'Explore and enable optional features',
+  },
+  {
+    title: 'Dashboard',
+    href: '/settings/dashboard',
+    icon: LayoutGrid,
+    description: 'Choose which cards appear on the main dashboard',
   },
   {
     title: 'Subscription',
     href: '/settings/subscription',
     icon: Crown,
     description: 'Manage your subscription',
+  },
+  {
+    title: 'API Keys',
+    href: '/settings/api-keys',
+    icon: Code2,
+    description: 'Manage external API access',
+  },
+  {
+    title: 'Integrations',
+    href: '/settings/integrations',
+    icon: Plug,
+    description: 'Connect third-party services with your API keys',
   },
   {
     title: 'Password',
@@ -68,7 +88,7 @@ const settingsNavItems = [
     title: 'Merchants',
     href: '/settings/merchants',
     icon: Users,
-    description: 'Manage merchant groups',
+    description: 'View merchant groups (read-only)',
   },
   {
     title: 'Backup',
@@ -77,16 +97,16 @@ const settingsNavItems = [
     description: 'Export and restore data',
   },
   {
-    title: 'Data',
-    href: '/settings/data',
-    icon: Database,
-    description: 'Import or clear data',
-  },
-  {
     title: 'Collaborators',
     href: '/settings/collaborators',
     icon: UserPlus,
     description: 'Manage account collaborators',
+  },
+  {
+    title: 'Profile',
+    href: '/settings/profile',
+    icon: User,
+    description: 'Manage your profile information',
   },
   {
     title: 'Account',
@@ -146,4 +166,5 @@ export function SettingsSidebar({ className }: SettingsSidebarProps) {
 }
 
 export { settingsNavItems };
+
 

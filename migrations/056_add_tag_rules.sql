@@ -79,3 +79,4 @@ CREATE POLICY "Users can delete tag rules in their accounts" ON tag_rules FOR DE
   );
 
 COMMIT;
+

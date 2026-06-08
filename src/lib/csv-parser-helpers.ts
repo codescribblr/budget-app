@@ -29,6 +29,58 @@ export function extractMerchant(description: string): string {
 }
 
 /**
+ * Check if a transaction is pending based on status column value
+ * Returns true if the transaction should be filtered out (is pending)
+ * Returns false if the transaction should be included (is cleared/posted)
+ * Returns null if status cannot be determined (keep transaction to be safe)
+ */
+export function isPendingTransaction(statusValue: string | null | undefined): boolean | null {
+  if (!statusValue) {
+    // No status value - can't determine, so keep the transaction (be safe)
+    return null;
+  }
+  
+  const normalizedStatus = statusValue.trim().toLowerCase();
+  
+  // Common pending status values
+  const pendingStatuses = [
+    'pending',
+    'processing',
+    'authorized',
+    'hold',
+    'on hold',
+    'temporary',
+    'temp',
+  ];
+  
+  // Common cleared/posted status values
+  const clearedStatuses = [
+    'posted',
+    'cleared',
+    'completed',
+    'complete',
+    'settled',
+    'settlement',
+    'final',
+    'confirmed',
+    'approved',
+  ];
+  
+  // Check if it's clearly pending
+  if (pendingStatuses.includes(normalizedStatus)) {
+    return true; // Filter out - it's pending
+  }
+  
+  // Check if it's clearly cleared
+  if (clearedStatuses.includes(normalizedStatus)) {
+    return false; // Keep - it's cleared
+  }
+  
+  // If we can't determine, keep the transaction (be safe)
+  return null;
+}
+
+/**
  * Generate hash for deduplication
  * Includes originalData to distinguish identical transactions that occur separately
  */
@@ -171,6 +223,20 @@ export async function parseCSVWithMapping(
         amount = Math.abs(amount); // Normalize to positive
       }
 
+      // Check status column if mapped - filter out pending transactions
+      if (mapping.statusColumn !== null && mapping.statusColumn !== undefined) {
+        const statusValue = row[mapping.statusColumn]?.trim() || null;
+        const isPending = isPendingTransaction(statusValue);
+        
+        // If we can reliably determine it's pending, skip this transaction
+        if (isPending === true) {
+          console.log(`Skipping pending transaction (row ${i}): ${descriptionValue || 'unknown'} - status: ${statusValue}`);
+          continue;
+        }
+        // If isPending is null, we can't determine status, so keep it (be safe)
+        // If isPending is false, it's cleared, so keep it
+      }
+
       // Validate required fields
       if (!dateValue || !descriptionValue || isNaN(amount) || amount === 0) {
         continue;
@@ -239,19 +305,20 @@ function determineTransactionTypeFromColumn(
 
 /**
  * Parse amount string to number
+ * Handles $(123.45) and $1,234.56 by removing $ and spaces before parenthesis check.
  */
 function parseAmount(amountStr: string): number {
   if (!amountStr) return 0;
 
   let cleaned = amountStr.trim();
 
-  // Handle negative amounts in parentheses: (123.45)
+  // Remove currency symbols and spaces first so " $(3.17)" and "$(4,838.54)" become "(3.17)" / "(4838.54)"
+  cleaned = cleaned.replace(/[$,\s]/g, '');
+
+  // Handle negative amounts in parentheses: (123.45) or (1,234.56) after comma removal
   if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
     cleaned = '-' + cleaned.slice(1, -1);
   }
-
-  // Remove currency symbols and spaces
-  cleaned = cleaned.replace(/[$,\s]/g, '');
 
   // Handle European format
   if (/^\d{1,3}(\.\d{3})+(,\d{2})?$/.test(cleaned)) {
@@ -311,14 +378,39 @@ export async function processTransactions(
   const { duplicates } = await response.json();
   const databaseDuplicateSet = new Set(duplicates);
 
-  // Step 3: Fetch categories for auto-categorization
-  if (progressCallback) progressCallback(55, 'Loading categories...');
+  // Step 3: Link merchants to global merchants before categorization
+  // This ensures merchant groups exist so categorization can use merchant-based rules
+  if (progressCallback) progressCallback(55, 'Linking merchants to global merchants...');
+  const descriptions = transactions.map(t => t.description || t.merchant);
+  const linkMerchantsUrl = baseUrl ? `${baseUrl}/api/import/link-merchants` : '/api/import/link-merchants';
+  try {
+    const linkResponse = await fetch(linkMerchantsUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ descriptions, batchId }),
+    });
+    
+    if (!linkResponse.ok) {
+      console.warn('Failed to link merchants, continuing without linking:', linkResponse.statusText);
+    } else {
+      const linkData = await linkResponse.json();
+      if (linkData.linked > 0) {
+        console.log(`Linked ${linkData.linked} merchants to global merchants`);
+      }
+    }
+  } catch (error) {
+    // Log but don't fail - merchant linking is helpful but not critical
+    console.warn('Error linking merchants, continuing without linking:', error);
+  }
+
+  // Step 4: Fetch categories for auto-categorization
+  if (progressCallback) progressCallback(60, 'Loading categories...');
   const categoriesUrl = baseUrl ? `${baseUrl}/api/categories` : '/api/categories';
   const categoriesResponse = await fetch(categoriesUrl);
   const categories = await categoriesResponse.json();
 
-  // Step 4: Get smart category suggestions for all merchants
-  if (progressCallback) progressCallback(60, 'Applying categorization rules...');
+  // Step 5: Get smart category suggestions for all merchants
+  if (progressCallback) progressCallback(65, 'Applying categorization rules...');
   const merchants = transactions.map(t => t.merchant);
   const categorizeUrl = baseUrl ? `${baseUrl}/api/categorize` : '/api/categorize';
   const categorizationResponse = await fetch(categorizeUrl, {
@@ -328,8 +420,8 @@ export async function processTransactions(
   });
   const { suggestions } = await categorizationResponse.json();
 
-  // Step 5: Process each transaction with initial categorization
-  if (progressCallback) progressCallback(65, 'Categorizing transactions...');
+  // Step 6: Process each transaction with initial categorization
+  if (progressCallback) progressCallback(70, 'Categorizing transactions...');
   const processedTransactions = transactions.map((transaction, index) => {
     const isDatabaseDuplicate = databaseDuplicateSet.has(transaction.hash);
     const isWithinFileDuplicate = withinFileDuplicates.has(index);
@@ -378,7 +470,7 @@ export async function processTransactions(
     }
   }
 
-  // Step 6: AI categorization for remaining uncategorized transactions (if enabled)
+  // Step 7: AI categorization for remaining uncategorized transactions (if enabled)
   if (skipAICategorization) {
     if (progressCallback) progressCallback(100, 'Processing complete!');
     return processedTransactions;
@@ -390,7 +482,7 @@ export async function processTransactions(
 
   if (uncategorizedTransactions.length > 0) {
     try {
-      if (progressCallback) progressCallback(70, `Using AI to categorize ${uncategorizedTransactions.length} transaction${uncategorizedTransactions.length !== 1 ? 's' : ''}...`);
+      if (progressCallback) progressCallback(75, `Using AI to categorize ${uncategorizedTransactions.length} transaction${uncategorizedTransactions.length !== 1 ? 's' : ''}...`);
       const aiCategorizationResponse = await fetch('/api/import/ai-categorize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -429,7 +521,7 @@ export async function processTransactions(
           });
         }
 
-        if (progressCallback) progressCallback(90, 'Applying AI category suggestions...');
+        if (progressCallback) progressCallback(95, 'Applying AI category suggestions...');
         // Update transactions with AI suggestions
         return processedTransactions.map((transaction): ParsedTransaction => {
           const aiSuggestion = aiSuggestionMap.get(transaction.id);
@@ -497,3 +589,4 @@ export async function processTransactions(
   if (progressCallback) progressCallback(100, 'Processing complete!');
   return processedTransactions;
 }
+

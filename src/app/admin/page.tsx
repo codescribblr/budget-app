@@ -1,0 +1,151 @@
+import { isAdmin } from "@/lib/admin"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Store, Settings, Shield, Bell, TestTube, MessageSquare, Users, BookOpen } from "lucide-react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+
+export const dynamic = 'force-dynamic'
+
+export default async function AdminDashboard() {
+  const adminStatus = await isAdmin();
+  if (!adminStatus) {
+    throw new Error('Unauthorized: Admin access required');
+  }
+
+  const adminSections = [
+    {
+      title: "Users",
+      description: "View all users, verification, wizard completion, subscription, and activity",
+      icon: Users,
+      href: "/admin/users",
+      color: "text-cyan-600",
+    },
+    {
+      title: "Global Merchants",
+      description: "Manage global merchant mappings and logos that apply to all users",
+      icon: Store,
+      href: "/admin/merchants",
+      color: "text-blue-600",
+    },
+    {
+      title: "Merchant Recommendations",
+      description: "Review and approve user recommendations for new merchants",
+      icon: MessageSquare,
+      href: "/admin/merchant-recommendations",
+      color: "text-orange-600",
+    },
+    {
+      title: "Help Feedback",
+      description: "View \"Was this helpful?\" ratings and comments from help center articles",
+      icon: BookOpen,
+      href: "/admin/help-feedback",
+      color: "text-teal-600",
+    },
+    {
+      title: "Notifications",
+      description: "Create and send notifications to users globally, by account, or individually",
+      icon: Bell,
+      href: "/admin/notifications",
+      color: "text-purple-600",
+    },
+    {
+      title: "Admin Settings",
+      description: "Configure global application settings and defaults",
+      icon: Settings,
+      href: "/admin/settings",
+      color: "text-green-600",
+    },
+  ]
+
+  const testPages = [
+    {
+      title: "Recurring Transactions Analysis",
+      description: "Test and analyze recurring transaction detection algorithm with real data",
+      href: "/admin/test/recurring-analysis",
+      color: "text-orange-600",
+    },
+    {
+      title: "Notification Testing",
+      description: "Test notification system and email templates",
+      href: "/admin/test/notifications",
+      color: "text-pink-600",
+    },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        <p className="text-muted-foreground mt-2">
+          Manage global settings and configurations for the application
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {adminSections.map((section) => (
+          <Card key={section.href} className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <section.icon className={`h-6 w-6 ${section.color}`} />
+                <CardTitle>{section.title}</CardTitle>
+              </div>
+              <CardDescription>{section.description}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href={section.href}>
+                <Button variant="outline" className="w-full">
+                  Manage
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div>
+        <h2 className="text-2xl font-bold mb-4">Test Pages</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          {testPages.map((page) => (
+            <Card key={page.href} className="hover:shadow-lg transition-shadow border-dashed">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <TestTube className={`h-6 w-6 ${page.color}`} />
+                  <CardTitle>{page.title}</CardTitle>
+                </div>
+                <CardDescription>{page.description}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href={page.href}>
+                  <Button variant="outline" className="w-full">
+                    Open Test Page
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-primary" />
+            <CardTitle>Admin Information</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            As an administrator, you have access to global configuration options that affect all users.
+          </p>
+          <p>
+            <strong>Important:</strong> Changes made in the admin interface are global and will affect
+            all users. User-specific settings will always take precedence over global defaults.
+          </p>
+          <p>
+            Global data (such as merchant mappings) will not be included in user backups/restores.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

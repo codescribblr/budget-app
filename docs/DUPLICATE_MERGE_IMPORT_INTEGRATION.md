@@ -78,3 +78,4 @@ When merging transactions (e.g., Transaction A + B → Merged A):
 - [ ] Verify transaction detail dialog shows all import sources
 - [ ] Verify duplicate finder still works correctly after merge
 
+

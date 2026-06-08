@@ -52,6 +52,16 @@ export function BudgetAccountsProvider({ children }: { children: React.ReactNode
 
   useEffect(() => {
     loadAccounts();
+
+    // Listen for account rename events to refresh the account list
+    const handleAccountRenamed = () => {
+      loadAccounts();
+    };
+
+    window.addEventListener('accountRenamed', handleAccountRenamed);
+    return () => {
+      window.removeEventListener('accountRenamed', handleAccountRenamed);
+    };
   }, []);
 
   return (
@@ -76,6 +86,11 @@ export function useBudgetAccounts() {
   }
   return context;
 }
+
+
+
+
+
 
 
 

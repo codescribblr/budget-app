@@ -28,3 +28,4 @@ COMMENT ON COLUMN queued_imports.csv_file_name IS 'Original CSV filename';
 COMMENT ON COLUMN queued_imports.csv_mapping_name IS 'Human-readable mapping name: template name if template used, or auto-generated name like "Wells Fargo Style Data"';
 
 COMMIT;
+

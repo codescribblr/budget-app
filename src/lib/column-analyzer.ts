@@ -244,3 +244,4 @@ function generateFingerprint(firstRow: string[]): string {
   return `${firstRow.length}-${Math.abs(hash).toString(16)}`;
 }
 
+

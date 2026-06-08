@@ -11,3 +11,4 @@ CREATE POLICY "Users can create their own budget accounts"
   ON budget_accounts FOR INSERT
   WITH CHECK (owner_id = auth.uid());
 
+

@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
-import { importUserDataFromFile, UserBackupData } from '@/lib/backup-utils';
+import {
+  importUserDataFromFile,
+  isBackupDataType,
+  validateImportSelection,
+  type UserBackupData,
+  type BackupDataType,
+} from '@/lib/backup-utils';
 import { checkWriteAccess } from '@/lib/api-helpers';
 
 /**
@@ -16,7 +22,8 @@ export async function POST(request: Request) {
 
     await getAuthenticatedUser(); // Verify authentication
 
-    const backupData: UserBackupData = await request.json();
+    const body = await request.json();
+    const backupData: UserBackupData = body.backupData ?? body;
 
     // Validate that the backup data has the required structure
     if (!backupData.version || !backupData.created_at) {
@@ -26,8 +33,46 @@ export async function POST(request: Request) {
       );
     }
 
+    let selectedTypes: BackupDataType[] | undefined;
+    if (body.selectedTypes) {
+      if (!Array.isArray(body.selectedTypes)) {
+        return NextResponse.json(
+          { error: 'selectedTypes must be an array' },
+          { status: 400 }
+        );
+      }
+      const invalid = body.selectedTypes.filter(
+        (type: string) => !isBackupDataType(type)
+      );
+      if (invalid.length > 0) {
+        return NextResponse.json(
+          { error: `Invalid data types: ${invalid.join(', ')}` },
+          { status: 400 }
+        );
+      }
+        selectedTypes = body.selectedTypes as BackupDataType[];
+
+        if (selectedTypes.length === 0) {
+        return NextResponse.json(
+          { error: 'Select at least one data type to import' },
+          { status: 400 }
+        );
+      }
+
+      const validation = validateImportSelection(backupData, selectedTypes);
+      if (!validation.valid) {
+        return NextResponse.json(
+          {
+            error: 'Backup file is missing required related data for the selected types',
+            missingDependencies: validation.missingDependencies,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Import the data (remaps user_id to current user and account_id to active account)
-    await importUserDataFromFile(backupData);
+    await importUserDataFromFile(backupData, selectedTypes ? { selectedTypes } : undefined);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -51,4 +96,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
 

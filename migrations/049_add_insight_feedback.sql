@@ -24,3 +24,4 @@ ADD CONSTRAINT ai_usage_tracking_feature_type_check
 CHECK (feature_type IN ('chat', 'categorization', 'insights', 'dashboard_insights', 'reports', 'prediction'));
 
 COMMIT;
+

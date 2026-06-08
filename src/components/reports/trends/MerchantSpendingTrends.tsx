@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
+import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -26,10 +27,10 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
     transactions.forEach(transaction => {
       const merchantName = transaction.merchant_name || 'Unknown';
 
-      // Sum only splits that are NOT in system categories
+      // Sum only splits that are NOT in system or buffer categories
       const nonSystemTotal = transaction.splits.reduce((sum, split) => {
         const category = categories.find(c => c.id === split.category_id);
-        if (category && !category.is_system) {
+        if (category && !category.is_system && !category.is_buffer) {
           const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
           return sum + signedAmount;
         }
@@ -59,10 +60,10 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
 
       if (!selectedMerchants.includes(merchantName)) return;
 
-      // Sum only splits that are NOT in system categories
+      // Sum only splits that are NOT in system or buffer categories
       const nonSystemTotal = transaction.splits.reduce((sum, split) => {
         const category = categories.find(c => c.id === split.category_id);
-        if (category && !category.is_system) {
+        if (category && !category.is_system && !category.is_buffer) {
           const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
           return sum + signedAmount;
         }
@@ -173,13 +174,29 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
               textAnchor="end"
               height={80}
             />
-            <YAxis
-              tick={{ fontSize: 12 }}
-              tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
-            />
+            <YAxis tick={{ fontSize: 12 }} {...chartCurrencyYAxisDefaults} />
             <Tooltip
-              formatter={(value: number) => formatCurrency(value)}
-              labelStyle={{ color: '#000' }}
+              content={({ active, payload, label }) => {
+                if (active && payload && payload.length) {
+                  return (
+                    <div className="bg-background border rounded-lg shadow-lg p-3">
+                      <div className="font-semibold mb-2 text-foreground">{label}</div>
+                      <div className="text-sm space-y-1">
+                        {payload.map((entry: any, index: number) => (
+                          <div key={index} className="text-foreground">
+                            <span
+                              className="inline-block w-3 h-3 rounded-full mr-2"
+                              style={{ backgroundColor: entry.color }}
+                            />
+                            {entry.name}: {formatCurrency(entry.value)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              }}
             />
             <Legend />
             {topMerchants.map((merchantName, index) => (
@@ -201,4 +218,5 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
     </Card>
   );
 }
+
 

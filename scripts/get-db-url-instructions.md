@@ -60,3 +60,4 @@ postgresql://postgres.abcdefghijk:MySecurePassword123@aws-0-us-west-1.pooler.sup
 ## Security Note:
 ⚠️ **Never commit this URL to git or share it publicly!** It contains your database password.
 
+

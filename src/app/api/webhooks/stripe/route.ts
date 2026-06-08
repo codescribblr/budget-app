@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { setupPremiumFeatures } from '@/lib/premium-feature-setup';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+import { createPaymentFailedNotification } from '@/lib/notifications/subscription-helpers';
+import { disablePremiumAccess } from '@/lib/subscription-access-control';
+import { getPriceInfoFromStripe } from '@/lib/subscription-price-utils';
+import { getStripe, getStripeWebhookSecret } from '@/lib/stripe';
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -15,6 +15,17 @@ export async function POST(request: Request) {
   if (!signature) {
     console.error('❌ Webhook rejected: Missing stripe-signature header');
     return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
+  }
+
+  let stripe: Stripe;
+  let webhookSecret: string;
+
+  try {
+    stripe = getStripe();
+    webhookSecret = getStripeWebhookSecret();
+  } catch (error: any) {
+    console.error('❌ Stripe webhook misconfigured:', error.message);
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
   }
 
   let event: Stripe.Event;
@@ -66,6 +77,21 @@ export async function POST(request: Request) {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
         console.log(`📝 Subscription status: ${subscription.status}`);
 
+        // Get price information from Stripe
+        const priceId = subscription.items.data[0]?.price.id;
+        let billingAmount: number | null = null;
+        let billingInterval: string | null = null;
+        let billingCurrency: string | null = null;
+
+        if (priceId) {
+          const priceInfo = await getPriceInfoFromStripe(priceId);
+          if (priceInfo) {
+            billingAmount = priceInfo.amount;
+            billingInterval = priceInfo.interval;
+            billingCurrency = priceInfo.currency;
+          }
+        }
+
         // Create or update subscription record
         // Note: user_id is kept for backwards compatibility but can be null
         const { data: subData, error: subError } = await supabase
@@ -77,7 +103,10 @@ export async function POST(request: Request) {
             status: subscription.status,
             stripe_customer_id: session.customer as string,
             stripe_subscription_id: subscriptionId,
-            stripe_price_id: subscription.items.data[0]?.price.id,
+            stripe_price_id: priceId,
+            billing_amount: billingAmount,
+            billing_interval: billingInterval,
+            billing_currency: billingCurrency,
             trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
             trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
             current_period_start: subscription.current_period_start ? new Date(subscription.current_period_start * 1000).toISOString() : null,
@@ -149,18 +178,43 @@ export async function POST(request: Request) {
 
         if (!userId) break;
 
+        // Get price information if price changed
+        const priceId = subscription.items.data[0]?.price.id;
+        let billingAmount: number | null = null;
+        let billingInterval: string | null = null;
+        let billingCurrency: string | null = null;
+
+        if (priceId) {
+          const priceInfo = await getPriceInfoFromStripe(priceId);
+          if (priceInfo) {
+            billingAmount = priceInfo.amount;
+            billingInterval = priceInfo.interval;
+            billingCurrency = priceInfo.currency;
+          }
+        }
+
+        const updateData: any = {
+          status: subscription.status,
+          stripe_price_id: priceId,
+          trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
+          trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+          current_period_start: subscription.current_period_start ? new Date(subscription.current_period_start * 1000).toISOString() : null,
+          current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+          cancel_at_period_end: subscription.cancel_at_period_end,
+          canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
+          updated_at: new Date().toISOString(),
+        };
+
+        // Only update billing info if we have it (don't overwrite with null)
+        if (billingAmount !== null) {
+          updateData.billing_amount = billingAmount;
+          updateData.billing_interval = billingInterval;
+          updateData.billing_currency = billingCurrency;
+        }
+
         await supabase
           .from('user_subscriptions')
-          .update({
-            status: subscription.status,
-            trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
-            trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-            current_period_start: subscription.current_period_start ? new Date(subscription.current_period_start * 1000).toISOString() : null,
-            current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
-            cancel_at_period_end: subscription.cancel_at_period_end,
-            canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq('stripe_subscription_id', subscription.id);
 
         console.log(`✅ Subscription updated for user ${userId}`);
@@ -169,6 +223,13 @@ export async function POST(request: Request) {
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
+
+        // Get account_id before updating
+        const { data: existingSub } = await supabase
+          .from('user_subscriptions')
+          .select('account_id')
+          .eq('stripe_subscription_id', subscription.id)
+          .single();
 
         await supabase
           .from('user_subscriptions')
@@ -179,6 +240,15 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq('stripe_subscription_id', subscription.id);
+
+        // Disable premium access
+        if (existingSub?.account_id) {
+          try {
+            await disablePremiumAccess(existingSub.account_id);
+          } catch (error: any) {
+            console.error(`Error disabling premium access:`, error);
+          }
+        }
 
         console.log(`✅ Subscription canceled for subscription ${subscription.id}`);
         // TODO: Send cancellation confirmation email
@@ -196,6 +266,19 @@ export async function POST(request: Request) {
         const invoice = event.data.object as any;
         const subscriptionId = invoice.subscription as string;
 
+        // Get subscription details to find user and account
+        const { data: subscription } = await supabase
+          .from('user_subscriptions')
+          .select('user_id, account_id, stripe_subscription_id')
+          .eq('stripe_subscription_id', subscriptionId)
+          .single();
+
+        if (!subscription) {
+          console.error(`⚠️ Subscription not found for payment failure: ${subscriptionId}`);
+          break;
+        }
+
+        // Update subscription status
         await supabase
           .from('user_subscriptions')
           .update({
@@ -204,8 +287,33 @@ export async function POST(request: Request) {
           })
           .eq('stripe_subscription_id', subscriptionId);
 
-        console.log(`⚠️ Payment failed for subscription ${subscriptionId}`);
-        // TODO: Send payment failed email
+        // Get next retry date from invoice if available
+        const nextRetryDate = invoice.next_payment_attempt 
+          ? new Date(invoice.next_payment_attempt * 1000).toISOString()
+          : undefined;
+
+        // Send notification
+        if (subscription.user_id && subscription.account_id) {
+          try {
+            await createPaymentFailedNotification(
+              subscription.user_id,
+              subscription.account_id,
+              subscriptionId,
+              nextRetryDate
+            );
+          } catch (error: any) {
+            console.error(`Error sending payment failed notification:`, error);
+          }
+        }
+
+        // Disable premium access immediately
+        try {
+          await disablePremiumAccess(subscription.account_id);
+        } catch (error: any) {
+          console.error(`Error disabling premium access:`, error);
+        }
+
+        console.log(`⚠️ Payment failed for subscription ${subscriptionId}, premium access disabled`);
         break;
       }
     }
@@ -219,4 +327,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
 

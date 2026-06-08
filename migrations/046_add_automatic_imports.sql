@@ -278,3 +278,4 @@ CREATE TRIGGER trigger_update_queued_imports_updated_at
   EXECUTE FUNCTION update_queued_imports_updated_at();
 
 COMMIT;
+

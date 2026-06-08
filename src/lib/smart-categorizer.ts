@@ -236,3 +236,4 @@ export function learnFromImportedTransactions(transactions: Array<{ merchant: st
   learn(transactions);
 }
 
+

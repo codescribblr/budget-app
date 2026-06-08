@@ -25,7 +25,7 @@ export async function GET(
     // Get all queued imports from batch to check for CSV data or API data
     const { data: queuedImports, error: fetchError } = await supabase
       .from('queued_imports')
-      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, original_data, transaction_date, description, amount, import_setup_id')
+      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, original_data, transaction_date, description, amount, import_setup_id, target_account_id, target_credit_card_id')
       .eq('account_id', accountId)
       .eq('source_batch_id', batchId)
       .limit(100); // Get enough to check for CSV data
@@ -105,7 +105,7 @@ export async function GET(
     if (csvMappingTemplateId) {
       const { data: template } = await supabase
         .from('csv_import_templates')
-        .select('id, template_name, date_column, amount_column, description_column, debit_column, credit_column, transaction_type_column, amount_sign_convention, date_format, has_headers, skip_rows')
+        .select('id, template_name, date_column, amount_column, description_column, debit_column, credit_column, transaction_type_column, status_column, amount_sign_convention, date_format, has_headers, skip_rows')
         .eq('id', csvMappingTemplateId)
         .eq('user_id', user.id)
         .single();
@@ -121,6 +121,7 @@ export async function GET(
             debitColumn: template.debit_column,
             creditColumn: template.credit_column,
             transactionTypeColumn: template.transaction_type_column,
+            statusColumn: template.status_column,
             amountSignConvention: template.amount_sign_convention || 'positive_is_expense',
             dateFormat: template.date_format,
             hasHeaders: template.has_headers,
@@ -138,6 +139,8 @@ export async function GET(
       currentTemplateId: currentTemplate?.id,
       currentTemplateName: currentTemplate?.name,
       currentMappingName: csvMappingName,
+      targetAccountId: firstImport?.target_account_id ?? null,
+      targetCreditCardId: firstImport?.target_credit_card_id ?? null,
     });
   } catch (error: any) {
     console.error('Error fetching remap data:', error);
@@ -147,3 +150,4 @@ export async function GET(
     );
   }
 }
+

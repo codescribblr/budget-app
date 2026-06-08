@@ -12,3 +12,4 @@ CREATE INDEX IF NOT EXISTS idx_transactions_is_historical ON transactions(is_his
 -- Add comment to explain the column
 COMMENT ON COLUMN transactions.is_historical IS 'When true, this transaction does not affect category envelope balances. Used for importing historical data for reporting/trends without impacting current budgets.';
 
+

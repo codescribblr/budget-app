@@ -30,18 +30,49 @@ export async function middleware(request: NextRequest) {
   // Refresh session if expired - required for Server Components
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Admin routes - require admin privileges (includes /admin/test/*)
+  const isAdminPath = request.nextUrl.pathname.startsWith('/admin')
+  
+  // Legacy test pages at root level - require admin privileges
+  const isTestPath = request.nextUrl.pathname.startsWith('/test')
+  
+  if (isAdminPath || isTestPath) {
+    // Require authentication
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('redirectTo', request.nextUrl.pathname)
+      return NextResponse.redirect(url)
+    }
+    
+    // Check if user is admin
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('is_admin')
+      .eq('user_id', user.id)
+      .single()
+    
+    // If not admin, return 404 to hide admin/test routes
+    if (!profile || !profile.is_admin) {
+      return new NextResponse(null, { status: 404 })
+    }
+  }
+
   // Protected routes - require authentication
-  const protectedPaths = ['/dashboard', '/categories', '/accounts', '/credit-cards', '/transactions', '/reports', '/import', '/goals', '/loans', '/settings', '/help', '/merchants', '/income', '/income-buffer', '/money-movement', '/category-rules']
+  const protectedPaths = ['/dashboard', '/categories', '/accounts', '/credit-cards', '/transactions', '/reports', '/import', '/imports', '/goals', '/loans', '/settings', '/help', '/income', '/income-buffer', '/money-movement', '/category-rules', '/non-cash-assets', '/pending-checks']
   const isProtectedPath = protectedPaths.some(path =>
     request.nextUrl.pathname === path || request.nextUrl.pathname.startsWith(path + '/')
   )
 
   // Public routes - allow without authentication
-  const publicPaths = ['/login', '/signup', '/auth', '/privacy', '/terms']
+  const publicPaths = ['/login', '/signup', '/auth', '/privacy', '/terms', '/invite']
   const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path))
+  
+  // Invitations choose page requires authentication
+  const isInvitationsChoose = request.nextUrl.pathname === '/invitations/choose'
 
   // Redirect to login if accessing protected route without authentication
-  if (isProtectedPath && !user) {
+  if ((isProtectedPath || isInvitationsChoose) && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('redirectTo', request.nextUrl.pathname)
@@ -50,6 +81,13 @@ export async function middleware(request: NextRequest) {
 
   // Redirect to dashboard if accessing login/signup while authenticated
   if (isPublicPath && user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
+
+  // Redirect authenticated users from home page to dashboard
+  if (request.nextUrl.pathname === '/' && user) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
@@ -70,4 +108,5 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
+
 

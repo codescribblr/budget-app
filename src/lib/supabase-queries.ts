@@ -4,6 +4,7 @@ import type {
   Account,
   CreditCard,
   Loan,
+  NonCashAsset,
   Transaction,
   TransactionSplit,
   PendingCheck,
@@ -13,16 +14,36 @@ import type {
   GoalWithDetails,
   CreateGoalRequest,
   UpdateGoalRequest,
+  IncomeStream,
+  CreateIncomeStreamRequest,
+  UpdateIncomeStreamRequest,
 } from './types';
+import { calculateAggregateMonthlyNetIncome } from './income-calculations';
 import { calculateGoalProgress, calculateGoalStatus } from './goals/calculations';
 import { getActiveAccountId } from './account-context';
+import { getExternalApiAuthOverride } from './external-api-overrides';
 import { cache } from 'react';
+import { logBalanceChange, logBalanceChanges } from './audit/category-balance-audit';
 
 // =====================================================
 // HELPER: Get authenticated user
 // =====================================================
 // Cache the authenticated user per request to avoid repeated auth calls
 export const getAuthenticatedUser = cache(async () => {
+  const authOverride = getExternalApiAuthOverride();
+  if (authOverride) {
+    const { data, error } = await authOverride.supabase.auth.admin.getUserById(
+      authOverride.userId
+    );
+    if (error || !data.user) {
+      throw new Error('Unauthorized');
+    }
+    return {
+      supabase: authOverride.supabase,
+      user: data.user,
+    };
+  }
+
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
 
@@ -161,6 +182,18 @@ export async function createCategory(data: {
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
+  // When sort_order not provided, add new category to end of list
+  let sortOrder = data.sort_order;
+  if (sortOrder === undefined) {
+    const { data: maxData } = await supabase
+      .from('categories')
+      .select('sort_order')
+      .eq('account_id', accountId)
+      .order('sort_order', { ascending: false })
+      .limit(1);
+    sortOrder = maxData && maxData.length > 0 ? maxData[0].sort_order + 1 : 0;
+  }
+
   const { data: category, error } = await supabase
     .from('categories')
     .insert({
@@ -169,7 +202,7 @@ export async function createCategory(data: {
       name: data.name,
       monthly_amount: monthlyAmount,
       current_balance: data.current_balance ?? 0,
-      sort_order: data.sort_order ?? 0,
+      sort_order: sortOrder,
       notes: data.notes ?? null,
       is_system: data.is_system ?? false,
       is_archived: data.is_archived ?? false,
@@ -206,6 +239,18 @@ export async function updateCategory(
   const { supabase } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
+
+  // Get old balance if current_balance is being updated
+  let oldBalance: number | null = null;
+  if (data.current_balance !== undefined) {
+    const { data: oldCategory } = await supabase
+      .from('categories')
+      .select('current_balance')
+      .eq('id', id)
+      .eq('account_id', accountId)
+      .single();
+    oldBalance = oldCategory?.current_balance ?? 0;
+  }
 
   const updateData: any = { updated_at: new Date().toISOString() };
 
@@ -267,6 +312,17 @@ export async function updateCategory(
   if (error) {
     if (error.code === 'PGRST116') return null; // Not found
     throw error;
+  }
+
+  // Log balance change if current_balance was updated
+  if (data.current_balance !== undefined && oldBalance !== null) {
+    await logBalanceChange(
+      id,
+      oldBalance,
+      category.current_balance,
+      'manual_edit',
+      {}
+    );
   }
 
   return category as Category;
@@ -413,6 +469,17 @@ export async function updateAccount(
 ): Promise<Account | null> {
   const { supabase } = await getAuthenticatedUser();
   
+  // Get old balance if balance is being updated
+  let oldBalance: number | undefined;
+  if (data.balance !== undefined) {
+    const { data: oldAccount } = await supabase
+      .from('accounts')
+      .select('balance')
+      .eq('id', id)
+      .single();
+    oldBalance = oldAccount?.balance;
+  }
+  
   const { data: account, error } = await supabase
     .from('accounts')
     .update(data)
@@ -423,6 +490,21 @@ export async function updateAccount(
   if (error) {
     if (error.code === 'PGRST116') return null;
     throw error;
+  }
+  
+  // Log balance change if balance was updated
+  if (data.balance !== undefined && oldBalance !== undefined && account) {
+    const { logAccountBalanceChange } = await import('./audit/account-balance-audit');
+    await logAccountBalanceChange(
+      id,
+      oldBalance,
+      account.balance,
+      'manual_edit'
+    );
+    
+    // Create net worth snapshot
+    const { createNetWorthSnapshot } = await import('./audit/account-balance-audit');
+    await createNetWorthSnapshot();
   }
   
   return account as Account;
@@ -525,9 +607,9 @@ export async function updateCreditCard(
 ): Promise<CreditCard | null> {
   const { supabase } = await getAuthenticatedUser();
 
-  // If credit_limit or available_credit is being updated, recalculate current_balance
-  if (data.credit_limit !== undefined || data.available_credit !== undefined) {
-    // Get current values if not provided in update
+  // Get old available_credit if it's being updated
+  let oldAvailableCredit: number | undefined;
+  if (data.available_credit !== undefined || data.credit_limit !== undefined) {
     const { data: currentCard } = await supabase
       .from('credit_cards')
       .select('credit_limit, available_credit')
@@ -535,6 +617,9 @@ export async function updateCreditCard(
       .single();
 
     if (currentCard) {
+      oldAvailableCredit = currentCard.available_credit;
+      
+      // If credit_limit or available_credit is being updated, recalculate current_balance
       const creditLimit = data.credit_limit ?? currentCard.credit_limit;
       const availableCredit = data.available_credit ?? currentCard.available_credit;
       data.current_balance = creditLimit - availableCredit;
@@ -553,17 +638,225 @@ export async function updateCreditCard(
     throw error;
   }
 
+  // Log available_credit change if it was updated
+  if (data.available_credit !== undefined && oldAvailableCredit !== undefined && creditCard) {
+    const { logCreditCardBalanceChange } = await import('./audit/account-balance-audit');
+    await logCreditCardBalanceChange(
+      id,
+      oldAvailableCredit,
+      creditCard.available_credit,
+      'manual_edit'
+    );
+    
+    // Create net worth snapshot
+    const { createNetWorthSnapshot } = await import('./audit/account-balance-audit');
+    await createNetWorthSnapshot();
+  }
+
   return creditCard as CreditCard;
 }
 
 export async function deleteCreditCard(id: number): Promise<void> {
   const { supabase } = await getAuthenticatedUser();
-
+  
   const { error } = await supabase
     .from('credit_cards')
     .delete()
     .eq('id', id);
+  
+  if (error) throw error;
+}
 
+// =====================================================
+// NON-CASH ASSETS
+// =====================================================
+
+export async function getAllNonCashAssets(): Promise<NonCashAsset[]> {
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) {
+    console.warn('No active account found for getAllNonCashAssets');
+    return [];
+  }
+
+  const { data: assets, error } = await supabase
+    .from('non_cash_assets')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('asset_type', { ascending: true })
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+  return (assets || []) as NonCashAsset[];
+}
+
+export async function getNonCashAssetById(id: number): Promise<NonCashAsset | null> {
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  const { data: asset, error } = await supabase
+    .from('non_cash_assets')
+    .select('*')
+    .eq('id', id)
+    .eq('account_id', accountId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+
+  return asset as NonCashAsset;
+}
+
+export async function createNonCashAsset(data: {
+  name: string;
+  asset_type: NonCashAsset['asset_type'];
+  current_value?: number;
+  estimated_return_percentage?: number;
+  address?: string | null;
+  vin?: string | null;
+  is_rmd_qualified?: boolean;
+  is_liquid?: boolean;
+  rentcast_enabled?: boolean;
+  property_type?: NonCashAsset['property_type'];
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  square_footage?: number | null;
+  sort_order?: number;
+}): Promise<NonCashAsset> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  if (data.rentcast_enabled) {
+    const { validateRentCastAssetReadiness } = await import('./integrations/rentcast/validation');
+    const readiness = validateRentCastAssetReadiness({
+      asset_type: data.asset_type,
+      address: data.address ?? null,
+      rentcast_enabled: true,
+    });
+    if (!readiness.ready) {
+      throw new Error(readiness.messages.join(' '));
+    }
+  }
+
+  const { data: asset, error } = await supabase
+    .from('non_cash_assets')
+    .insert({
+      account_id: accountId,
+      name: data.name,
+      asset_type: data.asset_type,
+      current_value: data.current_value ?? 0,
+      estimated_return_percentage: data.estimated_return_percentage ?? 0,
+      address: data.address ?? null,
+      vin: data.vin ?? null,
+      is_rmd_qualified: data.is_rmd_qualified ?? false,
+      is_liquid: data.is_liquid ?? true,
+      rentcast_enabled: data.rentcast_enabled ?? false,
+      property_type: data.property_type ?? null,
+      bedrooms: data.bedrooms ?? null,
+      bathrooms: data.bathrooms ?? null,
+      square_footage: data.square_footage ?? null,
+      sort_order: data.sort_order ?? 0,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return asset as NonCashAsset;
+}
+
+export async function updateNonCashAsset(
+  id: number,
+  data: Partial<{
+    name: string;
+    asset_type: NonCashAsset['asset_type'];
+    current_value: number;
+    estimated_return_percentage: number;
+    address: string | null;
+    vin: string | null;
+    is_rmd_qualified: boolean;
+    is_liquid: boolean;
+    rentcast_enabled: boolean;
+    property_type: NonCashAsset['property_type'];
+    bedrooms: number | null;
+    bathrooms: number | null;
+    square_footage: number | null;
+    sort_order: number;
+  }>
+): Promise<NonCashAsset | null> {
+  const { supabase } = await getAuthenticatedUser();
+
+  if (data.rentcast_enabled) {
+    const { data: existingAsset } = await supabase
+      .from('non_cash_assets')
+      .select('asset_type, address')
+      .eq('id', id)
+      .single();
+
+    const { validateRentCastAssetReadiness } = await import('./integrations/rentcast/validation');
+    const readiness = validateRentCastAssetReadiness({
+      asset_type: data.asset_type ?? existingAsset?.asset_type ?? 'other',
+      address: data.address !== undefined ? data.address : existingAsset?.address ?? null,
+      rentcast_enabled: true,
+    });
+    if (!readiness.ready) {
+      throw new Error(readiness.messages.join(' '));
+    }
+  }
+  
+  // Get old value if current_value is being updated
+  let oldValue: number | undefined;
+  if (data.current_value !== undefined) {
+    const { data: oldAsset } = await supabase
+      .from('non_cash_assets')
+      .select('current_value')
+      .eq('id', id)
+      .single();
+    oldValue = oldAsset?.current_value;
+  }
+  
+  const { data: asset, error } = await supabase
+    .from('non_cash_assets')
+    .update(data)
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+  
+  // Log value change if current_value was updated
+  if (data.current_value !== undefined && oldValue !== undefined && asset) {
+    const { logAssetValueChange } = await import('./audit/account-balance-audit');
+    await logAssetValueChange(
+      id,
+      oldValue,
+      asset.current_value,
+      'manual_edit'
+    );
+    
+    // Create net worth snapshot
+    const { createNetWorthSnapshot } = await import('./audit/account-balance-audit');
+    await createNetWorthSnapshot();
+  }
+  
+  return asset as NonCashAsset;
+}
+
+export async function deleteNonCashAsset(id: number): Promise<void> {
+  const { supabase } = await getAuthenticatedUser();
+  
+  const { error } = await supabase
+    .from('non_cash_assets')
+    .delete()
+    .eq('id', id);
+  
   if (error) throw error;
 }
 
@@ -612,9 +905,11 @@ export async function createLoan(loan: {
   minimum_payment?: number;
   payment_due_date?: number;
   open_date?: string;
+  maturity_date?: string | null;
   starting_balance?: number;
   institution?: string;
   include_in_net_worth?: boolean;
+  linked_non_cash_asset_id?: number | null;
 }): Promise<Loan> {
   const { supabase, user } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
@@ -654,12 +949,25 @@ export async function updateLoan(
     minimum_payment?: number;
     payment_due_date?: number;
     open_date?: string;
+    maturity_date?: string | null;
     starting_balance?: number;
     institution?: string;
     include_in_net_worth?: boolean;
+    linked_non_cash_asset_id?: number | null;
   }
 ): Promise<Loan> {
   const { supabase } = await getAuthenticatedUser();
+
+  // Get old balance if balance is being updated
+  let oldBalance: number | undefined;
+  if (updates.balance !== undefined) {
+    const { data: oldLoan } = await supabase
+      .from('loans')
+      .select('balance')
+      .eq('id', id)
+      .single();
+    oldBalance = oldLoan?.balance;
+  }
 
   const { data, error } = await supabase
     .from('loans')
@@ -669,6 +977,22 @@ export async function updateLoan(
     .single();
 
   if (error) throw error;
+  
+  // Log balance change if balance was updated
+  if (updates.balance !== undefined && oldBalance !== undefined && data) {
+    const { logLoanBalanceChange } = await import('./audit/account-balance-audit');
+    await logLoanBalanceChange(
+      id,
+      oldBalance,
+      data.balance,
+      'manual_edit'
+    );
+    
+    // Create net worth snapshot
+    const { createNetWorthSnapshot } = await import('./audit/account-balance-audit');
+    await createNetWorthSnapshot();
+  }
+  
   return data;
 }
 
@@ -804,6 +1128,169 @@ export async function deletePendingCheck(id: number): Promise<void> {
 }
 
 // =====================================================
+// INCOME STREAMS
+// =====================================================
+
+function parseIncomeStreamFromRow(row: any): IncomeStream {
+  let preTaxDeductionItems: any[] = [];
+  if (row.pre_tax_deduction_items) {
+    try {
+      preTaxDeductionItems = typeof row.pre_tax_deduction_items === 'string'
+        ? JSON.parse(row.pre_tax_deduction_items)
+        : row.pre_tax_deduction_items;
+    } catch {
+      preTaxDeductionItems = [];
+    }
+  }
+  return {
+    id: row.id,
+    account_id: row.account_id,
+    name: row.name,
+    annual_income: Number(row.annual_income),
+    tax_rate: Number(row.tax_rate),
+    pay_frequency: row.pay_frequency,
+    include_extra_paychecks: row.include_extra_paychecks ?? true,
+    pre_tax_deduction_items: preTaxDeductionItems,
+    include_in_budget: row.include_in_budget ?? true,
+    sort_order: row.sort_order ?? 0,
+    linked_non_cash_asset_id: row.linked_non_cash_asset_id != null ? Number(row.linked_non_cash_asset_id) : null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export async function getAllIncomeStreams(): Promise<IncomeStream[]> {
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  const { data, error } = await supabase
+    .from('income_streams')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('sort_order', { ascending: true });
+
+  if (error) {
+    // Table might not exist yet (migration not run) - return empty
+    if (error.code === '42P01') return [];
+    throw error;
+  }
+
+  const streams = (data || []).map(parseIncomeStreamFromRow);
+
+  // Migration: if no streams but legacy settings exist, create default stream from settings
+  if (streams.length === 0) {
+    const { data: settings } = await supabase
+      .from('settings')
+      .select('*')
+      .eq('account_id', accountId);
+
+    const settingsObj: Record<string, string> = {};
+    settings?.forEach((s: any) => { settingsObj[s.key] = s.value; });
+
+    const annualIncome = parseFloat(settingsObj.annual_income || settingsObj.annual_salary || '0');
+    if (annualIncome > 0 || settingsObj.tax_rate || settingsObj.pay_frequency) {
+      let deductionItems: any[] = [];
+      if (settingsObj.pre_tax_deduction_items) {
+        try {
+          deductionItems = JSON.parse(settingsObj.pre_tax_deduction_items);
+        } catch {
+          deductionItems = [];
+        }
+      }
+      const newStream = await createIncomeStream({
+        name: 'Primary Income',
+        annual_income: annualIncome,
+        tax_rate: parseFloat(settingsObj.tax_rate || '0'),
+        pay_frequency: (settingsObj.pay_frequency || 'monthly') as any,
+        include_extra_paychecks: settingsObj.include_extra_paychecks === 'true',
+        pre_tax_deduction_items: deductionItems,
+        include_in_budget: true,
+      });
+      return [newStream];
+    }
+  }
+
+  return streams;
+}
+
+export async function createIncomeStream(data: CreateIncomeStreamRequest): Promise<IncomeStream> {
+  const { supabase, user } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  const { data: maxOrder } = await supabase
+    .from('income_streams')
+    .select('sort_order')
+    .eq('account_id', accountId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .single();
+
+  const { data: row, error } = await supabase
+    .from('income_streams')
+    .insert({
+      account_id: accountId,
+      name: data.name,
+      annual_income: data.annual_income,
+      tax_rate: data.tax_rate ?? 0,
+      pay_frequency: data.pay_frequency ?? 'monthly',
+      include_extra_paychecks: data.include_extra_paychecks ?? true,
+      pre_tax_deduction_items: JSON.stringify(data.pre_tax_deduction_items ?? []),
+      include_in_budget: data.include_in_budget ?? true,
+      sort_order: data.sort_order ?? ((maxOrder?.sort_order ?? -1) + 1),
+      linked_non_cash_asset_id: data.linked_non_cash_asset_id ?? null,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return parseIncomeStreamFromRow(row);
+}
+
+export async function updateIncomeStream(id: number, data: UpdateIncomeStreamRequest): Promise<IncomeStream> {
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  const updateData: any = { updated_at: new Date().toISOString() };
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.annual_income !== undefined) updateData.annual_income = data.annual_income;
+  if (data.tax_rate !== undefined) updateData.tax_rate = data.tax_rate;
+  if (data.pay_frequency !== undefined) updateData.pay_frequency = data.pay_frequency;
+  if (data.include_extra_paychecks !== undefined) updateData.include_extra_paychecks = data.include_extra_paychecks;
+  if (data.pre_tax_deduction_items !== undefined) updateData.pre_tax_deduction_items = JSON.stringify(data.pre_tax_deduction_items);
+  if (data.include_in_budget !== undefined) updateData.include_in_budget = data.include_in_budget;
+  if (data.sort_order !== undefined) updateData.sort_order = data.sort_order;
+  if (data.linked_non_cash_asset_id !== undefined) updateData.linked_non_cash_asset_id = data.linked_non_cash_asset_id;
+
+  const { data: row, error } = await supabase
+    .from('income_streams')
+    .update(updateData)
+    .eq('id', id)
+    .eq('account_id', accountId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return parseIncomeStreamFromRow(row);
+}
+
+export async function deleteIncomeStream(id: number): Promise<void> {
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  const { error } = await supabase
+    .from('income_streams')
+    .delete()
+    .eq('id', id)
+    .eq('account_id', accountId);
+
+  if (error) throw error;
+}
+
+// =====================================================
 // DASHBOARD
 // =====================================================
 
@@ -847,19 +1334,27 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   if (pcError) throw pcError;
 
-  // Get settings for income calculation
-  const { data: settings, error: settingsError } = await supabase
-    .from('settings')
+  // Get income streams for income calculation
+  let monthlyNetIncome: number;
+  const { data: streamRows, error: streamsError } = await supabase
+    .from('income_streams')
     .select('*')
-    .eq('account_id', accountId);
+    .eq('account_id', accountId)
+    .order('sort_order', { ascending: true });
 
-  if (settingsError) throw settingsError;
-
-  // Convert settings array to object
-  const settingsObj: Record<string, string> = {};
-  settings?.forEach((setting: any) => {
-    settingsObj[setting.key] = setting.value;
-  });
+  if (!streamsError && streamRows?.length) {
+    const incomeStreams = streamRows.map((row: any) => parseIncomeStreamFromRow(row));
+    monthlyNetIncome = calculateAggregateMonthlyNetIncome(incomeStreams);
+  } else {
+    // Fallback: table doesn't exist or no streams - use legacy settings
+    const { data: settings } = await supabase
+      .from('settings')
+      .select('*')
+      .eq('account_id', accountId);
+    const settingsObj: Record<string, string> = {};
+    settings?.forEach((s: any) => { settingsObj[s.key] = s.value; });
+    monthlyNetIncome = calculateMonthlyNetIncome(settingsObj);
+  }
 
   // Calculate totals (only include accounts/credit cards with include_in_totals = true)
   const totalMonies = (accounts as Account[])
@@ -898,9 +1393,6 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   // Calculate total monthly budget (exclude buffer from budget totals)
   const totalMonthlyBudget = envelopeCategories
     .reduce((sum, cat) => sum + Number(cat.monthly_amount), 0);
-
-  // Calculate monthly net income
-  const monthlyNetIncome = calculateMonthlyNetIncome(settingsObj);
 
   return {
     total_monies: totalMonies,
@@ -1011,6 +1503,25 @@ function calculateMonthlyNetIncome(settingsObj: Record<string, string>): number 
 // TRANSACTIONS
 // =====================================================
 
+/**
+ * Helper function to extract global merchant info from nested Supabase query result
+ */
+function getGlobalMerchantInfo(merchantGroups: any): { display_name: string | null; logo_url: string | null; icon_name: string | null } | null {
+  if (!merchantGroups?.global_merchants) return null;
+  
+  const globalMerchant = Array.isArray(merchantGroups.global_merchants)
+    ? merchantGroups.global_merchants[0]
+    : merchantGroups.global_merchants;
+  
+  if (!globalMerchant || globalMerchant.status !== 'active') return null;
+  
+  return {
+    display_name: globalMerchant.display_name || null,
+    logo_url: globalMerchant.logo_url || null,
+    icon_name: globalMerchant.icon_name || null,
+  };
+}
+
 export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
   const { supabase } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
@@ -1019,13 +1530,27 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
     return [];
   }
 
-  // Get all transactions with merchant group, account, credit card, and tags info
+  // Get all transactions with merchant group, merchant override, global merchant, account, credit card, and tags info
   const { data: transactions, error: txError } = await supabase
     .from('transactions')
     .select(`
       *,
       merchant_groups (
-        display_name
+        display_name,
+        global_merchant_id,
+        global_merchants (
+          display_name,
+          logo_url,
+          icon_name,
+          status
+        )
+      ),
+      merchant_override:global_merchants!merchant_override_id (
+        id,
+        display_name,
+        logo_url,
+        icon_name,
+        status
       ),
       accounts (
         name
@@ -1076,24 +1601,34 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
   });
 
   // Build the final result
-  const transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => ({
-    id: transaction.id,
-    date: transaction.date,
-    description: transaction.description,
-    total_amount: transaction.total_amount,
-    transaction_type: transaction.transaction_type || 'expense',
-    merchant_group_id: transaction.merchant_group_id,
-    account_id: transaction.account_id,
-    credit_card_id: transaction.credit_card_id,
-    is_historical: transaction.is_historical || false,
-    created_at: transaction.created_at,
-    updated_at: transaction.updated_at,
-    merchant_name: transaction.merchant_groups?.display_name || null,
-    account_name: transaction.accounts?.name || null,
-    credit_card_name: transaction.credit_cards?.name || null,
-    tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
-    splits: splitsByTransaction.get(transaction.id) || [],
-  }));
+  const transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => {
+    const overrideMerchant = transaction.merchant_override;
+    const merchantGroup = transaction.merchant_groups;
+    const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
+    // Prefer global merchant name over user's merchant group name
+    const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || merchantGroup?.display_name || null;
+    
+    return {
+      id: transaction.id,
+      date: transaction.date,
+      description: transaction.description,
+      total_amount: transaction.total_amount,
+      transaction_type: transaction.transaction_type || 'expense',
+      merchant_group_id: transaction.merchant_group_id,
+      account_id: transaction.account_id,
+      credit_card_id: transaction.credit_card_id,
+      is_historical: transaction.is_historical || false,
+      created_at: transaction.created_at,
+      updated_at: transaction.updated_at,
+      merchant_name: merchantName,
+      merchant_logo_url: globalMerchant?.logo_url || null,
+      merchant_icon_name: globalMerchant?.icon_name || null,
+      account_name: transaction.accounts?.name || null,
+      credit_card_name: transaction.credit_cards?.name || null,
+      tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
+      splits: splitsByTransaction.get(transaction.id) || [],
+    };
+  });
 
   return transactionsWithSplits;
 }
@@ -1114,7 +1649,21 @@ export async function searchTransactions(
     .select(`
       *,
       merchant_groups (
-        display_name
+        display_name,
+        global_merchant_id,
+        global_merchants (
+          display_name,
+          logo_url,
+          icon_name,
+          status
+        )
+      ),
+      merchant_override:global_merchants!merchant_override_id (
+        id,
+        display_name,
+        logo_url,
+        icon_name,
+        status
       ),
       accounts (
         name
@@ -1167,26 +1716,403 @@ export async function searchTransactions(
   });
 
   // Build the final result
-  const transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => ({
-    id: transaction.id,
-    date: transaction.date,
-    description: transaction.description,
-    total_amount: transaction.total_amount,
-    transaction_type: transaction.transaction_type || 'expense',
-    merchant_group_id: transaction.merchant_group_id,
-    account_id: transaction.account_id,
-    credit_card_id: transaction.credit_card_id,
-    is_historical: transaction.is_historical || false,
-    created_at: transaction.created_at,
-    updated_at: transaction.updated_at,
-    merchant_name: transaction.merchant_groups?.display_name || null,
-    account_name: transaction.accounts?.name || null,
-    credit_card_name: transaction.credit_cards?.name || null,
-    tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
-    splits: splitsByTransaction.get(transaction.id) || [],
-  }));
+  const transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => {
+    const overrideMerchant = transaction.merchant_override;
+    const merchantGroup = transaction.merchant_groups;
+    const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
+    // Prefer global merchant name over user's merchant group name
+    const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || merchantGroup?.display_name || null;
+    
+    return {
+      id: transaction.id,
+      date: transaction.date,
+      description: transaction.description,
+      total_amount: transaction.total_amount,
+      transaction_type: transaction.transaction_type || 'expense',
+      merchant_group_id: transaction.merchant_group_id,
+      account_id: transaction.account_id,
+      credit_card_id: transaction.credit_card_id,
+      is_historical: transaction.is_historical || false,
+      created_at: transaction.created_at,
+      updated_at: transaction.updated_at,
+      merchant_name: merchantName,
+      merchant_logo_url: globalMerchant?.logo_url || null,
+      merchant_icon_name: globalMerchant?.icon_name || null,
+      account_name: transaction.accounts?.name || null,
+      credit_card_name: transaction.credit_cards?.name || null,
+      tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
+      splits: splitsByTransaction.get(transaction.id) || [],
+    };
+  });
 
   return transactionsWithSplits;
+}
+
+export interface GetTransactionsPaginatedParams {
+  page?: number;
+  pageSize?: number;
+  searchQuery?: string;
+  startDate?: string;
+  endDate?: string;
+  categoryIds?: number[];
+  merchantGroupIds?: number[];
+  transactionTypes?: ('income' | 'expense')[];
+  tagIds?: number[];
+  accountIds?: number[];
+  creditCardIds?: number[];
+  sortBy?: 'date' | 'description' | 'merchant' | 'amount';
+  sortDirection?: 'asc' | 'desc';
+}
+
+export interface GetTransactionsPaginatedResult {
+  transactions: TransactionWithSplits[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export async function getTransactionsPaginated(
+  params: GetTransactionsPaginatedParams = {}
+): Promise<GetTransactionsPaginatedResult> {
+  const {
+    page = 1,
+    pageSize = 50,
+    searchQuery,
+    startDate,
+    endDate,
+    categoryIds = [],
+    merchantGroupIds = [],
+    transactionTypes = [],
+    tagIds = [],
+    accountIds = [],
+    creditCardIds = [],
+    sortBy = 'date',
+    sortDirection = 'desc',
+  } = params;
+
+  const { supabase } = await getAuthenticatedUser();
+  const accountId = await getActiveAccountId();
+  if (!accountId) throw new Error('No active account');
+
+  // Build base query
+  let query = supabase
+    .from('transactions')
+    .select(`
+      *,
+      merchant_groups (
+        display_name,
+        global_merchant_id,
+        global_merchants (
+          display_name,
+          logo_url,
+          icon_name,
+          status
+        )
+      ),
+      merchant_override:global_merchants!merchant_override_id (
+        id,
+        display_name,
+        logo_url,
+        icon_name,
+        status
+      ),
+      accounts (
+        name
+      ),
+      credit_cards (
+        name
+      ),
+      transaction_tags (
+        tags (*)
+      )
+    `, { count: 'exact' })
+    .eq('budget_account_id', accountId);
+
+  // Apply date filters
+  if (startDate) {
+    query = query.gte('date', startDate);
+  }
+  if (endDate) {
+    query = query.lte('date', endDate);
+  }
+
+  // Apply merchant group filters
+  if (merchantGroupIds.length > 0) {
+    query = query.in('merchant_group_id', merchantGroupIds);
+  }
+
+  // Apply transaction type filters
+  if (transactionTypes.length > 0) {
+    query = query.in('transaction_type', transactionTypes);
+  }
+
+  // Apply account filters
+  if (accountIds.length > 0 && creditCardIds.length > 0) {
+    // If both accounts and credit cards, use OR logic
+    query = query.or(`account_id.in.(${accountIds.join(',')}),credit_card_id.in.(${creditCardIds.join(',')})`);
+  } else if (accountIds.length > 0) {
+    query = query.in('account_id', accountIds);
+  } else if (creditCardIds.length > 0) {
+    query = query.in('credit_card_id', creditCardIds);
+  }
+
+  // Apply search query (description search)
+  if (searchQuery && searchQuery.trim().length > 0) {
+    query = query.ilike('description', `%${searchQuery.trim()}%`);
+  }
+
+  // If category or tag filters are active, we need to filter before pagination
+  // First, get all matching transaction IDs
+  let transactionIdsToFetch: number[] | null = null;
+  let finalTotal = 0;
+  
+  if (categoryIds.length > 0 || tagIds.length > 0) {
+    // Fetch all matching transaction IDs first (without pagination)
+    // Build a separate query for counting (we don't need the count here, just the IDs)
+    // Apply ordering to ensure we get the most recent transactions first
+    const ascending = sortDirection === 'asc';
+    let idQuery = query.select('id');
+    
+    // Apply the same ordering as the final query to ensure consistency
+    switch (sortBy) {
+      case 'date':
+        idQuery = idQuery.order('date', { ascending }).order('created_at', { ascending });
+        break;
+      case 'description':
+        idQuery = idQuery.order('description', { ascending }).order('date', { ascending: false });
+        break;
+      case 'amount':
+        idQuery = idQuery.order('total_amount', { ascending }).order('date', { ascending: false });
+        break;
+      case 'merchant':
+        idQuery = idQuery.order('merchant_group_id', { ascending }).order('date', { ascending: false });
+        break;
+    }
+    
+    const { data: allMatchingTransactions, error: countError } = await idQuery
+      .limit(50000); // Reasonable limit
+    
+    if (countError) throw countError;
+    
+    if (!allMatchingTransactions || allMatchingTransactions.length === 0) {
+      return {
+        transactions: [],
+        total: 0,
+        page,
+        pageSize,
+        totalPages: 0,
+      };
+    }
+    
+    const allIds = allMatchingTransactions.map((t: any) => t.id);
+    
+    // Get splits and tags for all matching transactions
+    const [splitsResult, tagsResult] = await Promise.all([
+      categoryIds.length > 0 
+        ? supabase.from('transaction_splits').select('transaction_id').in('transaction_id', allIds).in('category_id', categoryIds)
+        : Promise.resolve({ data: null, error: null }),
+      tagIds.length > 0
+        ? supabase.from('transaction_tags').select('transaction_id').in('transaction_id', allIds).in('tag_id', tagIds)
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+    
+    // Filter IDs based on category/tag filters
+    let filteredIds = new Set(allIds);
+    
+    if (categoryIds.length > 0 && splitsResult.data) {
+      const transactionIdsWithCategories = new Set(splitsResult.data.map((s: any) => s.transaction_id));
+      filteredIds = new Set([...filteredIds].filter(id => transactionIdsWithCategories.has(id)));
+    }
+    
+    if (tagIds.length > 0 && tagsResult.data) {
+      // For tags, transaction must have ALL selected tags (AND logic)
+      const tagCountsByTransaction = new Map<number, number>();
+      tagsResult.data.forEach((tt: any) => {
+        tagCountsByTransaction.set(tt.transaction_id, (tagCountsByTransaction.get(tt.transaction_id) || 0) + 1);
+      });
+      filteredIds = new Set([...filteredIds].filter(id => tagCountsByTransaction.get(id) === tagIds.length));
+    }
+    
+    transactionIdsToFetch = Array.from(filteredIds);
+    finalTotal = transactionIdsToFetch.length;
+    
+    // Now rebuild query to fetch only the filtered IDs, with sorting and pagination
+    query = supabase
+      .from('transactions')
+      .select(`
+        *,
+        merchant_groups (
+          display_name,
+          global_merchant_id,
+          global_merchants (
+            logo_url,
+            icon_name,
+            status
+          )
+        ),
+        merchant_override:global_merchants!merchant_override_id (
+          id,
+          display_name,
+          logo_url,
+          icon_name,
+          status
+        ),
+        accounts (
+          name
+        ),
+        credit_cards (
+          name
+        ),
+        transaction_tags (
+          tags (*)
+        )
+      `)
+      .eq('budget_account_id', accountId)
+      .in('id', transactionIdsToFetch);
+    
+    // Reapply sorting (ascending already defined above)
+    switch (sortBy) {
+      case 'date':
+        query = query.order('date', { ascending }).order('created_at', { ascending });
+        break;
+      case 'description':
+        query = query.order('description', { ascending }).order('date', { ascending: false });
+        break;
+      case 'amount':
+        query = query.order('total_amount', { ascending }).order('date', { ascending: false });
+        break;
+      case 'merchant':
+        query = query.order('merchant_group_id', { ascending }).order('date', { ascending: false });
+        break;
+    }
+    
+    // Apply pagination
+    const offset = (page - 1) * pageSize;
+    query = query.range(offset, offset + pageSize - 1);
+  } else {
+    // No category/tag filters - can use normal pagination
+    const ascending = sortDirection === 'asc';
+    switch (sortBy) {
+      case 'date':
+        query = query.order('date', { ascending }).order('created_at', { ascending });
+        break;
+      case 'description':
+        query = query.order('description', { ascending }).order('date', { ascending: false });
+        break;
+      case 'amount':
+        query = query.order('total_amount', { ascending }).order('date', { ascending: false });
+        break;
+      case 'merchant':
+        query = query.order('merchant_group_id', { ascending }).order('date', { ascending: false });
+        break;
+    }
+    
+    // Apply pagination
+    const offset = (page - 1) * pageSize;
+    query = query.range(offset, offset + pageSize - 1);
+  }
+
+  // Execute query
+  const { data: transactions, error: txError, count } = await query;
+  
+  if (!transactionIdsToFetch) {
+    finalTotal = count || 0;
+  }
+
+  if (txError) throw txError;
+
+  if (!transactions || transactions.length === 0) {
+    return {
+      transactions: [],
+      total: count || 0,
+      page,
+      pageSize,
+      totalPages: Math.ceil((count || 0) / pageSize),
+    };
+  }
+
+  // Get all transaction IDs
+  const transactionIds = transactions.map((t: any) => t.id);
+
+  // Get splits for these transactions
+  const { data: allSplits, error: splitError } = await supabase
+    .from('transaction_splits')
+    .select(`
+      *,
+      categories (
+        name
+      )
+    `)
+    .in('transaction_id', transactionIds);
+
+  if (splitError) throw splitError;
+
+  // Group splits by transaction_id
+  const splitsByTransaction = new Map<number, any[]>();
+  (allSplits || []).forEach((split: any) => {
+    if (!splitsByTransaction.has(split.transaction_id)) {
+      splitsByTransaction.set(split.transaction_id, []);
+    }
+    splitsByTransaction.get(split.transaction_id)!.push({
+      ...split,
+      category_name: split.categories?.name || 'Unknown',
+    });
+  });
+
+  // Build the final result
+  let transactionsWithSplits: TransactionWithSplits[] = transactions.map((transaction: any) => {
+    // Prefer merchant override over merchant_group
+    const overrideMerchant = transaction.merchant_override;
+    const merchantGroup = transaction.merchant_groups;
+    const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
+    // Prefer global merchant name over user's merchant group name
+    const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || merchantGroup?.display_name || null;
+    
+    return {
+      id: transaction.id,
+      date: transaction.date,
+      description: transaction.description,
+      total_amount: transaction.total_amount,
+      transaction_type: transaction.transaction_type || 'expense',
+      merchant_group_id: transaction.merchant_group_id,
+      merchant_override_id: transaction.merchant_override_id,
+      account_id: transaction.account_id,
+      credit_card_id: transaction.credit_card_id,
+      is_historical: transaction.is_historical || false,
+      created_at: transaction.created_at,
+      updated_at: transaction.updated_at,
+      merchant_name: merchantName,
+      merchant_logo_url: globalMerchant?.logo_url || null,
+      merchant_icon_name: globalMerchant?.icon_name || null,
+      account_name: transaction.accounts?.name || null,
+      credit_card_name: transaction.credit_cards?.name || null,
+      tags: (transaction.transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
+      splits: splitsByTransaction.get(transaction.id) || [],
+    };
+  });
+
+  // Category and tag filters are already applied before pagination (if they were active)
+  // No need to filter again here
+
+  // Apply merchant sorting if needed (since merchant is a relation)
+  if (sortBy === 'merchant') {
+    transactionsWithSplits.sort((a, b) => {
+      const merchantA = a.merchant_name || '';
+      const merchantB = b.merchant_name || '';
+      const comparison = merchantA.localeCompare(merchantB, undefined, { sensitivity: 'base' });
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }
+
+
+  return {
+    transactions: transactionsWithSplits,
+    total: finalTotal,
+    page,
+    pageSize,
+    totalPages: Math.ceil(finalTotal / pageSize),
+  };
 }
 
 export async function getTransactionById(id: number): Promise<TransactionWithSplits | null> {
@@ -1194,13 +2120,27 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
-  // Get transaction with merchant group, account, credit card, and tags info
+  // Get transaction with merchant group, merchant override, global merchant, account, credit card, and tags info
   const { data: transaction, error: txError } = await supabase
     .from('transactions')
     .select(`
       *,
       merchant_groups (
-        display_name
+        display_name,
+        global_merchant_id,
+        global_merchants (
+          display_name,
+          logo_url,
+          icon_name,
+          status
+        )
+      ),
+      merchant_override:global_merchants!merchant_override_id (
+        id,
+        display_name,
+        logo_url,
+        icon_name,
+        status
       ),
       accounts (
         name
@@ -1240,6 +2180,13 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
     category_name: split.categories?.name || 'Unknown',
   }));
 
+  // Prefer merchant override over merchant_group
+  const overrideMerchant = transaction.merchant_override;
+  const merchantGroup = transaction.merchant_groups;
+  const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
+  // Prefer global merchant name over user's merchant group name
+  const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || merchantGroup?.display_name || null;
+
   return {
     id: transaction.id,
     date: transaction.date,
@@ -1247,12 +2194,15 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
     total_amount: transaction.total_amount,
     transaction_type: transaction.transaction_type || 'expense',
     merchant_group_id: transaction.merchant_group_id,
+    merchant_override_id: transaction.merchant_override_id,
     account_id: transaction.account_id,
     credit_card_id: transaction.credit_card_id,
     is_historical: transaction.is_historical || false,
     created_at: transaction.created_at,
     updated_at: transaction.updated_at,
-    merchant_name: (transaction as any).merchant_groups?.display_name || null,
+    merchant_name: merchantName,
+    merchant_logo_url: globalMerchant?.logo_url || null,
+    merchant_icon_name: globalMerchant?.icon_name || null,
     account_name: (transaction as any).accounts?.name || null,
     credit_card_name: (transaction as any).credit_cards?.name || null,
     tags: ((transaction as any).transaction_tags || []).map((tt: any) => tt.tags).filter(Boolean),
@@ -1344,6 +2294,7 @@ export async function createTransaction(data: {
         .single();
 
       if (category && !category.is_system) {
+        const oldBalance = Number(category.current_balance);
         // Update category balance based on transaction type
         const balanceChange = finalTransactionType === 'income' 
           ? absSplitAmount  // Income adds to balance
@@ -1352,12 +2303,24 @@ export async function createTransaction(data: {
         const { error: balanceError } = await supabase
           .from('categories')
           .update({
-            current_balance: Number(category.current_balance) + balanceChange,
+            current_balance: oldBalance + balanceChange,
             updated_at: new Date().toISOString(),
           })
           .eq('id', split.category_id);
 
         if (balanceError) throw balanceError;
+
+        // Log balance change
+        await logBalanceChange(
+          split.category_id,
+          oldBalance,
+          oldBalance + balanceChange,
+          'transaction_create',
+          {
+            transaction_id: transaction.id,
+            transaction_description: data.description,
+          }
+        );
       }
     }
   }
@@ -1389,6 +2352,7 @@ export async function updateTransaction(
     description?: string;
     transaction_type?: 'income' | 'expense';
     merchant_group_id?: number | null;
+    merchant_override_id?: number | null;
     account_id?: number | null;
     credit_card_id?: number | null;
     tag_ids?: number[];
@@ -1412,6 +2376,8 @@ export async function updateTransaction(
 
   // Reverse old splits (using old transaction_type)
   const oldTransactionType = existingTransaction.transaction_type || 'expense';
+  const oldBalanceMap = new Map<number, number>(); // categoryId -> oldBalance
+  
   for (const split of existingTransaction.splits) {
     const { data: category } = await supabase
       .from('categories')
@@ -1420,6 +2386,9 @@ export async function updateTransaction(
       .single();
 
     if (category && !category.is_system) {
+      const oldBalance = Number(category.current_balance);
+      oldBalanceMap.set(split.category_id, oldBalance);
+      
       // Reverse the old transaction's impact
       const oldBalanceChange = oldTransactionType === 'income'
         ? -split.amount  // Reverse income: subtract
@@ -1428,7 +2397,7 @@ export async function updateTransaction(
       await supabase
         .from('categories')
         .update({
-          current_balance: Number(category.current_balance) + oldBalanceChange,
+          current_balance: oldBalance + oldBalanceChange,
           updated_at: new Date().toISOString(),
         })
         .eq('id', split.category_id);
@@ -1439,6 +2408,7 @@ export async function updateTransaction(
   const newDate = data.date ?? existingTransaction.date;
   const newDescription = data.description ?? existingTransaction.description;
   const newMerchantGroupId = data.merchant_group_id !== undefined ? data.merchant_group_id : existingTransaction.merchant_group_id;
+  const newMerchantOverrideId = data.merchant_override_id !== undefined ? data.merchant_override_id : existingTransaction.merchant_override_id;
   const newTransactionType = data.transaction_type ?? oldTransactionType;
   const newSplits = data.splits ?? existingTransaction.splits;
   const newTotalAmount = newSplits.reduce((sum, split) => sum + split.amount, 0);
@@ -1451,6 +2421,7 @@ export async function updateTransaction(
       description: newDescription,
       transaction_type: newTransactionType,
       merchant_group_id: newMerchantGroupId,
+      merchant_override_id: newMerchantOverrideId,
       account_id: newAccountId || null,
       credit_card_id: newCreditCardId || null,
       total_amount: newTotalAmount,
@@ -1489,6 +2460,7 @@ export async function updateTransaction(
       .single();
 
     if (category && !category.is_system) {
+      const oldBalance = Number(category.current_balance);
       // Update category balance based on transaction type
       const newBalanceChange = newTransactionType === 'income'
         ? split.amount   // Income adds
@@ -1497,12 +2469,24 @@ export async function updateTransaction(
       const { error: balanceError } = await supabase
         .from('categories')
         .update({
-          current_balance: Number(category.current_balance) + newBalanceChange,
+          current_balance: oldBalance + newBalanceChange,
           updated_at: new Date().toISOString(),
         })
         .eq('id', split.category_id);
 
       if (balanceError) throw balanceError;
+
+      // Log balance change
+      await logBalanceChange(
+        split.category_id,
+        oldBalance,
+        oldBalance + newBalanceChange,
+        'transaction_update',
+        {
+          transaction_id: id,
+          transaction_description: newDescription,
+        }
+      );
     }
   }
 
@@ -1536,6 +2520,7 @@ export async function deleteTransaction(id: number): Promise<void> {
       .single();
 
     if (category && !category.is_system) {
+      const oldBalance = Number(category.current_balance);
       // Reverse the transaction's impact based on transaction type
       const balanceChange = transactionType === 'income'
         ? -split.amount  // Reverse income: subtract
@@ -1544,10 +2529,22 @@ export async function deleteTransaction(id: number): Promise<void> {
       await supabase
         .from('categories')
         .update({
-          current_balance: Number(category.current_balance) + balanceChange,
+          current_balance: oldBalance + balanceChange,
           updated_at: new Date().toISOString(),
         })
         .eq('id', split.category_id);
+
+      // Log balance change
+      await logBalanceChange(
+        split.category_id,
+        oldBalance,
+        oldBalance + balanceChange,
+        'transaction_delete',
+        {
+          transaction_id: id,
+          transaction_description: transaction.description,
+        }
+      );
     }
   }
 
@@ -1894,15 +2891,68 @@ export async function importTransactions(transactions: any[], isHistorical: bool
   // ===== STEP 4: Batch insert transaction splits =====
   const splitsData: any[] = [];
   const categoryBalanceUpdates = new Map<number, number>(); // categoryId -> net change
+  
+  // Get initial category balances before any updates
+  const allCategoryIds = new Set<number>();
+  validTransactions.forEach(txn => {
+    txn.splits?.forEach((split: any) => {
+      allCategoryIds.add(split.categoryId);
+    });
+  });
 
-  validTransactions.forEach((txn, txnIndex) => {
-    const transactionId = createdTransactions[txnIndex].id;
-    const transactionType = transactionsData[txnIndex].transaction_type;
-    // Use per-transaction is_historical if provided, otherwise fall back to global flag
+  const { data: initialCategories } = await supabase
+    .from('categories')
+    .select('id, current_balance, is_system')
+    .in('id', Array.from(allCategoryIds));
+
+  const initialBalanceMap = new Map<number, number>();
+  (initialCategories || [])
+    .filter(cat => !cat.is_system)
+    .forEach(cat => {
+      initialBalanceMap.set(cat.id, Number(cat.current_balance));
+    });
+
+  // Track running balances as we process transactions
+  const runningBalanceMap = new Map<number, number>();
+  initialBalanceMap.forEach((balance, catId) => {
+    runningBalanceMap.set(catId, balance);
+  });
+
+  // Create a map from original transaction index to created transaction ID
+  const transactionIdMap = new Map<number, number>();
+  createdTransactions.forEach((createdTx, idx) => {
+    transactionIdMap.set(idx, createdTx.id);
+  });
+
+  // Sort transactions by date (ascending) for proper audit log ordering
+  const transactionsWithIndices = validTransactions.map((txn, idx) => ({
+    txn,
+    originalIdx: idx,
+    date: txn.date,
+  })).sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    return dateA - dateB; // Ascending order (oldest first)
+  });
+
+  // Track individual transaction changes for audit logging (ordered by date)
+  const transactionAuditLogs: Array<{
+    transactionId: number;
+    transactionDate: string;
+    transactionDescription: string;
+    transactionType: string;
+    categoryId: number;
+    oldBalance: number;
+    balanceChange: number;
+  }> = [];
+
+  // Process transactions in date order (ascending) to build splits and track audit logs
+  for (const { txn, originalIdx } of transactionsWithIndices) {
+    const transactionId = transactionIdMap.get(originalIdx)!;
+    const transactionType = transactionsData[originalIdx].transaction_type;
     const transactionIsHistorical = txn.is_historical !== undefined ? txn.is_historical : isHistorical;
 
     txn.splits.forEach((split: any) => {
-      // CSV parser already normalizes amounts to positive, but add safeguard for edge cases
       const absSplitAmount = Math.abs(split.amount || 0);
       
       splitsData.push({
@@ -1912,16 +2962,31 @@ export async function importTransactions(transactions: any[], isHistorical: bool
       });
 
       // Accumulate balance updates (only for non-historical transactions)
-      if (!transactionIsHistorical) {
+      if (!transactionIsHistorical && !initialCategories?.find(c => c.id === split.categoryId)?.is_system) {
         const balanceChange = transactionType === 'income'
           ? absSplitAmount
           : -absSplitAmount;
         
         const currentTotal = categoryBalanceUpdates.get(split.categoryId) || 0;
         categoryBalanceUpdates.set(split.categoryId, currentTotal + balanceChange);
+
+        // Track individual transaction for audit logging
+        const oldBalance = runningBalanceMap.get(split.categoryId) || initialBalanceMap.get(split.categoryId) || 0;
+        transactionAuditLogs.push({
+          transactionId,
+          transactionDate: txn.date,
+          transactionDescription: txn.description,
+          transactionType,
+          categoryId: split.categoryId,
+          oldBalance,
+          balanceChange,
+        });
+
+        // Update running balance for next transaction
+        runningBalanceMap.set(split.categoryId, oldBalance + balanceChange);
       }
     });
-  });
+  }
 
   const { error: splitsError } = await supabase
     .from('transaction_splits')
@@ -1954,6 +3019,22 @@ export async function importTransactions(transactions: any[], isHistorical: bool
       });
 
     await Promise.all(updatePromises);
+
+    // Log individual balance changes for each transaction (already sorted by date ascending)
+    const auditChanges = transactionAuditLogs.map(log => ({
+      categoryId: log.categoryId,
+      oldBalance: log.oldBalance,
+      newBalance: log.oldBalance + log.balanceChange,
+      changeType: 'transaction_import' as const,
+      metadata: {
+        transaction_id: log.transactionId,
+        transaction_description: log.transactionDescription,
+        transaction_date: log.transactionDate,
+        import_file_name: fileName,
+      },
+    }));
+
+    await logBalanceChanges(auditChanges);
   }
 
   // ===== STEP 6: Batch insert links =====
@@ -2398,6 +3479,67 @@ export async function updateGoal(id: number, data: UpdateGoalRequest): Promise<G
   
   updateData.updated_at = new Date().toISOString();
   
+  // Handle linked account change for account-linked goals
+  if (existingGoal.goal_type === 'account-linked' && data.linked_account_id !== undefined) {
+    const newLinkedAccountId = data.linked_account_id;
+    const oldLinkedAccountId = existingGoal.linked_account_id;
+    
+    if (newLinkedAccountId !== oldLinkedAccountId) {
+      // Unlink old account if there was one
+      if (oldLinkedAccountId) {
+        const { error: unlinkError } = await supabase
+          .from('accounts')
+          .update({
+            include_in_totals: true,
+            linked_goal_id: null,
+          })
+          .eq('id', oldLinkedAccountId);
+        
+        if (unlinkError) throw unlinkError;
+      }
+      
+      // Link new account if specified
+      if (newLinkedAccountId) {
+        // Verify account exists and belongs to budget account
+        const { data: account, error: accError } = await supabase
+          .from('accounts')
+          .select('*')
+          .eq('id', newLinkedAccountId)
+          .eq('account_id', accountId)
+          .single();
+        
+        if (accError || !account) {
+          throw new Error('Account not found or does not belong to this account');
+        }
+        
+        // Check if account is already linked to another goal (other than this one)
+        const { data: existingGoalLink } = await supabase
+          .from('goals')
+          .select('id')
+          .eq('linked_account_id', newLinkedAccountId)
+          .eq('account_id', accountId)
+          .neq('id', id)
+          .single();
+        
+        if (existingGoalLink) {
+          throw new Error('Account is already linked to another goal');
+        }
+        
+        const { error: linkError } = await supabase
+          .from('accounts')
+          .update({
+            include_in_totals: false,
+            linked_goal_id: id,
+          })
+          .eq('id', newLinkedAccountId);
+        
+        if (linkError) throw linkError;
+      }
+      
+      updateData.linked_account_id = newLinkedAccountId;
+    }
+  }
+  
   const { error } = await supabase
     .from('goals')
     .update(updateData)
@@ -2552,6 +3694,8 @@ export async function recordMonthlyFunding(
   const newFundedAmount = currentFunded + amount;
 
   // Upsert the record
+  // Note: Using user_id, category_id, month for conflict resolution to match the unique constraint
+  // TODO: Update unique constraint to use account_id, category_id, month in a future migration
   const { error } = await supabase
     .from('category_monthly_funding')
     .upsert({
@@ -2563,7 +3707,7 @@ export async function recordMonthlyFunding(
       target_amount: targetAmount,
       updated_at: new Date().toISOString(),
     }, {
-      onConflict: 'account_id,category_id,month',
+      onConflict: 'user_id,category_id,month',
     });
 
   if (error) throw error;
@@ -2634,4 +3778,5 @@ export async function isFeatureEnabled(featureName: string): Promise<boolean> {
   if (error) throw error;
   return data?.enabled || false;
 }
+
 

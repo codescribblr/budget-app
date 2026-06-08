@@ -32,3 +32,4 @@ ALTER TABLE goals ADD CONSTRAINT goal_type_constraints CHECK (
   )
 );
 
+

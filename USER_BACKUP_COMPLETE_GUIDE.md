@@ -236,3 +236,4 @@ Backups are stored as JSON with this structure:
 - **`src/app/api/backups/[id]/restore/route.ts`** - Restore backup API
 - **`migrations/006_create_user_backups_table.sql`** - Database schema
 
+

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
@@ -9,23 +8,21 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
 import type { GoalWithDetails } from '@/lib/types';
-import { Target, Calendar, TrendingUp, ArrowRight, Crown, ChevronUp } from 'lucide-react';
+import { Target, Calendar, ArrowRight, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
 import { parseLocalDate } from '@/lib/date-utils';
 import { useFeature } from '@/contexts/FeatureContext';
-import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 interface GoalsWidgetProps {
   disabled?: boolean;
 }
 
 export default function GoalsWidget({ disabled = false }: GoalsWidgetProps) {
-  const router = useRouter();
   const goalsEnabled = useFeature('goals');
-  const { isPremium } = useSubscription();
   const [goals, setGoals] = useState<GoalWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useLocalStorage('dashboard-card-goals', true);
 
   useEffect(() => {
     const fetchGoals = async () => {
@@ -54,53 +51,7 @@ export default function GoalsWidget({ disabled = false }: GoalsWidgetProps) {
     return null;
   }
 
-  // If feature is disabled, hide widget completely (don't show upgrade prompt for premium users who disabled it)
   if (!goalsEnabled) {
-    // Only show upgrade prompt if user doesn't have premium
-    if (!isPremium) {
-      return (
-        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-          <Card className="relative">
-            <CardHeader>
-              <CollapsibleTrigger asChild>
-                <div className="flex items-center gap-2 cursor-pointer">
-                  <CardTitle className="flex items-center gap-2">
-                    <Target className="h-5 w-5" />
-                    Goals
-                  </CardTitle>
-                  <CardDescription>Track your savings goals</CardDescription>
-                </div>
-              </CollapsibleTrigger>
-            </CardHeader>
-            <CollapsibleContent>
-              <CardContent className="pb-8 text-center py-4 space-y-4">
-                <p className="text-muted-foreground">
-                  Goals & Debt Tracking is a premium feature
-                </p>
-                <Button
-                  onClick={() => router.push('/settings/subscription')}
-                  size="sm"
-                  className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
-                >
-                  <Crown className="mr-2 h-4 w-4" />
-                  Upgrade to Premium
-                </Button>
-              </CardContent>
-              {isOpen && (
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="absolute bottom-4 right-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
-                  aria-label="Collapse card"
-                >
-                  <ChevronUp className="h-4 w-4" />
-                </button>
-              )}
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-      );
-    }
-    // Premium user disabled the feature - hide widget completely
     return null;
   }
 
@@ -162,9 +113,9 @@ export default function GoalsWidget({ disabled = false }: GoalsWidgetProps) {
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <Card className="relative">
         <CardHeader>
-          <div className="flex justify-between items-start">
+          <div className="flex flex-wrap items-start gap-2">
             <CollapsibleTrigger asChild>
-              <div className="flex-1 cursor-pointer">
+              <div className="flex-1 min-w-[200px] cursor-pointer">
                 <CardTitle className="flex items-center gap-2">
                   <Target className="h-5 w-5" />
                   Goals
@@ -174,8 +125,8 @@ export default function GoalsWidget({ disabled = false }: GoalsWidgetProps) {
                 </CardDescription>
               </div>
             </CollapsibleTrigger>
-            <Link href="/goals">
-              <Button variant="ghost" size="sm">
+            <Link href="/goals" className="ml-auto">
+              <Button variant="ghost" size="sm" className="shrink-0">
                 View All
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -257,4 +208,5 @@ export default function GoalsWidget({ disabled = false }: GoalsWidgetProps) {
     </Collapsible>
   );
 }
+
 

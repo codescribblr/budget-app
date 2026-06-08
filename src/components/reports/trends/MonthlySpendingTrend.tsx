@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
+import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
@@ -43,11 +44,11 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
       let uncategorizedCount = 0;
 
       monthTransactions.forEach(transaction => {
-        // Sum only splits that are NOT in system categories
+        // Sum only splits that are NOT in system or buffer categories
         // Expenses add, income subtracts
         const nonSystemTotal = transaction.splits.reduce((sum, split) => {
           const category = categories.find(c => c.id === split.category_id);
-          if (category && !category.is_system) {
+          if (category && !category.is_system && !category.is_buffer) {
             const amount = transaction.transaction_type === 'expense'
               ? split.amount
               : -split.amount;
@@ -61,12 +62,12 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
         // Categorize transaction
         const hasCategorizedSplit = transaction.splits.some(split => {
           const category = categories.find(c => c.id === split.category_id);
-          return category && !category.is_system;
+          return category && !category.is_system && !category.is_buffer;
         });
 
         const isSystemOnly = transaction.splits.every(split => {
           const category = categories.find(c => c.id === split.category_id);
-          return category?.is_system;
+          return category?.is_system || category?.is_buffer;
         });
 
         if (hasCategorizedSplit) {
@@ -122,10 +123,10 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white border border-gray-300 rounded-lg shadow-lg p-3">
-          <div className="font-semibold mb-2">{data.month}</div>
+        <div className="bg-background border rounded-lg shadow-lg p-3">
+          <div className="font-semibold mb-2 text-foreground">{data.month}</div>
           <div className="text-sm space-y-1">
-            <div className="font-medium">{formatCurrency(data.total)}</div>
+            <div className="font-medium text-foreground">{formatCurrency(data.total)}</div>
             <div className="text-xs text-muted-foreground mt-2">
               <div>Total Transactions: {data.totalTransactions}</div>
               <div className="ml-2 space-y-0.5 mt-1">
@@ -177,10 +178,7 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
               textAnchor="end"
               height={80}
             />
-            <YAxis
-              tick={{ fontSize: 12 }}
-              tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
-            />
+            <YAxis tick={{ fontSize: 12 }} {...chartCurrencyYAxisDefaults} />
             <Tooltip content={<CustomTooltip />} />
             <Legend />
             <Line
@@ -198,4 +196,5 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
     </Card>
   );
 }
+
 

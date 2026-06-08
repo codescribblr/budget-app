@@ -28,3 +28,4 @@ WHERE t.merchant_group_id IS NULL
       AND mm.merchant_group_id IS NOT NULL
   );
 
+

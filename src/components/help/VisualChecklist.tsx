@@ -40,3 +40,4 @@ export function VisualChecklist({ title, items, variant = 'default' }: VisualChe
   );
 }
 
+

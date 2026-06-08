@@ -30,3 +30,4 @@ CREATE POLICY "Users can delete duplicate group reviews in their accounts"
 
 COMMIT;
 
+

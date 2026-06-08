@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { Category } from '@/lib/types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { handleApiError } from '@/lib/api-error-handler';
+import { toast } from 'sonner';
 
 interface TransferBetweenEnvelopesProps {
   categories: Category[];
@@ -25,55 +26,51 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
 
   const handleTransfer = async () => {
     if (!fromCategoryId || !toCategoryId || !amount) {
-      alert('Please fill in all fields');
+      toast.error('Missing information', {
+        description: 'Please fill in all fields.',
+      });
       return;
     }
 
     if (fromCategoryId === toCategoryId) {
-      alert('Cannot transfer to the same category');
+      toast.error('Invalid transfer', {
+        description: 'Cannot transfer to the same category.',
+      });
       return;
     }
 
     const transferAmount = parseFloat(amount);
     if (transferAmount <= 0) {
-      alert('Amount must be greater than 0');
+      toast.error('Invalid amount', {
+        description: 'Amount must be greater than 0.',
+      });
       return;
     }
 
     if (!fromCategory || fromCategory.current_balance < transferAmount) {
-      alert('Insufficient balance in source category');
+      toast.error('Insufficient balance', {
+        description: 'The source category does not have enough funds.',
+      });
       return;
     }
 
     try {
       setIsSubmitting(true);
 
-      // Update both categories
-      const [fromResponse, toResponse] = await Promise.all([
-        fetch(`/api/categories/${fromCategoryId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            current_balance: fromCategory.current_balance - transferAmount,
-          }),
+      // Transfer funds using the transfer API endpoint
+      const transferResponse = await fetch('/api/transfers/envelopes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fromCategoryId: parseInt(fromCategoryId),
+          toCategoryId: parseInt(toCategoryId),
+          amount: transferAmount,
         }),
-        fetch(`/api/categories/${toCategoryId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            current_balance: (toCategory?.current_balance || 0) + transferAmount,
-          }),
-        }),
-      ]);
+      });
 
-      if (!fromResponse.ok) {
-        await handleApiError(fromResponse, 'Failed to update source category');
-        throw new Error('Failed to update source category');
-      }
-
-      if (!toResponse.ok) {
-        await handleApiError(toResponse, 'Failed to update destination category');
-        throw new Error('Failed to update destination category');
+      if (!transferResponse.ok) {
+        await handleApiError(transferResponse, 'Failed to transfer funds');
+        throw new Error('Failed to transfer funds');
       }
 
       // Reset form
@@ -81,7 +78,9 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
       setToCategoryId('');
       setAmount('');
       onSuccess();
-      alert('Transfer completed successfully!');
+      toast.success('Transfer completed', {
+        description: `Successfully transferred ${formatCurrency(transferAmount)} between envelopes.`,
+      });
     } catch (error) {
       console.error('Error transferring funds:', error);
       // Error toast already shown by handleApiError
@@ -224,4 +223,5 @@ export default function TransferBetweenEnvelopes({ categories, onSuccess }: Tran
     </div>
   );
 }
+
 

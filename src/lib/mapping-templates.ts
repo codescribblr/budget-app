@@ -9,8 +9,9 @@ export interface ColumnMapping {
   descriptionColumn: number | null;
   debitColumn: number | null;
   creditColumn: number | null;
-  transactionTypeColumn: number | null; // NEW: Column with "INCOME", "EXPENSE", "DEBIT", "CREDIT", etc.
-  amountSignConvention: 'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit'; // NEW
+  transactionTypeColumn: number | null; // Column with "INCOME", "EXPENSE", "DEBIT", "CREDIT", etc.
+  statusColumn: number | null; // Column with transaction status (e.g., "pending", "cleared", "posted")
+  amountSignConvention: 'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit';
   dateFormat: string | null;
   hasHeaders: boolean;
   skipRows?: number;
@@ -23,6 +24,8 @@ export interface SaveTemplateInput {
   fingerprint: string;
   columnCount: number;
   mapping: ColumnMapping;
+  targetAccountId?: number | null;
+  targetCreditCardId?: number | null;
 }
 
 export interface CSVImportTemplate {
@@ -50,6 +53,8 @@ export async function saveTemplate(template: SaveTemplateInput): Promise<CSVImpo
       fingerprint: template.fingerprint,
       columnCount: template.columnCount,
       mapping: template.mapping,
+      targetAccountId: template.targetAccountId ?? null,
+      targetCreditCardId: template.targetCreditCardId ?? null,
     }),
   });
 
@@ -62,10 +67,18 @@ export async function saveTemplate(template: SaveTemplateInput): Promise<CSVImpo
 }
 
 /**
- * Load a template by fingerprint
+ * Load a template by fingerprint with optional account binding.
+ * Lookup order: (fingerprint, targetAccountId, targetCreditCardId) then (fingerprint, null, null)
  */
-export async function loadTemplate(fingerprint: string): Promise<CSVImportTemplate | null> {
-  const response = await fetch(`/api/import/templates?fingerprint=${encodeURIComponent(fingerprint)}`);
+export async function loadTemplate(
+  fingerprint: string,
+  targetAccountId?: number | null,
+  targetCreditCardId?: number | null
+): Promise<CSVImportTemplate | null> {
+  const params = new URLSearchParams({ fingerprint });
+  if (targetAccountId != null) params.set('targetAccountId', String(targetAccountId));
+  if (targetCreditCardId != null) params.set('targetCreditCardId', String(targetCreditCardId));
+  const response = await fetch(`/api/import/templates?${params.toString()}`);
 
   if (!response.ok) {
     if (response.status === 404) {
@@ -88,6 +101,7 @@ export async function loadTemplate(fingerprint: string): Promise<CSVImportTempla
       debitColumn: template.debit_column ?? null,
       creditColumn: template.credit_column ?? null,
       transactionTypeColumn: template.transaction_type_column ?? null,
+      statusColumn: template.status_column ?? null,
       amountSignConvention: template.amount_sign_convention ?? 'positive_is_expense',
       dateFormat: template.date_format ?? null,
       hasHeaders: template.has_headers ?? true,
@@ -128,6 +142,7 @@ export async function loadTemplateById(
       debitColumn: template.debit_column ?? null,
       creditColumn: template.credit_column ?? null,
       transactionTypeColumn: template.transaction_type_column ?? null,
+      statusColumn: template.status_column ?? null,
       amountSignConvention: template.amount_sign_convention ?? 'positive_is_expense',
       dateFormat: template.date_format ?? null,
       hasHeaders: template.has_headers ?? true,
@@ -166,6 +181,7 @@ export async function listTemplates(): Promise<CSVImportTemplate[]> {
       debitColumn: template.debit_column ?? null,
       creditColumn: template.credit_column ?? null,
       transactionTypeColumn: template.transaction_type_column ?? null,
+      statusColumn: template.status_column ?? null,
       amountSignConvention: template.amount_sign_convention ?? 'positive_is_expense',
       dateFormat: template.date_format ?? null,
       hasHeaders: template.has_headers ?? true,
@@ -204,4 +220,5 @@ export async function updateTemplateUsage(templateId: number): Promise<void> {
     console.warn('Failed to update template usage');
   }
 }
+
 

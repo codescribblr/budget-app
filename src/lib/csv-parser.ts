@@ -1,6 +1,6 @@
 import Papa from 'papaparse';
 import type { ParsedTransaction } from './import-types';
-import { analyzeCSV, type CSVAnalysisResult } from './column-analyzer';
+import { analyzeCSV, type CSVAnalysisResult, type ColumnAnalysis } from './column-analyzer';
 import { parseDate, normalizeDate } from './date-parser';
 import { loadTemplate } from './mapping-templates';
 import type { ColumnMapping } from './mapping-templates';
@@ -15,13 +15,23 @@ export { extractMerchant, generateTransactionHash };
  */
 export async function parseCSVFile(
   file: File,
-  options?: { skipTemplate?: boolean }
+  options?: {
+    skipTemplate?: boolean;
+    targetAccountId?: number | null;
+    targetCreditCardId?: number | null;
+  }
 ): Promise<{ transactions: ParsedTransaction[]; templateId?: number; fingerprint?: string; dateFormat?: string | null }> {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       complete: async (results) => {
         try {
-          const result = await processCSVData(results.data as string[][], file.name, options?.skipTemplate);
+          const result = await processCSVData(
+            results.data as string[][],
+            file.name,
+            options?.skipTemplate,
+            options?.targetAccountId,
+            options?.targetCreditCardId
+          );
           resolve(result);
         } catch (error) {
           reject(error);
@@ -88,12 +98,87 @@ function detectAmountSignConvention(
 }
 
 /**
+ * Detect if a column contains transaction type values (credit/debit/income/expense)
+ * Returns the column index if found, null otherwise
+ */
+function detectTransactionTypeColumn(
+  data: string[][],
+  columns: ColumnAnalysis[],
+  hasHeaders: boolean,
+  excludeColumns: Set<number>
+): number | null {
+  const transactionTypeValues = ['CREDIT', 'DEBIT', 'CR', 'DB', 'INCOME', 'EXPENSE', 'DEPOSIT', 'WITHDRAWAL', '+', '-'];
+  const startRow = hasHeaders ? 1 : 0;
+  const sampleSize = Math.min(20, data.length - startRow);
+
+  for (const col of columns) {
+    if (excludeColumns.has(col.columnIndex)) continue;
+    
+    // Check header first
+    if (hasHeaders && col.headerName) {
+      const headerUpper = col.headerName.toUpperCase().trim();
+      if (['TYPE', 'TRANSACTION TYPE', 'TXN TYPE', 'TRANS TYPE'].includes(headerUpper)) {
+        // Check if values match transaction type patterns
+        let matchCount = 0;
+        let validValues = 0;
+        
+        for (let i = startRow; i < startRow + sampleSize && i < data.length; i++) {
+          const row = data[i];
+          if (!row || row.length <= col.columnIndex) continue;
+          
+          const value = row[col.columnIndex]?.trim();
+          if (!value) continue;
+          
+          validValues++;
+          const valueUpper = value.toUpperCase();
+          if (transactionTypeValues.some(pattern => valueUpper.includes(pattern))) {
+            matchCount++;
+          }
+        }
+        
+        // If at least 70% of values match transaction type patterns, consider it a match
+        if (validValues >= 3 && matchCount / validValues >= 0.7) {
+          return col.columnIndex;
+        }
+      }
+    }
+    
+    // Check values even if header doesn't match
+    let matchCount = 0;
+    let validValues = 0;
+    
+    for (let i = startRow; i < startRow + sampleSize && i < data.length; i++) {
+      const row = data[i];
+      if (!row || row.length <= col.columnIndex) continue;
+      
+      const value = row[col.columnIndex]?.trim();
+      if (!value) continue;
+      
+      validValues++;
+      const valueUpper = value.toUpperCase();
+      if (transactionTypeValues.some(pattern => valueUpper.includes(pattern))) {
+        matchCount++;
+      }
+    }
+    
+    // If at least 70% of values match transaction type patterns, consider it a match
+    if (validValues >= 3 && matchCount / validValues >= 0.7) {
+      return col.columnIndex;
+    }
+  }
+  
+  return null;
+}
+
+/**
  * Process CSV data with intelligent detection
  */
 async function processCSVData(
   data: string[][],
   fileName: string,
-  skipTemplate?: boolean
+  skipTemplate?: boolean,
+  targetAccountId?: number | null,
+  targetCreditCardId?: number | null
 ): Promise<{ transactions: ParsedTransaction[]; templateId?: number; fingerprint: string; dateFormat?: string | null }> {
   if (data.length === 0) {
     throw new Error('CSV file is empty');
@@ -102,13 +187,17 @@ async function processCSVData(
   // Analyze CSV structure
   const analysis = analyzeCSV(data);
 
-  // Check for saved template (unless skipping)
+  // Check for saved template (unless skipping) - use account-aware lookup
   let mapping: ColumnMapping | null = null;
   let templateId: number | undefined;
   
   if (!skipTemplate) {
     try {
-      const template = await loadTemplate(analysis.fingerprint);
+      const template = await loadTemplate(
+        analysis.fingerprint,
+        targetAccountId,
+        targetCreditCardId
+      );
       if (template) {
         mapping = template.mapping;
         templateId = template.id;
@@ -120,22 +209,70 @@ async function processCSVData(
     }
   }
 
-  // If no template found, use analysis results
+  // If no template found, use analysis results with improved detection logic
   if (!mapping) {
-    // Detect amount sign convention from the data
-    const detectedConvention = detectAmountSignConvention(
-      data,
-      analysis.amountColumn,
-      analysis.hasHeaders
-    );
+    // Track mapped columns to avoid duplicates
+    const mappedColumns = new Set<number>();
+    
+    // Case 1: If both debit and credit columns exist, use separate_debit_credit convention
+    let detectedConvention: 'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit' = 'positive_is_expense';
+    let detectedTransactionTypeColumn: number | null = null;
+    
+    if (analysis.debitColumn !== null && analysis.creditColumn !== null) {
+      detectedConvention = 'separate_debit_credit';
+      mappedColumns.add(analysis.debitColumn);
+      mappedColumns.add(analysis.creditColumn);
+      // When using separate debit/credit columns, don't use amountColumn
+      // (even if analysis detected one)
+    }
+    // Case 2: If there's an amount column, check for transaction type column
+    else if (analysis.amountColumn !== null) {
+      // Check if there's a transaction type column
+      const transactionTypeCol = detectTransactionTypeColumn(
+        data,
+        analysis.columns || [],
+        analysis.hasHeaders,
+        mappedColumns
+      );
+      
+      if (transactionTypeCol !== null) {
+        // Use separate_column convention
+        detectedConvention = 'separate_column';
+        detectedTransactionTypeColumn = transactionTypeCol;
+        mappedColumns.add(analysis.amountColumn);
+      } else {
+        // Use standard amount column with sign convention detection
+        mappedColumns.add(analysis.amountColumn);
+        detectedConvention = detectAmountSignConvention(
+          data,
+          analysis.amountColumn,
+          analysis.hasHeaders
+        );
+      }
+    }
+    // Case 3: Only debit or credit column exists (shouldn't happen often, but handle it)
+    else if (analysis.debitColumn !== null || analysis.creditColumn !== null) {
+      // If only one exists, we can't use separate_debit_credit, so fall back to amount detection
+      if (analysis.debitColumn !== null) {
+        mappedColumns.add(analysis.debitColumn);
+      }
+      if (analysis.creditColumn !== null) {
+        mappedColumns.add(analysis.creditColumn);
+      }
+      // Note: This case is unusual - typically both debit and credit should exist together
+      // Default to positive_is_expense convention
+      detectedConvention = 'positive_is_expense';
+    }
 
     mapping = {
       dateColumn: analysis.dateColumn,
-      amountColumn: analysis.amountColumn,
+      // When using separate_debit_credit, don't use amountColumn
+      amountColumn: detectedConvention === 'separate_debit_credit' ? null : analysis.amountColumn,
       descriptionColumn: analysis.descriptionColumn,
       debitColumn: analysis.debitColumn,
       creditColumn: analysis.creditColumn,
-      transactionTypeColumn: null,
+      transactionTypeColumn: detectedTransactionTypeColumn,
+      statusColumn: null,
       amountSignConvention: detectedConvention,
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
@@ -338,20 +475,20 @@ function parseRowWithMapping(
 
 /**
  * Parse amount string to number
- * Handles various formats: $1,234.56, (123.45), -123.45, 1.234,56 (European)
+ * Handles various formats: $1,234.56, (123.45), $(123.45), -123.45, 1.234,56 (European)
  */
 function parseAmount(amountStr: string): number {
   if (!amountStr) return 0;
 
   let cleaned = amountStr.trim();
 
-  // Handle negative amounts in parentheses: (123.45)
+  // Remove currency symbols and spaces first so " $(3.17)" and "$(4,838.54)" become "(3.17)" / "(4838.54)"
+  cleaned = cleaned.replace(/[$,\s]/g, '');
+
+  // Handle negative amounts in parentheses: (123.45) or (1,234.56) after comma removal
   if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
     cleaned = '-' + cleaned.slice(1, -1);
   }
-
-  // Remove currency symbols and spaces
-  cleaned = cleaned.replace(/[$,\s]/g, '');
 
   // Handle European format (comma as decimal separator)
   // Check if it looks like European format (has dots as thousands separators and comma as decimal)
@@ -401,3 +538,4 @@ function isWellsFargoFormat(row: string[]): boolean {
 
   return true;
 }
+

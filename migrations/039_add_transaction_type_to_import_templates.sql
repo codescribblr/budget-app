@@ -19,3 +19,4 @@ DEFAULT 'positive_is_expense';
 COMMENT ON COLUMN csv_import_templates.transaction_type_column IS 'Column index that contains transaction type (e.g., "DEBIT", "CREDIT", "INCOME", "EXPENSE"). Used when amount_sign_convention is "separate_column"';
 COMMENT ON COLUMN csv_import_templates.amount_sign_convention IS 'How to interpret amount signs: positive_is_expense (default), positive_is_income, separate_column, or separate_debit_credit';
 
+

@@ -36,3 +36,4 @@ ADD CONSTRAINT goal_type_constraints CHECK (
 -- Add comment to explain the new column
 COMMENT ON COLUMN goals.linked_credit_card_id IS 'References credit_cards table. Only used for debt-paydown goal type.';
 
+

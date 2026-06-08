@@ -1,5 +1,85 @@
 import { getAuthenticatedUser } from './supabase-queries';
 import { getActiveAccountId, userHasAccountWriteAccess, userHasOwnAccount } from './account-context';
+import { createServiceRoleClient } from './supabase/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  type BackupDataType,
+  BACKUP_DATA_TYPES,
+  BACKUP_DATA_TYPE_INFO,
+  filterBackupDataByTypes,
+  getTypesPresentInBackup,
+  isFullBackupSelection,
+  resolveBackupTypeSelection,
+  validateImportSelection,
+} from './backup-data-types';
+import { deleteSelectedBackupDataTypes } from './backup-selective-delete';
+
+export type { BackupDataType };
+export {
+  BACKUP_DATA_TYPES,
+  BACKUP_DATA_TYPE_INFO,
+  BACKUP_TYPE_DEPENDENCIES,
+  getAutoIncludedTypes,
+  getBackupRecordCount,
+  getTypesPresentInBackup,
+  isBackupDataType,
+  isFullBackupSelection,
+  listBackupDataTypesForApi,
+  resolveBackupTypeSelection,
+  toggleBackupTypeSelection,
+  validateImportSelection,
+} from './backup-data-types';
+
+export interface ExportOptions {
+  /** When omitted, exports all data types (full backup). */
+  selectedTypes?: BackupDataType[];
+}
+
+export interface ImportOptions {
+  /** When omitted, imports all types present in the backup (full restore). */
+  selectedTypes?: BackupDataType[];
+}
+
+type BackupOperationContext = {
+  supabase: SupabaseClient;
+  userId: string;
+  accountId: number;
+};
+
+let backupOperationContext: BackupOperationContext | null = null;
+
+export async function exportAccountDataForAccount(
+  accountId: number,
+  createdByUserId: string
+): Promise<AccountBackupData> {
+  backupOperationContext = {
+    supabase: createServiceRoleClient(),
+    userId: createdByUserId,
+    accountId,
+  };
+  try {
+    return await exportAccountData();
+  } finally {
+    backupOperationContext = null;
+  }
+}
+
+export async function importAccountDataForAccount(
+  accountId: number,
+  userId: string,
+  backupData: UserBackupData | AccountBackupData
+): Promise<void> {
+  backupOperationContext = {
+    supabase: createServiceRoleClient(),
+    userId,
+    accountId,
+  };
+  try {
+    await importUserDataFromFile(backupData as UserBackupData);
+  } finally {
+    backupOperationContext = null;
+  }
+}
 
 export interface AccountBackupData {
   version: string; // "2.0" for account-based backups
@@ -39,6 +119,7 @@ export interface AccountBackupData {
   categories: any[];
   credit_cards: any[];
   loans?: any[];
+  non_cash_assets?: any[];
   transactions: any[];
   transaction_splits: any[];
   imported_transactions: any[];
@@ -48,6 +129,7 @@ export interface AccountBackupData {
   merchant_category_rules: any[];
   pending_checks: any[];
   income_settings: any[];
+  income_streams?: any[];
   pre_tax_deductions: any[];
   settings: any[];
   goals?: any[];
@@ -61,6 +143,17 @@ export interface AccountBackupData {
   tags?: any[];
   transaction_tags?: any[];
   tag_rules?: any[];
+  recurring_transactions?: any[];
+  recurring_transaction_matches?: any[];
+  notifications?: any[];
+  category_balance_audit?: any[];
+  account_balance_audit?: any[];
+  credit_card_balance_audit?: any[];
+  loan_balance_audit?: any[];
+  asset_value_audit?: any[];
+  net_worth_snapshots?: any[];
+  /** Data types included in a selective export (v2.4+). */
+  included_types?: BackupDataType[];
 }
 
 // Legacy interface for backward compatibility
@@ -71,6 +164,7 @@ export interface UserBackupData {
   categories: any[];
   credit_cards: any[];
   loans?: any[];
+  non_cash_assets?: any[];
   transactions: any[];
   transaction_splits: any[];
   imported_transactions: any[];
@@ -80,6 +174,7 @@ export interface UserBackupData {
   merchant_category_rules: any[];
   pending_checks: any[];
   income_settings: any[];
+  income_streams?: any[];
   pre_tax_deductions: any[];
   settings: any[];
   goals?: any[];
@@ -93,21 +188,45 @@ export interface UserBackupData {
   tags?: any[];
   transaction_tags?: any[];
   tag_rules?: any[];
+  recurring_transactions?: any[];
+  recurring_transaction_matches?: any[];
+  notifications?: any[];
+  category_balance_audit?: any[];
+  account_balance_audit?: any[];
+  credit_card_balance_audit?: any[];
+  loan_balance_audit?: any[];
+  asset_value_audit?: any[];
+  net_worth_snapshots?: any[];
+  /** Data types included in a selective export (v2.4+). */
+  included_types?: BackupDataType[];
 }
 
 /**
  * Export all account data to a JSON backup (account-based)
  * Only account owners can create backups
  */
-export async function exportAccountData(): Promise<AccountBackupData> {
-  const { supabase, user } = await getAuthenticatedUser();
-  const accountId = await getActiveAccountId();
-  if (!accountId) throw new Error('No active account');
+export async function exportAccountData(options?: ExportOptions): Promise<AccountBackupData> {
+  let supabase: SupabaseClient;
+  let user: { id: string };
+  let accountId: number;
 
-  // Verify user has write access (owners and editors can create backups)
-  const hasWriteAccess = await userHasAccountWriteAccess(accountId);
-  if (!hasWriteAccess) {
-    throw new Error('Unauthorized: Only account owners and editors can create backups');
+  if (backupOperationContext) {
+    supabase = backupOperationContext.supabase;
+    user = { id: backupOperationContext.userId };
+    accountId = backupOperationContext.accountId;
+  } else {
+    const auth = await getAuthenticatedUser();
+    supabase = auth.supabase;
+    user = auth.user;
+    const activeAccountId = await getActiveAccountId();
+    if (!activeAccountId) throw new Error('No active account');
+    accountId = activeAccountId;
+
+    // Verify user has write access (owners and editors can create backups)
+    const hasWriteAccess = await userHasAccountWriteAccess(accountId);
+    if (!hasWriteAccess) {
+      throw new Error('Unauthorized: Only account owners and editors can create backups');
+    }
   }
 
   // Fetch account structure
@@ -138,81 +257,159 @@ export async function exportAccountData(): Promise<AccountBackupData> {
 
   if (invitationsError) throw invitationsError;
 
+  // Helper function to fetch all records with pagination (Supabase default limit is 1000)
+  async function fetchAllRecords<T>(
+    queryBuilder: (limit: number, offset: number) => any,
+    batchSize: number = 1000
+  ): Promise<T[]> {
+    const allRecords: T[] = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const query = queryBuilder(batchSize, offset);
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        allRecords.push(...data);
+        offset += batchSize;
+        hasMore = data.length === batchSize; // If we got a full batch, there might be more
+      } else {
+        hasMore = false;
+      }
+    }
+
+    return allRecords;
+  }
+
+  // Helper function to safely fetch records from a table that might not exist
+  async function fetchAllRecordsSafe<T>(
+    queryBuilder: (limit: number, offset: number) => any,
+    tableName: string,
+    batchSize: number = 1000
+  ): Promise<T[]> {
+    try {
+      return await fetchAllRecords(queryBuilder, batchSize);
+    } catch (error: any) {
+      // If table doesn't exist, return empty array (for backward compatibility)
+      if (error?.message?.includes('Could not find the table') || 
+          error?.message?.includes('does not exist') ||
+          error?.code === 'PGRST204') {
+        console.warn(`[Export] Table '${tableName}' does not exist, skipping (this is OK for older schemas)`);
+        return [];
+      }
+      throw error;
+    }
+  }
+
   // Fetch all account data (filtered by account_id)
+  // Use pagination for tables that might have >1000 records (Supabase default limit)
   const [
-    { data: accounts },
-    { data: categories },
-    { data: credit_cards },
-    { data: loans },
-    { data: transactions },
-    { data: transaction_splits },
-    { data: imported_transactions },
-    { data: imported_transaction_links },
-    { data: merchant_groups },
-    { data: merchant_mappings },
-    { data: merchant_category_rules },
-    { data: pending_checks },
-    { data: income_settings },
-    { data: pre_tax_deductions },
-    { data: settings },
-    { data: goals },
-    { data: csv_import_templates },
-    { data: category_monthly_funding },
-    { data: user_feature_flags },
-    { data: ai_conversations },
-    { data: duplicate_group_reviews },
-    { data: automatic_import_setups },
-    { data: queued_imports },
-    { data: tags },
-    { data: transaction_tags },
-    { data: tag_rules },
+    accounts,
+    categories,
+    credit_cards,
+    loans,
+    non_cash_assets,
+    transactions,
+    transaction_splits,
+    imported_transactions,
+    imported_transaction_links,
+    merchant_groups,
+    merchant_mappings,
+    merchant_category_rules,
+    pending_checks,
+    income_settings,
+    income_streams,
+    pre_tax_deductions,
+    settings,
+    goals,
+    csv_import_templates,
+    category_monthly_funding,
+    user_feature_flags,
+    ai_conversations,
+    duplicate_group_reviews,
+    automatic_import_setups,
+    queued_imports,
+    tags,
+    transaction_tags,
+    tag_rules,
+    recurring_transactions,
+    recurring_transaction_matches,
+    notifications,
+    category_balance_audit,
+    account_balance_audit,
+    credit_card_balance_audit,
+    loan_balance_audit,
+    asset_value_audit,
+    net_worth_snapshots,
   ] = await Promise.all([
-    supabase.from('accounts').select('*').eq('account_id', accountId),
-    supabase.from('categories').select('*').eq('account_id', accountId),
-    supabase.from('credit_cards').select('*').eq('account_id', accountId),
-    supabase.from('loans').select('*').eq('account_id', accountId),
-    supabase.from('transactions').select('*').eq('budget_account_id', accountId),
-    supabase
+    fetchAllRecords((limit, offset) => supabase.from('accounts').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('categories').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('credit_cards').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('loans').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('non_cash_assets').select('*').eq('account_id', accountId).range(offset, offset + limit - 1), 'non_cash_assets'),
+    fetchAllRecords((limit, offset) => supabase.from('transactions').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase
       .from('transaction_splits')
       .select('*, transactions!inner(budget_account_id)')
-      .eq('transactions.budget_account_id', accountId),
-    supabase.from('imported_transactions').select('*').eq('account_id', accountId),
+      .eq('transactions.budget_account_id', accountId)
+      .range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('imported_transactions').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
     // Imported transaction links: ensure both imported_transaction and transaction belong to this account
     // When importing to a new account, account_id fields are remapped, but the link IDs are remapped via maps
-    supabase
+    fetchAllRecords((limit, offset) => supabase
       .from('imported_transaction_links')
       .select('*, imported_transactions!inner(account_id), transactions!inner(budget_account_id)')
       .eq('imported_transactions.account_id', accountId)
-      .eq('transactions.budget_account_id', accountId),
-    supabase.from('merchant_groups').select('*').eq('account_id', accountId),
-    supabase.from('merchant_mappings').select('*').eq('account_id', accountId),
-    supabase.from('merchant_category_rules').select('*').eq('account_id', accountId),
-    supabase.from('pending_checks').select('*').eq('account_id', accountId),
-    supabase.from('income_settings').select('*').eq('account_id', accountId),
-    supabase.from('pre_tax_deductions').select('*').eq('account_id', accountId),
-    supabase.from('settings').select('*').eq('account_id', accountId),
-    supabase.from('goals').select('*').eq('account_id', accountId),
-    supabase.from('csv_import_templates').select('*').eq('account_id', accountId),
-    supabase.from('category_monthly_funding').select('*').eq('account_id', accountId),
-    supabase.from('user_feature_flags').select('*').eq('account_id', accountId),
-    supabase.from('ai_conversations').select('*').eq('account_id', accountId),
-    supabase.from('duplicate_group_reviews').select('*').eq('budget_account_id', accountId),
-    supabase.from('automatic_import_setups').select('*').eq('account_id', accountId),
-    supabase.from('queued_imports').select('*').eq('account_id', accountId),
-    supabase.from('tags').select('*').eq('account_id', accountId),
-    supabase
+      .eq('transactions.budget_account_id', accountId)
+      .range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('merchant_groups').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('merchant_mappings').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('merchant_category_rules').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('pending_checks').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('income_settings').select('*').eq('account_id', accountId).range(offset, offset + limit - 1), 'income_settings'),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('income_streams').select('*').eq('account_id', accountId).range(offset, offset + limit - 1), 'income_streams'),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('pre_tax_deductions').select('*').eq('account_id', accountId).range(offset, offset + limit - 1), 'pre_tax_deductions'),
+    fetchAllRecords((limit, offset) => supabase.from('settings').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('goals').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('csv_import_templates').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('category_monthly_funding').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('user_feature_flags').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('ai_conversations').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('duplicate_group_reviews').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('automatic_import_setups').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('queued_imports').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('tags').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase
       .from('transaction_tags')
       .select('*, transactions!inner(budget_account_id)')
-      .eq('transactions.budget_account_id', accountId),
-    supabase.from('tag_rules').select('*').eq('account_id', accountId),
+      .eq('transactions.budget_account_id', accountId)
+      .range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('tag_rules').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('recurring_transactions').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase
+      .from('recurring_transaction_matches')
+      .select('*, recurring_transactions!inner(budget_account_id)')
+      .eq('recurring_transactions.budget_account_id', accountId)
+      .range(offset, offset + limit - 1)),
+    // Only export account-scoped notifications (budget_account_id IS NOT NULL)
+    // User-level notifications (budget_account_id IS NULL) are not included in account backups
+    fetchAllRecords((limit, offset) => supabase.from('notifications').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecords((limit, offset) => supabase.from('category_balance_audit').select('*').eq('account_id', accountId).range(offset, offset + limit - 1)),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('account_balance_audit').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1), 'account_balance_audit'),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('credit_card_balance_audit').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1), 'credit_card_balance_audit'),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('loan_balance_audit').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1), 'loan_balance_audit'),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('asset_value_audit').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1), 'asset_value_audit'),
+    fetchAllRecordsSafe((limit, offset) => supabase.from('net_worth_snapshots').select('*').eq('budget_account_id', accountId).range(offset, offset + limit - 1), 'net_worth_snapshots'),
   ]);
 
   // Validate data integrity: ensure all referenced transactions exist
-  const transactionIds = new Set((transactions || []).map((t: any) => t.id));
-  const importedTransactionIds = new Set((imported_transactions || []).map((t: any) => t.id));
+  const transactionIds = new Set(transactions.map((t: any) => t.id));
+  const importedTransactionIds = new Set(imported_transactions.map((t: any) => t.id));
   
   // Filter out any links that reference non-existent transactions (data integrity check)
-  const validImportedTransactionLinks = (imported_transaction_links || []).filter((link: any) => {
+  const validImportedTransactionLinks = imported_transaction_links.filter((link: any) => {
     const hasValidImportedTransaction = link.imported_transaction_id && importedTransactionIds.has(link.imported_transaction_id);
     const hasValidTransaction = link.transaction_id && transactionIds.has(link.transaction_id);
     
@@ -223,12 +420,14 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     return true;
   });
 
-  if (imported_transaction_links && imported_transaction_links.length !== validImportedTransactionLinks.length) {
+  if (imported_transaction_links.length !== validImportedTransactionLinks.length) {
     console.warn(`[Export] Filtered out ${imported_transaction_links.length - validImportedTransactionLinks.length} invalid imported_transaction_links`);
   }
 
-  return {
-    version: '2.1',
+  console.log(`[Export] Exported ${queued_imports.length} queued imports`);
+
+  const fullBackup: AccountBackupData = {
+    version: '2.4',
     created_at: new Date().toISOString(),
     created_by: user.id,
     account: {
@@ -253,33 +452,54 @@ export async function exportAccountData(): Promise<AccountBackupData> {
       invited_by: inv.invited_by,
       expires_at: inv.expires_at,
     })),
-    accounts: accounts || [],
-    categories: categories || [],
-    credit_cards: credit_cards || [],
-    loans: loans || [],
-    transactions: transactions || [],
-    transaction_splits: transaction_splits || [],
-    imported_transactions: imported_transactions || [],
+    accounts: accounts,
+    categories: categories,
+    credit_cards: credit_cards,
+    loans: loans,
+    non_cash_assets: non_cash_assets || [],
+    transactions: transactions,
+    transaction_splits: transaction_splits,
+    imported_transactions: imported_transactions,
     imported_transaction_links: validImportedTransactionLinks,
-    merchant_groups: merchant_groups || [],
-    merchant_mappings: merchant_mappings || [],
-    merchant_category_rules: merchant_category_rules || [],
-    pending_checks: pending_checks || [],
-    income_settings: income_settings || [],
-    pre_tax_deductions: pre_tax_deductions || [],
-    settings: settings || [],
-    goals: goals || [],
-    csv_import_templates: csv_import_templates || [],
-    category_monthly_funding: category_monthly_funding || [],
-    user_feature_flags: user_feature_flags || [],
-    ai_conversations: ai_conversations || [],
-    duplicate_group_reviews: duplicate_group_reviews || [],
-    automatic_import_setups: automatic_import_setups || [],
-    queued_imports: queued_imports || [],
-    tags: tags || [],
-    transaction_tags: transaction_tags || [],
-    tag_rules: tag_rules || [],
+    merchant_groups: merchant_groups,
+    merchant_mappings: merchant_mappings,
+    merchant_category_rules: merchant_category_rules,
+    pending_checks: pending_checks,
+    income_settings: income_settings,
+    income_streams: income_streams || [],
+    pre_tax_deductions: pre_tax_deductions,
+    settings: settings,
+    goals: goals,
+    csv_import_templates: csv_import_templates,
+    category_monthly_funding: category_monthly_funding,
+    user_feature_flags: user_feature_flags,
+    ai_conversations: ai_conversations,
+    duplicate_group_reviews: duplicate_group_reviews,
+    automatic_import_setups: automatic_import_setups,
+    queued_imports: queued_imports,
+    tags: tags,
+    transaction_tags: transaction_tags,
+    tag_rules: tag_rules,
+    recurring_transactions: recurring_transactions,
+    recurring_transaction_matches: recurring_transaction_matches,
+    notifications: notifications,
+    category_balance_audit: category_balance_audit,
+    account_balance_audit: account_balance_audit,
+    credit_card_balance_audit: credit_card_balance_audit,
+    loan_balance_audit: loan_balance_audit,
+    asset_value_audit: asset_value_audit,
+    net_worth_snapshots: net_worth_snapshots,
   };
+
+  if (!options?.selectedTypes || options.selectedTypes.length === 0) {
+    return {
+      ...fullBackup,
+      included_types: [...BACKUP_DATA_TYPES],
+    };
+  }
+
+  const resolvedTypes = resolveBackupTypeSelection(options.selectedTypes);
+  return filterBackupDataByTypes(fullBackup, resolvedTypes);
 }
 
 /**
@@ -297,6 +517,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     categories: accountData.categories,
     credit_cards: accountData.credit_cards,
     loans: accountData.loans,
+    non_cash_assets: accountData.non_cash_assets,
     transactions: accountData.transactions,
     transaction_splits: accountData.transaction_splits,
     imported_transactions: accountData.imported_transactions,
@@ -306,6 +527,7 @@ export async function exportUserData(): Promise<UserBackupData> {
     merchant_category_rules: accountData.merchant_category_rules,
     pending_checks: accountData.pending_checks,
     income_settings: accountData.income_settings,
+    income_streams: accountData.income_streams,
     pre_tax_deductions: accountData.pre_tax_deductions,
     settings: accountData.settings,
     goals: accountData.goals,
@@ -319,7 +541,52 @@ export async function exportUserData(): Promise<UserBackupData> {
     tags: accountData.tags,
     transaction_tags: accountData.transaction_tags,
     tag_rules: accountData.tag_rules,
+    recurring_transactions: accountData.recurring_transactions,
+    recurring_transaction_matches: accountData.recurring_transaction_matches,
+    notifications: accountData.notifications,
+    category_balance_audit: accountData.category_balance_audit,
+    account_balance_audit: accountData.account_balance_audit,
+    credit_card_balance_audit: accountData.credit_card_balance_audit,
+    loan_balance_audit: accountData.loan_balance_audit,
+    asset_value_audit: accountData.asset_value_audit,
+    net_worth_snapshots: accountData.net_worth_snapshots,
   };
+}
+
+async function loadValidGlobalMerchantIds(
+  supabase: SupabaseClient,
+  ids: number[]
+): Promise<Set<number>> {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) {
+    return new Set();
+  }
+
+  const { data, error } = await supabase.from('global_merchants').select('id').in('id', uniqueIds);
+  if (error) {
+    console.warn('[Import] Could not validate global_merchant references, clearing links:', error);
+    return new Set();
+  }
+
+  return new Set(data?.map((merchant) => merchant.id) ?? []);
+}
+
+function collectGlobalMerchantIdsFromBackup(backupData: UserBackupData): number[] {
+  const ids: number[] = [];
+
+  for (const group of backupData.merchant_groups ?? []) {
+    if (group.global_merchant_id != null) {
+      ids.push(group.global_merchant_id);
+    }
+  }
+
+  for (const transaction of backupData.transactions ?? []) {
+    if (transaction.merchant_override_id != null) {
+      ids.push(transaction.merchant_override_id);
+    }
+  }
+
+  return ids;
 }
 
 /**
@@ -328,10 +595,13 @@ export async function exportUserData(): Promise<UserBackupData> {
  * to avoid ID conflicts when restoring backups
  * WARNING: This will DELETE all existing user data and replace it with the backup
  */
-export async function importUserData(backupData: UserBackupData): Promise<void> {
+export async function importUserData(
+  backupData: UserBackupData,
+  options?: ImportOptions
+): Promise<void> {
   // Use the same logic as file import to handle ID remapping
   // This prevents ID conflicts when restoring older backups
-  await importUserDataFromFile(backupData);
+  await importUserDataFromFile(backupData, options);
 }
 
 /**
@@ -341,14 +611,54 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
  * and remaps all IDs and foreign key references to avoid conflicts
  * WARNING: This will DELETE all existing account data and replace it with the backup
  */
-export async function importUserDataFromFile(backupData: UserBackupData): Promise<void> {
-  const { supabase, user } = await getAuthenticatedUser();
-  const accountId = await getActiveAccountId();
-  if (!accountId) throw new Error('No active account');
+export async function importUserDataFromFile(
+  rawBackupData: UserBackupData,
+  options?: ImportOptions
+): Promise<void> {
+  let supabase: SupabaseClient;
+  let user: { id: string };
+  let accountId: number;
+
+  if (backupOperationContext) {
+    supabase = backupOperationContext.supabase;
+    user = { id: backupOperationContext.userId };
+    accountId = backupOperationContext.accountId;
+  } else {
+    const auth = await getAuthenticatedUser();
+    supabase = auth.supabase;
+    user = auth.user;
+    const activeAccountId = await getActiveAccountId();
+    if (!activeAccountId) throw new Error('No active account');
+    accountId = activeAccountId;
+  }
 
   console.log('[Import] Starting import for user:', user.id, 'account:', accountId);
 
-  // Step 1: Delete all existing account data
+  const typesInFile = getTypesPresentInBackup(rawBackupData);
+  const isSelectiveImport = Boolean(
+    options?.selectedTypes && options.selectedTypes.length > 0
+  );
+
+  let backupData = rawBackupData;
+
+  if (isSelectiveImport) {
+    const validation = validateImportSelection(rawBackupData, options!.selectedTypes!);
+    if (!validation.valid) {
+      const labels = validation.missingDependencies
+        .map((type) => BACKUP_DATA_TYPE_INFO[type]?.label ?? type)
+        .join(', ');
+      throw new Error(
+        `Cannot import selected data: this backup is missing required related data (${labels}). Include those types in the backup or import them together.`
+      );
+    }
+
+    backupData = filterBackupDataByTypes(rawBackupData, validation.resolvedTypes);
+    console.log('[Import] Selective import for types:', validation.resolvedTypes.join(', '));
+
+    await deleteSelectedBackupDataTypes(supabase, accountId, new Set(validation.resolvedTypes));
+    console.log('[Import] Deleted existing data for selected types');
+  } else {
+  // Step 1: Delete all existing account data (full restore)
   const { data: accountTransactions } = await supabase
     .from('transactions')
     .select('id')
@@ -366,6 +676,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   if (transactionIds.length > 0) {
     await supabase.from('transaction_tags').delete().in('transaction_id', transactionIds);
     await supabase.from('transaction_splits').delete().in('transaction_id', transactionIds);
+    await supabase.from('recurring_transaction_matches').delete().in('transaction_id', transactionIds);
   }
 
   if (importedTransactionIds.length > 0) {
@@ -374,14 +685,95 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   await supabase.from('tag_rules').delete().eq('account_id', accountId);
   await supabase.from('tags').delete().eq('account_id', accountId);
+  // Only delete recurring_transactions if they exist in the backup (to avoid data loss with older backups)
+  if (backupData.recurring_transactions !== undefined) {
+    // Delete recurring_transaction_matches first (they reference recurring_transactions)
+    const { data: recurringTransactions } = await supabase
+      .from('recurring_transactions')
+      .select('id')
+      .eq('budget_account_id', accountId);
+    const recurringTransactionIds = recurringTransactions?.map(rt => rt.id) || [];
+    if (recurringTransactionIds.length > 0) {
+      await supabase.from('recurring_transaction_matches').delete().in('recurring_transaction_id', recurringTransactionIds);
+    }
+    await supabase.from('recurring_transactions').delete().eq('budget_account_id', accountId);
+  }
+  // Only delete notifications if they exist in the backup (to avoid data loss with older backups)
+  if (backupData.notifications !== undefined) {
+    await supabase.from('notifications').delete().eq('budget_account_id', accountId);
+  }
+  // Delete audit tables that reference transactions (before transactions are deleted)
+  // Use safe deletion for backwards compatibility (tables may not exist in older schemas)
+  try {
+    await supabase.from('account_balance_audit').delete().eq('budget_account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
+  try {
+    await supabase.from('credit_card_balance_audit').delete().eq('budget_account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
+  try {
+    await supabase.from('loan_balance_audit').delete().eq('budget_account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
+  try {
+    await supabase.from('asset_value_audit').delete().eq('budget_account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
+  try {
+    await supabase.from('non_cash_assets').delete().eq('account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
+  try {
+    await supabase.from('net_worth_snapshots').delete().eq('budget_account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
   await supabase.from('transactions').delete().eq('budget_account_id', accountId);
   await supabase.from('imported_transactions').delete().eq('account_id', accountId);
   await supabase.from('merchant_category_rules').delete().eq('account_id', accountId);
   await supabase.from('merchant_mappings').delete().eq('account_id', accountId);
   await supabase.from('merchant_groups').delete().eq('account_id', accountId);
   await supabase.from('pending_checks').delete().eq('account_id', accountId);
-  await supabase.from('pre_tax_deductions').delete().eq('account_id', accountId);
-  await supabase.from('income_settings').delete().eq('account_id', accountId);
+  // pre_tax_deductions and income_settings tables may not exist (data stored in settings table)
+  try {
+    await supabase.from('pre_tax_deductions').delete().eq('account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
+  try {
+    await supabase.from('income_settings').delete().eq('account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
+  try {
+    await supabase.from('income_streams').delete().eq('account_id', accountId);
+  } catch (error: any) {
+    if (!error?.message?.includes('Could not find the table') && !error?.message?.includes('does not exist') && error?.code !== 'PGRST204') {
+      throw error;
+    }
+  }
   await supabase.from('settings').delete().eq('account_id', accountId);
   await supabase.from('csv_import_templates').delete().eq('account_id', accountId);
   await supabase.from('goals').delete().eq('account_id', accountId);
@@ -393,27 +785,40 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   await supabase.from('duplicate_group_reviews').delete().eq('budget_account_id', accountId);
   await supabase.from('queued_imports').delete().eq('account_id', accountId);
   await supabase.from('automatic_import_setups').delete().eq('account_id', accountId);
+  await supabase.from('category_balance_audit').delete().eq('account_id', accountId);
   await supabase.from('categories').delete().eq('account_id', accountId);
   await supabase.from('accounts').delete().eq('account_id', accountId);
 
   console.log('[Import] Deleted existing account data');
+  }
 
   // Step 2: Insert data and build ID mappings (using batch inserts for performance)
   const accountIdMap = new Map<number, number>();
   const categoryIdMap = new Map<number, number>();
   const creditCardIdMap = new Map<number, number>();
   const loanIdMap = new Map<number, number>();
+  const assetIdMap = new Map<number, number>();
   const transactionIdMap = new Map<number, number>();
   const merchantGroupIdMap = new Map<number, number>();
   const importedTransactionIdMap = new Map<number, number>();
   const tagIdMap = new Map<number, number>();
+  const recurringTransactionIdMap = new Map<number, number>();
+  const csvImportTemplateIdMap = new Map<number, number>();
+  const goalIdMap = new Map<number, number>();
+
+  const validGlobalMerchantIds = await loadValidGlobalMerchantIds(
+    supabase,
+    collectGlobalMerchantIdsFromBackup(backupData)
+  );
 
   // Insert accounts (batch)
   if (backupData.accounts && backupData.accounts.length > 0) {
-    const accountsToInsert = backupData.accounts.map(({ id, account_id, user_id, ...account }) => ({
+    const accountsToInsert = backupData.accounts.map(({ id, account_id, user_id, linked_goal_id, ...account }) => ({
       ...account,
       user_id: user.id,
       account_id: accountId,
+      // Goals are inserted later; clear stale FK refs from the backup (invalid cross-account IDs).
+      linked_goal_id: null,
     }));
 
     const { data, error } = await supabase
@@ -481,12 +886,41 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     console.log('[Import] Inserted', data.length, 'credit cards');
   }
 
-  // Insert loans (batch)
+  // Insert non_cash_assets (batch) - before loans/income_streams so linked_non_cash_asset_id can be remapped
+  if (backupData.non_cash_assets && backupData.non_cash_assets.length > 0) {
+    try {
+      const nonCashAssetsToInsert = backupData.non_cash_assets.map(({ id, account_id, ...asset }) => ({
+        ...asset,
+        account_id: accountId,
+      }));
+
+      const { data, error } = await supabase
+        .from('non_cash_assets')
+        .insert(nonCashAssetsToInsert)
+        .select('id');
+
+      if (error) throw error;
+
+      backupData.non_cash_assets.forEach((oldAsset, index) => {
+        if (data[index]) assetIdMap.set(oldAsset.id, data[index].id);
+      });
+      console.log('[Import] Inserted', data.length, 'non-cash assets');
+    } catch (error: any) {
+      if (error?.message?.includes('Could not find the table') || error?.message?.includes('does not exist') || error?.code === 'PGRST204') {
+        console.warn('[Import] non_cash_assets table does not exist, skipping');
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  // Insert loans (batch) - remap linked_non_cash_asset_id when non_cash_assets are in backup
   if (backupData.loans && backupData.loans.length > 0) {
-    const loansToInsert = backupData.loans.map(({ id, account_id, user_id, ...loan }) => ({
+    const loansToInsert = backupData.loans.map(({ id, account_id, user_id, linked_non_cash_asset_id, ...loan }) => ({
       ...loan,
       user_id: user.id,
       account_id: accountId,
+      linked_non_cash_asset_id: linked_non_cash_asset_id != null && assetIdMap.has(linked_non_cash_asset_id) ? assetIdMap.get(linked_non_cash_asset_id)! : null,
     }));
 
     const { data, error } = await supabase
@@ -517,24 +951,65 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       linked_loan_id: linked_loan_id ? (loanIdMap.get(linked_loan_id) || null) : null,
     }));
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('goals')
-      .insert(goalsToInsert);
+      .insert(goalsToInsert)
+      .select('id');
 
     if (error) {
       console.error('[Import] Error inserting goals:', error);
       throw error;
     }
+
+    backupData.goals.forEach((oldGoal, index) => {
+      if (data[index]) {
+        goalIdMap.set(oldGoal.id, data[index].id);
+      }
+    });
     console.log('[Import] Inserted', goalsToInsert.length, 'goals');
+
+    // Restore account ↔ goal links after both are inserted
+    for (const oldAccount of backupData.accounts ?? []) {
+      if (!oldAccount.linked_goal_id || !goalIdMap.has(oldAccount.linked_goal_id)) {
+        continue;
+      }
+      const newAccountId = accountIdMap.get(oldAccount.id);
+      const newGoalId = goalIdMap.get(oldAccount.linked_goal_id);
+      if (!newAccountId || !newGoalId) {
+        continue;
+      }
+      const { error: linkError } = await supabase
+        .from('accounts')
+        .update({ linked_goal_id: newGoalId })
+        .eq('id', newAccountId);
+      if (linkError) {
+        console.warn('[Import] Failed to restore account goal link:', linkError);
+      }
+    }
   }
 
   // Insert merchant groups (batch)
   if (backupData.merchant_groups && backupData.merchant_groups.length > 0) {
-    const merchantGroupsToInsert = backupData.merchant_groups.map(({ id, account_id, user_id, ...group }) => ({
-      ...group,
-      user_id: user.id,
-      account_id: accountId,
-    }));
+    const merchantGroupsToInsert = backupData.merchant_groups.map(
+      ({ id, account_id, user_id, global_merchant_id, ...group }) => ({
+        ...group,
+        user_id: user.id,
+        account_id: accountId,
+        global_merchant_id:
+          global_merchant_id != null && validGlobalMerchantIds.has(global_merchant_id)
+            ? global_merchant_id
+            : null,
+      })
+    );
+
+    const clearedGlobalMerchantLinks = backupData.merchant_groups.filter(
+      (group) => group.global_merchant_id != null && !validGlobalMerchantIds.has(group.global_merchant_id)
+    ).length;
+    if (clearedGlobalMerchantLinks > 0) {
+      console.warn(
+        `[Import] Cleared global_merchant_id on ${clearedGlobalMerchantLinks} merchant groups (referenced global merchants not found in this environment)`
+      );
+    }
 
     const { data, error } = await supabase
       .from('merchant_groups')
@@ -643,14 +1118,40 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   // Insert transactions (batch with remapped foreign keys)
   if (backupData.transactions && backupData.transactions.length > 0) {
-    const transactionsToInsert = backupData.transactions.map(({ id, budget_account_id, user_id, merchant_group_id, account_id, credit_card_id, ...transaction }) => ({
-      ...transaction,
-      user_id: user.id,
-      budget_account_id: accountId,
-      merchant_group_id: merchant_group_id ? (merchantGroupIdMap.get(merchant_group_id) || null) : null,
-      account_id: account_id ? (accountIdMap.get(account_id) || null) : null,
-      credit_card_id: credit_card_id ? (creditCardIdMap.get(credit_card_id) || null) : null,
-    }));
+    const transactionsToInsert = backupData.transactions.map(
+      ({
+        id,
+        budget_account_id,
+        user_id,
+        merchant_group_id,
+        merchant_override_id,
+        account_id,
+        credit_card_id,
+        ...transaction
+      }) => ({
+        ...transaction,
+        user_id: user.id,
+        budget_account_id: accountId,
+        merchant_group_id: merchant_group_id ? (merchantGroupIdMap.get(merchant_group_id) || null) : null,
+        merchant_override_id:
+          merchant_override_id != null && validGlobalMerchantIds.has(merchant_override_id)
+            ? merchant_override_id
+            : null,
+        account_id: account_id ? (accountIdMap.get(account_id) || null) : null,
+        credit_card_id: credit_card_id ? (creditCardIdMap.get(credit_card_id) || null) : null,
+      })
+    );
+
+    const clearedMerchantOverrides = backupData.transactions.filter(
+      (transaction) =>
+        transaction.merchant_override_id != null &&
+        !validGlobalMerchantIds.has(transaction.merchant_override_id)
+    ).length;
+    if (clearedMerchantOverrides > 0) {
+      console.warn(
+        `[Import] Cleared merchant_override_id on ${clearedMerchantOverrides} transactions (referenced global merchants not found in this environment)`
+      );
+    }
 
     const { data, error } = await supabase
       .from('transactions')
@@ -910,6 +1411,108 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     }
   }
 
+  // Insert recurring_transactions (after transactions, categories, accounts, credit_cards, merchant_groups are inserted)
+  if (backupData.recurring_transactions && backupData.recurring_transactions.length > 0) {
+    const recurringTransactionsToInsert = backupData.recurring_transactions.map(({ 
+      id, 
+      budget_account_id, 
+      user_id, 
+      merchant_group_id, 
+      category_id, 
+      account_id, 
+      credit_card_id, 
+      ...recurringTx 
+    }) => ({
+      ...recurringTx,
+      user_id: user.id,
+      budget_account_id: accountId,
+      merchant_group_id: merchant_group_id ? (merchantGroupIdMap.get(merchant_group_id) || null) : null,
+      category_id: category_id ? (categoryIdMap.get(category_id) || null) : null,
+      account_id: account_id ? (accountIdMap.get(account_id) || null) : null,
+      credit_card_id: credit_card_id ? (creditCardIdMap.get(credit_card_id) || null) : null,
+    }));
+
+    const { data, error } = await supabase
+      .from('recurring_transactions')
+      .insert(recurringTransactionsToInsert)
+      .select('id');
+
+    if (error) {
+      console.error('[Import] Error inserting recurring transactions:', error);
+      throw error;
+    }
+
+    if (backupData.recurring_transactions.length !== data.length) {
+      console.error(`[Import] Mismatch: Expected ${backupData.recurring_transactions.length} recurring transactions, got ${data.length} back from insert`);
+    }
+    backupData.recurring_transactions.forEach((oldRecurringTx, index) => {
+      if (data[index]) {
+        recurringTransactionIdMap.set(oldRecurringTx.id, data[index].id);
+      } else {
+        console.warn(`[Import] Missing recurring transaction data at index ${index} for recurring transaction ID ${oldRecurringTx.id}`);
+      }
+    });
+    console.log('[Import] Inserted', data.length, 'recurring transactions');
+  }
+
+  // Insert recurring_transaction_matches (after recurring_transactions and transactions are inserted)
+  if (backupData.recurring_transaction_matches && backupData.recurring_transaction_matches.length > 0) {
+    const recurringTransactionMatchesToInsert = backupData.recurring_transaction_matches
+      .map(({ id, recurring_transaction_id, transaction_id, recurring_transactions, ...match }) => ({
+        ...match,
+        recurring_transaction_id: recurring_transaction_id ? (recurringTransactionIdMap.get(recurring_transaction_id) || null) : null,
+        transaction_id: transaction_id ? (transactionIdMap.get(transaction_id) || null) : null,
+      }))
+      .filter(match => match.recurring_transaction_id && match.transaction_id); // Only include valid mappings
+
+    if (recurringTransactionMatchesToInsert.length > 0) {
+      const { error } = await supabase
+        .from('recurring_transaction_matches')
+        .insert(recurringTransactionMatchesToInsert);
+
+      if (error) {
+        console.error('[Import] Error inserting recurring transaction matches:', error);
+        throw error;
+      }
+      console.log('[Import] Inserted', recurringTransactionMatchesToInsert.length, 'recurring transaction matches');
+    }
+  }
+
+  // Insert notifications (after transactions are inserted, in case metadata references them)
+  // Note: We only export account-scoped notifications (budget_account_id IS NOT NULL)
+  // User-level notifications (budget_account_id IS NULL) are not included in account backups
+  // All notifications in the backup should have budget_account_id set (from export filter)
+  if (backupData.notifications && backupData.notifications.length > 0) {
+    const notificationsToInsert = backupData.notifications
+      .map(({ 
+        id, 
+        budget_account_id, 
+        user_id, 
+        ...notification 
+      }) => ({
+        ...notification,
+        user_id: user.id, // Remap to current user (notifications are user-specific)
+        budget_account_id: accountId, // Always set to target account (we only export account-scoped notifications)
+        // Note: notification_type_id is a reference to notification_types table (lookup table)
+        // We don't remap it as it's a reference table that should exist in the system
+      }))
+      .filter(notification => {
+        // Ensure notification_type_id exists (should always be true, but safety check)
+        // Also filter out any notifications that somehow have NULL budget_account_id (shouldn't happen, but safety)
+        return notification.notification_type_id && accountId;
+      });
+
+    const { error } = await supabase
+      .from('notifications')
+      .insert(notificationsToInsert);
+
+    if (error) {
+      console.error('[Import] Error inserting notifications:', error);
+      throw error;
+    }
+    console.log('[Import] Inserted', notificationsToInsert.length, 'notifications');
+  }
+
   // Insert pending checks (batch)
   if (backupData.pending_checks && backupData.pending_checks.length > 0) {
     const pendingChecksToInsert = backupData.pending_checks.map(({ id, account_id, user_id, ...check }) => ({
@@ -930,41 +1533,116 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   }
 
   // Insert income settings (batch)
+  // Note: income_settings table may not exist (data stored in settings table)
   if (backupData.income_settings && backupData.income_settings.length > 0) {
-    const incomeSettingsToInsert = backupData.income_settings.map(({ id, account_id, user_id, ...income }) => ({
-      ...income,
-      user_id: user.id,
-      account_id: accountId,
-    }));
+    try {
+      const incomeSettingsToInsert = backupData.income_settings.map(({ id, account_id, user_id, ...income }) => ({
+        ...income,
+        user_id: user.id,
+        account_id: accountId,
+      }));
 
-    const { error } = await supabase
-      .from('income_settings')
-      .insert(incomeSettingsToInsert);
+      const { error } = await supabase
+        .from('income_settings')
+        .insert(incomeSettingsToInsert);
 
-    if (error) {
-      console.error('[Import] Error inserting income settings:', error);
-      throw error;
+      if (error) {
+        // If table doesn't exist, skip (for backward compatibility)
+        if (error.message?.includes('Could not find the table') || 
+            error.message?.includes('does not exist') ||
+            error.code === 'PGRST204') {
+          console.warn('[Import] income_settings table does not exist, skipping (this is OK for older schemas)');
+        } else {
+          console.error('[Import] Error inserting income settings:', error);
+          throw error;
+        }
+      } else {
+        console.log('[Import] Inserted', incomeSettingsToInsert.length, 'income settings');
+      }
+    } catch (error: any) {
+      if (error?.message?.includes('Could not find the table') || 
+          error?.message?.includes('does not exist') ||
+          error?.code === 'PGRST204') {
+        console.warn('[Import] income_settings table does not exist, skipping (this is OK for older schemas)');
+      } else {
+        throw error;
+      }
     }
-    console.log('[Import] Inserted', incomeSettingsToInsert.length, 'income settings');
+  }
+
+  // Insert income streams (batch) - remap linked_non_cash_asset_id when non_cash_assets are in backup
+  const incomeStreams = backupData.income_streams || [];
+  if (incomeStreams.length > 0) {
+    try {
+      const incomeStreamsToInsert = incomeStreams.map(({ id, account_id, linked_non_cash_asset_id, ...stream }: any) => ({
+        ...stream,
+        account_id: accountId,
+        linked_non_cash_asset_id: linked_non_cash_asset_id != null && assetIdMap.has(linked_non_cash_asset_id) ? assetIdMap.get(linked_non_cash_asset_id)! : null,
+      }));
+
+      const { error } = await supabase
+        .from('income_streams')
+        .insert(incomeStreamsToInsert);
+
+      if (error) {
+        if (error.message?.includes('Could not find the table') || 
+            error.message?.includes('does not exist') ||
+            error.code === 'PGRST204') {
+          console.warn('[Import] income_streams table does not exist, skipping (run migration 106)');
+        } else {
+          console.error('[Import] Error inserting income streams:', error);
+          throw error;
+        }
+      } else {
+        console.log('[Import] Inserted', incomeStreamsToInsert.length, 'income streams');
+      }
+    } catch (error: any) {
+      if (error?.message?.includes('Could not find the table') || 
+          error?.message?.includes('does not exist') ||
+          error?.code === 'PGRST204') {
+        console.warn('[Import] income_streams table does not exist, skipping');
+      } else {
+        throw error;
+      }
+    }
   }
 
   // Insert pre-tax deductions (batch)
+  // Note: pre_tax_deductions table may not exist (data stored in settings table as JSON)
   if (backupData.pre_tax_deductions && backupData.pre_tax_deductions.length > 0) {
-    const preTaxDeductionsToInsert = backupData.pre_tax_deductions.map(({ id, account_id, user_id, ...deduction }) => ({
-      ...deduction,
-      user_id: user.id,
-      account_id: accountId,
-    }));
+    try {
+      const preTaxDeductionsToInsert = backupData.pre_tax_deductions.map(({ id, account_id, user_id, ...deduction }) => ({
+        ...deduction,
+        user_id: user.id,
+        account_id: accountId,
+      }));
 
-    const { error } = await supabase
-      .from('pre_tax_deductions')
-      .insert(preTaxDeductionsToInsert);
+      const { error } = await supabase
+        .from('pre_tax_deductions')
+        .insert(preTaxDeductionsToInsert);
 
-    if (error) {
-      console.error('[Import] Error inserting pre-tax deductions:', error);
-      throw error;
+      if (error) {
+        // If table doesn't exist, skip (for backward compatibility)
+        if (error.message?.includes('Could not find the table') || 
+            error.message?.includes('does not exist') ||
+            error.code === 'PGRST204') {
+          console.warn('[Import] pre_tax_deductions table does not exist, skipping (this is OK - data stored in settings table)');
+        } else {
+          console.error('[Import] Error inserting pre-tax deductions:', error);
+          throw error;
+        }
+      } else {
+        console.log('[Import] Inserted', preTaxDeductionsToInsert.length, 'pre-tax deductions');
+      }
+    } catch (error: any) {
+      if (error?.message?.includes('Could not find the table') || 
+          error?.message?.includes('does not exist') ||
+          error?.code === 'PGRST204') {
+        console.warn('[Import] pre_tax_deductions table does not exist, skipping (this is OK - data stored in settings table)');
+      } else {
+        throw error;
+      }
     }
-    console.log('[Import] Inserted', preTaxDeductionsToInsert.length, 'pre-tax deductions');
   }
 
   // Insert settings (batch)
@@ -986,21 +1664,33 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     console.log('[Import] Inserted', settingsToInsert.length, 'settings');
   }
 
-  // Insert CSV import templates (batch)
+  // Insert CSV import templates (batch) - remap target_account_id and target_credit_card_id
   if (backupData.csv_import_templates && backupData.csv_import_templates.length > 0) {
-    const csvImportTemplatesToInsert = backupData.csv_import_templates.map(({ id, account_id, user_id, ...template }) => ({
+    const csvImportTemplatesToInsert = backupData.csv_import_templates.map(({ id, account_id, user_id, target_account_id, target_credit_card_id, ...template }) => ({
       ...template,
       user_id: user.id,
       account_id: accountId,
+      target_account_id: target_account_id != null && accountIdMap.has(target_account_id) ? accountIdMap.get(target_account_id)! : null,
+      target_credit_card_id: target_credit_card_id != null && creditCardIdMap.has(target_credit_card_id) ? creditCardIdMap.get(target_credit_card_id)! : null,
     }));
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('csv_import_templates')
-      .insert(csvImportTemplatesToInsert);
+      .insert(csvImportTemplatesToInsert)
+      .select('id');
 
     if (error) {
       console.error('[Import] Error inserting CSV import templates:', error);
       throw error;
+    }
+
+    // Build ID mapping (old ID -> new ID) for foreign key remapping
+    if (data) {
+      backupData.csv_import_templates.forEach((oldTemplate, index) => {
+        if (data[index]) {
+          csvImportTemplateIdMap.set(oldTemplate.id, data[index].id);
+        }
+      });
     }
     console.log('[Import] Inserted', csvImportTemplatesToInsert.length, 'CSV import templates');
   }
@@ -1153,7 +1843,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     }
   }
 
-  // Insert automatic_import_setups (after accounts, credit_cards are inserted)
+  // Insert automatic_import_setups (after accounts, credit_cards, csv_import_templates are inserted)
   const importSetupIdMap = new Map<number, number>();
   if (backupData.automatic_import_setups && backupData.automatic_import_setups.length > 0) {
     const setupsToInsert = backupData.automatic_import_setups.map(({ 
@@ -1162,6 +1852,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       user_id, 
       target_account_id, 
       target_credit_card_id,
+      csv_mapping_template_id,
       created_by,
       ...setup 
     }) => ({
@@ -1170,6 +1861,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
       account_id: accountId,
       target_account_id: target_account_id ? (accountIdMap.get(target_account_id) || null) : null,
       target_credit_card_id: target_credit_card_id ? (creditCardIdMap.get(target_credit_card_id) || null) : null,
+      csv_mapping_template_id: csv_mapping_template_id ? (csvImportTemplateIdMap.get(csv_mapping_template_id) || null) : null,
       // Remap created_by to current user (since we're importing to a different account, the original creator may not exist)
       created_by: user.id,
     }));
@@ -1207,6 +1899,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
         target_account_id,
         target_credit_card_id,
         imported_transaction_id,
+        csv_mapping_template_id,
         reviewed_by,
         ...queuedImport 
       }) => {
@@ -1226,6 +1919,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
           target_account_id: target_account_id ? (accountIdMap.get(target_account_id) || null) : null,
           target_credit_card_id: target_credit_card_id ? (creditCardIdMap.get(target_credit_card_id) || null) : null,
           imported_transaction_id: imported_transaction_id ? (transactionIdMap.get(imported_transaction_id) || null) : null,
+          csv_mapping_template_id: csv_mapping_template_id ? (csvImportTemplateIdMap.get(csv_mapping_template_id) || null) : null,
           // Remap reviewed_by to current user (since we're importing to a different account, the original reviewer may not exist)
           reviewed_by: user.id, // Set to current importing user
         };
@@ -1253,6 +1947,273 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
     }
   }
 
+  // Insert category_balance_audit (after categories, transactions are inserted)
+  if (backupData.category_balance_audit && backupData.category_balance_audit.length > 0) {
+    const categoryBalanceAuditToInsert = backupData.category_balance_audit.map(({ 
+      id, 
+      category_id, 
+      account_id, 
+      user_id, 
+      transaction_id,
+      ...audit 
+    }) => ({
+      ...audit,
+      category_id: category_id ? (categoryIdMap.get(category_id) || null) : null,
+      account_id: accountId,
+      user_id: user.id, // Remap to current importing user
+      transaction_id: transaction_id ? (transactionIdMap.get(transaction_id) || null) : null,
+    }))
+    .filter((audit) => {
+      // Filter out audit records that don't have a valid category_id mapping
+      // This handles cases where categories might not exist in the backup
+      return audit.category_id !== null;
+    });
+
+    if (categoryBalanceAuditToInsert.length > 0) {
+      const { error } = await supabase
+        .from('category_balance_audit')
+        .insert(categoryBalanceAuditToInsert);
+
+      if (error) {
+        console.error('[Import] Error inserting category_balance_audit:', error);
+        throw error;
+      }
+      console.log('[Import] Inserted', categoryBalanceAuditToInsert.length, 'category balance audit records');
+      
+      // Log if any were skipped
+      const skipped = backupData.category_balance_audit.length - categoryBalanceAuditToInsert.length;
+      if (skipped > 0) {
+        console.warn(`[Import] Skipped ${skipped} category balance audit records due to missing category_id mapping`);
+      }
+    } else if (backupData.category_balance_audit.length > 0) {
+      console.warn('[Import] All category balance audit records were skipped - no valid category_id mappings found');
+    }
+  }
+
+  // Insert account_balance_audit (after accounts, transactions are inserted)
+  if (backupData.account_balance_audit && backupData.account_balance_audit.length > 0) {
+    const accountBalanceAuditToInsert = backupData.account_balance_audit.map(({ 
+      id, 
+      account_id, 
+      budget_account_id, 
+      user_id, 
+      transaction_id,
+      ...audit 
+    }) => ({
+      ...audit,
+      account_id: account_id ? (accountIdMap.get(account_id) || null) : null,
+      budget_account_id: accountId,
+      user_id: user.id, // Remap to current importing user
+      transaction_id: transaction_id ? (transactionIdMap.get(transaction_id) || null) : null,
+    }))
+    .filter((audit) => {
+      // Filter out audit records that don't have a valid account_id mapping
+      return audit.account_id !== null;
+    });
+
+    if (accountBalanceAuditToInsert.length > 0) {
+      const { error } = await supabase
+        .from('account_balance_audit')
+        .insert(accountBalanceAuditToInsert);
+
+      if (error) {
+        console.error('[Import] Error inserting account_balance_audit:', error);
+        throw error;
+      }
+      console.log('[Import] Inserted', accountBalanceAuditToInsert.length, 'account balance audit records');
+      
+      const skipped = backupData.account_balance_audit.length - accountBalanceAuditToInsert.length;
+      if (skipped > 0) {
+        console.warn(`[Import] Skipped ${skipped} account balance audit records due to missing account_id mapping`);
+      }
+    } else if (backupData.account_balance_audit.length > 0) {
+      console.warn('[Import] All account balance audit records were skipped - no valid account_id mappings found');
+    }
+  }
+
+  // Insert credit_card_balance_audit (after credit_cards, transactions are inserted)
+  if (backupData.credit_card_balance_audit && backupData.credit_card_balance_audit.length > 0) {
+    const creditCardBalanceAuditToInsert = backupData.credit_card_balance_audit.map(({ 
+      id, 
+      credit_card_id, 
+      budget_account_id, 
+      user_id, 
+      transaction_id,
+      ...audit 
+    }) => ({
+      ...audit,
+      credit_card_id: credit_card_id ? (creditCardIdMap.get(credit_card_id) || null) : null,
+      budget_account_id: accountId,
+      user_id: user.id, // Remap to current importing user
+      transaction_id: transaction_id ? (transactionIdMap.get(transaction_id) || null) : null,
+    }))
+    .filter((audit) => {
+      // Filter out audit records that don't have a valid credit_card_id mapping
+      return audit.credit_card_id !== null;
+    });
+
+    if (creditCardBalanceAuditToInsert.length > 0) {
+      const { error } = await supabase
+        .from('credit_card_balance_audit')
+        .insert(creditCardBalanceAuditToInsert);
+
+      if (error) {
+        console.error('[Import] Error inserting credit_card_balance_audit:', error);
+        throw error;
+      }
+      console.log('[Import] Inserted', creditCardBalanceAuditToInsert.length, 'credit card balance audit records');
+      
+      const skipped = backupData.credit_card_balance_audit.length - creditCardBalanceAuditToInsert.length;
+      if (skipped > 0) {
+        console.warn(`[Import] Skipped ${skipped} credit card balance audit records due to missing credit_card_id mapping`);
+      }
+    } else if (backupData.credit_card_balance_audit.length > 0) {
+      console.warn('[Import] All credit card balance audit records were skipped - no valid credit_card_id mappings found');
+    }
+  }
+
+  // Insert loan_balance_audit (after loans, transactions are inserted)
+  if (backupData.loan_balance_audit && backupData.loan_balance_audit.length > 0) {
+    const loanBalanceAuditToInsert = backupData.loan_balance_audit.map(({ 
+      id, 
+      loan_id, 
+      budget_account_id, 
+      user_id, 
+      transaction_id,
+      ...audit 
+    }) => ({
+      ...audit,
+      loan_id: loan_id ? (loanIdMap.get(loan_id) || null) : null,
+      budget_account_id: accountId,
+      user_id: user.id, // Remap to current importing user
+      transaction_id: transaction_id ? (transactionIdMap.get(transaction_id) || null) : null,
+    }))
+    .filter((audit) => {
+      // Filter out audit records that don't have a valid loan_id mapping
+      return audit.loan_id !== null;
+    });
+
+    if (loanBalanceAuditToInsert.length > 0) {
+      const { error } = await supabase
+        .from('loan_balance_audit')
+        .insert(loanBalanceAuditToInsert);
+
+      if (error) {
+        console.error('[Import] Error inserting loan_balance_audit:', error);
+        throw error;
+      }
+      console.log('[Import] Inserted', loanBalanceAuditToInsert.length, 'loan balance audit records');
+      
+      const skipped = backupData.loan_balance_audit.length - loanBalanceAuditToInsert.length;
+      if (skipped > 0) {
+        console.warn(`[Import] Skipped ${skipped} loan balance audit records due to missing loan_id mapping`);
+      }
+    } else if (backupData.loan_balance_audit.length > 0) {
+      console.warn('[Import] All loan balance audit records were skipped - no valid loan_id mappings found');
+    }
+  }
+
+  // Insert asset_value_audit (after non_cash_assets are inserted; remap asset_id via assetIdMap)
+  if (backupData.asset_value_audit && backupData.asset_value_audit.length > 0 && assetIdMap.size > 0) {
+    try {
+      const assetValueAuditToInsert = backupData.asset_value_audit
+        .map(({ id, asset_id, budget_account_id, user_id, ...audit }: any) => ({
+          ...audit,
+          asset_id: asset_id != null ? (assetIdMap.get(asset_id) ?? null) : null,
+          budget_account_id: accountId,
+          user_id: user.id,
+        }))
+        .filter((audit: any) => audit.asset_id != null);
+
+      if (assetValueAuditToInsert.length > 0) {
+        const { error } = await supabase
+          .from('asset_value_audit')
+          .insert(assetValueAuditToInsert);
+
+        if (error) {
+          if (error.message?.includes('Could not find the table') || error.message?.includes('does not exist') || error.code === 'PGRST204') {
+            console.warn('[Import] asset_value_audit table does not exist, skipping');
+          } else {
+            throw error;
+          }
+        } else {
+          console.log('[Import] Inserted', assetValueAuditToInsert.length, 'asset value audit records');
+        }
+      }
+      if (backupData.asset_value_audit.length > assetValueAuditToInsert.length) {
+        console.warn('[Import] Skipped', backupData.asset_value_audit.length - assetValueAuditToInsert.length, 'asset_value_audit records (no matching asset in backup)');
+      }
+    } catch (error: any) {
+      if (error?.message?.includes('Could not find the table') || error?.message?.includes('does not exist') || error?.code === 'PGRST204') {
+        console.warn('[Import] asset_value_audit table does not exist, skipping');
+      } else {
+        throw error;
+      }
+    }
+  } else if (backupData.asset_value_audit?.length && assetIdMap.size === 0) {
+    console.warn('[Import] Skipping asset_value_audit records - backup has no non_cash_assets (backwards compatibility)');
+  }
+
+  // Insert net_worth_snapshots (no foreign key dependencies except budget_account_id)
+  // Note: net_worth_snapshots has UNIQUE(budget_account_id, snapshot_date) constraint, so duplicates will fail
+  if (backupData.net_worth_snapshots && backupData.net_worth_snapshots.length > 0) {
+    const netWorthSnapshotsToInsert = backupData.net_worth_snapshots.map(({ 
+      id, 
+      budget_account_id, 
+      ...snapshot 
+    }) => ({
+      ...snapshot,
+      budget_account_id: accountId,
+    }));
+
+    let { error } = await supabase
+      .from('net_worth_snapshots')
+      .insert(netWorthSnapshotsToInsert);
+
+    // Handle duplicate (budget_account_id, snapshot_date) constraint violations
+    if (error && error.code === '23505') {
+      console.warn('[Import] Duplicate snapshots detected in net_worth_snapshots, filtering duplicates...');
+      
+      // Get existing snapshots for this account
+      const snapshotDates = backupData.net_worth_snapshots.map(s => s.snapshot_date).filter(d => d);
+      const { data: existingSnapshots } = await supabase
+        .from('net_worth_snapshots')
+        .select('budget_account_id, snapshot_date')
+        .eq('budget_account_id', accountId)
+        .in('snapshot_date', snapshotDates);
+
+      const existingSnapshotSet = new Set(
+        existingSnapshots?.map(s => `${s.budget_account_id}-${s.snapshot_date}`) || []
+      );
+
+      // Filter out duplicates and retry
+      const nonDuplicates = netWorthSnapshotsToInsert.filter((snapshot) => {
+        const key = `${snapshot.budget_account_id}-${snapshot.snapshot_date}`;
+        return !existingSnapshotSet.has(key);
+      });
+
+      if (nonDuplicates.length > 0) {
+        const { error: retryError } = await supabase
+          .from('net_worth_snapshots')
+          .insert(nonDuplicates);
+
+        if (retryError) {
+          console.error('[Import] Error inserting non-duplicate net worth snapshots:', retryError);
+          throw retryError;
+        }
+        console.log('[Import] Inserted', nonDuplicates.length, 'net worth snapshots (skipped', netWorthSnapshotsToInsert.length - nonDuplicates.length, 'duplicates)');
+      } else {
+        console.log('[Import] All net worth snapshots were duplicates, skipped insertion');
+      }
+    } else if (error) {
+      console.error('[Import] Error inserting net_worth_snapshots:', error);
+      throw error;
+    } else {
+      console.log('[Import] Inserted', netWorthSnapshotsToInsert.length, 'net worth snapshots');
+    }
+  }
+
   console.log('[Import] Import completed successfully');
 }
+
 

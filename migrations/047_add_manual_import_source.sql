@@ -21,3 +21,4 @@ ALTER TABLE automatic_import_setups
   ));
 
 COMMIT;
+

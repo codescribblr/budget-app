@@ -147,3 +147,4 @@ export function calculateGoalStatus(goal: Goal, currentBalance: number): Goal['s
   return 'active';
 }
 
+

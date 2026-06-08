@@ -121,3 +121,4 @@ echo ""
 echo -e "${GREEN}✨ Done! Schema should now be up to date.${NC}"
 echo -e "${YELLOW}⚠️  Remember to reload schema cache in Supabase Dashboard if needed${NC}"
 
+

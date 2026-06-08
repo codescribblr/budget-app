@@ -32,3 +32,4 @@ COMMENT ON COLUMN duplicate_group_reviews.group_fingerprint IS
 
 COMMIT;
 
+

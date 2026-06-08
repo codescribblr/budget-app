@@ -6,8 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
 import { parseCSVFile } from '@/lib/csv-parser';
 import { parseImageFile } from '@/lib/image-parser';
@@ -32,13 +38,19 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
   const [fallbackError, setFallbackError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [progressStage, setProgressStage] = useState<string>('');
-  const [defaultAccountId, setDefaultAccountId] = useState<number | null>(null);
-  const [defaultCreditCardId, setDefaultCreditCardId] = useState<number | null>(null);
   const [isHistorical, setIsHistorical] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [queuedBatchId, setQueuedBatchId] = useState<string | null>(null);
   const [showProcessingDialog, setShowProcessingDialog] = useState(false);
+  const [showAccountDialog, setShowAccountDialog] = useState(false);
+  const [pendingFileForAccount, setPendingFileForAccount] = useState<File | null>(null);
+  const [selectedTargetAccountId, setSelectedTargetAccountId] = useState<number | null>(null);
+  const [selectedTargetCreditCardId, setSelectedTargetCreditCardId] = useState<number | null>(null);
+  const [pendingTargetForAIFallback, setPendingTargetForAIFallback] = useState<{
+    accountId: number | null;
+    creditCardId: number | null;
+  }>({ accountId: null, creditCardId: null });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
@@ -60,22 +72,22 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
     setCreditCards(data);
   };
 
-  const handleDefaultAccountChange = (value: string) => {
+  const handleAccountSelectionChange = (value: string) => {
     if (value === 'none') {
-      setDefaultAccountId(null);
-      setDefaultCreditCardId(null);
+      setSelectedTargetAccountId(null);
+      setSelectedTargetCreditCardId(null);
     } else if (value.startsWith('account-')) {
-      setDefaultAccountId(parseInt(value.replace('account-', '')));
-      setDefaultCreditCardId(null);
+      setSelectedTargetAccountId(parseInt(value.replace('account-', '')));
+      setSelectedTargetCreditCardId(null);
     } else if (value.startsWith('card-')) {
-      setDefaultCreditCardId(parseInt(value.replace('card-', '')));
-      setDefaultAccountId(null);
+      setSelectedTargetCreditCardId(parseInt(value.replace('card-', '')));
+      setSelectedTargetAccountId(null);
     }
   };
 
-  const getDefaultAccountValue = (): string => {
-    if (defaultAccountId) return `account-${defaultAccountId}`;
-    if (defaultCreditCardId) return `card-${defaultCreditCardId}`;
+  const getAccountSelectionValue = (): string => {
+    if (selectedTargetAccountId) return `account-${selectedTargetAccountId}`;
+    if (selectedTargetCreditCardId) return `card-${selectedTargetCreditCardId}`;
     return 'none';
   };
 
@@ -85,8 +97,32 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
     setProgressStage(stage);
   };
 
-  // Process a file (used by both file input and drag-drop)
-  const processFile = async (file: File) => {
+  // Handle file selection - show account dialog before processing
+  const handleFileSelected = (file: File) => {
+    if (disabled) {
+      setError('You only have read access to this account. Only account owners and editors can import transactions.');
+      return;
+    }
+    setSelectedTargetAccountId(null);
+    setSelectedTargetCreditCardId(null);
+    setPendingFileForAccount(file);
+    setShowAccountDialog(true);
+  };
+
+  const handleAccountDialogContinue = () => {
+    const file = pendingFileForAccount;
+    if (!file) return;
+    setShowAccountDialog(false);
+    setPendingFileForAccount(null);
+    processFile(file, selectedTargetAccountId, selectedTargetCreditCardId);
+  };
+
+  // Process a file (called after account selection)
+  const processFile = async (
+    file: File,
+    targetAccountId: number | null,
+    targetCreditCardId: number | null
+  ) => {
     if (disabled) {
       setError('You only have read access to this account. Only account owners and editors can import transactions.');
       return;
@@ -122,7 +158,11 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         
         try {
           const { loadTemplate } = await import('@/lib/mapping-templates');
-          const template = await loadTemplate(analysis.fingerprint);
+          const template = await loadTemplate(
+            analysis.fingerprint,
+            targetAccountId,
+            targetCreditCardId
+          );
           
           if (template && template.id) {
             templateFound = true;
@@ -139,7 +179,10 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         if (templateFound) {
           updateProgress(30, `Using template: ${templateName || 'Saved Template'}...`);
           // Parse CSV with template mapping
-          const result = await parseCSVFile(file);
+          const result = await parseCSVFile(file, {
+            targetAccountId,
+            targetCreditCardId,
+          });
           transactions = result.transactions;
           
           // Store CSV data and template info
@@ -182,7 +225,10 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           if (highConfidence) {
             updateProgress(30, 'Parsing CSV transactions...');
             // Auto-import with detected mapping (no template)
-            const result = await parseCSVFile(file);
+            const result = await parseCSVFile(file, {
+              targetAccountId,
+              targetCreditCardId,
+            });
             transactions = result.transactions;
             
             // Generate automatic mapping name
@@ -205,27 +251,13 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
             sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
             sessionStorage.setItem('csvData', JSON.stringify(rawData));
             sessionStorage.setItem('csvFileName', file.name);
+            sessionStorage.setItem('csvTargetAccountId', String(targetAccountId ?? ''));
+            sessionStorage.setItem('csvTargetCreditCardId', String(targetCreditCardId ?? ''));
             router.push('/import/map-columns');
             setIsProcessing(false);
             return;
           }
         }
-      } else if (
-        fileType.startsWith('image/') ||
-        fileName.endsWith('.jpg') ||
-        fileName.endsWith('.jpeg') ||
-        fileName.endsWith('.png')
-      ) {
-        updateProgress(10, 'Processing image with AI...');
-        // Images use AI parsing
-        const parseResult = await parseImageFile(file, true);
-        
-        if (parseResult.error || parseResult.transactions.length === 0) {
-          throw new Error(parseResult.error || 'No transactions found in the file');
-        }
-        
-        transactions = parseResult.transactions;
-        sessionStorage.setItem('csvFileName', file.name);
       } else if (fileName.endsWith('.pdf') || fileType === 'application/pdf') {
         updateProgress(10, 'Converting PDF to text...');
         // Parse PDF using local parser first
@@ -302,6 +334,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
               sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
               sessionStorage.setItem('csvData', JSON.stringify(csvData));
               sessionStorage.setItem('csvFileName', file.name);
+              sessionStorage.setItem('csvTargetAccountId', String(targetAccountId ?? ''));
+              sessionStorage.setItem('csvTargetCreditCardId', String(targetCreditCardId ?? ''));
               router.push('/import/map-columns');
               setIsProcessing(false);
               return;
@@ -314,6 +348,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           const errorData = await response.json();
           if (errorData.canFallbackToAI) {
             setPendingFile(file);
+            setPendingTargetForAIFallback({ accountId: targetAccountId, creditCardId: targetCreditCardId });
             setFallbackError(errorData.error || 'PDF parsing failed. AI fallback available.');
             setShowAIFallback(true);
             setIsProcessing(false);
@@ -322,7 +357,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           throw new Error(errorData.error || 'Failed to parse PDF');
         }
       } else {
-        setError('Unsupported file type. Please upload a CSV or image file.');
+        setError('Unsupported file type. Please upload a CSV or PDF file.');
         setIsProcessing(false);
         setProgress(0);
         setProgressStage('');
@@ -359,8 +394,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         body: JSON.stringify({
           transactions: transactions, // Raw transactions, not processed
           fileName: file.name,
-          targetAccountId: defaultAccountId,
-          targetCreditCardId: defaultCreditCardId,
+          targetAccountId: targetAccountId,
+          targetCreditCardId: targetCreditCardId,
           isHistorical: isHistorical,
           csvData,
           csvAnalysis,
@@ -394,10 +429,10 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
     }
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    await processFile(file);
+    handleFileSelected(file);
   };
 
   // Drag and drop handlers
@@ -438,7 +473,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
 
       const files = e.dataTransfer?.files;
       if (files && files.length > 0) {
-        processFile(files[0]);
+        handleFileSelected(files[0]);
       }
     };
 
@@ -475,11 +510,77 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv,.jpg,.jpeg,.png,.pdf,image/*"
+        accept=".csv,.pdf"
         onChange={handleFileChange}
         disabled={disabled}
         className="hidden"
       />
+
+      {/* Account selection dialog - shown before processing */}
+      <Dialog open={showAccountDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowAccountDialog(false);
+          setPendingFileForAccount(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select account for import</DialogTitle>
+            <DialogDescription>
+              Choose which account or credit card these transactions belong to. This helps us use the correct mapping (e.g., checking vs. credit card have different amount conventions).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="import-account">Transactions are for</Label>
+              <Select value={getAccountSelectionValue()} onValueChange={handleAccountSelectionChange}>
+                <SelectTrigger id="import-account">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No account (unassigned)</SelectItem>
+                  {accounts.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Accounts</div>
+                      {accounts.map((account) => (
+                        <SelectItem key={account.id} value={`account-${account.id}`}>
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                  {creditCards.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Credit Cards</div>
+                      {creditCards.map((card) => (
+                        <SelectItem key={card.id} value={`card-${card.id}`}>
+                          {card.name}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            {pendingFileForAccount && (
+              <p className="text-sm text-muted-foreground">
+                File: <span className="font-medium">{pendingFileForAccount.name}</span>
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowAccountDialog(false);
+              setPendingFileForAccount(null);
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleAccountDialogContinue}>
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
         isDragging && !disabled
@@ -489,17 +590,17 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
           : 'border-gray-300 dark:border-gray-700'
       }`}>
         <div className="space-y-4">
-          <div className="text-4xl">{isDragging && !disabled ? '📥' : '📄 📷'}</div>
+          <div className="text-4xl">{isDragging && !disabled ? '📥' : '📄'}</div>
           <div>
             <p className="text-lg font-medium">
-              {isDragging && !disabled ? 'Drop file here' : 'Upload CSV or Image'}
+              {isDragging && !disabled ? 'Drop file here' : 'Upload CSV or PDF'}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
               {isDragging && !disabled
                 ? 'Release to upload'
                 : disabled
                 ? 'Read-only users cannot import transactions'
-                : 'Upload a CSV file or screenshot/photo of transactions'}
+                : 'Upload a CSV file or PDF statement of transactions'}
             </p>
           </div>
           <Button onClick={handleButtonClick} disabled={isProcessing || disabled}>
@@ -562,10 +663,13 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                   updateProgress(40, `Found ${aiResult.transactions.length} transaction${aiResult.transactions.length !== 1 ? 's' : ''}. Checking for duplicates...`);
                   const { processTransactions } = await import('@/lib/csv-parser-helpers');
                   // AI categorization is now done on-demand in TransactionPreview
+                  const targetAccId = pendingTargetForAIFallback.accountId;
+                  const targetCardId = pendingTargetForAIFallback.creditCardId;
+
                   const processedTransactions = await processTransactions(
                     aiResult.transactions,
-                    undefined,
-                    undefined,
+                    targetAccId ?? undefined,
+                    targetCardId ?? undefined,
                     true, // Always skip AI categorization - user can trigger it manually in preview
                     updateProgress
                   );
@@ -573,8 +677,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                   // Apply default account/card and historical flag to transactions before saving
                   const transactionsWithDefaults = processedTransactions.map(txn => ({
                     ...txn,
-                    account_id: (txn.account_id !== undefined && txn.account_id !== null) ? txn.account_id : (defaultAccountId || null),
-                    credit_card_id: (txn.credit_card_id !== undefined && txn.credit_card_id !== null) ? txn.credit_card_id : (defaultCreditCardId || null),
+                    account_id: (txn.account_id !== undefined && txn.account_id !== null) ? txn.account_id : (targetAccId || null),
+                    credit_card_id: (txn.credit_card_id !== undefined && txn.credit_card_id !== null) ? txn.credit_card_id : (targetCardId || null),
                     is_historical: isHistorical,
                   }));
 
@@ -586,8 +690,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
                     body: JSON.stringify({
                       transactions: aiResult.transactions, // Raw transactions, not processed
                       fileName: pendingFile!.name,
-                      targetAccountId: defaultAccountId,
-                      targetCreditCardId: defaultCreditCardId,
+                      targetAccountId: targetAccId,
+                      targetCreditCardId: targetCardId,
                       isHistorical: isHistorical,
                     }),
                   });
@@ -627,9 +731,6 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
               Cancel
             </Button>
           </div>
-          <p className="text-xs text-yellow-700 dark:text-yellow-300">
-            💡 AI parsing requires OpenAI API key configured in your environment
-          </p>
         </div>
       )}
 
@@ -637,13 +738,8 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         <p className="font-medium">Supported formats:</p>
         <ul className="list-disc list-inside space-y-1 ml-2">
           <li><strong>CSV Files:</strong> Any bank statement format (auto-detected)</li>
-          <li><strong>Screenshots:</strong> Bank statements, transaction history</li>
-          <li><strong>Photos:</strong> Receipts, mobile banking screenshots</li>
-          <li><strong>Images:</strong> JPG, PNG, PDF</li>
+          <li><strong>PDF Files:</strong> Bank statements and transaction history</li>
         </ul>
-        <p className="text-xs mt-3 p-2 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
-          💡 <strong>Image processing requires OpenAI API key.</strong> Add OPENAI_API_KEY to your .env.local file.
-        </p>
       </div>
     </div>
   );
@@ -664,4 +760,5 @@ function parseCSVToArray(file: File): Promise<string[][]> {
     });
   });
 }
+
 

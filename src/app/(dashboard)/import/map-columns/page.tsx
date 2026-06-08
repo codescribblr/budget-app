@@ -36,7 +36,7 @@ import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
 import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
 
-type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'ignore';
+type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'status' | 'ignore';
 
 /**
  * Parse amount string to number (helper function)
@@ -116,6 +116,79 @@ function detectAmountSignConvention(
   return 'positive_is_expense';
 }
 
+/**
+ * Detect if a column contains transaction type values (credit/debit/income/expense)
+ * Returns the column index if found, null otherwise
+ */
+function detectTransactionTypeColumn(
+  data: string[][],
+  columns: ColumnAnalysis[],
+  hasHeaders: boolean,
+  excludeColumns: Set<number>
+): number | null {
+  const transactionTypeValues = ['CREDIT', 'DEBIT', 'CR', 'DB', 'INCOME', 'EXPENSE', 'DEPOSIT', 'WITHDRAWAL', '+', '-'];
+  const startRow = hasHeaders ? 1 : 0;
+  const sampleSize = Math.min(20, data.length - startRow);
+
+  for (const col of columns) {
+    if (excludeColumns.has(col.columnIndex)) continue;
+    
+    // Check header first
+    if (hasHeaders && col.headerName) {
+      const headerUpper = col.headerName.toUpperCase().trim();
+      if (['TYPE', 'TRANSACTION TYPE', 'TXN TYPE', 'TRANS TYPE'].includes(headerUpper)) {
+        // Check if values match transaction type patterns
+        let matchCount = 0;
+        let validValues = 0;
+        
+        for (let i = startRow; i < startRow + sampleSize && i < data.length; i++) {
+          const row = data[i];
+          if (!row || row.length <= col.columnIndex) continue;
+          
+          const value = row[col.columnIndex]?.trim();
+          if (!value) continue;
+          
+          validValues++;
+          const valueUpper = value.toUpperCase();
+          if (transactionTypeValues.some(pattern => valueUpper.includes(pattern))) {
+            matchCount++;
+          }
+        }
+        
+        // If at least 70% of values match transaction type patterns, consider it a match
+        if (validValues >= 3 && matchCount / validValues >= 0.7) {
+          return col.columnIndex;
+        }
+      }
+    }
+    
+    // Check values even if header doesn't match
+    let matchCount = 0;
+    let validValues = 0;
+    
+    for (let i = startRow; i < startRow + sampleSize && i < data.length; i++) {
+      const row = data[i];
+      if (!row || row.length <= col.columnIndex) continue;
+      
+      const value = row[col.columnIndex]?.trim();
+      if (!value) continue;
+      
+      validValues++;
+      const valueUpper = value.toUpperCase();
+      if (transactionTypeValues.some(pattern => valueUpper.includes(pattern))) {
+        matchCount++;
+      }
+    }
+    
+    // If at least 70% of values match transaction type patterns, consider it a match
+    if (validValues >= 3 && matchCount / validValues >= 0.7) {
+      return col.columnIndex;
+    }
+  }
+  
+  return null;
+}
+
 export default function MapColumnsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -131,6 +204,7 @@ export default function MapColumnsPage() {
   const [sampleData, setSampleData] = useState<string[][]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [transactionTypeColumn, setTransactionTypeColumn] = useState<number | null>(null);
+  const [statusColumn, setStatusColumn] = useState<number | null>(null);
   const [amountSignConvention, setAmountSignConvention] = useState<'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit'>('positive_is_expense');
   const [remapBatchId, setRemapBatchId] = useState<string | null>(null);
   const [currentTemplateId, setCurrentTemplateId] = useState<number | null>(null);
@@ -142,6 +216,8 @@ export default function MapColumnsPage() {
   const [isProcessingRemap, setIsProcessingRemap] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [processingStage, setProcessingStage] = useState('');
+  const [targetAccountId, setTargetAccountId] = useState<number | null>(null);
+  const [targetCreditCardId, setTargetCreditCardId] = useState<number | null>(null);
 
   useEffect(() => {
     // Check permissions - redirect if read-only user
@@ -199,6 +275,8 @@ export default function MapColumnsPage() {
           setRemapBatchId(batchId);
           setCurrentTemplateId(templateId);
           setCurrentTemplateName(templateName);
+          setTargetAccountId(remapData.targetAccountId ?? null);
+          setTargetCreditCardId(remapData.targetCreditCardId ?? null);
           
           // Store in sessionStorage for template dialog
           sessionStorage.setItem('csvData', JSON.stringify(csvData));
@@ -209,6 +287,8 @@ export default function MapColumnsPage() {
           const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
           const csvDataStr = sessionStorage.getItem('csvData');
           fileNameStr = sessionStorage.getItem('csvFileName') || '';
+          const targetAccountIdStr = sessionStorage.getItem('csvTargetAccountId') || '';
+          const targetCreditCardIdStr = sessionStorage.getItem('csvTargetCreditCardId') || '';
 
           if (!csvAnalysisStr || !csvDataStr) {
             router.push('/import');
@@ -217,6 +297,12 @@ export default function MapColumnsPage() {
 
           analysisData = JSON.parse(csvAnalysisStr);
           csvData = JSON.parse(csvDataStr);
+
+          // Target account for template save and queue (from sessionStorage for normal flow)
+          const tid = targetAccountIdStr ? parseInt(targetAccountIdStr, 10) : null;
+          const cid = targetCreditCardIdStr ? parseInt(targetCreditCardIdStr, 10) : null;
+          setTargetAccountId(isNaN(tid as number) ? null : tid);
+          setTargetCreditCardId(isNaN(cid as number) ? null : cid);
         }
 
         // Validate data structure
@@ -243,40 +329,90 @@ export default function MapColumnsPage() {
           if (currentMapping.creditColumn !== null) initialMappings[currentMapping.creditColumn] = 'credit';
           setAmountSignConvention(currentMapping.amountSignConvention);
           setTransactionTypeColumn(currentMapping.transactionTypeColumn);
+          setStatusColumn(currentMapping.statusColumn);
         } else {
-          // Initialize from analysis
+          // Initialize from analysis - only use the best match for each field type
+          // The analysis already finds the highest confidence column for each type
+          const mappedColumns = new Set<number>();
+          
+          if (analysisData.dateColumn !== null) {
+            initialMappings[analysisData.dateColumn] = 'date';
+            mappedColumns.add(analysisData.dateColumn);
+          }
+          if (analysisData.descriptionColumn !== null) {
+            initialMappings[analysisData.descriptionColumn] = 'description';
+            mappedColumns.add(analysisData.descriptionColumn);
+          }
+          
+          // Detect amount sign convention and handle special cases
+          let detectedConvention: 'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit' = 'positive_is_expense';
+          let detectedTransactionTypeColumn: number | null = null;
+          
+          // Case 1: If both debit and credit columns exist, use separate_debit_credit convention
+          if (analysisData.debitColumn !== null && analysisData.creditColumn !== null) {
+            detectedConvention = 'separate_debit_credit';
+            initialMappings[analysisData.debitColumn] = 'debit';
+            mappedColumns.add(analysisData.debitColumn);
+            initialMappings[analysisData.creditColumn] = 'credit';
+            mappedColumns.add(analysisData.creditColumn);
+          }
+          // Case 2: If there's an amount column, check for transaction type column
+          else if (analysisData.amountColumn !== null) {
+            // Check if there's a transaction type column
+            const transactionTypeCol = detectTransactionTypeColumn(
+              csvData,
+              analysisData.columns || [],
+              analysisData.hasHeaders,
+              mappedColumns
+            );
+            
+            if (transactionTypeCol !== null) {
+              // Use separate_column convention
+              detectedConvention = 'separate_column';
+              detectedTransactionTypeColumn = transactionTypeCol;
+              initialMappings[analysisData.amountColumn] = 'amount';
+              mappedColumns.add(analysisData.amountColumn);
+              // Note: transactionTypeColumn is stored separately, not in mappings
+              // The column will be shown in the UI but doesn't need to be in initialMappings
+            } else {
+              // Use standard amount column with sign convention detection
+              initialMappings[analysisData.amountColumn] = 'amount';
+              mappedColumns.add(analysisData.amountColumn);
+              detectedConvention = detectAmountSignConvention(
+                csvData,
+                analysisData.amountColumn,
+                analysisData.hasHeaders
+              );
+            }
+          }
+          // Case 3: Only debit or credit column exists (shouldn't happen often, but handle it)
+          else if (analysisData.debitColumn !== null || analysisData.creditColumn !== null) {
+            // If only one exists, we can't use separate_debit_credit, so fall back to amount detection
+            if (analysisData.debitColumn !== null) {
+              initialMappings[analysisData.debitColumn] = 'debit';
+              mappedColumns.add(analysisData.debitColumn);
+            }
+            if (analysisData.creditColumn !== null) {
+              initialMappings[analysisData.creditColumn] = 'credit';
+              mappedColumns.add(analysisData.creditColumn);
+            }
+            // Note: This case is unusual - typically both debit and credit should exist together
+          }
+
+          // Explicitly set all other columns to "ignore" for clarity
+          // This makes it clear which columns are being used and which should be ignored
           if (Array.isArray(analysisData.columns)) {
             analysisData.columns.forEach((col: ColumnAnalysis) => {
-              if (col && col.fieldType !== 'unknown' && col.confidence > 0.5) {
-                initialMappings[col.columnIndex] = col.fieldType as FieldType;
+              if (col && !mappedColumns.has(col.columnIndex)) {
+                initialMappings[col.columnIndex] = 'ignore';
               }
             });
           }
 
-          if (analysisData.dateColumn !== null) {
-            initialMappings[analysisData.dateColumn] = 'date';
-          }
-          if (analysisData.amountColumn !== null) {
-            initialMappings[analysisData.amountColumn] = 'amount';
-          }
-          if (analysisData.descriptionColumn !== null) {
-            initialMappings[analysisData.descriptionColumn] = 'description';
-          }
-          if (analysisData.debitColumn !== null) {
-            initialMappings[analysisData.debitColumn] = 'debit';
-          }
-          if (analysisData.creditColumn !== null) {
-            initialMappings[analysisData.creditColumn] = 'credit';
-          }
-
-          // Detect amount sign convention
-          if (analysisData.amountColumn !== null) {
-            const detectedConvention = detectAmountSignConvention(
-              csvData,
-              analysisData.amountColumn,
-              analysisData.hasHeaders
-            );
-            setAmountSignConvention(detectedConvention);
+          // Set the detected convention and transaction type column
+          setAmountSignConvention(detectedConvention);
+          if (detectedTransactionTypeColumn !== null) {
+            setTransactionTypeColumn(detectedTransactionTypeColumn);
           }
         }
 
@@ -333,6 +469,7 @@ export default function MapColumnsPage() {
       debitColumn: findColumnForField('debit'),
       creditColumn: findColumnForField('credit'),
       transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
+      statusColumn: statusColumn,
       amountSignConvention,
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
@@ -564,6 +701,8 @@ export default function MapColumnsPage() {
             fingerprint: analysis.fingerprint,
             columnCount: analysis.columns.length,
             mapping,
+            targetAccountId: targetAccountId ?? undefined,
+            targetCreditCardId: targetCreditCardId ?? undefined,
           });
           savedTemplateId = savedTemplate.id;
           mappingName = savedTemplate.templateName || templateName || 'Saved Template';
@@ -587,6 +726,8 @@ export default function MapColumnsPage() {
         body: JSON.stringify({
           transactions, // Raw parsed transactions, NOT processed
           fileName,
+          targetAccountId: targetAccountId ?? undefined,
+          targetCreditCardId: targetCreditCardId ?? undefined,
           csvData, // csvData is already parsed from sessionStorage above
           csvAnalysis: analysis,
           csvFingerprint: analysis.fingerprint,
@@ -656,6 +797,7 @@ export default function MapColumnsPage() {
       debitColumn: findColumnForField('debit'),
       creditColumn: findColumnForField('credit'),
       transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
+      statusColumn: statusColumn,
       amountSignConvention,
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
@@ -871,6 +1013,7 @@ export default function MapColumnsPage() {
                             <SelectItem value="description">Description {findColumnForField('description') === column.columnIndex && '✓'}</SelectItem>
                             <SelectItem value="debit">Debit {findColumnForField('debit') === column.columnIndex && '✓'}</SelectItem>
                             <SelectItem value="credit">Credit {findColumnForField('credit') === column.columnIndex && '✓'}</SelectItem>
+                            <SelectItem value="status">Status {findColumnForField('status') === column.columnIndex && '✓'}</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -955,6 +1098,41 @@ export default function MapColumnsPage() {
                   </p>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Status Column Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Status Column (Optional)</CardTitle>
+              <CardDescription>
+                Map a column containing transaction status (e.g., "pending", "cleared", "posted") to automatically filter out pending transactions
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="status-column">Status Column</Label>
+                <Select
+                  value={statusColumn?.toString() || 'none'}
+                  onValueChange={(value) => setStatusColumn(value === 'none' ? null : parseInt(value))}
+                >
+                  <SelectTrigger id="status-column">
+                    <SelectValue placeholder="Select column (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (don't filter by status)</SelectItem>
+                    {analysis.columns.map((col) => (
+                      <SelectItem key={col.columnIndex} value={col.columnIndex.toString()}>
+                        {col.headerName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  If mapped, transactions with status "pending", "processing", "authorized", etc. will be automatically excluded from the import.
+                  Transactions with status "posted", "cleared", "completed", etc. will be included.
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -1291,6 +1469,7 @@ export default function MapColumnsPage() {
                     debitColumn: findColumnForField('debit'),
                     creditColumn: findColumnForField('credit'),
                     transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
+                    statusColumn: statusColumn,
                     amountSignConvention,
                     dateFormat: analysis.dateFormat,
                     hasHeaders: analysis.hasHeaders,
@@ -1484,4 +1663,5 @@ export default function MapColumnsPage() {
     </div>
   );
 }
+
 
