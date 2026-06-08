@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
-import { createClient } from '@/lib/supabase/server';
+import { recordRecurringFeedback } from '@/lib/recurring-transactions/user-feedback';
 
 /**
  * GET /api/recurring-transactions/[id]
@@ -92,6 +92,7 @@ export async function PATCH(
       'credit_card_id',
       'is_active',
       'is_confirmed',
+      'tracking_status',
       'notes',
       'reminder_days_before',
       'reminder_enabled',
@@ -112,6 +113,20 @@ export async function PATCH(
       updateData.amount_variance = body.amount_variance ? Math.abs(body.amount_variance) : 0;
     }
 
+    if (body.is_confirmed === true) {
+      updateData.tracking_status = 'confirmed';
+    }
+
+    if (body.tracking_status === 'dismissed') {
+      updateData.dismissed_at = new Date().toISOString();
+      updateData.dismissed_reason = body.dismissed_reason || 'not_recurring';
+      updateData.is_active = false;
+    }
+
+    if (body.tracking_status === 'paused') {
+      updateData.status_reason = body.status_reason || 'user_paused';
+    }
+
     const { data: recurringTransaction, error } = await supabase
       .from('recurring_transactions')
       .update(updateData)
@@ -126,6 +141,14 @@ export async function PATCH(
         return NextResponse.json({ error: 'Recurring transaction not found' }, { status: 404 });
       }
       throw error;
+    }
+
+    if (body.is_confirmed === true || body.tracking_status === 'confirmed') {
+      await recordRecurringFeedback(supabase, user.id, accountId, recurringTransaction, 'confirmed');
+    }
+
+    if (body.tracking_status === 'dismissed') {
+      await recordRecurringFeedback(supabase, user.id, accountId, recurringTransaction, 'dismissed');
     }
 
     // Normalize amounts to always be positive (even if stored as negative)
@@ -165,6 +188,14 @@ export async function DELETE(
 
     const { id } = await params;
 
+    const { data: existing } = await supabase
+      .from('recurring_transactions')
+      .select('*')
+      .eq('id', parseInt(id))
+      .eq('user_id', user.id)
+      .eq('budget_account_id', accountId)
+      .single();
+
     const { error } = await supabase
       .from('recurring_transactions')
       .delete()
@@ -173,6 +204,10 @@ export async function DELETE(
       .eq('budget_account_id', accountId);
 
     if (error) throw error;
+
+    if (existing) {
+      await recordRecurringFeedback(supabase, user.id, accountId, existing, 'dismissed');
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const lookbackMonths = body.lookbackMonths || 24;
+    const lookbackMonths = body.lookbackMonths || 15;
 
     // Detect patterns
     const patterns = await detectRecurringTransactions(user.id, accountId, lookbackMonths);
