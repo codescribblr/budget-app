@@ -553,6 +553,42 @@ export async function exportUserData(): Promise<UserBackupData> {
   };
 }
 
+async function loadValidGlobalMerchantIds(
+  supabase: SupabaseClient,
+  ids: number[]
+): Promise<Set<number>> {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) {
+    return new Set();
+  }
+
+  const { data, error } = await supabase.from('global_merchants').select('id').in('id', uniqueIds);
+  if (error) {
+    console.warn('[Import] Could not validate global_merchant references, clearing links:', error);
+    return new Set();
+  }
+
+  return new Set(data?.map((merchant) => merchant.id) ?? []);
+}
+
+function collectGlobalMerchantIdsFromBackup(backupData: UserBackupData): number[] {
+  const ids: number[] = [];
+
+  for (const group of backupData.merchant_groups ?? []) {
+    if (group.global_merchant_id != null) {
+      ids.push(group.global_merchant_id);
+    }
+  }
+
+  for (const transaction of backupData.transactions ?? []) {
+    if (transaction.merchant_override_id != null) {
+      ids.push(transaction.merchant_override_id);
+    }
+  }
+
+  return ids;
+}
+
 /**
  * Import user data from a JSON backup
  * This now uses the same ID remapping logic as importUserDataFromFile
@@ -768,13 +804,21 @@ export async function importUserDataFromFile(
   const tagIdMap = new Map<number, number>();
   const recurringTransactionIdMap = new Map<number, number>();
   const csvImportTemplateIdMap = new Map<number, number>();
+  const goalIdMap = new Map<number, number>();
+
+  const validGlobalMerchantIds = await loadValidGlobalMerchantIds(
+    supabase,
+    collectGlobalMerchantIdsFromBackup(backupData)
+  );
 
   // Insert accounts (batch)
   if (backupData.accounts && backupData.accounts.length > 0) {
-    const accountsToInsert = backupData.accounts.map(({ id, account_id, user_id, ...account }) => ({
+    const accountsToInsert = backupData.accounts.map(({ id, account_id, user_id, linked_goal_id, ...account }) => ({
       ...account,
       user_id: user.id,
       account_id: accountId,
+      // Goals are inserted later; clear stale FK refs from the backup (invalid cross-account IDs).
+      linked_goal_id: null,
     }));
 
     const { data, error } = await supabase
@@ -907,24 +951,65 @@ export async function importUserDataFromFile(
       linked_loan_id: linked_loan_id ? (loanIdMap.get(linked_loan_id) || null) : null,
     }));
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('goals')
-      .insert(goalsToInsert);
+      .insert(goalsToInsert)
+      .select('id');
 
     if (error) {
       console.error('[Import] Error inserting goals:', error);
       throw error;
     }
+
+    backupData.goals.forEach((oldGoal, index) => {
+      if (data[index]) {
+        goalIdMap.set(oldGoal.id, data[index].id);
+      }
+    });
     console.log('[Import] Inserted', goalsToInsert.length, 'goals');
+
+    // Restore account ↔ goal links after both are inserted
+    for (const oldAccount of backupData.accounts ?? []) {
+      if (!oldAccount.linked_goal_id || !goalIdMap.has(oldAccount.linked_goal_id)) {
+        continue;
+      }
+      const newAccountId = accountIdMap.get(oldAccount.id);
+      const newGoalId = goalIdMap.get(oldAccount.linked_goal_id);
+      if (!newAccountId || !newGoalId) {
+        continue;
+      }
+      const { error: linkError } = await supabase
+        .from('accounts')
+        .update({ linked_goal_id: newGoalId })
+        .eq('id', newAccountId);
+      if (linkError) {
+        console.warn('[Import] Failed to restore account goal link:', linkError);
+      }
+    }
   }
 
   // Insert merchant groups (batch)
   if (backupData.merchant_groups && backupData.merchant_groups.length > 0) {
-    const merchantGroupsToInsert = backupData.merchant_groups.map(({ id, account_id, user_id, ...group }) => ({
-      ...group,
-      user_id: user.id,
-      account_id: accountId,
-    }));
+    const merchantGroupsToInsert = backupData.merchant_groups.map(
+      ({ id, account_id, user_id, global_merchant_id, ...group }) => ({
+        ...group,
+        user_id: user.id,
+        account_id: accountId,
+        global_merchant_id:
+          global_merchant_id != null && validGlobalMerchantIds.has(global_merchant_id)
+            ? global_merchant_id
+            : null,
+      })
+    );
+
+    const clearedGlobalMerchantLinks = backupData.merchant_groups.filter(
+      (group) => group.global_merchant_id != null && !validGlobalMerchantIds.has(group.global_merchant_id)
+    ).length;
+    if (clearedGlobalMerchantLinks > 0) {
+      console.warn(
+        `[Import] Cleared global_merchant_id on ${clearedGlobalMerchantLinks} merchant groups (referenced global merchants not found in this environment)`
+      );
+    }
 
     const { data, error } = await supabase
       .from('merchant_groups')
@@ -1033,14 +1118,40 @@ export async function importUserDataFromFile(
 
   // Insert transactions (batch with remapped foreign keys)
   if (backupData.transactions && backupData.transactions.length > 0) {
-    const transactionsToInsert = backupData.transactions.map(({ id, budget_account_id, user_id, merchant_group_id, account_id, credit_card_id, ...transaction }) => ({
-      ...transaction,
-      user_id: user.id,
-      budget_account_id: accountId,
-      merchant_group_id: merchant_group_id ? (merchantGroupIdMap.get(merchant_group_id) || null) : null,
-      account_id: account_id ? (accountIdMap.get(account_id) || null) : null,
-      credit_card_id: credit_card_id ? (creditCardIdMap.get(credit_card_id) || null) : null,
-    }));
+    const transactionsToInsert = backupData.transactions.map(
+      ({
+        id,
+        budget_account_id,
+        user_id,
+        merchant_group_id,
+        merchant_override_id,
+        account_id,
+        credit_card_id,
+        ...transaction
+      }) => ({
+        ...transaction,
+        user_id: user.id,
+        budget_account_id: accountId,
+        merchant_group_id: merchant_group_id ? (merchantGroupIdMap.get(merchant_group_id) || null) : null,
+        merchant_override_id:
+          merchant_override_id != null && validGlobalMerchantIds.has(merchant_override_id)
+            ? merchant_override_id
+            : null,
+        account_id: account_id ? (accountIdMap.get(account_id) || null) : null,
+        credit_card_id: credit_card_id ? (creditCardIdMap.get(credit_card_id) || null) : null,
+      })
+    );
+
+    const clearedMerchantOverrides = backupData.transactions.filter(
+      (transaction) =>
+        transaction.merchant_override_id != null &&
+        !validGlobalMerchantIds.has(transaction.merchant_override_id)
+    ).length;
+    if (clearedMerchantOverrides > 0) {
+      console.warn(
+        `[Import] Cleared merchant_override_id on ${clearedMerchantOverrides} transactions (referenced global merchants not found in this environment)`
+      );
+    }
 
     const { data, error } = await supabase
       .from('transactions')
