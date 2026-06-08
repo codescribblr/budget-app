@@ -3,7 +3,10 @@
  * Usage: npx tsx scripts/run-recurring-detection-local.ts [email]
  */
 import { createClient } from '@supabase/supabase-js';
-import { detectRecurringTransactionsFromData } from '../src/lib/recurring-transactions/detect-from-data';
+import {
+  detectRecurringTransactionsFromData,
+  effectiveLookbackMonths,
+} from '../src/lib/recurring-transactions/detect-from-data';
 import type { DetectionTransaction } from '../src/lib/recurring-transactions/types';
 
 const email = process.argv[2] || 'jonathanwadsworth+1@gmail.com';
@@ -25,9 +28,10 @@ async function main() {
 
   if (!budgetAccount) throw new Error('No budget account');
 
+  const lookbackMonths = effectiveLookbackMonths(15);
   const endDate = new Date();
   const startDate = new Date();
-  startDate.setMonth(startDate.getMonth() - 15);
+  startDate.setMonth(startDate.getMonth() - lookbackMonths);
 
   let all: any[] = [];
   let from = 0;
@@ -84,7 +88,7 @@ async function main() {
 
   const patterns = detectRecurringTransactionsFromData(mapped, {
     userFeedback: (feedback || []) as any,
-    lookbackMonths: 15,
+    lookbackMonths,
   });
 
   console.log(`\nUser: ${email}`);

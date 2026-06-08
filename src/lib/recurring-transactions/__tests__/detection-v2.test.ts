@@ -94,7 +94,7 @@ function monthlyDates(startYear: number, startMonth: number, count: number, day 
   console.log('✓ City Electric variable utility detected');
 }
 
-// Single explicit-text occurrence
+// Single explicit-text occurrence (recent)
 {
   const patterns = detectRecurringTransactionsFromData([
     txn({
@@ -105,11 +105,238 @@ function monthlyDates(startYear: number, startMonth: number, count: number, day 
       merchant_name: 'NETFLIX.COM',
       description: 'NETFLIX SUBSCRIPTION',
     }),
+    txn({
+      id: 301,
+      date: new Date().toISOString().split('T')[0],
+      total_amount: 12.99,
+      merchant_group_id: 51,
+      merchant_name: 'Spotify',
+      splits: [
+        {
+          category_id: 1,
+          amount: 12.99,
+          category_name: 'Subscriptions',
+          is_system: false,
+          is_buffer: false,
+        },
+      ],
+    }),
   ]);
-  assert.ok(patterns.length >= 1, 'Single explicit subscription should surface');
-  assert.equal(patterns[0].occurrenceCount, 1);
-  assert.equal(patterns[0].nextExpectedDate, null);
+  const netflix = patterns.find((pattern) => pattern.merchantName === 'NETFLIX.COM');
+  assert.ok(netflix, 'Single explicit subscription should surface when recent');
+  assert.equal(netflix.occurrenceCount, 1);
+  assert.equal(netflix.nextExpectedDate, null);
   console.log('✓ Single explicit-text Netflix detected');
+}
+
+// Yearly subscription with two charges one year apart
+{
+  const patterns = detectRecurringTransactionsFromData([
+    txn({
+      id: 350,
+      date: '2024-12-30',
+      total_amount: 30,
+      merchant_group_id: 99,
+      merchant_name: 'Nebula',
+      description: 'NEBULA SUBSCRIPTION DENVER CO',
+    }),
+    txn({
+      id: 351,
+      date: '2025-12-30',
+      total_amount: 30,
+      merchant_group_id: 99,
+      merchant_name: 'Nebula',
+      description: 'NEBULA SUBSCRIPTION',
+    }),
+    txn({
+      id: 352,
+      date: new Date().toISOString().split('T')[0],
+      total_amount: 5,
+      merchant_group_id: 51,
+      merchant_name: 'Spotify',
+      splits: [
+        {
+          category_id: 1,
+          amount: 5,
+          category_name: 'Subscriptions',
+          is_system: false,
+          is_buffer: false,
+        },
+      ],
+    }),
+  ]);
+  const nebula = patterns.find((pattern) => pattern.merchantName === 'Nebula');
+  assert.ok(nebula, 'Yearly subscription with two annual charges should be detected');
+  assert.equal(nebula.frequency, 'yearly');
+  assert.equal(nebula.occurrenceCount, 2);
+  assert.deepEqual(nebula.transactionIds.sort(), [350, 351]);
+  console.log('✓ Yearly subscription detected with both charges');
+}
+
+// Single explicit-text occurrence (stale) — should not surface
+{
+  const patterns = detectRecurringTransactionsFromData([
+    txn({
+      id: 302,
+      date: '2024-12-30',
+      total_amount: 30,
+      merchant_group_id: 99,
+      merchant_name: 'Nebula',
+      description: 'NEBULA SUBSCRIPTION',
+    }),
+    txn({
+      id: 303,
+      date: new Date().toISOString().split('T')[0],
+      total_amount: 5,
+      merchant_group_id: 51,
+      merchant_name: 'Spotify',
+      splits: [
+        {
+          category_id: 1,
+          amount: 5,
+          category_name: 'Subscriptions',
+          is_system: false,
+          is_buffer: false,
+        },
+      ],
+    }),
+  ]);
+  assert.equal(
+    patterns.find((pattern) => pattern.merchantName === 'Nebula'),
+    undefined,
+    'Stale single-occurrence explicit-text patterns should be rejected'
+  );
+  console.log('✓ Stale single-occurrence explicit-text rejected');
+}
+
+// System: merchant groups are excluded (bookkeeping merchants, not budget categories)
+{
+  const now = new Date();
+  const dates = monthlyDates(now.getFullYear(), now.getMonth() - 2, 4);
+  const patterns = detectRecurringTransactionsFromData(
+    dates.map((date, i) =>
+      txn({
+        id: 400 + i,
+        date,
+        total_amount: 150,
+        merchant_group_id: 99,
+        merchant_name: 'System: Transfer',
+        splits: [
+          {
+            category_id: 10,
+            amount: 150,
+            category_name: 'JRWDevelopment',
+            is_system: false,
+            is_buffer: false,
+          },
+        ],
+      })
+    )
+  );
+  assert.equal(patterns.length, 0, 'System: merchant groups should be excluded');
+  console.log('✓ System: merchant groups excluded');
+}
+
+// Lapsed monthly patterns are rejected when account data is fresh
+{
+  const patterns = detectRecurringTransactionsFromData([
+    txn({
+      id: 500,
+      date: '2024-10-22',
+      total_amount: 804.76,
+      merchant_group_id: 50,
+      merchant_name: 'Truist Bank',
+    }),
+    txn({
+      id: 501,
+      date: '2024-11-27',
+      total_amount: 804.76,
+      merchant_group_id: 50,
+      merchant_name: 'Truist Bank',
+    }),
+    txn({
+      id: 502,
+      date: '2025-02-21',
+      total_amount: 804.76,
+      merchant_group_id: 50,
+      merchant_name: 'Truist Bank',
+    }),
+    txn({
+      id: 503,
+      date: '2025-03-21',
+      total_amount: 804.76,
+      merchant_group_id: 50,
+      merchant_name: 'Truist Bank',
+    }),
+    txn({
+      id: 600,
+      date: new Date().toISOString().split('T')[0],
+      total_amount: 12.99,
+      merchant_group_id: 51,
+      merchant_name: 'Spotify',
+      splits: [
+        {
+          category_id: 1,
+          amount: 12.99,
+          category_name: 'Subscriptions',
+          is_system: false,
+          is_buffer: false,
+        },
+      ],
+    }),
+  ]);
+  assert.equal(
+    patterns.find((pattern) => pattern.merchantName === 'Truist Bank'),
+    undefined,
+    'Lapsed monthly patterns should not be suggested when newer account data exists'
+  );
+  console.log('✓ Lapsed patterns rejected when account data is fresh');
+}
+
+// Biweekly payroll income
+{
+  const now = new Date();
+  const base = new Date(now);
+  base.setDate(base.getDate() - 84);
+  const transactions = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(base);
+    d.setDate(d.getDate() + i * 14);
+    return txn({
+      id: 700 + i,
+      date: d.toISOString().split('T')[0],
+      total_amount: 3734.04,
+      merchant_group_id: 200,
+      merchant_name: 'Sttark',
+      description: 'STTARK GR PAYROLL',
+      transaction_type: 'income',
+      splits: [
+        {
+          category_id: 99,
+          amount: 3734.04,
+          category_name: 'Paycheck',
+          is_system: true,
+          is_buffer: false,
+        },
+      ],
+    });
+  });
+  transactions.push(
+    txn({
+      id: 710,
+      date: now.toISOString().split('T')[0],
+      total_amount: 12.99,
+      merchant_group_id: 51,
+      merchant_name: 'Spotify',
+      transaction_type: 'expense',
+    })
+  );
+  const patterns = detectRecurringTransactionsFromData(transactions);
+  const payroll = patterns.find((pattern) => pattern.merchantName === 'Sttark');
+  assert.ok(payroll, 'Payroll income should be detected');
+  assert.equal(payroll.transactionType, 'income');
+  assert.equal(payroll.chargeClass, 'income_payroll');
+  assert.equal(payroll.frequency, 'biweekly');
+  console.log('✓ Biweekly payroll income detected');
 }
 
 console.log('\nAll detection V2 tests passed.');

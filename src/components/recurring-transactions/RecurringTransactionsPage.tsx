@@ -14,7 +14,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
 } from '@/components/ui/dropdown-menu';
 import { 
   Search, 
@@ -40,6 +39,38 @@ import {
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
 import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
+
+interface FilterSegmentProps {
+  label: string;
+  value: string | null;
+  options: { value: string | null; label: string }[];
+  onChange: (value: string | null) => void;
+}
+
+function FilterSegment({ label, value, options, onChange }: FilterSegmentProps) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
+        {options.map((option) => {
+          const selected = value === option.value;
+          return (
+            <Button
+              key={option.label}
+              type="button"
+              variant={selected ? 'default' : 'ghost'}
+              size="sm"
+              className="h-8 rounded-sm px-3 shadow-none"
+              onClick={() => onChange(option.value)}
+            >
+              {option.label}
+            </Button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 interface RecurringTransaction {
   id: number;
@@ -498,52 +529,45 @@ export default function RecurringTransactionsPage() {
       )}
 
       <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle>Recurring Transactions</CardTitle>
               <CardDescription>
                 {filteredTransactions.length} of {recurringTransactions.length} transactions
               </CardDescription>
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search merchants..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 w-full sm:w-64"
-                />
-              </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
-                    Filters
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuCheckboxItem
-                    checked={isActiveParam === 'true'}
-                    onCheckedChange={(checked) => updateFilters({ isActive: checked ? 'true' : null })}
-                  >
-                    Active Only
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                    checked={isConfirmedParam === 'true'}
-                    onCheckedChange={(checked) => updateFilters({ isConfirmed: checked ? 'true' : null })}
-                  >
-                    Confirmed Only
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                    checked={isConfirmedParam === 'false'}
-                    onCheckedChange={(checked) => updateFilters({ isConfirmed: checked ? 'false' : null })}
-                  >
-                    Unconfirmed Only
-                  </DropdownMenuCheckboxItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search merchants..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+              />
             </div>
+          </div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+            <FilterSegment
+              label="Status"
+              value={isActiveParam}
+              options={[
+                { value: null, label: 'All' },
+                { value: 'true', label: 'Active' },
+                { value: 'false', label: 'Inactive' },
+              ]}
+              onChange={(value) => updateFilters({ isActive: value })}
+            />
+            <FilterSegment
+              label="Confirmation"
+              value={isConfirmedParam}
+              options={[
+                { value: null, label: 'All' },
+                { value: 'true', label: 'Confirmed' },
+                { value: 'false', label: 'Unconfirmed' },
+              ]}
+              onChange={(value) => updateFilters({ isConfirmed: value })}
+            />
           </div>
         </CardHeader>
         <CardContent>

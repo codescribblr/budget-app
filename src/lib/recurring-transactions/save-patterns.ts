@@ -74,7 +74,7 @@ export async function saveDetectedPatterns(
           merchant_group_id: pattern.merchantGroupId,
           merchant_name: pattern.merchantName,
           description_pattern: pattern.descriptionPattern,
-          frequency: pattern.frequency === 'unknown' ? 'monthly' : pattern.frequency,
+          frequency: pattern.frequency === 'unknown' ? 'custom' : pattern.frequency,
           interval: 1,
           day_of_month: pattern.dayOfMonth,
           day_of_week: pattern.dayOfWeek,

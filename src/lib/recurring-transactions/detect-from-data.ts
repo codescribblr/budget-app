@@ -13,12 +13,24 @@ import type {
   DetectionTransaction,
   RecurringPattern,
 } from './types';
-import { calculateNextDate, formatDateISO, monthsBetween } from './utils/dates';
+import {
+  calculateNextDate,
+  daysBetween,
+  formatDateISO,
+  monthsBetween,
+} from './utils/dates';
 import { calculateCV, calculateVariance, getMostCommon } from './utils/stats';
 
 export interface DetectFromDataOptions {
   userFeedback?: UserFeedbackRecord[];
   lookbackMonths?: number;
+}
+
+/** Yearly patterns need at least two charges ~12 months apart. */
+export const MIN_DETECTION_LOOKBACK_MONTHS = 24;
+
+export function effectiveLookbackMonths(requested: number): number {
+  return Math.max(requested, MIN_DETECTION_LOOKBACK_MONTHS);
 }
 
 function getCategoryId(transactions: DetectionTransaction[]): number | null {
@@ -30,9 +42,39 @@ function getCategoryId(transactions: DetectionTransaction[]): number | null {
   return getMostCommon(categories);
 }
 
+const ACCOUNT_DATA_FRESHNESS_DAYS = 60;
+
+function isAccountDataFresh(transactions: DetectionTransaction[]): boolean {
+  if (transactions.length === 0) return false;
+
+  const latestDate = transactions.reduce(
+    (latest, txn) => (txn.date > latest ? txn.date : latest),
+    transactions[0].date
+  );
+  const today = new Date().toISOString().split('T')[0];
+  return daysBetween(latestDate, today) <= ACCOUNT_DATA_FRESHNESS_DAYS;
+}
+
+function isLapsedPattern(
+  transactions: DetectionTransaction[],
+  medianInterval: number
+): boolean {
+  if (transactions.length < 2) return false;
+  return !passesRecencyGate(transactions, medianInterval);
+}
+
+/** Single-occurrence guesses use monthly-scale recency — one old charge is not evidence of an active pattern. */
+function isStaleSingleOccurrence(
+  transactions: DetectionTransaction[]
+): boolean {
+  if (transactions.length !== 1) return false;
+  return !passesRecencyGate(transactions, 30);
+}
+
 function buildCandidate(
   groupTransactions: DetectionTransaction[],
-  isAmountVariable: boolean
+  isAmountVariable: boolean,
+  accountDataFresh: boolean
 ): CandidatePattern | null {
   const sorted = [...groupTransactions].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -50,8 +92,16 @@ function buildCandidate(
     return null;
   }
 
-  // Recency is a confidence factor, not a hard reject — users often have stale imports.
-  const isStale = cadence.medianInterval > 0 && !passesRecencyGate(sorted, cadence.medianInterval);
+  if (accountDataFresh && isStaleSingleOccurrence(sorted)) {
+    return null;
+  }
+
+  if (
+    accountDataFresh &&
+    isLapsedPattern(sorted, cadence.medianInterval)
+  ) {
+    return null;
+  }
 
   const amounts = sorted.map((t) => Math.abs(t.total_amount));
   const expectedAmount =
@@ -140,7 +190,8 @@ function processTransactionSet(
   transactions: DetectionTransaction[],
   userFeedback: UserFeedbackRecord[],
   patterns: RecurringPattern[],
-  processedKeys: Set<string>
+  processedKeys: Set<string>,
+  accountDataFresh: boolean
 ) {
   if (transactions.length === 0) return;
 
@@ -157,7 +208,7 @@ function processTransactionSet(
   }
 
   for (const groupTxns of groupsToProcess) {
-    const candidate = buildCandidate(groupTxns, variable);
+    const candidate = buildCandidate(groupTxns, variable, accountDataFresh);
     if (!candidate) continue;
 
     const dedupeKey = [
@@ -169,11 +220,12 @@ function processTransactionSet(
     if (processedKeys.has(dedupeKey)) continue;
 
     const classification = classifyCandidate(candidate, userFeedback);
-    const isStale =
-      candidate.medianInterval > 0 &&
-      !passesRecencyGate(candidate.transactions, candidate.medianInterval);
-
     let result = classification;
+    const isStale =
+      !accountDataFresh &&
+      candidate.medianInterval > 0 &&
+      isLapsedPattern(candidate.transactions, candidate.medianInterval);
+
     if (isStale && !result.rejected) {
       result = {
         ...result,
@@ -181,7 +233,12 @@ function processTransactionSet(
         finalConfidence: Math.max(0, result.finalConfidence - 0.1),
         signals: [
           ...result.signals,
-          { layer: 3, name: 'stale_data', value: -0.1, detail: 'Last occurrence outside recency window' },
+          {
+            layer: 3,
+            name: 'stale_data',
+            value: -0.1,
+            detail: 'Last occurrence outside recency window',
+          },
         ],
       };
     }
@@ -200,7 +257,7 @@ export function detectRecurringTransactionsFromData(
   options: DetectFromDataOptions = {}
 ): RecurringPattern[] {
   const userFeedback = options.userFeedback ?? [];
-  const lookbackMonths = options.lookbackMonths ?? 15;
+  const lookbackMonths = effectiveLookbackMonths(options.lookbackMonths ?? 15);
 
   const endDate = new Date();
   const startDate = new Date();
@@ -211,6 +268,7 @@ export function detectRecurringTransactionsFromData(
   const filtered = filterValidTransactions(
     transactions.filter((txn) => txn.date >= startIso && txn.date <= endIso)
   );
+  const accountDataFresh = isAccountDataFresh(filtered);
 
   const patterns: RecurringPattern[] = [];
   const processedKeys = new Set<string>();
@@ -218,7 +276,13 @@ export function detectRecurringTransactionsFromData(
 
   for (const group of candidateGroups) {
     if (group.transactions.length === 1) {
-      processTransactionSet(group.transactions, userFeedback, patterns, processedKeys);
+      processTransactionSet(
+        group.transactions,
+        userFeedback,
+        patterns,
+        processedKeys,
+        accountDataFresh
+      );
       continue;
     }
 
@@ -230,16 +294,34 @@ export function detectRecurringTransactionsFromData(
     const variable = isVariableAmountCluster(amounts) && spanMonths >= 3;
 
     if (variable) {
-      processTransactionSet(group.transactions, userFeedback, patterns, processedKeys);
+      processTransactionSet(
+        group.transactions,
+        userFeedback,
+        patterns,
+        processedKeys,
+        accountDataFresh
+      );
       continue;
     }
 
     const amountGroups = groupBySimilarAmount(group.transactions, 2);
     if (amountGroups.length === 0) {
-      processTransactionSet(group.transactions, userFeedback, patterns, processedKeys);
+      processTransactionSet(
+        group.transactions,
+        userFeedback,
+        patterns,
+        processedKeys,
+        accountDataFresh
+      );
     } else {
       for (const amountGroup of amountGroups) {
-        processTransactionSet(amountGroup, userFeedback, patterns, processedKeys);
+        processTransactionSet(
+          amountGroup,
+          userFeedback,
+          patterns,
+          processedKeys,
+          accountDataFresh
+        );
       }
     }
   }

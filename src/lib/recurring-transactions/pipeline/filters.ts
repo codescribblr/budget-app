@@ -1,14 +1,15 @@
 import type { DetectionTransaction } from '../types';
 
-export function hasValidSplits(txn: DetectionTransaction): boolean {
-  if (txn.splits.length === 0) return true;
-  return txn.splits.some((split) => !split.is_system && !split.is_buffer);
+const SYSTEM_MERCHANT_PREFIX = /^system:/i;
+
+export function isExcludedMerchant(merchantName: string): boolean {
+  return SYSTEM_MERCHANT_PREFIX.test(merchantName.trim());
 }
 
 export function filterValidTransactions(
   transactions: DetectionTransaction[]
 ): DetectionTransaction[] {
   return transactions.filter(
-    (txn) => txn.merchant_group_id && hasValidSplits(txn)
+    (txn) => txn.merchant_group_id && !isExcludedMerchant(txn.merchant_name)
   );
 }

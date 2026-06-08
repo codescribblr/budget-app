@@ -1,6 +1,7 @@
 import { createClient } from '../supabase/server';
 import {
   detectRecurringTransactionsFromData,
+  effectiveLookbackMonths,
   type RecurringPattern,
   type UserFeedbackRecord,
 } from './detect-from-data';
@@ -63,9 +64,10 @@ export async function detectRecurringTransactions(
 ): Promise<RecurringPattern[]> {
   const supabase = await createClient();
 
+  const effectiveLookback = effectiveLookbackMonths(lookbackMonths);
   const endDate = new Date();
   const startDate = new Date();
-  startDate.setMonth(startDate.getMonth() - lookbackMonths);
+  startDate.setMonth(startDate.getMonth() - effectiveLookback);
 
   let allTransactions: any[] = [];
   let from = 0;
@@ -123,6 +125,6 @@ export async function detectRecurringTransactions(
 
   return detectRecurringTransactionsFromData(mapped, {
     userFeedback,
-    lookbackMonths,
+    lookbackMonths: effectiveLookback,
   });
 }

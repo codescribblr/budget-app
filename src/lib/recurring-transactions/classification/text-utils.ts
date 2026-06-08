@@ -98,8 +98,19 @@ export function getDescriptionSubgroupKey(
   merchantName: string,
   description: string
 ): string {
-  if (!isPaymentProcessor(merchantName)) {
-    return String(description ? normalizeText(description).slice(0, 40) : merchantName);
+  if (isPaymentProcessor(merchantName)) {
+    return normalizeText(description);
   }
-  return normalizeText(description);
+
+  const normalized = normalizeText(description || merchantName);
+
+  // Bank memos for the same subscription often add city/state or reference codes.
+  if (containsKeyword(normalized, EXPLICIT_SUBSCRIPTION_KEYWORDS)) {
+    return 'subscription';
+  }
+  if (containsKeyword(normalized, BILL_KEYWORDS)) {
+    return 'bill';
+  }
+
+  return normalized.slice(0, 40) || normalizeText(merchantName);
 }
