@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
-import { importUserData, UserBackupData } from '@/lib/backup-utils';
+import { importUserDataFromFile, isBackupDataType, validateImportSelection, type UserBackupData, type BackupDataType } from '@/lib/backup-utils';
 import { getActiveAccountId } from '@/lib/account-context';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import { downloadBackupFromStorage, decompressBackup } from '@/lib/backup-storage';
@@ -61,8 +61,51 @@ export async function POST(
       return NextResponse.json({ error: 'Backup data not found' }, { status: 404 });
     }
 
+    let selectedTypes: BackupDataType[] | undefined;
+    try {
+      const body = await request.json();
+      if (body?.selectedTypes) {
+        if (!Array.isArray(body.selectedTypes)) {
+          return NextResponse.json(
+            { error: 'selectedTypes must be an array' },
+            { status: 400 }
+          );
+        }
+        const invalid = body.selectedTypes.filter(
+          (type: string) => !isBackupDataType(type)
+        );
+        if (invalid.length > 0) {
+          return NextResponse.json(
+            { error: `Invalid data types: ${invalid.join(', ')}` },
+            { status: 400 }
+          );
+        }
+        selectedTypes = body.selectedTypes as BackupDataType[];
+
+        if (selectedTypes.length === 0) {
+          return NextResponse.json(
+            { error: 'Select at least one data type to restore' },
+            { status: 400 }
+          );
+        }
+
+        const validation = validateImportSelection(backupData, selectedTypes);
+        if (!validation.valid) {
+          return NextResponse.json(
+            {
+              error: 'Backup is missing required related data for the selected types',
+              missingDependencies: validation.missingDependencies,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    } catch {
+      // Empty body restores all data
+    }
+
     // Restore the data
-    await importUserData(backupData);
+    await importUserDataFromFile(backupData, selectedTypes ? { selectedTypes } : undefined);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

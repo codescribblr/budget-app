@@ -2,6 +2,43 @@ import { getAuthenticatedUser } from './supabase-queries';
 import { getActiveAccountId, userHasAccountWriteAccess, userHasOwnAccount } from './account-context';
 import { createServiceRoleClient } from './supabase/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  type BackupDataType,
+  BACKUP_DATA_TYPES,
+  BACKUP_DATA_TYPE_INFO,
+  filterBackupDataByTypes,
+  getTypesPresentInBackup,
+  isFullBackupSelection,
+  resolveBackupTypeSelection,
+  validateImportSelection,
+} from './backup-data-types';
+import { deleteSelectedBackupDataTypes } from './backup-selective-delete';
+
+export type { BackupDataType };
+export {
+  BACKUP_DATA_TYPES,
+  BACKUP_DATA_TYPE_INFO,
+  BACKUP_TYPE_DEPENDENCIES,
+  getAutoIncludedTypes,
+  getBackupRecordCount,
+  getTypesPresentInBackup,
+  isBackupDataType,
+  isFullBackupSelection,
+  listBackupDataTypesForApi,
+  resolveBackupTypeSelection,
+  toggleBackupTypeSelection,
+  validateImportSelection,
+} from './backup-data-types';
+
+export interface ExportOptions {
+  /** When omitted, exports all data types (full backup). */
+  selectedTypes?: BackupDataType[];
+}
+
+export interface ImportOptions {
+  /** When omitted, imports all types present in the backup (full restore). */
+  selectedTypes?: BackupDataType[];
+}
 
 type BackupOperationContext = {
   supabase: SupabaseClient;
@@ -115,6 +152,8 @@ export interface AccountBackupData {
   loan_balance_audit?: any[];
   asset_value_audit?: any[];
   net_worth_snapshots?: any[];
+  /** Data types included in a selective export (v2.4+). */
+  included_types?: BackupDataType[];
 }
 
 // Legacy interface for backward compatibility
@@ -158,13 +197,15 @@ export interface UserBackupData {
   loan_balance_audit?: any[];
   asset_value_audit?: any[];
   net_worth_snapshots?: any[];
+  /** Data types included in a selective export (v2.4+). */
+  included_types?: BackupDataType[];
 }
 
 /**
  * Export all account data to a JSON backup (account-based)
  * Only account owners can create backups
  */
-export async function exportAccountData(): Promise<AccountBackupData> {
+export async function exportAccountData(options?: ExportOptions): Promise<AccountBackupData> {
   let supabase: SupabaseClient;
   let user: { id: string };
   let accountId: number;
@@ -385,8 +426,8 @@ export async function exportAccountData(): Promise<AccountBackupData> {
 
   console.log(`[Export] Exported ${queued_imports.length} queued imports`);
 
-  return {
-    version: '2.3',
+  const fullBackup: AccountBackupData = {
+    version: '2.4',
     created_at: new Date().toISOString(),
     created_by: user.id,
     account: {
@@ -449,6 +490,16 @@ export async function exportAccountData(): Promise<AccountBackupData> {
     asset_value_audit: asset_value_audit,
     net_worth_snapshots: net_worth_snapshots,
   };
+
+  if (!options?.selectedTypes || options.selectedTypes.length === 0) {
+    return {
+      ...fullBackup,
+      included_types: [...BACKUP_DATA_TYPES],
+    };
+  }
+
+  const resolvedTypes = resolveBackupTypeSelection(options.selectedTypes);
+  return filterBackupDataByTypes(fullBackup, resolvedTypes);
 }
 
 /**
@@ -508,10 +559,13 @@ export async function exportUserData(): Promise<UserBackupData> {
  * to avoid ID conflicts when restoring backups
  * WARNING: This will DELETE all existing user data and replace it with the backup
  */
-export async function importUserData(backupData: UserBackupData): Promise<void> {
+export async function importUserData(
+  backupData: UserBackupData,
+  options?: ImportOptions
+): Promise<void> {
   // Use the same logic as file import to handle ID remapping
   // This prevents ID conflicts when restoring older backups
-  await importUserDataFromFile(backupData);
+  await importUserDataFromFile(backupData, options);
 }
 
 /**
@@ -521,7 +575,10 @@ export async function importUserData(backupData: UserBackupData): Promise<void> 
  * and remaps all IDs and foreign key references to avoid conflicts
  * WARNING: This will DELETE all existing account data and replace it with the backup
  */
-export async function importUserDataFromFile(backupData: UserBackupData): Promise<void> {
+export async function importUserDataFromFile(
+  rawBackupData: UserBackupData,
+  options?: ImportOptions
+): Promise<void> {
   let supabase: SupabaseClient;
   let user: { id: string };
   let accountId: number;
@@ -541,7 +598,31 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
 
   console.log('[Import] Starting import for user:', user.id, 'account:', accountId);
 
-  // Step 1: Delete all existing account data
+  const typesInFile = getTypesPresentInBackup(rawBackupData);
+  const isSelectiveImport = Boolean(
+    options?.selectedTypes && options.selectedTypes.length > 0
+  );
+
+  let backupData = rawBackupData;
+
+  if (isSelectiveImport) {
+    const validation = validateImportSelection(rawBackupData, options!.selectedTypes!);
+    if (!validation.valid) {
+      const labels = validation.missingDependencies
+        .map((type) => BACKUP_DATA_TYPE_INFO[type]?.label ?? type)
+        .join(', ');
+      throw new Error(
+        `Cannot import selected data: this backup is missing required related data (${labels}). Include those types in the backup or import them together.`
+      );
+    }
+
+    backupData = filterBackupDataByTypes(rawBackupData, validation.resolvedTypes);
+    console.log('[Import] Selective import for types:', validation.resolvedTypes.join(', '));
+
+    await deleteSelectedBackupDataTypes(supabase, accountId, new Set(validation.resolvedTypes));
+    console.log('[Import] Deleted existing data for selected types');
+  } else {
+  // Step 1: Delete all existing account data (full restore)
   const { data: accountTransactions } = await supabase
     .from('transactions')
     .select('id')
@@ -673,6 +754,7 @@ export async function importUserDataFromFile(backupData: UserBackupData): Promis
   await supabase.from('accounts').delete().eq('account_id', accountId);
 
   console.log('[Import] Deleted existing account data');
+  }
 
   // Step 2: Insert data and build ID mappings (using batch inserts for performance)
   const accountIdMap = new Map<number, number>();

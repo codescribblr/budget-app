@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,18 +21,40 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Loader2, Trash2, HardDrive, RotateCcw, Download, Upload } from 'lucide-react';
+import { Loader2, Trash2, HardDrive, RotateCcw, Download, Upload, FileOutput } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
+import BackupTypeSelector, { ALL_BACKUP_DATA_TYPES, BACKUP_SELECTION_DIALOG_CLASS } from '@/components/settings/BackupTypeSelector';
+import {
+  type BackupDataType,
+  filterBackupDataByTypes,
+  getBackupRecordCount,
+  getTypesPresentInBackup,
+  resolveBackupTypeSelection,
+} from '@/lib/backup-data-types';
 
 interface Backup {
   id: number;
   created_at: string;
 }
 
+interface BackupPreview {
+  typesPresent: BackupDataType[];
+  recordCounts: Partial<Record<BackupDataType, number>>;
+  included_types?: BackupDataType[];
+}
+
 export default function DataBackup() {
   const [backups, setBackups] = useState<Backup[]>([]);
-  const [maxBackups, setMaxBackups] = useState(3); // Default to free tier
+  const [maxBackups, setMaxBackups] = useState(3);
   const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -42,6 +64,9 @@ export default function DataBackup() {
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [restoreBackupId, setRestoreBackupId] = useState<number | null>(null);
   const [restoreConfirmText, setRestoreConfirmText] = useState('');
+  const [restoreSelectedTypes, setRestoreSelectedTypes] = useState<BackupDataType[]>([]);
+  const [restorePreview, setRestorePreview] = useState<BackupPreview | null>(null);
+  const [isLoadingRestorePreview, setIsLoadingRestorePreview] = useState(false);
 
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -49,14 +74,36 @@ export default function DataBackup() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState('');
   const [showProgressDialog, setShowProgressDialog] = useState(false);
+  const [importBackupData, setImportBackupData] = useState<Record<string, unknown> | null>(null);
+  const [importSelectedTypes, setImportSelectedTypes] = useState<BackupDataType[]>([]);
+  const [importTypesPresent, setImportTypesPresent] = useState<BackupDataType[]>([]);
+  const [importRecordCounts, setImportRecordCounts] = useState<Partial<Record<BackupDataType, number>>>({});
 
-  // Track if fetch is in progress to prevent duplicate calls
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [exportSelectedTypes, setExportSelectedTypes] = useState<BackupDataType[]>([...ALL_BACKUP_DATA_TYPES]);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const [showDownloadDialog, setShowDownloadDialog] = useState(false);
+  const [downloadBackupId, setDownloadBackupId] = useState<number | null>(null);
+  const [downloadSelectedTypes, setDownloadSelectedTypes] = useState<BackupDataType[]>([]);
+  const [downloadPreview, setDownloadPreview] = useState<BackupPreview | null>(null);
+  const [isLoadingDownloadPreview, setIsLoadingDownloadPreview] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+
   const fetchingRef = useRef(false);
   const hasMountedRef = useRef(false);
 
-  // Fetch backups
+  const isPartialRestore =
+    !restorePreview ||
+    restoreSelectedTypes.length < ALL_BACKUP_DATA_TYPES.length ||
+    restorePreview.typesPresent.length < ALL_BACKUP_DATA_TYPES.length;
+
+  const isPartialImport =
+    importTypesPresent.length === 0 ||
+    importSelectedTypes.length < ALL_BACKUP_DATA_TYPES.length ||
+    importTypesPresent.length < ALL_BACKUP_DATA_TYPES.length;
+
   const fetchBackups = async () => {
-    // Prevent duplicate calls
     if (fetchingRef.current) {
       return;
     }
@@ -66,16 +113,14 @@ export default function DataBackup() {
       const response = await fetch('/api/backups');
       if (!response.ok) throw new Error('Failed to fetch backups');
       const data = await response.json();
-      
-      // Ensure backups is always an array
+
       if (data && Array.isArray(data.backups)) {
         setBackups(data.backups);
       } else {
         console.error('Invalid backups data:', data);
         setBackups([]);
       }
-      
-      // Update max backups and premium status from API response
+
       if (data.maxBackups !== undefined) {
         setMaxBackups(data.maxBackups);
       }
@@ -85,7 +130,7 @@ export default function DataBackup() {
     } catch (error) {
       console.error('Error fetching backups:', error);
       toast.error('Failed to load backups');
-      setBackups([]); // Set empty array on error
+      setBackups([]);
     } finally {
       setIsLoading(false);
       fetchingRef.current = false;
@@ -99,7 +144,15 @@ export default function DataBackup() {
     }
   }, []);
 
-  // Create backup
+  const loadBackupPreview = async (backupId: number): Promise<BackupPreview> => {
+    const response = await fetch(`/api/backups/${backupId}/preview`);
+    if (!response.ok) {
+      const errorMessage = await handleApiError(response, 'Failed to load backup details');
+      throw new Error(errorMessage || 'Failed to load backup details');
+    }
+    return response.json();
+  };
+
   const handleCreateBackup = async () => {
     setIsCreating(true);
     try {
@@ -114,15 +167,13 @@ export default function DataBackup() {
 
       toast.success('Backup created successfully');
       await fetchBackups();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating backup:', error);
-      // Error toast already shown by handleApiError
     } finally {
       setIsCreating(false);
     }
   };
 
-  // Delete backup
   const handleDeleteBackup = async (id: number) => {
     setIsDeletingId(id);
     try {
@@ -139,27 +190,39 @@ export default function DataBackup() {
       await fetchBackups();
     } catch (error) {
       console.error('Error deleting backup:', error);
-      // Error toast already shown by handleApiError
     } finally {
       setIsDeletingId(null);
     }
   };
 
-  // Open restore dialog
-  const openRestoreDialog = (id: number) => {
+  const openRestoreDialog = async (id: number) => {
     setRestoreBackupId(id);
     setRestoreConfirmText('');
+    setRestorePreview(null);
+    setRestoreSelectedTypes([]);
     setShowRestoreDialog(true);
+    setIsLoadingRestorePreview(true);
+
+    try {
+      const preview = await loadBackupPreview(id);
+      setRestorePreview(preview);
+      setRestoreSelectedTypes(preview.typesPresent);
+    } catch (error) {
+      console.error('Error loading restore preview:', error);
+      toast.error('Failed to load backup details');
+      setShowRestoreDialog(false);
+    } finally {
+      setIsLoadingRestorePreview(false);
+    }
   };
 
-  // Restore backup
   const handleRestoreBackup = async () => {
     if (restoreConfirmText.toLowerCase() !== 'restore') {
       toast.error('Please type "restore" to confirm');
       return;
     }
 
-    if (!restoreBackupId) return;
+    if (!restoreBackupId || restoreSelectedTypes.length === 0) return;
 
     setIsRestoring(true);
     setShowRestoreDialog(false);
@@ -167,11 +230,17 @@ export default function DataBackup() {
     setImportProgress('Preparing to restore backup...');
 
     try {
-      setImportProgress('Deleting existing data...');
-      await new Promise(resolve => setTimeout(resolve, 100)); // Small delay for UI update
+      setImportProgress(
+        isPartialRestore
+          ? 'Replacing selected data types...'
+          : 'Deleting existing data...'
+      );
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       const response = await fetch(`/api/backups/${restoreBackupId}/restore`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selectedTypes: restoreSelectedTypes }),
       });
 
       if (!response.ok) {
@@ -180,8 +249,6 @@ export default function DataBackup() {
       }
 
       setImportProgress('Restore complete! Refreshing page...');
-
-      // Refresh the page after a short delay
       setTimeout(() => {
         window.location.href = '/dashboard';
       }, 1500);
@@ -193,65 +260,165 @@ export default function DataBackup() {
     }
   };
 
-  // Download backup as JSON file
-  const handleDownloadBackup = async (id: number) => {
-    try {
-      const response = await fetch(`/api/backups/${id}/export`);
+  const openDownloadDialog = async (id: number) => {
+    setDownloadBackupId(id);
+    setDownloadPreview(null);
+    setDownloadSelectedTypes([]);
+    setShowDownloadDialog(true);
+    setIsLoadingDownloadPreview(true);
 
+    try {
+      const preview = await loadBackupPreview(id);
+      setDownloadPreview(preview);
+      setDownloadSelectedTypes(preview.typesPresent);
+    } catch (error) {
+      console.error('Error loading download preview:', error);
+      toast.error('Failed to load backup details');
+      setShowDownloadDialog(false);
+    } finally {
+      setIsLoadingDownloadPreview(false);
+    }
+  };
+
+  const handleDownloadBackup = async () => {
+    if (!downloadBackupId || downloadSelectedTypes.length === 0) return;
+
+    setIsDownloading(true);
+    try {
+      const response = await fetch(`/api/backups/${downloadBackupId}/export`);
       if (!response.ok) throw new Error('Failed to download backup');
 
       const backupData = await response.json();
+      const resolvedTypes = resolveBackupTypeSelection(downloadSelectedTypes, {
+        limitTo: downloadPreview?.typesPresent,
+      });
+      const filteredBackup = filterBackupDataByTypes(backupData, resolvedTypes);
 
-      // Create a blob from the JSON data
-      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-
-      // Create a download link
+      const blob = new Blob([JSON.stringify(filteredBackup, null, 2)], {
+        type: 'application/json',
+      });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `budget-backup-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
-
-      // Cleanup
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
       toast.success('Backup downloaded successfully');
+      setShowDownloadDialog(false);
     } catch (error) {
       console.error('Error downloading backup:', error);
       toast.error('Failed to download backup');
+    } finally {
+      setIsDownloading(false);
     }
   };
 
-  // Open import dialog
+  const openExportDialog = () => {
+    setExportSelectedTypes([...ALL_BACKUP_DATA_TYPES]);
+    setShowExportDialog(true);
+  };
+
+  const handleExportToFile = async () => {
+    if (exportSelectedTypes.length === 0) {
+      toast.error('Select at least one data type to export');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const isFullExport = exportSelectedTypes.length === ALL_BACKUP_DATA_TYPES.length;
+      const response = await fetch('/api/backups/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          isFullExport ? {} : { selectedTypes: exportSelectedTypes }
+        ),
+      });
+
+      if (!response.ok) {
+        const errorMessage = await handleApiError(response, 'Failed to export backup');
+        throw new Error(errorMessage || 'Failed to export backup');
+      }
+
+      const backupData = await response.json();
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], {
+        type: 'application/json',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `budget-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success('Backup exported successfully');
+      setShowExportDialog(false);
+    } catch (error) {
+      console.error('Error exporting backup:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const openImportDialog = () => {
     setImportFile(null);
     setImportConfirmText('');
+    setImportBackupData(null);
+    setImportSelectedTypes([]);
+    setImportTypesPresent([]);
+    setImportRecordCounts({});
     setShowImportDialog(true);
   };
 
-  // Handle file selection
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.type !== 'application/json') {
-        toast.error('Please select a JSON file');
+    if (!file) return;
+
+    if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
+      toast.error('Please select a JSON file');
+      return;
+    }
+
+    setImportFile(file);
+
+    try {
+      const fileContent = await file.text();
+      const backupData = JSON.parse(fileContent);
+      if (!backupData.version || !backupData.created_at) {
+        toast.error('Invalid backup file format');
+        setImportFile(null);
         return;
       }
-      setImportFile(file);
+
+      const typesPresent = getTypesPresentInBackup(backupData);
+      const recordCounts = Object.fromEntries(
+        ALL_BACKUP_DATA_TYPES.map((type) => [type, getBackupRecordCount(backupData, type)])
+      ) as Partial<Record<BackupDataType, number>>;
+
+      setImportBackupData(backupData);
+      setImportTypesPresent(typesPresent);
+      setImportRecordCounts(recordCounts);
+      setImportSelectedTypes(typesPresent);
+    } catch (error) {
+      console.error('Error reading backup file:', error);
+      toast.error('Failed to read backup file');
+      setImportFile(null);
     }
   };
 
-  // Import backup from file
   const handleImportFromFile = async () => {
     if (importConfirmText.toLowerCase() !== 'restore') {
       toast.error('Please type "restore" to confirm');
       return;
     }
 
-    if (!importFile) {
-      toast.error('Please select a file to import');
+    if (!importFile || !importBackupData || importSelectedTypes.length === 0) {
+      toast.error('Please select a file and at least one data type to import');
       return;
     }
 
@@ -261,20 +428,22 @@ export default function DataBackup() {
     setImportProgress('Reading backup file...');
 
     try {
-      // Read the file
-      const fileContent = await importFile.text();
-      const backupData = JSON.parse(fileContent);
+      setImportProgress(
+        isPartialImport
+          ? 'Replacing selected data types...'
+          : 'Deleting existing data...'
+      );
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      setImportProgress('Deleting existing data...');
-      await new Promise(resolve => setTimeout(resolve, 100)); // Small delay for UI update
-
-      // Send to API
       const response = await fetch('/api/backups/import', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(backupData),
+        body: JSON.stringify({
+          backupData: importBackupData,
+          selectedTypes: importSelectedTypes,
+        }),
       });
 
       if (!response.ok) {
@@ -283,8 +452,6 @@ export default function DataBackup() {
       }
 
       setImportProgress('Import complete! Refreshing page...');
-
-      // Refresh the page after a short delay
       setTimeout(() => {
         window.location.href = '/dashboard';
       }, 1500);
@@ -296,7 +463,6 @@ export default function DataBackup() {
     }
   };
 
-  // Format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleString('en-US', {
@@ -318,33 +484,30 @@ export default function DataBackup() {
             Data Backup
           </CardTitle>
           <CardDescription>
-            Create and manage backups of your budget data (maximum {maxBackups} {isPremium ? 'premium' : ''} backups)
+            Create and manage backups of your budget data (maximum {maxBackups}{' '}
+            {isPremium ? 'premium' : ''} backups)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Create Backup and Import Buttons */}
-          <div className="flex gap-2">
-            <Button
-              onClick={handleCreateBackup}
-              disabled={isCreating || isLoading}
-            >
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleCreateBackup} disabled={isCreating || isLoading}>
               {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Backup
             </Button>
-            <Button
-              variant="outline"
-              onClick={openImportDialog}
-              disabled={isLoading}
-            >
+            <Button variant="outline" onClick={openExportDialog} disabled={isLoading}>
+              <FileOutput className="mr-2 h-4 w-4" />
+              Export to File
+            </Button>
+            <Button variant="outline" onClick={openImportDialog} disabled={isLoading}>
               <Upload className="mr-2 h-4 w-4" />
               Import from File
             </Button>
           </div>
           <p className="text-sm text-muted-foreground">
-            {backups.length}/{maxBackups} backups used
+            {backups.length}/{maxBackups} backups used. Use Export to File to choose which data
+            types to include. Imports let you restore only the types present in your backup file.
           </p>
 
-          {/* Backups List */}
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -362,15 +525,13 @@ export default function DataBackup() {
                 >
                   <div>
                     <p className="font-medium">{formatDate(backup.created_at)}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Backup ID: {backup.id}
-                    </p>
+                    <p className="text-sm text-muted-foreground">Backup ID: {backup.id}</p>
                   </div>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDownloadBackup(backup.id)}
+                      onClick={() => openDownloadDialog(backup.id)}
                     >
                       <Download className="mr-2 h-4 w-4" />
                       Download
@@ -404,19 +565,106 @@ export default function DataBackup() {
         </CardContent>
       </Card>
 
-      {/* Restore Confirmation Dialog */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent className={BACKUP_SELECTION_DIALOG_CLASS}>
+          <DialogHeader>
+            <DialogTitle>Export to File</DialogTitle>
+            <DialogDescription>
+              Choose which data types to include. Related data is selected automatically when
+              needed (for example, transactions require accounts and categories).
+            </DialogDescription>
+          </DialogHeader>
+          <BackupTypeSelector
+            availableTypes={[...ALL_BACKUP_DATA_TYPES]}
+            selectedTypes={exportSelectedTypes}
+            onChange={setExportSelectedTypes}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleExportToFile} disabled={isExporting || exportSelectedTypes.length === 0}>
+              {isExporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Export
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDownloadDialog} onOpenChange={setShowDownloadDialog}>
+        <DialogContent className={BACKUP_SELECTION_DIALOG_CLASS}>
+          <DialogHeader>
+            <DialogTitle>Download Backup</DialogTitle>
+            <DialogDescription>
+              Choose which data types from this stored backup to include in the download.
+            </DialogDescription>
+          </DialogHeader>
+          {isLoadingDownloadPreview ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : downloadPreview ? (
+            <BackupTypeSelector
+              availableTypes={downloadPreview.typesPresent}
+              selectedTypes={downloadSelectedTypes}
+              onChange={setDownloadSelectedTypes}
+              recordCounts={downloadPreview.recordCounts}
+            />
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDownloadDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDownloadBackup}
+              disabled={isDownloading || downloadSelectedTypes.length === 0 || isLoadingDownloadPreview}
+            >
+              {isDownloading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Download
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={showRestoreDialog} onOpenChange={setShowRestoreDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className={BACKUP_SELECTION_DIALOG_CLASS}>
           <AlertDialogHeader>
             <AlertDialogTitle>Restore Backup?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
                 <div className="mb-4">
-                  This will <strong>permanently delete all your current data</strong> and replace it with the backup data.
+                  {isPartialRestore ? (
+                    <>
+                      This will <strong>replace only the selected data types</strong>. Other data
+                      in your account will be left unchanged.
+                    </>
+                  ) : (
+                    <>
+                      This will <strong>permanently delete all your current data</strong> and
+                      replace it with the backup data.
+                    </>
+                  )}
                 </div>
                 <div className="mb-4 text-destructive font-semibold">
                   This action cannot be undone!
                 </div>
+
+                {isLoadingRestorePreview ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : restorePreview ? (
+                  <div className="mb-4">
+                    <p className="text-sm font-medium mb-2">Data types to restore:</p>
+                    <BackupTypeSelector
+                      availableTypes={restorePreview.typesPresent}
+                      selectedTypes={restoreSelectedTypes}
+                      onChange={setRestoreSelectedTypes}
+                      recordCounts={restorePreview.recordCounts}
+                    />
+                  </div>
+                ) : null}
+
                 <div className="mb-2">
                   To confirm, please type <strong>restore</strong> below:
                 </div>
@@ -433,7 +681,12 @@ export default function DataBackup() {
             <AlertDialogCancel disabled={isRestoring}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRestoreBackup}
-              disabled={isRestoring || restoreConfirmText.toLowerCase() !== 'restore'}
+              disabled={
+                isRestoring ||
+                restoreConfirmText.toLowerCase() !== 'restore' ||
+                restoreSelectedTypes.length === 0 ||
+                isLoadingRestorePreview
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isRestoring && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -443,15 +696,24 @@ export default function DataBackup() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Import from File Dialog */}
       <AlertDialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className={BACKUP_SELECTION_DIALOG_CLASS}>
           <AlertDialogHeader>
             <AlertDialogTitle>Import Backup from File?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
                 <div className="mb-4">
-                  This will <strong>permanently delete all your current data</strong> and replace it with the data from the imported file.
+                  {isPartialImport ? (
+                    <>
+                      This will <strong>replace only the selected data types</strong>. Other data
+                      in your account will be left unchanged.
+                    </>
+                  ) : (
+                    <>
+                      This will <strong>permanently delete all your current data</strong> and
+                      replace it with the data from the imported file.
+                    </>
+                  )}
                 </div>
                 <div className="mb-4 text-destructive font-semibold">
                   This action cannot be undone!
@@ -471,6 +733,19 @@ export default function DataBackup() {
                     </div>
                   )}
                 </div>
+
+                {importTypesPresent.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-sm font-medium mb-2">Data types in this file:</p>
+                    <BackupTypeSelector
+                      availableTypes={importTypesPresent}
+                      selectedTypes={importSelectedTypes}
+                      onChange={setImportSelectedTypes}
+                      recordCounts={importRecordCounts}
+                    />
+                  </div>
+                )}
+
                 <div className="mb-2">
                   To confirm, please type <strong>restore</strong> below:
                 </div>
@@ -487,7 +762,12 @@ export default function DataBackup() {
             <AlertDialogCancel disabled={isImporting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleImportFromFile}
-              disabled={isImporting || !importFile || importConfirmText.toLowerCase() !== 'restore'}
+              disabled={
+                isImporting ||
+                !importFile ||
+                importSelectedTypes.length === 0 ||
+                importConfirmText.toLowerCase() !== 'restore'
+              }
               className="bg-destructive text-white hover:bg-destructive/90"
             >
               {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -497,7 +777,6 @@ export default function DataBackup() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Progress Dialog - Cannot be dismissed */}
       <AlertDialog open={showProgressDialog}>
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
@@ -510,9 +789,7 @@ export default function DataBackup() {
                 <div className="mb-4">
                   Please wait while we process your data. This may take a few moments.
                 </div>
-                <div className="text-sm font-medium text-foreground">
-                  {importProgress}
-                </div>
+                <div className="text-sm font-medium text-foreground">{importProgress}</div>
                 <div className="mt-4 text-sm text-muted-foreground">
                   Do not close this window or navigate away from this page.
                 </div>
@@ -524,5 +801,3 @@ export default function DataBackup() {
     </>
   );
 }
-
-
