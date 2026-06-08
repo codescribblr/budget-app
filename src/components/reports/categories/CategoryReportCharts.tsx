@@ -123,7 +123,7 @@ export default function CategoryReportCharts({
         </Card>
 
         {/* Recurring Transactions */}
-        <CategoryRecurringTransactions />
+        <CategoryRecurringTransactions category={category} />
       </div>
     </div>
   );

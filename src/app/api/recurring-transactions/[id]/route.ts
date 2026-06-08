@@ -22,7 +22,11 @@ export async function GET(
 
     const { data: recurringTransaction, error } = await supabase
       .from('recurring_transactions')
-      .select('*')
+      .select(`
+        *,
+        accounts ( id, name ),
+        credit_cards ( id, name )
+      `)
       .eq('id', parseInt(id))
       .eq('user_id', user.id)
       .eq('budget_account_id', accountId)

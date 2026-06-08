@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const isActive = searchParams.get('isActive');
     const isConfirmed = searchParams.get('isConfirmed');
+    const categoryId = searchParams.get('categoryId');
 
     let query = supabase
       .from('recurring_transactions')
@@ -42,6 +43,9 @@ export async function GET(request: NextRequest) {
     }
     if (isConfirmed !== null) {
       query = query.eq('is_confirmed', isConfirmed === 'true');
+    }
+    if (categoryId) {
+      query = query.eq('category_id', parseInt(categoryId, 10));
     }
 
     const { data: recurringTransactions, error } = await query;

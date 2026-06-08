@@ -10,6 +10,12 @@ interface CategoryReportStatsProps {
   transactions: TransactionWithSplits[];
   startDate?: string;
   endDate?: string;
+  lastTransactionDate?: string | null;
+  monthTransactionCount?: number | null;
+  /** When true, show calendar MTD/YTD budget summary instead of period transaction stats */
+  budgetSummaryOnly?: boolean;
+  monthlySpending?: number;
+  ytdSpending?: number;
 }
 
 export default function CategoryReportStats({
@@ -17,6 +23,11 @@ export default function CategoryReportStats({
   transactions,
   startDate = '',
   endDate = '',
+  lastTransactionDate = null,
+  monthTransactionCount = null,
+  budgetSummaryOnly = false,
+  monthlySpending = 0,
+  ytdSpending = 0,
 }: CategoryReportStatsProps) {
   const stats = useMemo(() => {
     const now = new Date();
@@ -159,6 +170,28 @@ export default function CategoryReportStats({
       balanceProgress = targetBalance > 0 ? (currentBalance / targetBalance) * 100 : 0;
     }
 
+    let periodLabel = 'Selected period';
+    if (!startDate && !endDate) {
+      periodLabel = 'Year to date';
+    } else if (startDate && endDate) {
+      const [sy, sm, sd] = startDate.split('-').map(Number);
+      const [ey, em, ed] = endDate.split('-').map(Number);
+      const now = new Date();
+      const isCurrentMonth =
+        sy === now.getFullYear() &&
+        sm === now.getMonth() + 1 &&
+        sd === 1 &&
+        ey === now.getFullYear() &&
+        em === now.getMonth() + 1;
+      if (isCurrentMonth) {
+        periodLabel = 'This month';
+      } else if (monthsInPeriod === 1) {
+        periodLabel = 'This period';
+      } else {
+        periodLabel = `${monthsInPeriod}-month period`;
+      }
+    }
+
     return {
       totalSpent,
       totalIncome,
@@ -179,11 +212,259 @@ export default function CategoryReportStats({
       targetBalance,
       currentBalance,
       balanceProgress,
+      monthsInPeriod,
+      periodLabel,
     };
   }, [category, transactions, startDate, endDate]);
 
+  const currentBalanceCard = (
+    <Card>
+      <CardHeader className="pb-0 md:pb-2">
+        <CardDescription className="text-xs md:text-sm">Current balance</CardDescription>
+        <CardTitle className={`text-sm md:text-lg lg:text-xl xl:text-2xl ${(category.current_balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          {formatCurrency(category.current_balance || 0)}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0 pb-1 md:pb-4">
+        <p className="text-xs text-muted-foreground">Available in this category</p>
+      </CardContent>
+    </Card>
+  );
+
+  const budgetStatusCard = (() => {
+    const type = category.category_type || 'monthly_expense';
+
+    if (type === 'monthly_expense' && stats.monthlyBudget !== undefined && stats.ytdBudget !== undefined) {
+      const remaining = stats.variance ?? 0;
+      const isUnderBudget = remaining >= 0;
+
+      return (
+        <Card>
+          <CardHeader className="pb-0 md:pb-2">
+            <CardDescription className="text-xs md:text-sm">Budget · {stats.periodLabel}</CardDescription>
+            <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
+              <span className={stats.netSpending > stats.ytdBudget ? 'text-red-600' : undefined}>
+                {formatCurrency(stats.netSpending)}
+              </span>
+              <span className="text-muted-foreground font-normal text-base md:text-lg lg:text-xl">
+                {' '}of {formatCurrency(stats.ytdBudget)}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 pb-1 md:pb-4">
+            <p className={`text-sm font-medium ${isUnderBudget ? 'text-green-600' : 'text-red-600'}`}>
+              {isUnderBudget
+                ? `${formatCurrency(remaining)} remaining`
+                : `${formatCurrency(Math.abs(remaining))} over budget`}
+            </p>
+            {stats.monthsInPeriod > 1 ? (
+              <p className="text-xs text-muted-foreground mt-1">
+                {formatCurrency(stats.monthlyBudget)}/mo · {stats.monthsInPeriod} months budgeted
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1">
+                Monthly budget {formatCurrency(stats.monthlyBudget)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (type === 'accumulation' && stats.annualTarget) {
+      const saved = stats.ytdSpent ?? 0;
+      const remaining = stats.annualTarget - saved;
+
+      return (
+        <Card>
+          <CardHeader className="pb-0 md:pb-2">
+            <CardDescription className="text-xs md:text-sm">Annual savings goal</CardDescription>
+            <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
+              {formatCurrency(saved)}
+              <span className="text-muted-foreground font-normal text-base md:text-lg lg:text-xl">
+                {' '}of {formatCurrency(stats.annualTarget)}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 pb-1 md:pb-4">
+            <p className="text-sm font-medium">
+              {remaining >= 0
+                ? `${formatCurrency(remaining)} left to save this year`
+                : `${formatCurrency(Math.abs(remaining))} above annual goal`}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats.ytdProgress?.toFixed(0)}% of annual target
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (type === 'target_balance' && stats.targetBalance !== undefined) {
+      const current = stats.currentBalance ?? category.current_balance ?? 0;
+      const remaining = stats.targetBalance - current;
+
+      return (
+        <Card>
+          <CardHeader className="pb-0 md:pb-2">
+            <CardDescription className="text-xs md:text-sm">Target balance</CardDescription>
+            <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
+              {formatCurrency(current)}
+              <span className="text-muted-foreground font-normal text-base md:text-lg lg:text-xl">
+                {' '}of {formatCurrency(stats.targetBalance)}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 pb-1 md:pb-4">
+            <p className="text-sm font-medium">
+              {remaining > 0
+                ? `${formatCurrency(remaining)} to reach target`
+                : remaining < 0
+                  ? `${formatCurrency(Math.abs(remaining))} above target`
+                  : 'Target reached'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats.balanceProgress?.toFixed(0)}% funded
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <Card>
+        <CardHeader className="pb-0 md:pb-2">
+          <CardDescription className="text-xs md:text-sm">Monthly funding</CardDescription>
+          <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
+            {formatCurrency(category.monthly_amount ?? 0)}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0 pb-1 md:pb-4">
+          <p className="text-xs text-muted-foreground">Allocated per month</p>
+        </CardContent>
+      </Card>
+    );
+  })();
+
+  const freeBudgetStatusCard = (() => {
+    const type = category.category_type || 'monthly_expense';
+
+    if (type === 'accumulation') {
+      const annualTarget = category.annual_target || (category.monthly_amount * 12);
+      const remaining = annualTarget - ytdSpending;
+      return (
+        <Card>
+          <CardHeader className="pb-0 md:pb-2">
+            <CardDescription className="text-xs md:text-sm">Annual savings goal</CardDescription>
+            <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
+              {formatCurrency(ytdSpending)}
+              <span className="text-muted-foreground font-normal text-base md:text-lg lg:text-xl">
+                {' '}of {formatCurrency(annualTarget)}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 pb-1 md:pb-4">
+            <p className="text-sm font-medium">
+              {remaining >= 0
+                ? `${formatCurrency(remaining)} left to save this year`
+                : `${formatCurrency(Math.abs(remaining))} above annual goal`}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {formatCurrency(monthlySpending)} saved this month
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (type === 'target_balance') {
+      const target = category.target_balance || 0;
+      const current = category.current_balance || 0;
+      const remaining = target - current;
+      return (
+        <Card>
+          <CardHeader className="pb-0 md:pb-2">
+            <CardDescription className="text-xs md:text-sm">Target balance</CardDescription>
+            <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
+              {formatCurrency(current)}
+              <span className="text-muted-foreground font-normal text-base md:text-lg lg:text-xl">
+                {' '}of {formatCurrency(target)}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 pb-1 md:pb-4">
+            <p className="text-sm font-medium">
+              {remaining > 0
+                ? `${formatCurrency(remaining)} to reach target`
+                : remaining < 0
+                  ? `${formatCurrency(Math.abs(remaining))} above target`
+                  : 'Target reached'}
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    const monthlyBudget = category.monthly_target || category.monthly_amount || 0;
+    const remaining = monthlyBudget - monthlySpending;
+    const isUnderBudget = remaining >= 0;
+
+    return (
+      <Card>
+        <CardHeader className="pb-0 md:pb-2">
+          <CardDescription className="text-xs md:text-sm">Budget · This month</CardDescription>
+          <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
+            <span className={monthlySpending > monthlyBudget ? 'text-red-600' : undefined}>
+              {formatCurrency(monthlySpending)}
+            </span>
+            <span className="text-muted-foreground font-normal text-base md:text-lg lg:text-xl">
+              {' '}of {formatCurrency(monthlyBudget)}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0 pb-1 md:pb-4">
+          <p className={`text-sm font-medium ${isUnderBudget ? 'text-green-600' : 'text-red-600'}`}>
+            {isUnderBudget
+              ? `${formatCurrency(remaining)} remaining`
+              : `${formatCurrency(Math.abs(remaining))} over budget`}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {formatCurrency(ytdSpending)} spent year to date
+          </p>
+        </CardContent>
+      </Card>
+    );
+  })();
+
+  if (budgetSummaryOnly) {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2 md:gap-3 lg:gap-4">
+        {freeBudgetStatusCard}
+        {currentBalanceCard}
+
+        <Card>
+          <CardHeader className="pb-0 md:pb-2">
+            <CardDescription className="text-xs md:text-sm">Activity</CardDescription>
+            <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
+              {monthTransactionCount ?? '—'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 pb-1 md:pb-4">
+            <div className="text-xs text-muted-foreground space-y-0 md:space-y-1">
+              <div>Transactions this month</div>
+              {lastTransactionDate && <div>Last: {lastTransactionDate}</div>}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2 md:gap-3 lg:gap-4">
+      {budgetStatusCard}
+      {currentBalanceCard}
+
       {/* Total Transactions */}
       <Card>
         <CardHeader className="pb-0 md:pb-2">
@@ -191,9 +472,10 @@ export default function CategoryReportStats({
           <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">{stats.transactionCount}</CardTitle>
         </CardHeader>
         <CardContent className="pt-0 pb-1 md:pb-4">
-          <p className="text-xs text-muted-foreground">
-            {stats.transactionCount === 1 ? 'transaction' : 'transactions'} in period
-          </p>
+          <div className="text-xs text-muted-foreground space-y-0 md:space-y-1">
+            <p>{stats.transactionCount === 1 ? 'transaction' : 'transactions'} in period</p>
+            {lastTransactionDate && <p>Last: {lastTransactionDate}</p>}
+          </div>
         </CardContent>
       </Card>
 
@@ -232,80 +514,6 @@ export default function CategoryReportStats({
         </CardContent>
       </Card>
 
-      {/* Category Type Specific Stats */}
-      {category.category_type === 'accumulation' && stats.annualTarget && (
-        <Card>
-          <CardHeader className="pb-0 md:pb-2">
-            <CardDescription className="text-xs md:text-sm">Annual Progress</CardDescription>
-            <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
-              {stats.ytdProgress?.toFixed(0)}%
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0 pb-1 md:pb-4">
-            <div className="text-xs text-muted-foreground space-y-0 md:space-y-1">
-              <div>YTD: {formatCurrency(stats.ytdSpent || 0)}</div>
-              <div>Target: {formatCurrency(stats.annualTarget)}</div>
-              {stats.ytdTarget && (
-                <div className="hidden sm:block">YTD Target: {formatCurrency(stats.ytdTarget)}</div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {category.category_type === 'monthly_expense' && stats.monthlyBudget !== undefined && (
-        <Card>
-          <CardHeader className="pb-0 md:pb-2">
-            <CardDescription className="text-xs md:text-sm">Budget Status</CardDescription>
-            <CardTitle className={`text-sm md:text-lg lg:text-xl xl:text-2xl ${stats.variance! >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {stats.budgetProgress?.toFixed(0)}%
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0 pb-1 md:pb-4">
-            <div className="text-xs text-muted-foreground space-y-0 md:space-y-1">
-              <div>Monthly: {formatCurrency(stats.monthlyBudget)}</div>
-              {stats.ytdBudget !== undefined && (
-                <div>Period Budget: {formatCurrency(stats.ytdBudget)}</div>
-              )}
-              <div>Variance: {formatCurrency(stats.variance!)}</div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {category.category_type === 'target_balance' && stats.targetBalance !== undefined && (
-        <Card>
-          <CardHeader className="pb-0 md:pb-2">
-            <CardDescription className="text-xs md:text-sm">Target Progress</CardDescription>
-            <CardTitle className="text-sm md:text-lg lg:text-xl xl:text-2xl">
-              {stats.balanceProgress?.toFixed(0)}%
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0 pb-1 md:pb-4">
-            <div className="text-xs text-muted-foreground space-y-0 md:space-y-1">
-              <div>Current: {formatCurrency(stats.currentBalance || 0)}</div>
-              <div>Target: {formatCurrency(stats.targetBalance)}</div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Current Balance (always show) */}
-      {category.category_type !== 'target_balance' && (
-        <Card>
-          <CardHeader className="pb-0 md:pb-2">
-            <CardDescription className="text-xs md:text-sm">Current Balance</CardDescription>
-            <CardTitle className={`text-sm md:text-lg lg:text-xl xl:text-2xl ${(category.current_balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(category.current_balance || 0)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0 pb-1 md:pb-4">
-            <p className="text-xs text-muted-foreground">
-              Available balance
-            </p>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

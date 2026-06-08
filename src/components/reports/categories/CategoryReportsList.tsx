@@ -174,7 +174,7 @@ export default function CategoryReportsList() {
   }, [categories, transactions, categoryTypesEnabled]);
 
   const handleCategoryClick = (categoryId: number) => {
-    router.push(`/reports/categories/${categoryId}`);
+    router.push(`/categories/${categoryId}`);
   };
 
   const formatDate = (dateString: string | null) => {
