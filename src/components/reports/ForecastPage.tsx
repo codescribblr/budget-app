@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatCurrencyAbbreviated } from '@/lib/utils';
+import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart, ReferenceLine, ComposedChart, Scatter } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign, Calendar, Info, Palmtree, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -2589,10 +2590,7 @@ export default function ForecastPage() {
                   textAnchor="end"
                   height={80}
                 />
-                <YAxis 
-                  className="text-xs"
-                  tickFormatter={(value) => formatCurrencyAbbreviated(value)}
-                />
+                <YAxis className="text-xs" {...chartCurrencyYAxisDefaults} />
                 <Tooltip
                   formatter={(value: number, name: string) => {
                     // Don't show income/expenses in the main tooltip list
@@ -2879,10 +2877,7 @@ export default function ForecastPage() {
                   textAnchor="end"
                   height={80}
                 />
-                <YAxis 
-                  className="text-xs"
-                  tickFormatter={(value) => formatCurrencyAbbreviated(value)}
-                />
+                <YAxis className="text-xs" {...chartCurrencyYAxisDefaults} />
                 <Tooltip
                   formatter={(value: number, name: string) => {
                     // Don't show income/expenses/distributions in the main tooltip list

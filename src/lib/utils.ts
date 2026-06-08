@@ -12,27 +12,48 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-/** Drop a trailing `.00` from a fixed-2-decimal string (e.g. chart axes). */
+/** Compact numeric part for chart axis labels (drops unnecessary decimals). */
 function abbrevNumberPart(scaled: number): string {
-  const s = scaled.toFixed(2);
-  return s.endsWith('.00') ? s.slice(0, -3) : s;
+  return scaled
+    .toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 0 })
+    .replace(/\.00$/, '');
 }
 
 /**
- * Format currency with abbreviations (K, M, B) for chart axes
- * Examples: $1.25K, $2.5M, $2M (whole millions omit `.00`)
+ * Format a plain number with K/M/B suffixes for chart axes (non-currency).
+ */
+export function formatNumberAbbreviated(value: number): string {
+  const sign = value < 0 ? '-' : '';
+  const absValue = Math.abs(value);
+
+  if (absValue >= 1_000_000_000) {
+    return `${sign}${abbrevNumberPart(absValue / 1_000_000_000)}B`;
+  }
+  if (absValue >= 1_000_000) {
+    return `${sign}${abbrevNumberPart(absValue / 1_000_000)}M`;
+  }
+  if (absValue >= 1_000) {
+    return `${sign}${abbrevNumberPart(absValue / 1_000)}K`;
+  }
+  return `${sign}${abbrevNumberPart(absValue)}`;
+}
+
+/**
+ * Format currency with abbreviations (K, M, B) for chart axes.
+ * Examples: $250K, $1.5M, $2M
  */
 export function formatCurrencyAbbreviated(amount: number): string {
+  const sign = amount < 0 ? '-' : '';
   const absAmount = Math.abs(amount);
 
   if (absAmount >= 1_000_000_000) {
-    return `$${abbrevNumberPart(amount / 1_000_000_000)}B`;
+    return `${sign}$${abbrevNumberPart(absAmount / 1_000_000_000)}B`;
   }
   if (absAmount >= 1_000_000) {
-    return `$${abbrevNumberPart(amount / 1_000_000)}M`;
+    return `${sign}$${abbrevNumberPart(absAmount / 1_000_000)}M`;
   }
   if (absAmount >= 1_000) {
-    return `$${abbrevNumberPart(amount / 1_000)}K`;
+    return `${sign}$${abbrevNumberPart(absAmount / 1_000)}K`;
   }
-  return `$${abbrevNumberPart(amount)}`;
+  return `${sign}$${abbrevNumberPart(absAmount)}`;
 }

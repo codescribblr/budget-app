@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { formatCurrency } from '@/lib/utils';
+import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Tag } from '@/lib/types';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
@@ -116,7 +117,7 @@ export default function TagSpendingReport({
                   height={100}
                   interval={0}
                 />
-                <YAxis />
+                <YAxis tick={{ fontSize: 12 }} {...chartCurrencyYAxisDefaults} />
                 <Tooltip
                   content={({ active, payload, label }) => {
                     if (active && payload && payload.length) {

@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { formatCurrency, formatCurrencyAbbreviated } from '@/lib/utils';
+import { formatCurrency, formatCurrencyAbbreviated, cn } from '@/lib/utils';
+import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import { format, parseISO } from 'date-fns';
 import { buildNetWorthChartSeries, NET_WORTH_MONTHLY_CHART_MAX_SPAN_MONTHS } from '@/lib/net-worth';
 import {
@@ -21,7 +22,6 @@ import {
   LabelList,
 } from 'recharts';
 import { ArrowRight, TrendingDown, TrendingUp } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface NetWorthSummaryResponse {
   current: {
@@ -124,8 +124,6 @@ export default function NetWorthTrackingPage() {
         : 'Area shows daily snapshots. Axis labels are abbreviated.';
 
   const showBarValueLabels = chartGranularity === 'month' && chartData.length <= 24;
-
-  const yAxisTickFormatter = (v: number) => formatCurrencyAbbreviated(Number(v));
 
   const tooltipContent = ({
     active,
@@ -275,12 +273,7 @@ export default function NetWorthTrackingPage() {
                   textAnchor={chartData.length > 10 ? 'end' : 'middle'}
                   height={chartData.length > 10 ? 56 : 32}
                 />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={yAxisTickFormatter}
-                  width={56}
-                  tickMargin={6}
-                />
+                <YAxis tick={{ fontSize: 11 }} {...chartCurrencyYAxisDefaults} />
                 <Tooltip
                   content={tooltipContent}
                   cursor={{ fill: 'var(--muted)', fillOpacity: 0.35 }}
@@ -323,12 +316,7 @@ export default function NetWorthTrackingPage() {
                   tickFormatter={xAxisTickFormatter}
                   minTickGap={20}
                 />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={yAxisTickFormatter}
-                  width={56}
-                  tickMargin={6}
-                />
+                <YAxis tick={{ fontSize: 11 }} {...chartCurrencyYAxisDefaults} />
                 <Tooltip content={tooltipContent} />
                 <Area
                   type="monotone"

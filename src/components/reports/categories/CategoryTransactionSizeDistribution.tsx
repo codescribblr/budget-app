@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { formatCurrency } from '@/lib/utils';
+import { chartNumberYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -131,6 +132,7 @@ export default function CategoryTransactionSizeDistribution({ transactions, cate
           <YAxis
             tick={{ fontSize: 12 }}
             label={{ value: 'Number of Transactions', angle: -90, position: 'insideLeft' }}
+            {...chartNumberYAxisDefaults}
           />
           <Tooltip content={<CustomTooltip />} />
           <Bar dataKey="count" name="Transaction Count" radius={[4, 4, 0, 0]}>

@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { formatCurrency } from '@/lib/utils';
+import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -108,10 +109,7 @@ export default function CategoryDayOfWeekSpending({ transactions, category }: Ca
             textAnchor="end"
             height={80}
           />
-          <YAxis
-            tick={{ fontSize: 12 }}
-            tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
-          />
+          <YAxis tick={{ fontSize: 12 }} {...chartCurrencyYAxisDefaults} />
           <Tooltip content={<CustomTooltip />} />
           <Bar
             dataKey="total"

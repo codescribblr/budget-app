@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency } from '@/lib/utils';
+import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import {
   LineChart,
   Line,
@@ -121,10 +122,7 @@ export default function CreditCardBalanceChart({ creditCardId }: CreditCardBalan
               textAnchor="end"
               height={80}
             />
-            <YAxis
-              tick={{ fontSize: 12 }}
-              tickFormatter={(value) => formatCurrency(value)}
-            />
+            <YAxis tick={{ fontSize: 12 }} {...chartCurrencyYAxisDefaults} />
             <Tooltip
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {

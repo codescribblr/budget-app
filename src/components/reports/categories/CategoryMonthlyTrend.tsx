@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { formatCurrency } from '@/lib/utils';
+import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
@@ -160,10 +161,7 @@ export default function CategoryMonthlyTrend({ transactions, category, startDate
             textAnchor="end"
             height={80}
           />
-          <YAxis
-            tick={{ fontSize: 12 }}
-            tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
-          />
+          <YAxis tick={{ fontSize: 12 }} {...chartCurrencyYAxisDefaults} />
           <Tooltip content={<CustomTooltip />} />
           <Legend />
           <Line
