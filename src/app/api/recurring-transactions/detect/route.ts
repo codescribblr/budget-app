@@ -34,8 +34,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Save detected patterns (checks for duplicates)
-    const result = await saveDetectedPatterns(user.id, accountId, patterns);
+    // Save detected patterns — manual detect does not send new-pattern notifications
+    const result = await saveDetectedPatterns(user.id, accountId, patterns, {
+      sendNewPatternNotifications: false,
+    });
 
     return NextResponse.json({ 
       patterns,

@@ -22,7 +22,11 @@ export const POST = withExternalApiService('recurring_transactions', async (requ
     );
   }
 
-  const result = await saveDetectedPatterns(context.createdBy, context.budgetAccountId, patterns);
+  const sendNotifications = body.sendNotifications === true;
+
+  const result = await saveDetectedPatterns(context.createdBy, context.budgetAccountId, patterns, {
+    sendNewPatternNotifications: sendNotifications,
+  });
   return NextResponse.json(
     externalApiData(
       {

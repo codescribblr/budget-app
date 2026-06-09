@@ -11,6 +11,7 @@ import {
   EXTERNAL_API_USAGE_LOG_RETENTION_DAYS,
 } from '@/lib/external-api/constants';
 import { processRecurringNotifications } from '@/lib/recurring-transactions/recurring-notification-check';
+import { processBudgetAlerts } from '@/lib/budget/budget-alert-check';
 import { NotificationService } from '@/lib/notifications/notification-service';
 import { getUsersNeedingTrialNotifications, createTrialEndingNotification } from '@/lib/notifications/subscription-helpers';
 import { checkAndDisableExpiredSubscriptions } from '@/lib/subscription-access-control';
@@ -56,6 +57,29 @@ export async function handleCheckRecurringTransactions(): Promise<JobResult> {
     };
   } catch (error: any) {
     console.error('Error in check recurring transactions job:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Handler for check_budget_alerts job
+ */
+export async function handleCheckBudgetAlerts(): Promise<JobResult> {
+  try {
+    const result = await processBudgetAlerts();
+    const messages: string[] = [];
+    if (result.categoryAlertsSent > 0) {
+      messages.push(`Sent ${result.categoryAlertsSent} category over budget alert(s)`);
+    }
+    if (result.lowBalanceAlertsSent > 0) {
+      messages.push(`Sent ${result.lowBalanceAlertsSent} low balance alert(s)`);
+    }
+    return {
+      success: true,
+      message: messages.length > 0 ? messages.join(', ') : 'No budget alerts to send',
+    };
+  } catch (error: any) {
+    console.error('Error in check budget alerts job:', error);
     return { success: false, error: error.message };
   }
 }
@@ -428,6 +452,8 @@ export function getJobHandler(jobType: string): (() => Promise<JobResult>) | nul
   switch (jobType) {
     case 'check_recurring_transactions':
       return handleCheckRecurringTransactions;
+    case 'check_budget_alerts':
+      return handleCheckBudgetAlerts;
     case 'send_notifications':
       return handleSendNotifications;
     case 'monthly_rollover':

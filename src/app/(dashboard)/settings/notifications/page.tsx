@@ -25,6 +25,9 @@ const IMPLEMENTED_NOTIFICATION_TYPES = new Set([
   'recurring_transaction_upcoming',
   'recurring_transaction_insufficient_funds',
   'recurring_transaction_amount_changed',
+  'recurring_transaction_new',
+  'budget_category_over_limit',
+  'budget_low_balance',
   'subscription_trial_ending',
   'subscription_payment_failed',
   'system_notification',
@@ -274,6 +277,27 @@ export default function NotificationPreferencesPage() {
                           className="w-20"
                         />
                         <Label htmlFor={`${type.id}-days`} className="text-sm">days before</Label>
+                      </div>
+                    )}
+                    {type.id === 'budget_low_balance' && isImplemented && (
+                      <div className="flex items-center gap-2 pl-6">
+                        <Label htmlFor={`${type.id}-threshold`} className="text-sm">Alert when balance below</Label>
+                        <Input
+                          id={`${type.id}-threshold`}
+                          type="number"
+                          value={pref.settings?.low_balance_threshold ?? 100}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 100;
+                            handleSettingChange(type.id, 'low_balance_threshold', value);
+                          }}
+                          onBlur={(e) => {
+                            const value = parseFloat(e.target.value) || 100;
+                            handleSettingChange(type.id, 'low_balance_threshold', value);
+                          }}
+                          min={0}
+                          step={1}
+                          className="w-24"
+                        />
                       </div>
                     )}
                   </div>

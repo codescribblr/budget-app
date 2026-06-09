@@ -110,6 +110,67 @@ export async function createRecurringTransactionNotification(
   });
 }
 
+export interface NewRecurringPatternItem {
+  recurringTransactionId: number;
+  merchantName: string;
+  expectedAmount: number;
+  frequency: string;
+  confidenceScore: number;
+}
+
+/**
+ * Send a grouped notification for newly detected recurring transaction patterns.
+ * Used for automatic detection only — manual detect runs skip this.
+ */
+export async function createGroupedNewRecurringPatternsNotification(
+  userId: string,
+  budgetAccountId: number,
+  patterns: NewRecurringPatternItem[]
+): Promise<number> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const actionUrl = `${baseUrl}/recurring-transactions`;
+
+  const count = patterns.length;
+  const title =
+    count === 1
+      ? `New recurring pattern: ${patterns[0].merchantName}`
+      : `${count} new recurring patterns detected`;
+
+  const lines = patterns.map(
+    (p) =>
+      `${p.merchantName}: ~$${p.expectedAmount.toFixed(2)} (${p.frequency.replace('_', ' ')})`
+  );
+  const message =
+    count === 1
+      ? `We detected a recurring ${patterns[0].frequency.replace('_', ' ')} pattern for ${patterns[0].merchantName} (~$${patterns[0].expectedAmount.toFixed(2)}). Review and confirm it on the recurring transactions page.`
+      : `We detected these recurring patterns. Review and confirm them on the recurring transactions page:\n${lines.join('\n')}`;
+
+  const today = new Date().toISOString().split('T')[0];
+  const patternKeys = patterns.map((p) => `recurring_new:${p.recurringTransactionId}`);
+
+  return service.createNotification({
+    userId,
+    budgetAccountId,
+    notificationTypeId: 'recurring_transaction_new',
+    title,
+    message,
+    actionUrl,
+    actionLabel: 'Review Patterns',
+    metadata: {
+      recurring_transaction_ids: patterns.map((p) => p.recurringTransactionId),
+      patterns: patterns.map((p) => ({
+        recurring_transaction_id: p.recurringTransactionId,
+        merchant_name: p.merchantName,
+        expected_amount: p.expectedAmount,
+        frequency: p.frequency,
+        confidence_score: p.confidenceScore,
+      })),
+      dedupe_key: `recurring_new_group:${today}:${patternKeys.join(',')}`,
+      pattern_dedupe_keys: patternKeys,
+    },
+  });
+}
+
 /**
  * Get all notification types
  */

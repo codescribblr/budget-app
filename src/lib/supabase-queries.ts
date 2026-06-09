@@ -505,6 +505,13 @@ export async function updateAccount(
     // Create net worth snapshot
     const { createNetWorthSnapshot } = await import('./audit/account-balance-audit');
     await createNetWorthSnapshot();
+
+    // Check low balance alerts when balance crosses threshold (non-blocking)
+    const budgetAccountId = await getActiveAccountId();
+    if (budgetAccountId) {
+      const { scheduleLowBalanceCheck } = await import('@/lib/budget/budget-alert-check');
+      scheduleLowBalanceCheck(budgetAccountId, id, oldBalance, account.balance);
+    }
   }
   
   return account as Account;
@@ -2339,6 +2346,13 @@ export async function createTransaction(data: {
     }
   }
 
+  // Check budget alerts for affected categories (non-blocking)
+  if (!isHistorical) {
+    const categoryIds = data.splits.map((s) => s.category_id);
+    const { scheduleCategoryOverBudgetCheck } = await import('@/lib/budget/budget-alert-check');
+    scheduleCategoryOverBudgetCheck(accountId, categoryIds);
+  }
+
   // Return the created transaction with splits
   const result = await getTransactionById(transaction.id);
   if (!result) throw new Error('Failed to retrieve created transaction');
@@ -2497,6 +2511,16 @@ export async function updateTransaction(
   } else {
     // Apply tag rules if tags weren't explicitly set (only for new transactions)
     // Note: We don't auto-apply rules on update to avoid overwriting user choices
+  }
+
+  // Check budget alerts for affected categories (non-blocking)
+  const affectedCategoryIds = new Set<number>();
+  existingTransaction.splits.forEach((s) => affectedCategoryIds.add(s.category_id));
+  newSplits.forEach((s) => affectedCategoryIds.add(s.category_id));
+  const budgetAccountId = await getActiveAccountId();
+  if (budgetAccountId && affectedCategoryIds.size > 0) {
+    const { scheduleCategoryOverBudgetCheck } = await import('@/lib/budget/budget-alert-check');
+    scheduleCategoryOverBudgetCheck(budgetAccountId, Array.from(affectedCategoryIds));
   }
 
   // Return updated transaction
@@ -3065,6 +3089,12 @@ export async function importTransactions(transactions: any[], isHistorical: bool
         }
       }
     }
+  }
+
+  // Check budget alerts for affected categories (non-blocking)
+  if (!isHistorical && allCategoryIds.size > 0) {
+    const { scheduleCategoryOverBudgetCheck } = await import('@/lib/budget/budget-alert-check');
+    scheduleCategoryOverBudgetCheck(accountId, Array.from(allCategoryIds));
   }
 
   return createdTransactions.length;
