@@ -5,7 +5,7 @@ import type { CreateCategoryRequest } from '@/lib/types';
 
 export async function GET(request: NextRequest) {
   try {
-    // Exclude goal categories from transaction dropdowns
+    // excludeGoals=true omits envelope goal categories (e.g. smart categorization, tag rules)
     const excludeGoals = request.nextUrl.searchParams.get('excludeGoals') === 'true';
     const includeArchivedParam = request.nextUrl.searchParams.get('includeArchived');
     const includeArchived =

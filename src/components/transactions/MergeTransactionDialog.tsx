@@ -13,6 +13,11 @@ import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import { toast } from 'sonner';
 import { Loader2, ChevronDown, ChevronUp, CheckCircle2, XCircle } from 'lucide-react';
 import type { DuplicateGroup, Category, MerchantGroup } from '@/lib/types';
+import { TransactionCategorySelectLabel } from '@/components/transactions/TransactionCategorySelectLabel';
+import {
+  filterCategoriesForTransactionSelect,
+  sortCategoriesForTransactionSelect,
+} from '@/lib/transaction-categories';
 
 interface MergeTransactionDialogProps {
   isOpen: boolean;
@@ -517,9 +522,11 @@ export default function MergeTransactionDialog({
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent>
-                          {categories.filter(cat => !cat.is_goal && !cat.is_buffer).map((category) => (
+                          {sortCategoriesForTransactionSelect(
+                            filterCategoriesForTransactionSelect(categories)
+                          ).map((category) => (
                             <SelectItem key={category.id} value={category.id.toString()}>
-                              {category.name}
+                              <TransactionCategorySelectLabel category={category} />
                             </SelectItem>
                           ))}
                         </SelectContent>

@@ -33,6 +33,11 @@ import { Crown } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
 import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
 import { TruncatedTextWithTooltip } from '@/components/ui/truncated-text-with-tooltip';
+import { TransactionCategorySelectLabel } from '@/components/transactions/TransactionCategorySelectLabel';
+import {
+  filterCategoriesForTransactionSelect,
+  sortCategoriesForTransactionSelect,
+} from '@/lib/transaction-categories';
 
 interface TransactionPreviewProps {
   transactions: ParsedTransaction[];
@@ -258,7 +263,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
 
   const fetchCategories = async () => {
     const includeArchived = showArchivedCategories ? 'all' : 'none';
-    const response = await fetch(`/api/categories?excludeGoals=true&includeArchived=${includeArchived}`);
+    const response = await fetch(`/api/categories?excludeGoals=false&includeArchived=${includeArchived}`);
     const data = await response.json();
     const base = Array.isArray(data) ? data : [];
     const merged = await ensureReferencedCategoriesPresent(base);
@@ -640,7 +645,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
       }
 
       // Fetch categories to get names
-      const categoriesResponse = await fetch('/api/categories?excludeGoals=true&includeArchived=all');
+      const categoriesResponse = await fetch('/api/categories?excludeGoals=false&includeArchived=all');
       const categoriesForNames = await (categoriesResponse.ok ? categoriesResponse.json() : []);
 
       // Update transactions with AI suggestions
@@ -1086,24 +1091,14 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent>
-                          {categories
-                            .filter((c) => {
-                              if (showArchivedCategories) return true;
-                              const selectedId = transaction.splits[0]?.categoryId;
-                              if (c.is_archived && c.id !== selectedId) return false;
-                              return true;
+                          {sortCategoriesForTransactionSelect(
+                            filterCategoriesForTransactionSelect(categories, {
+                              showArchivedCategories,
+                              includeCategoryId: transaction.splits[0]?.categoryId,
                             })
-                            .map((category) => (
+                          ).map((category) => (
                             <SelectItem key={category.id} value={category.id.toString()}>
-                              <div className="flex items-center gap-2">
-                                {category.name}
-                                {category.is_archived && (
-                                  <span className="text-muted-foreground" title="Archived category">Archived</span>
-                                )}
-                                {category.is_system && (
-                                  <span className="text-muted-foreground" title="System category">⚙️</span>
-                                )}
-                              </div>
+                              <TransactionCategorySelectLabel category={category} />
                             </SelectItem>
                           ))}
                         </SelectContent>

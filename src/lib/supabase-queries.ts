@@ -77,7 +77,7 @@ export async function getAllCategories(
     .select('*')
     .eq('account_id', accountId);
   
-  // Exclude goal categories when fetching for transactions
+  // Exclude envelope goal categories when requested (smart categorization, etc.)
   if (excludeGoals) {
     query = query.eq('is_goal', false);
   }

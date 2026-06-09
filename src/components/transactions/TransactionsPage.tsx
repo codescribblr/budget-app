@@ -262,7 +262,7 @@ export default function TransactionsPage() {
       // Only fetch other data on initial load or if data is missing
       if (shouldFetchOtherData) {
         fetchPromises.push(
-          fetch('/api/categories?excludeGoals=true'),
+          fetch('/api/categories?excludeGoals=false'),
           fetch('/api/merchant-groups'),
           fetch('/api/accounts'),
           fetch('/api/credit-cards'),

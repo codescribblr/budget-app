@@ -14,6 +14,12 @@ import TagSelector from '@/components/tags/TagSelector';
 import { useFeature } from '@/contexts/FeatureContext';
 import { MerchantLogo } from '@/components/admin/MerchantLogo';
 import { toast } from 'sonner';
+import { TransactionCategorySelectLabel } from '@/components/transactions/TransactionCategorySelectLabel';
+import {
+  TRANSACTION_CATEGORIES_API,
+  filterCategoriesForTransactionSelect,
+  sortCategoriesForTransactionSelect,
+} from '@/lib/transaction-categories';
 
 interface EditTransactionDialogProps {
   isOpen: boolean;
@@ -126,7 +132,7 @@ export default function EditTransactionDialog({
       if (!isOpen) return;
       if (!showArchivedCategories) return;
       try {
-        const res = await fetch('/api/categories?excludeGoals=true&includeArchived=all');
+        const res = await fetch(TRANSACTION_CATEGORIES_API);
         if (!res.ok) return;
         const data = await res.json();
         setAvailableCategories(Array.isArray(data) ? data : categories);
@@ -496,20 +502,13 @@ export default function EditTransactionDialog({
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableCategories
-                        .filter(cat => !cat.is_goal && !cat.is_buffer)
-                        .filter(cat => (showArchivedCategories ? true : !cat.is_archived))
-                        .map((category) => (
+                      {sortCategoriesForTransactionSelect(
+                        filterCategoriesForTransactionSelect(availableCategories, {
+                          showArchivedCategories,
+                        })
+                      ).map((category) => (
                         <SelectItem key={category.id} value={category.id.toString()}>
-                          <div className="flex items-center gap-2">
-                            {category.name}
-                            {category.is_archived && (
-                              <span className="text-muted-foreground" title="Archived category">Archived</span>
-                            )}
-                            {category.is_system && (
-                              <span className="text-muted-foreground" title="System category">⚙️</span>
-                            )}
-                          </div>
+                          <TransactionCategorySelectLabel category={category} />
                         </SelectItem>
                       ))}
                     </SelectContent>
