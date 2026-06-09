@@ -46,6 +46,7 @@ export async function createRecurringTransactionNotification(
     shortfall?: number;
     oldAmount?: number;
     newAmount?: number;
+    dedupeKey?: string;
   }
 ): Promise<number> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
@@ -66,6 +67,7 @@ export async function createRecurringTransactionNotification(
       message = `Your ${data.merchantName} payment of $${data.expectedAmount.toFixed(2)} is due ${data.daysUntilDue === 0 ? 'today' : `in ${data.daysUntilDue} day${data.daysUntilDue === 1 ? '' : 's'}`}.`;
       metadata.due_date = data.dueDate;
       metadata.days_until_due = data.daysUntilDue;
+      metadata.dedupe_key = data.dedupeKey;
       break;
 
     case 'insufficient_funds':
@@ -74,6 +76,8 @@ export async function createRecurringTransactionNotification(
       message = `Your ${data.merchantName} payment of $${data.expectedAmount.toFixed(2)} is due soon, but your account balance is only $${data.currentBalance?.toFixed(2) || '0.00'}.`;
       metadata.current_balance = data.currentBalance;
       metadata.shortfall = data.shortfall;
+      metadata.due_date = data.dueDate;
+      metadata.dedupe_key = data.dedupeKey;
       break;
 
     case 'amount_changed':
@@ -82,6 +86,7 @@ export async function createRecurringTransactionNotification(
       message = `Your ${data.merchantName} payment changed from $${data.oldAmount?.toFixed(2) || '0.00'} to $${data.newAmount?.toFixed(2) || '0.00'}.`;
       metadata.old_amount = data.oldAmount;
       metadata.new_amount = data.newAmount;
+      metadata.dedupe_key = data.dedupeKey;
       break;
 
     case 'missed':
@@ -89,23 +94,8 @@ export async function createRecurringTransactionNotification(
       title = `Missed: ${data.merchantName} payment`;
       message = `Your expected ${data.merchantName} payment of $${data.expectedAmount.toFixed(2)} was not received.`;
       metadata.expected_date = data.expectedDate;
+      metadata.dedupe_key = data.dedupeKey;
       break;
-  }
-
-  // Check if scheduled (for upcoming notifications)
-  let scheduledFor: Date | undefined;
-  if (type === 'upcoming' && data.daysUntilDue !== undefined && data.daysUntilDue > 0) {
-    const reminderDays = await getNotificationSetting(
-      userId,
-      notificationTypeId,
-      'reminder_days_before'
-    ) || 2;
-
-    // Schedule for reminder_days_before days before due date
-    if (data.dueDate) {
-      const dueDate = new Date(data.dueDate);
-      scheduledFor = new Date(dueDate.getTime() - reminderDays * 24 * 60 * 60 * 1000);
-    }
   }
 
   return service.createNotification({
@@ -117,7 +107,6 @@ export async function createRecurringTransactionNotification(
     actionUrl,
     actionLabel: 'View Transaction',
     metadata,
-    scheduledFor,
   });
 }
 

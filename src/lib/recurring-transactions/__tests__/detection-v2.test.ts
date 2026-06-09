@@ -293,7 +293,7 @@ function monthlyDates(startYear: number, startMonth: number, count: number, day 
   console.log('✓ Lapsed patterns rejected when account data is fresh');
 }
 
-// Biweekly payroll income
+// System category transactions (paycheck, transfers) are excluded
 {
   const now = new Date();
   const base = new Date(now);
@@ -324,19 +324,70 @@ function monthlyDates(startYear: number, startMonth: number, count: number, day 
     txn({
       id: 710,
       date: now.toISOString().split('T')[0],
-      total_amount: 12.99,
-      merchant_group_id: 51,
-      merchant_name: 'Spotify',
+      total_amount: 500,
+      merchant_group_id: 201,
+      merchant_name: 'Internal Transfer',
+      description: 'TRANSFER TO SAVINGS',
       transaction_type: 'expense',
+      splits: [
+        {
+          category_id: 100,
+          amount: 500,
+          category_name: 'Transfer',
+          is_system: true,
+          is_buffer: false,
+        },
+      ],
     })
   );
   const patterns = detectRecurringTransactionsFromData(transactions);
+  assert.equal(
+    patterns.find((pattern) => pattern.merchantName === 'Sttark'),
+    undefined,
+    'Payroll in a system category should not be detected'
+  );
+  assert.equal(
+    patterns.find((pattern) => pattern.merchantName === 'Internal Transfer'),
+    undefined,
+    'Transfers in a system category should not be detected'
+  );
+  console.log('✓ System category transactions excluded from detection');
+}
+
+// Biweekly payroll income in a user category is still detected
+{
+  const now = new Date();
+  const base = new Date(now);
+  base.setDate(base.getDate() - 84);
+  const transactions = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(base);
+    d.setDate(d.getDate() + i * 14);
+    return txn({
+      id: 800 + i,
+      date: d.toISOString().split('T')[0],
+      total_amount: 3734.04,
+      merchant_group_id: 200,
+      merchant_name: 'Sttark',
+      description: 'STTARK GR PAYROLL',
+      transaction_type: 'income',
+      splits: [
+        {
+          category_id: 42,
+          amount: 3734.04,
+          category_name: 'Salary',
+          is_system: false,
+          is_buffer: false,
+        },
+      ],
+    });
+  });
+  const patterns = detectRecurringTransactionsFromData(transactions);
   const payroll = patterns.find((pattern) => pattern.merchantName === 'Sttark');
-  assert.ok(payroll, 'Payroll income should be detected');
+  assert.ok(payroll, 'Payroll in a user category should be detected');
   assert.equal(payroll.transactionType, 'income');
   assert.equal(payroll.chargeClass, 'income_payroll');
   assert.equal(payroll.frequency, 'biweekly');
-  console.log('✓ Biweekly payroll income detected');
+  console.log('✓ Biweekly payroll income detected in user category');
 }
 
 console.log('\nAll detection V2 tests passed.');

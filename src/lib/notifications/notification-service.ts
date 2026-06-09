@@ -1,4 +1,4 @@
-import { createClient, createServiceRoleClient } from '../supabase/server';
+import { createServiceRoleClient } from '../supabase/server';
 import { sendEmail, renderEmailTemplate } from '../email-utils';
 import type { NotificationData, NotificationPreferences, Notification } from './types';
 import { sendPushNotificationToUser } from '../push-notification-sender';
@@ -11,7 +11,7 @@ export class NotificationService {
    * Checks user preferences and sends via enabled channels
    */
   async createNotification(data: NotificationData): Promise<number> {
-    const supabase = await createClient();
+    const supabase = createServiceRoleClient();
 
     // 1. Get user preferences for this notification type
     const preferences = await this.getUserPreferences(data.userId, data.notificationTypeId);
@@ -57,7 +57,7 @@ export class NotificationService {
     userId: string,
     notificationTypeId: string
   ): Promise<NotificationPreferences> {
-    const supabase = await createClient();
+    const supabase = createServiceRoleClient();
 
     // Check user preferences first
     const { data: userPrefs } = await supabase
@@ -105,7 +105,7 @@ export class NotificationService {
    * Send scheduled notifications (called by cron job)
    */
   async sendScheduledNotifications(): Promise<void> {
-    const supabase = await createClient();
+    const supabase = createServiceRoleClient();
     const now = new Date().toISOString();
 
     // Query notifications where scheduled_for <= now AND sent_at IS NULL
@@ -146,7 +146,7 @@ export class NotificationService {
     notificationId: number,
     preferences: NotificationPreferences
   ): Promise<void> {
-    const supabase = await createClient();
+    const supabase = createServiceRoleClient();
 
     // Load notification
     const { data: notification, error } = await supabase
@@ -341,7 +341,7 @@ export class NotificationService {
     status: 'pending' | 'sent' | 'failed' | 'skipped',
     errorMessage?: string
   ): Promise<void> {
-    const supabase = await createClient();
+    const supabase = createServiceRoleClient();
 
     await supabase.from('notification_delivery_log').insert({
       notification_id: notificationId,
