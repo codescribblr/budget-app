@@ -791,7 +791,7 @@ export default function TransactionsPage() {
               </Button>
             )}
             <Button variant="outline" asChild className="w-full sm:w-auto">
-              <Link href="/import">
+              <Link href="/imports">
                 <Upload className="mr-2 h-4 w-4" />
                 Import Transactions
               </Link>
@@ -1102,7 +1102,7 @@ export default function TransactionsPage() {
                     Add transaction
                   </Button>
                   <Button variant="outline" asChild>
-                    <Link href="/import">Import from CSV</Link>
+                    <Link href="/imports">Import from CSV</Link>
                   </Button>
                 </div>
               </CardContent>

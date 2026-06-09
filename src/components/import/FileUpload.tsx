@@ -26,9 +26,16 @@ import Papa from 'papaparse';
 interface FileUploadProps {
   onFileUploaded: (transactions: ParsedTransaction[], fileName: string) => void;
   disabled?: boolean;
+  compact?: boolean;
+  onBatchQueued?: () => void;
 }
 
-export default function FileUpload({ onFileUploaded, disabled = false }: FileUploadProps) {
+export default function FileUpload({
+  onFileUploaded,
+  disabled = false,
+  compact = false,
+  onBatchQueued,
+}: FileUploadProps) {
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -253,7 +260,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
             sessionStorage.setItem('csvFileName', file.name);
             sessionStorage.setItem('csvTargetAccountId', String(targetAccountId ?? ''));
             sessionStorage.setItem('csvTargetCreditCardId', String(targetCreditCardId ?? ''));
-            router.push('/import/map-columns');
+            router.push('/imports/map-columns');
             setIsProcessing(false);
             return;
           }
@@ -336,7 +343,7 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
               sessionStorage.setItem('csvFileName', file.name);
               sessionStorage.setItem('csvTargetAccountId', String(targetAccountId ?? ''));
               sessionStorage.setItem('csvTargetCreditCardId', String(targetCreditCardId ?? ''));
-              router.push('/import/map-columns');
+              router.push('/imports/map-columns');
               setIsProcessing(false);
               return;
             }
@@ -499,9 +506,10 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
   const handleProcessingComplete = () => {
     if (!queuedBatchId) return;
     setShowProcessingDialog(false);
+    onBatchQueued?.();
     // Navigate to review page with a small delay to ensure database updates are committed
     setTimeout(() => {
-      router.push(`/imports/queue/${queuedBatchId}?t=${Date.now()}`);
+      router.push(`/imports/${queuedBatchId}?t=${Date.now()}`);
     }, 300);
   };
 
@@ -582,30 +590,50 @@ export default function FileUpload({ onFileUploaded, disabled = false }: FileUpl
         </DialogContent>
       </Dialog>
 
-      <div className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
-        isDragging && !disabled
-          ? 'border-primary bg-primary/5 scale-105 shadow-lg'
-          : disabled
-          ? 'border-gray-200 dark:border-gray-800 opacity-50'
-          : 'border-gray-300 dark:border-gray-700'
-      }`}>
-        <div className="space-y-4">
-          <div className="text-4xl">{isDragging && !disabled ? '📥' : '📄'}</div>
-          <div>
-            <p className="text-lg font-medium">
-              {isDragging && !disabled ? 'Drop file here' : 'Upload CSV or PDF'}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {isDragging && !disabled
-                ? 'Release to upload'
-                : disabled
-                ? 'Read-only users cannot import transactions'
-                : 'Upload a CSV file or PDF statement of transactions'}
-            </p>
+      <div
+        className={`border-2 border-dashed rounded-lg text-center transition-all ${
+          compact ? 'p-4' : 'p-8'
+        } ${
+          isDragging && !disabled
+            ? 'border-primary bg-primary/5 scale-[1.02] shadow-lg'
+            : disabled
+              ? 'border-gray-200 dark:border-gray-800 opacity-50'
+              : 'border-gray-300 dark:border-gray-700'
+        }`}
+      >
+        <div className={compact ? 'space-y-2' : 'space-y-4'}>
+          {!compact && (
+            <div className="text-4xl">{isDragging && !disabled ? '📥' : '📄'}</div>
+          )}
+          <div className={compact ? 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3' : ''}>
+            <div className={compact ? 'text-left' : ''}>
+              <p className={compact ? 'text-sm font-medium' : 'text-lg font-medium'}>
+                {isDragging && !disabled ? 'Drop file here' : 'Upload CSV or PDF'}
+              </p>
+              {!compact && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  {isDragging && !disabled
+                    ? 'Release to upload'
+                    : disabled
+                      ? 'Read-only users cannot import transactions'
+                      : 'Upload a CSV file or PDF statement of transactions'}
+                </p>
+              )}
+              {compact && disabled && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Read-only users cannot import transactions
+                </p>
+              )}
+            </div>
+            <Button
+              onClick={handleButtonClick}
+              disabled={isProcessing || disabled}
+              size={compact ? 'sm' : 'default'}
+              className={compact ? 'shrink-0' : ''}
+            >
+              {isProcessing ? 'Processing...' : 'Choose file'}
+            </Button>
           </div>
-          <Button onClick={handleButtonClick} disabled={isProcessing || disabled}>
-            {isProcessing ? 'Processing...' : 'Choose File'}
-          </Button>
         </div>
       </div>
 

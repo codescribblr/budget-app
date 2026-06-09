@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import FileUpload from './FileUpload';
 import TransactionPreview from './TransactionPreview';
+import ImportQueueList from './ImportQueueList';
 import type { ParsedTransaction } from '@/lib/import-types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
@@ -14,19 +15,17 @@ export default function ImportTransactionsPage() {
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [fileName, setFileName] = useState<string>('');
-  const [isImporting, setIsImporting] = useState(false);
+  const [queueRefreshKey, setQueueRefreshKey] = useState(0);
 
-  // Check for parsed transactions from map-columns page
   useEffect(() => {
     const storedTransactions = sessionStorage.getItem('parsedTransactions');
     const storedFileName = sessionStorage.getItem('parsedFileName');
-    
+
     if (storedTransactions && storedFileName) {
       try {
         const transactions = JSON.parse(storedTransactions);
         setParsedTransactions(transactions);
         setFileName(storedFileName);
-        // Clear session storage (but keep csvDateFormat and csvTemplateId for the preview)
         sessionStorage.removeItem('parsedTransactions');
         sessionStorage.removeItem('parsedFileName');
       } catch (err) {
@@ -43,7 +42,6 @@ export default function ImportTransactionsPage() {
   const handleClearImport = () => {
     setParsedTransactions([]);
     setFileName('');
-    // Also clear any session storage
     sessionStorage.removeItem('parsedTransactions');
     sessionStorage.removeItem('parsedFileName');
     sessionStorage.removeItem('csvDateFormat');
@@ -54,15 +52,17 @@ export default function ImportTransactionsPage() {
   const handleImportComplete = () => {
     setParsedTransactions([]);
     setFileName('');
-    // Clear session storage
     sessionStorage.removeItem('csvDateFormat');
     sessionStorage.removeItem('csvTemplateId');
     sessionStorage.removeItem('csvData');
     sessionStorage.removeItem('csvFileName');
     sessionStorage.removeItem('csvFingerprint');
     sessionStorage.removeItem('importIsHistorical');
-    // Navigate to transactions page
     router.push('/transactions');
+  };
+
+  const handleBatchQueued = () => {
+    setQueueRefreshKey((k) => k + 1);
   };
 
   if (parsedTransactions.length > 0) {
@@ -88,27 +88,34 @@ export default function ImportTransactionsPage() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Upload CSV or PDF</CardTitle>
-        <CardDescription>
-          Upload a CSV file or PDF statement of transactions from your bank or credit card.
-          Supports CSV files and PDF statements.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {!isEditor && !permissionsLoading ? (
-          <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md">
-            <p className="text-sm text-yellow-800 dark:text-yellow-200">
-              You only have read access to this account. Only account owners and editors can import transactions.
-            </p>
-          </div>
-        ) : (
-          <FileUpload onFileUploaded={handleFileUploaded} disabled={!isEditor || permissionsLoading} />
-        )}
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Upload transactions</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {!isEditor && !permissionsLoading ? (
+            <div className="p-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                You only have read access to this account. Only account owners and editors can import
+                transactions.
+              </p>
+            </div>
+          ) : (
+            <FileUpload
+              onFileUploaded={handleFileUploaded}
+              disabled={!isEditor || permissionsLoading}
+              compact
+              onBatchQueued={handleBatchQueued}
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      <div>
+        <h2 className="text-lg font-semibold mb-3">Queued imports</h2>
+        <ImportQueueList refreshKey={queueRefreshKey} />
+      </div>
+    </div>
   );
 }
-
-

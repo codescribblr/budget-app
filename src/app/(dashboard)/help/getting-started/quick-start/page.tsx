@@ -64,7 +64,7 @@ export default function QuickStartPage() {
             <li>Watch your category balances update automatically</li>
           </ul>
           <p className="mt-2 text-xs">
-            <strong>Tip:</strong> You can also <Link href="/import" className="text-primary hover:underline">import transactions</Link> from your bank's CSV export.
+            <strong>Tip:</strong> You can also <Link href="/imports" className="text-primary hover:underline">import transactions</Link> from your bank's CSV export.
           </p>
         </>
       ),

@@ -110,9 +110,9 @@ export default function AppHeader({
                       Transactions
                     </button>
                     <button
-                      onClick={() => handleNavigation('/import')}
+                      onClick={() => handleNavigation('/imports')}
                       className={`w-full text-left px-4 py-3 transition-colors border-b ${
-                        isActive('/import')
+                        isActive('/imports')
                           ? 'bg-gray-800 text-white hover:bg-gray-700'
                           : 'hover:bg-accent'
                       }`}
@@ -265,8 +265,8 @@ export default function AppHeader({
                 Transactions
               </Button>
               <Button
-                variant={getButtonVariant('/import')}
-                onClick={() => window.location.href = '/import'}
+                variant={getButtonVariant('/imports')}
+                onClick={() => window.location.href = '/imports'}
                 size="sm"
                 className="md:size-default"
               >

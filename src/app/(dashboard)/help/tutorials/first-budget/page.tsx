@@ -176,7 +176,7 @@ export default function FirstBudgetTutorialPage() {
                     <li>Download a CSV file from your bank</li>
                     <li>
                       Go to the{' '}
-                      <Link href="/import" className="text-primary hover:underline">
+                      <Link href="/imports" className="text-primary hover:underline">
                         Import page
                       </Link>
                     </li>

@@ -42,8 +42,10 @@ export default function CSVImportFeaturePage() {
           <p className="text-base leading-relaxed">
             Instead of manually entering every transaction, you can import them from your bank's
             CSV export. This saves hours of data entry! When you upload a CSV file, transactions
-            are added to the <Link href="/help/features/import-queue" className="text-primary hover:underline">Import Queue</Link> where you can review,
-            categorize, and approve them before they're added to your budget.
+            are added to the queued imports list on the same page where you can review,
+            categorize, and approve them before they're added to your budget. See the{' '}
+            <Link href="/help/features/import-queue" className="text-primary hover:underline">Import Queue</Link> guide
+            for details on reviewing batches.
           </p>
         </CardContent>
       </Card>
@@ -79,8 +81,8 @@ export default function CSVImportFeaturePage() {
                 title: 'Go to the Import page',
                 content: (
                   <>
-                    Navigate to the <Link href="/import" className="text-primary hover:underline">Import page</Link> in
-                    the app
+                    Navigate to <Link href="/imports" className="text-primary hover:underline">Import</Link> in
+                    the sidebar
                   </>
                 ),
               },
@@ -101,8 +103,8 @@ export default function CSVImportFeaturePage() {
                 title: 'Review and categorize',
                 content: (
                   <>
-                    Transactions are added to the <Link href="/help/features/import-queue" className="text-primary hover:underline">Import Queue</Link> for review.
-                    Categorize transactions and exclude any you don't want to import (like transfers or duplicates)
+                    Transactions appear in the queued imports list below the upload area. Click Review on a batch to
+                    categorize transactions and exclude any you don't want to import (like transfers or duplicates)
                   </>
                 ),
               },
@@ -110,8 +112,7 @@ export default function CSVImportFeaturePage() {
                 title: 'Approve and import',
                 content: (
                   <>
-                    Once reviewed, click "Import Transactions" in the <Link href="/help/features/import-queue" className="text-primary hover:underline">Import Queue</Link> to
-                    add them to your budget
+                    Once reviewed, click &quot;Import Transactions&quot; to add them to your budget
                   </>
                 ),
               },
@@ -283,15 +284,15 @@ export default function CSVImportFeaturePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            After uploading your CSV file and mapping columns, transactions are added to the{' '}
-            <Link href="/help/features/import-queue" className="text-primary hover:underline">Import Queue</Link>.
+            After uploading your CSV file and mapping columns, transactions appear in the queued imports list on the{' '}
+            <Link href="/imports" className="text-primary hover:underline">Import page</Link>.
             This allows you to review and categorize transactions before they're added to your budget.
           </p>
           <div className="space-y-3">
             <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
               <div className="font-medium text-sm min-w-[180px]">Review in Queue</div>
               <div className="text-sm text-muted-foreground">
-                Navigate to the Import Queue to see your uploaded transactions grouped in a batch
+                On the Import page, find your batch in the queued imports list below the upload area
               </div>
             </div>
             <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">

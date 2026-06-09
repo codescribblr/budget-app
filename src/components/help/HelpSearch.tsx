@@ -22,7 +22,7 @@ const allHelpPages = [
   { title: 'Transactions', href: '/help/features/transactions', category: 'Features', keywords: ['transactions', 'spending', 'expenses', 'record'] },
   { title: 'Money Movement', href: '/help/features/money-movement', category: 'Features', keywords: ['money', 'movement', 'allocate', 'assign', 'distribute'] },
   { title: 'CSV Import', href: '/help/features/csv-import', category: 'Features', keywords: ['csv', 'import', 'upload', 'bank', 'download'] },
-  { title: 'Import Queue', href: '/help/features/import-queue', category: 'Features', keywords: ['import', 'queue', 'review', 'approve', 'batch', 'automatic', 'teller', 'plaid'] },
+  { title: 'Import Queue', href: '/help/features/import-queue', category: 'Features', keywords: ['import', 'queue', 'review', 'approve', 'batch', 'automatic', 'teller', 'plaid', 'upload', 'csv'] },
   { title: 'Financial Goals', href: '/help/features/goals', category: 'Features', keywords: ['goals', 'savings', 'targets', 'objectives'] },
   { title: 'Merchants & Auto-Categorization', href: '/help/features/merchants', category: 'Features', keywords: ['merchants', 'auto', 'categorization', 'automatic', 'groups'] },
   { title: 'Loans', href: '/help/features/loans', category: 'Features', keywords: ['loans', 'debt', 'payoff', 'mortgage', 'car'] },

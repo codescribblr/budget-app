@@ -555,7 +555,7 @@ export default function TransactionsFeaturePage() {
               { title: 'Export from bank', content: 'Export transactions from your bank as a CSV file' },
               {
                 title: 'Go to Import page',
-                content: <span>Navigate to the <Link href="/import" className="text-primary hover:underline">Import page</Link></span>
+                content: <span>Navigate to the <Link href="/imports" className="text-primary hover:underline">Import page</Link></span>
               },
               { title: 'Upload CSV', content: 'Upload your CSV file' },
               { title: 'Map columns', content: 'Map the columns to match the app\'s format' },

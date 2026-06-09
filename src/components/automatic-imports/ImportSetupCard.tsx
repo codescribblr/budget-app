@@ -239,7 +239,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
           if (reviewingImports.length > 0) {
             const batchId = reviewingImports[0].source_batch_id;
             if (batchId) {
-              router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
+              router.push(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
               return;
             }
           }
@@ -250,7 +250,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
       
       const batchId = imports[0].source_batch_id;
       if (batchId) {
-        router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
+        router.push(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
       } else {
         alert('No batch ID found');
       }
@@ -302,7 +302,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
         )[0];
         
         if (latestBatch.source_batch_id) {
-          router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`);
+          router.push(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`);
         }
         return;
       }
@@ -333,7 +333,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
             )[0];
             
             if (latestBatch.source_batch_id) {
-              router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`);
+              router.push(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`);
               return;
             }
           }
@@ -348,7 +348,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
       )[0];
       
       if (latestBatch.source_batch_id) {
-        router.push(`/import/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`);
+        router.push(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`);
       } else {
         alert('No batch ID found');
       }
@@ -566,10 +566,10 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => router.push('/imports/queue')}
+                  onClick={() => router.push('/imports')}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
-                  View Queue
+                  View Imports
                 </Button>
               </div>
             )}
@@ -580,10 +580,10 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => router.push('/imports/queue')}
+                  onClick={() => router.push('/imports')}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
-                  View Queue
+                  View Imports
                 </Button>
               </div>
             )}

@@ -74,7 +74,7 @@ export default function ImportingTutorialPage() {
                   <ol className="list-decimal list-inside mt-2 space-y-1">
                     <li>
                       Go to the{' '}
-                      <Link href="/import" className="text-primary hover:underline">
+                      <Link href="/imports" className="text-primary hover:underline">
                         Import page
                       </Link>
                     </li>

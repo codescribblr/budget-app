@@ -34,7 +34,7 @@ export default function ImportQueueFeaturePage() {
       <div>
         <h1 className="text-3xl font-bold mb-2">Import Queue</h1>
         <p className="text-lg text-muted-foreground">
-          Review and approve transactions before they're added to your budget
+          Review and approve queued transactions on the Import page before they're added to your budget
         </p>
       </div>
 
@@ -42,9 +42,10 @@ export default function ImportQueueFeaturePage() {
       <Card>
         <CardContent className="pt-6">
           <p className="text-base leading-relaxed">
-            The Import Queue is where transactions from automatic imports and manual CSV uploads wait for your review
-            before being added to your budget. This gives you control over which transactions are imported and ensures
-            they're properly categorized before affecting your budget balances.
+            The Import page combines uploading new files with reviewing queued imports. Transactions from automatic
+            imports and manual CSV uploads wait in the queued imports list until you review them. This gives you control
+            over which transactions are imported and ensures they're properly categorized before affecting your budget
+            balances.
           </p>
         </CardContent>
       </Card>
@@ -170,8 +171,8 @@ export default function ImportQueueFeaturePage() {
           <CardContent className="space-y-4">
             <StepList
               steps={[
-                { title: 'Go to Import Queue', content: <><Link href="/imports/queue" className="text-primary hover:underline">Navigate to the Import Queue page</Link></> },
-                { title: 'View batches', content: 'See all pending batches grouped by import setup and account' },
+                { title: 'Go to Import', content: <><Link href="/imports" className="text-primary hover:underline">Navigate to the Import page</Link></> },
+                { title: 'View batches', content: 'See all pending batches in the queued imports list below the upload area' },
                 { title: 'Review batch details', content: 'Each batch shows the number of transactions, date range, source type, and target account' },
                 { title: 'Click Review', content: 'Click the "Review" button on a batch to start reviewing its transactions' },
               ]}
