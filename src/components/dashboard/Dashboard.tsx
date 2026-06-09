@@ -65,6 +65,10 @@ function calculateSummary(
     .filter(cat => !cat.is_system || cat.is_buffer)
     .reduce((sum, cat) => sum + Number(cat.current_balance), 0);
 
+  const bufferBalance = categories
+    .filter(cat => cat.is_buffer)
+    .reduce((sum, cat) => sum + Number(cat.current_balance), 0);
+
   const hasNegativeEnvelopes = categories
     .filter(cat => !cat.is_system || cat.is_buffer)
     .some(cat => Number(cat.current_balance) < 0);
@@ -92,6 +96,7 @@ function calculateSummary(
   return {
     total_monies: totalMonies,
     total_envelopes: categoriesTotalBalance, // Includes buffer category balance
+    buffer_balance: bufferBalance,
     total_credit_card_balances: totalCreditCardBalances,
     total_pending_checks: totalPendingChecks,
     current_savings: currentSavings,
@@ -448,7 +453,12 @@ export default function Dashboard() {
 
       {cardVisibility.net_worth && retirementPlanningEnabled && isPremium && <NetWorthSummaryCard />}
 
-      {cardVisibility.summary && summary && <SummaryCards summary={summary} />}
+      {cardVisibility.summary && summary && (
+        <SummaryCards
+          summary={summary}
+          showBufferBalance={incomeBufferFeatureEnabled && bufferStatus?.enabled === true}
+        />
+      )}
 
       <div
         className={

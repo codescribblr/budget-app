@@ -514,6 +514,7 @@ export interface MergeTransactionRequest {
 export interface DashboardSummary {
   total_monies: number;
   total_envelopes: number;
+  buffer_balance: number;
   total_credit_card_balances: number;
   total_pending_checks: number;
   current_savings: number;

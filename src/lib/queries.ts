@@ -538,6 +538,7 @@ export function getDashboardSummary(): DashboardSummary {
   return {
     total_monies: totalMonies.total,
     total_envelopes: totalEnvelopes.total,
+    buffer_balance: 0,
     total_credit_card_balances: totalCreditCardBalances.total,
     total_pending_checks: totalPendingChecks.total,
     current_savings: currentSavings,

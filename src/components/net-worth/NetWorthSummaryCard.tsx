@@ -67,8 +67,8 @@ export default function NetWorthSummaryCard() {
 
   if (loading) {
     return (
-      <Card className="border-muted">
-        <CardContent className="py-4 px-4 md:px-6 flex items-center justify-between gap-4">
+      <Card className="border-muted py-3 gap-0">
+        <CardContent className="py-3 px-4 md:px-6 flex items-center justify-between gap-4">
           <div className="space-y-2 flex-1">
             <div className="h-3 w-24 rounded bg-muted animate-pulse" />
             <div className="h-8 w-40 rounded bg-muted animate-pulse" />
@@ -87,8 +87,8 @@ export default function NetWorthSummaryCard() {
   const positive = change30Days ? change30Days.amount >= 0 : true;
 
   return (
-    <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-      <CardContent className="py-4 px-4 md:px-6">
+    <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent py-3 gap-0">
+      <CardContent className="py-3 px-4 md:px-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-1 min-w-0">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

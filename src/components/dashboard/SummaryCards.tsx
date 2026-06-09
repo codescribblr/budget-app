@@ -4,9 +4,10 @@ import type { DashboardSummary } from '@/lib/types';
 
 interface SummaryCardsProps {
   summary: DashboardSummary;
+  showBufferBalance?: boolean;
 }
 
-export default function SummaryCards({ summary }: SummaryCardsProps) {
+export default function SummaryCards({ summary, showBufferBalance = false }: SummaryCardsProps) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-3 lg:gap-4">
       <Card>
@@ -30,6 +31,11 @@ export default function SummaryCards({ summary }: SummaryCardsProps) {
           <div className={`text-sm md:text-lg lg:text-xl xl:text-2xl font-bold ${summary.has_negative_envelopes ? 'text-red-600' : ''}`}>
             {formatCurrency(summary.total_envelopes)}
           </div>
+          {showBufferBalance && (
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 md:mt-1 tabular-nums">
+              Buffer: {formatCurrency(summary.buffer_balance)}
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -70,5 +76,3 @@ export default function SummaryCards({ summary }: SummaryCardsProps) {
     </div>
   );
 }
-
-

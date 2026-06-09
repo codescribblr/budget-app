@@ -495,6 +495,7 @@ export const OPENAPI_COMPONENT_SCHEMAS: Record<string, Record<string, unknown>> 
     properties: {
       total_monies: { type: 'number' },
       total_envelopes: { type: 'number' },
+      buffer_balance: { type: 'number' },
       total_credit_card_balances: { type: 'number' },
       total_pending_checks: { type: 'number' },
       current_savings: { type: 'number' },

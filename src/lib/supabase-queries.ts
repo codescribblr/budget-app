@@ -1377,6 +1377,10 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     .filter(cat => !cat.is_system || cat.is_buffer)
     .reduce((sum, cat) => sum + Number(cat.current_balance), 0);
 
+  const bufferBalance = (categories as Category[])
+    .filter(cat => cat.is_buffer)
+    .reduce((sum, cat) => sum + Number(cat.current_balance), 0);
+
   const hasNegativeEnvelopes = (categories as Category[])
     .filter(cat => !cat.is_system || cat.is_buffer)
     .some(cat => Number(cat.current_balance) < 0);
@@ -1404,6 +1408,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   return {
     total_monies: totalMonies,
     total_envelopes: categoriesTotalBalance, // Includes buffer category balance
+    buffer_balance: bufferBalance,
     total_credit_card_balances: totalCreditCardBalances,
     total_pending_checks: totalPendingChecks,
     current_savings: currentSavings,
