@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
+import { APP_NAME, APP_SHORT_NAME } from "@/lib/branding"
 
 interface Account {
   accountId: number
@@ -194,7 +195,7 @@ export function AccountSwitcher() {
             )}>
               <Image
                 src={logoSrc}
-                alt="Budget App"
+                alt={APP_NAME}
                 width={32}
                 height={32}
                 className={state === "expanded" ? "h-8 w-8" : "h-7 w-7"}
@@ -204,7 +205,7 @@ export function AccountSwitcher() {
             {state === "expanded" && (
               <>
                 <div className="flex flex-col items-start flex-1 min-w-0 gap-1">
-                  <span className="text-sm font-semibold leading-none">Budget App</span>
+                  <span className="text-sm font-semibold leading-none">{APP_SHORT_NAME}</span>
                   <span className="text-xs text-muted-foreground leading-none truncate w-full text-left">
                     {pathname?.startsWith('/admin')
                       ? 'Admin'

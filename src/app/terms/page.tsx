@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import { APP_NAME, SUPPORT_EMAIL } from '@/lib/branding';
 
 export default function TermsPage() {
   return (
@@ -11,19 +12,19 @@ export default function TermsPage() {
           <Link href="/" className="flex items-center gap-3">
             <Image 
               src="/icon.svg" 
-              alt="Budget App" 
+              alt={APP_NAME} 
               width={40} 
               height={40}
               className="dark:hidden"
             />
             <Image 
               src="/icon-darkmode.svg" 
-              alt="Budget App" 
+              alt={APP_NAME} 
               width={40} 
               height={40}
               className="hidden dark:block"
             />
-            <span className="text-xl font-bold">Budget App</span>
+            <span className="text-xl font-bold">{APP_NAME}</span>
           </Link>
           <nav className="flex items-center gap-4">
             <Link href="/login">
@@ -45,14 +46,14 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">Agreement to Terms</h2>
             <p className="text-muted-foreground leading-relaxed">
-              By accessing or using Budget App, you agree to be bound by these Terms of Service and all applicable laws and regulations. If you do not agree with any of these terms, you are prohibited from using this service.
+              By accessing or using {APP_NAME}, you agree to be bound by these Terms of Service and all applicable laws and regulations. If you do not agree with any of these terms, you are prohibited from using this service.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-semibold mb-4">Use License</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
-              Permission is granted to use Budget App for personal, non-commercial budgeting and financial management purposes. This license shall automatically terminate if you violate any of these restrictions.
+              Permission is granted to use {APP_NAME} for personal, non-commercial budgeting and financial management purposes. This license shall automatically terminate if you violate any of these restrictions.
             </p>
             <p className="text-muted-foreground leading-relaxed mb-3">
               You may not:
@@ -60,7 +61,7 @@ export default function TermsPage() {
             <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
               <li>Modify or copy the application materials</li>
               <li>Use the materials for any commercial purpose</li>
-              <li>Attempt to reverse engineer any software contained in Budget App</li>
+              <li>Attempt to reverse engineer any software contained in {APP_NAME}</li>
               <li>Remove any copyright or proprietary notations</li>
               <li>Transfer the materials to another person or "mirror" the materials on any other server</li>
             </ul>
@@ -69,7 +70,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">Account Registration</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
-              To use Budget App, you must:
+              To use {APP_NAME}, you must:
             </p>
             <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
               <li>Be at least 13 years of age</li>
@@ -110,7 +111,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">User Content and Data</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
-              You retain all rights to the financial data and information you enter into Budget App. By using our service, you grant us a license to:
+              You retain all rights to the financial data and information you enter into {APP_NAME}. By using our service, you grant us a license to:
             </p>
             <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
               <li>Store and process your data to provide the service</li>
@@ -125,7 +126,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">Prohibited Uses</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
-              You agree not to use Budget App:
+              You agree not to use {APP_NAME}:
             </p>
             <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
               <li>For any unlawful purpose or to violate any laws</li>
@@ -141,21 +142,21 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">Disclaimer of Warranties</h2>
             <p className="text-muted-foreground leading-relaxed">
-              Budget App is provided "as is" without warranties of any kind, either express or implied. We do not warrant that the service will be uninterrupted, secure, or error-free. We do not provide financial advice, and the application should not be used as a substitute for professional financial guidance.
+              {APP_NAME} is provided "as is" without warranties of any kind, either express or implied. We do not warrant that the service will be uninterrupted, secure, or error-free. We do not provide financial advice, and the application should not be used as a substitute for professional financial guidance.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-semibold mb-4">Limitation of Liability</h2>
             <p className="text-muted-foreground leading-relaxed">
-              In no event shall Budget App or its suppliers be liable for any damages (including, without limitation, damages for loss of data or profit, or due to business interruption) arising out of the use or inability to use Budget App, even if we have been notified of the possibility of such damage.
+              In no event shall {APP_NAME} or its suppliers be liable for any damages (including, without limitation, damages for loss of data or profit, or due to business interruption) arising out of the use or inability to use {APP_NAME}, even if we have been notified of the possibility of such damage.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-semibold mb-4">Indemnification</h2>
             <p className="text-muted-foreground leading-relaxed">
-              You agree to indemnify and hold harmless Budget App and its affiliates from any claims, damages, losses, liabilities, and expenses (including legal fees) arising from your use of the service or violation of these Terms.
+              You agree to indemnify and hold harmless {APP_NAME} and its affiliates from any claims, damages, losses, liabilities, and expenses (including legal fees) arising from your use of the service or violation of these Terms.
             </p>
           </section>
 
@@ -190,7 +191,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">Entire Agreement</h2>
             <p className="text-muted-foreground leading-relaxed">
-              These Terms constitute the entire agreement between you and Budget App regarding the use of the service and supersede all prior agreements and understandings.
+              These Terms constitute the entire agreement between you and {APP_NAME} regarding the use of the service and supersede all prior agreements and understandings.
             </p>
           </section>
 
@@ -200,7 +201,7 @@ export default function TermsPage() {
               If you have any questions about these Terms of Service, please contact us at:
             </p>
             <p className="text-muted-foreground leading-relaxed">
-              Email: support@budgetapp.com
+              Email: {SUPPORT_EMAIL}
             </p>
           </section>
         </div>
@@ -215,7 +216,7 @@ export default function TermsPage() {
       {/* Footer */}
       <footer className="border-t py-8 px-4 bg-muted/50 mt-12">
         <div className="container mx-auto max-w-6xl text-center text-sm text-muted-foreground">
-          © {new Date().getFullYear()} Budget App. All rights reserved.
+          © {new Date().getFullYear()} {APP_NAME}. All rights reserved.
         </div>
       </footer>
     </div>

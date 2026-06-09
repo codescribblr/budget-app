@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { APP_NAME, APP_SHORT_NAME, APP_URL } from "@/lib/branding";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/providers/theme-provider";
@@ -19,8 +20,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Budget App",
-  description: "Envelope budgeting made simple",
+  metadataBase: new URL(APP_URL),
+  title: APP_NAME,
+  description: "Envelope budgeting made simple — take back control of your money.",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -63,9 +65,9 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Budget",
+    title: APP_SHORT_NAME,
   },
-  applicationName: "Budget App",
+  applicationName: APP_NAME,
 };
 
 export const viewport: Viewport = {

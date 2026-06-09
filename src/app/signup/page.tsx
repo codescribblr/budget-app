@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { APP_NAME, APP_DOMAIN } from '@/lib/branding';
 
 function SignupForm() {
   const router = useRouter();
@@ -221,21 +222,21 @@ function SignupForm() {
         <div className="flex items-center gap-3 mb-8">
           <Image
             src="/icon.svg"
-            alt="Budget App"
+            alt={APP_NAME}
             width={48}
             height={48}
             className="dark:hidden"
           />
           <Image
             src="/icon-darkmode.svg"
-            alt="Budget App"
+            alt={APP_NAME}
             width={48}
             height={48}
             className="hidden dark:block"
           />
           <div>
-            <h1 className="text-2xl font-bold">Budget App</h1>
-            <p className="text-sm text-muted-foreground">Envelope Budgeting Made Simple</p>
+            <h1 className="text-2xl font-bold">{APP_NAME}</h1>
+            <p className="text-sm text-muted-foreground">{APP_DOMAIN}</p>
           </div>
         </div>
 
@@ -270,21 +271,21 @@ function SignupForm() {
       <div className="flex items-center gap-3 mb-8">
         <Image
           src="/icon.svg"
-          alt="Budget App"
+          alt={APP_NAME}
           width={48}
           height={48}
           className="dark:hidden"
         />
         <Image
           src="/icon-darkmode.svg"
-          alt="Budget App"
+          alt={APP_NAME}
           width={48}
           height={48}
           className="hidden dark:block"
         />
         <div>
-          <h1 className="text-2xl font-bold">Budget App</h1>
-          <p className="text-sm text-muted-foreground">Envelope Budgeting Made Simple</p>
+          <h1 className="text-2xl font-bold">{APP_NAME}</h1>
+          <p className="text-sm text-muted-foreground">{APP_DOMAIN}</p>
         </div>
       </div>
 

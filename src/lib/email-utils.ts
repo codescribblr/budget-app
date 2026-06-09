@@ -60,7 +60,7 @@ export async function sendEmail(
   }
 
   // Get sender email from environment
-  const fromEmail = process.env.SMTP_FROM_EMAIL || 'Budget App <onboarding@resend.dev>';
+  const fromEmail = process.env.SMTP_FROM_EMAIL || 'Every Dollar Budget App <onboarding@resend.dev>';
 
   const resend = new Resend(apiKey);
 
@@ -114,7 +114,7 @@ export async function sendInvitationEmail(
 
   await sendEmail(
     to,
-    `You've been invited to collaborate on "${accountName}" - Budget App`,
+    `You've been invited to collaborate on "${accountName}" - Every Dollar Budget App`,
     html
   );
 }

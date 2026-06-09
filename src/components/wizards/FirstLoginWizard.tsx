@@ -256,7 +256,7 @@ export function FirstLoginWizard() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Rocket className="h-5 w-5 text-primary" />
-            Welcome to Budget App!
+            Welcome to Every Dollar Budget App!
           </DialogTitle>
           <DialogDescription>
             Let's set up your first budget in just a few minutes

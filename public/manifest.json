@@ -1,6 +1,6 @@
 {
-  "name": "Budget App",
-  "short_name": "Budget",
+  "name": "Every Dollar Budget App",
+  "short_name": "Every Dollar",
   "description": "Envelope budgeting made simple",
   "start_url": "/",
   "display": "standalone",

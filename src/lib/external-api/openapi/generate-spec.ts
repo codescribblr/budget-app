@@ -12,6 +12,7 @@ import {
   EXTERNAL_API_RATE_LIMIT_PER_MINUTE,
   IDEMPOTENCY_HEADER,
 } from '../constants';
+import { APP_NAME } from '@/lib/branding';
 
 type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
@@ -457,7 +458,7 @@ function buildFullDescriptionLines(): string[] {
 
 function buildReportingDescriptionLines(): string[] {
   return [
-    `Read-only subset of the Budget App API with exactly ${REPORTING_API_OPERATION_COUNT} GET operations for budget reporting and AI assistants.`,
+    `Read-only subset of the ${APP_NAME} API with exactly ${REPORTING_API_OPERATION_COUNT} GET operations for budget reporting and AI assistants.`,
     '',
     'Use this spec when your tool limits OpenAPI operation count (e.g. ChatGPT custom actions).',
     'The full API including writes is at `/api/v1/openapi.json`.',
@@ -498,11 +499,11 @@ export function generateOpenApiSpec(baseUrl: string, options: GenerateOpenApiSpe
   return sanitizeOpenApiSpec({
     openapi: '3.1.0',
     info: {
-      title: options.title ?? 'Budget App External API',
+      title: options.title ?? `${APP_NAME} External API`,
       version: options.version ?? '1.0.0',
       description: descriptionLines.join('\n'),
       contact: {
-        name: 'Budget App Support',
+        name: `${APP_NAME} Support`,
       },
     },
     servers: [{ url: baseUrl, description: 'Current environment' }],
@@ -515,7 +516,7 @@ export function generateOpenApiSpec(baseUrl: string, options: GenerateOpenApiSpe
 export function generateReportingOpenApiSpec(baseUrl: string) {
   return generateOpenApiSpec(baseUrl, {
     endpoints: REPORTING_API_OPERATIONS,
-    title: 'Budget App Reporting API',
+    title: `${APP_NAME} Reporting API`,
     version: '1.0.0-reporting',
     descriptionLines: buildReportingDescriptionLines(),
   });

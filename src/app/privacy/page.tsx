@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import { APP_NAME, PRIVACY_EMAIL } from '@/lib/branding';
 
 export default function PrivacyPage() {
   return (
@@ -11,19 +12,19 @@ export default function PrivacyPage() {
           <Link href="/" className="flex items-center gap-3">
             <Image 
               src="/icon.svg" 
-              alt="Budget App" 
+              alt={APP_NAME} 
               width={40} 
               height={40}
               className="dark:hidden"
             />
             <Image 
               src="/icon-darkmode.svg" 
-              alt="Budget App" 
+              alt={APP_NAME} 
               width={40} 
               height={40}
               className="hidden dark:block"
             />
-            <span className="text-xl font-bold">Budget App</span>
+            <span className="text-xl font-bold">{APP_NAME}</span>
           </Link>
           <nav className="flex items-center gap-4">
             <Link href="/login">
@@ -45,7 +46,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">Introduction</h2>
             <p className="text-muted-foreground leading-relaxed">
-              Budget App ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our budgeting application.
+              {APP_NAME} ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our budgeting application.
             </p>
           </section>
 
@@ -182,7 +183,7 @@ export default function PrivacyPage() {
               If you have any questions about this Privacy Policy or our data practices, please contact us at:
             </p>
             <p className="text-muted-foreground leading-relaxed">
-              Email: privacy@budgetapp.com
+              Email: {PRIVACY_EMAIL}
             </p>
           </section>
         </div>
@@ -197,7 +198,7 @@ export default function PrivacyPage() {
       {/* Footer */}
       <footer className="border-t py-8 px-4 bg-muted/50 mt-12">
         <div className="container mx-auto max-w-6xl text-center text-sm text-muted-foreground">
-          © {new Date().getFullYear()} Budget App. All rights reserved.
+          © {new Date().getFullYear()} {APP_NAME}. All rights reserved.
         </div>
       </footer>
     </div>

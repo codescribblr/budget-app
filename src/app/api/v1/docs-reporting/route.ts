@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { renderOpenApiDocsPage } from '@/lib/external-api/openapi/generate-spec';
+import { APP_NAME } from '@/lib/branding';
 
 /**
  * GET /api/v1/docs-reporting
@@ -8,7 +9,7 @@ import { renderOpenApiDocsPage } from '@/lib/external-api/openapi/generate-spec'
 export async function GET() {
   const html = renderOpenApiDocsPage(
     '/api/v1/openapi-reporting.json',
-    'Budget App Reporting API',
+    `${APP_NAME} Reporting API`,
     'Read-only API documentation for budget reporting — optimized for AI assistants.'
   );
 

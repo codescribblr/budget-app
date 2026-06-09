@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { LogOut } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
+import { APP_NAME } from "@/lib/branding"
 
 export default function AccountSelectionLayout({
   children,
@@ -38,13 +39,13 @@ export default function AccountSelectionLayout({
           {mounted && (
             <Image
               src={logoSrc}
-              alt="Budget App"
+              alt={APP_NAME}
               width={32}
               height={32}
               className="h-8 w-8"
             />
           )}
-          <span className="font-semibold text-lg">Budget App</span>
+          <span className="font-semibold text-lg">{APP_NAME}</span>
         </Link>
         <Button
           onClick={handleSignOut}

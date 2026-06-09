@@ -12,7 +12,7 @@ This directory contains branded email templates for Supabase authentication emai
 
 3. Copy the contents of `confirmation.html` and paste it into the **"Message Body (HTML)"** field
 
-4. Update the **Subject** to: `Confirm your email - Budget App`
+4. Update the **Subject** to: `Confirm your email - Every Dollar Budget App`
 
 5. Click **Save** to apply the changes
 
@@ -39,7 +39,7 @@ curl -X PATCH "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth" \
   -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"mailer_subjects_confirmation\": \"Confirm your email - Budget App\",
+    \"mailer_subjects_confirmation\": \"Confirm your email - Every Dollar Budget App\",
     \"mailer_templates_confirmation_content\": $TEMPLATE_CONTENT
   }"
 ```

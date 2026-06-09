@@ -102,10 +102,10 @@ export function InstallPrompt() {
             <Smartphone className="h-5 w-5 text-primary" />
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-sm mb-1">Install Budget App</h3>
+            <h3 className="font-semibold text-sm mb-1">Install Every Dollar Budget App</h3>
             {isIOSDevice ? (
               <div className="text-xs text-muted-foreground space-y-2">
-                <p>Add Budget App to your home screen for quick access and push notifications.</p>
+                <p>Add Every Dollar Budget App to your home screen for quick access and push notifications.</p>
                 <ol className="list-decimal list-inside space-y-1 ml-2">
                   <li>Tap the Share button <span className="font-mono">□↑</span></li>
                   <li>Scroll down and tap &quot;Add to Home Screen&quot;</li>
@@ -114,7 +114,7 @@ export function InstallPrompt() {
               </div>
             ) : (
               <p className="text-xs text-muted-foreground mb-3">
-                Install Budget App to your home screen for quick access and push notifications.
+                Install Every Dollar Budget App to your home screen for quick access and push notifications.
               </p>
             )}
             <div className="flex gap-2 mt-3">

@@ -1,6 +1,8 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { APP_NAME, APP_DOMAIN, APP_URL } from '@/lib/branding';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,8 +33,52 @@ import {
   Eye,
   X,
   CheckCircle2,
-  Clock
+  Clock,
+  Code2,
+  KeyRound,
+  ExternalLink,
+  Repeat,
+  Landmark,
+  ListOrdered
 } from 'lucide-react';
+
+function PremiumBadge() {
+  return (
+    <Badge variant="secondary" className="text-xs">
+      <Crown className="h-3 w-3 mr-1" />
+      Premium
+    </Badge>
+  );
+}
+
+function PremiumFeatureCard({
+  icon,
+  iconBg,
+  iconColor,
+  title,
+  description,
+}: {
+  icon: ReactNode;
+  iconBg: string;
+  iconColor: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Card className="border-2 border-primary/50 relative">
+      <div className="absolute top-2 right-2">
+        <PremiumBadge />
+      </div>
+      <CardHeader>
+        <div className={`h-12 w-12 rounded-lg ${iconBg} flex items-center justify-center mb-4`}>
+          <div className={iconColor}>{icon}</div>
+        </div>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+    </Card>
+  );
+}
 
 export default function HomePage() {
   return (
@@ -43,19 +89,22 @@ export default function HomePage() {
           <div className="flex items-center gap-3">
             <Image 
               src="/icon.svg" 
-              alt="Budget App" 
+              alt={APP_NAME} 
               width={40} 
               height={40}
               className="dark:hidden"
             />
             <Image 
               src="/icon-darkmode.svg" 
-              alt="Budget App" 
+              alt={APP_NAME} 
               width={40} 
               height={40}
               className="hidden dark:block"
             />
-            <span className="text-xl font-bold">Budget App</span>
+            <div>
+              <span className="text-xl font-bold">{APP_NAME}</span>
+              <p className="text-xs text-muted-foreground hidden sm:block">{APP_DOMAIN}</p>
+            </div>
           </div>
           <nav className="flex items-center gap-4">
             <Link href="/login">
@@ -268,7 +317,8 @@ export default function HomePage() {
         <div className="container mx-auto max-w-6xl">
           <h2 className="text-4xl font-bold text-center mb-4">Powerful Tools for Taking Control</h2>
           <p className="text-center text-muted-foreground mb-12 text-lg">
-            Everything you need to be hands-on with your finances and make real progress
+            Everything you need to be hands-on with your finances and make real progress.
+            Features marked <Crown className="inline h-4 w-4 text-yellow-500" /> Premium require a subscription.
           </p>
           
           <div className="grid md:grid-cols-3 gap-8">
@@ -287,23 +337,11 @@ export default function HomePage() {
             <Card className="border-2">
               <CardHeader>
                 <div className="h-12 w-12 rounded-lg bg-green-100 dark:bg-green-900 flex items-center justify-center mb-4">
-                  <TrendingUp className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  <BarChart3 className="h-6 w-6 text-green-600 dark:text-green-400" />
                 </div>
-                <CardTitle>Smart Insights</CardTitle>
+                <CardTitle>Basic Reports</CardTitle>
                 <CardDescription>
-                  See your spending trends clearly. Get insights and recommendations to help you make better decisions—you're still in control.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="border-2">
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center mb-4">
-                  <Target className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                </div>
-                <CardTitle>Goal Tracking</CardTitle>
-                <CardDescription>
-                  Set savings goals and watch your progress. Stay motivated to reach your targets.
+                  See spending by category and merchant with charts and filters. Included with every account—no upgrade required.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -320,17 +358,6 @@ export default function HomePage() {
               </CardHeader>
             </Card>
 
-            <Card className="border-2">
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center mb-4">
-                  <BarChart3 className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                </div>
-                <CardTitle>Powerful Reports</CardTitle>
-                <CardDescription>
-                  Visualize your spending with beautiful charts and detailed analytics.
-                </CardDescription>
-              </CardHeader>
-            </Card>
 
             <Card className="border-2">
               <CardHeader>
@@ -381,112 +408,203 @@ export default function HomePage() {
             </Card>
 
             {/* Premium Feature Cards */}
-            <Card className="border-2 border-primary/50 relative">
-              <div className="absolute top-2 right-2">
-                <Badge variant="secondary" className="text-xs">
-                  <Crown className="h-3 w-3 mr-1" />
-                  Premium
-                </Badge>
-              </div>
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center mb-4">
-                  <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                </div>
-                <CardTitle>Monthly Funding Tracking</CardTitle>
-                <CardDescription>
-                  Track how much you've funded to each category this month, separate from balances. Never refund already-paid bills.
-                </CardDescription>
-              </CardHeader>
-            </Card>
+            <PremiumFeatureCard
+              icon={<Target className="h-6 w-6" />}
+              iconBg="bg-purple-100 dark:bg-purple-900"
+              iconColor="text-purple-600 dark:text-purple-400"
+              title="Goals & Debt Tracking"
+              description="Set savings goals and track debt payoff progress with visual indicators. Stay motivated as you reach your targets."
+            />
 
-            <Card className="border-2 border-primary/50 relative">
-              <div className="absolute top-2 right-2">
-                <Badge variant="secondary" className="text-xs">
-                  <Crown className="h-3 w-3 mr-1" />
-                  Premium
-                </Badge>
-              </div>
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center mb-4">
-                  <Layers className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                </div>
-                <CardTitle>Smart Allocation</CardTitle>
-                <CardDescription>
-                  Get intelligent suggestions for allocating funds based on your priorities. Review and approve—you make the final decisions.
-                </CardDescription>
-              </CardHeader>
-            </Card>
+            <PremiumFeatureCard
+              icon={<BarChart3 className="h-6 w-6" />}
+              iconBg="bg-indigo-100 dark:bg-indigo-900"
+              iconColor="text-indigo-600 dark:text-indigo-400"
+              title="Advanced Reports"
+              description="Trend analysis, category deep-dives, and detailed spending analytics beyond the basic reports overview."
+            />
 
-            <Card className="border-2 border-primary/50 relative">
-              <div className="absolute top-2 right-2">
-                <Badge variant="secondary" className="text-xs">
-                  <Crown className="h-3 w-3 mr-1" />
-                  Premium
-                </Badge>
-              </div>
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center mb-4">
-                  <PiggyBank className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <CardTitle>Income Buffer</CardTitle>
-                <CardDescription>
-                  Smooth irregular income by storing large payments and releasing funds monthly. Perfect for freelancers and variable earners.
-                </CardDescription>
-              </CardHeader>
-            </Card>
+            <PremiumFeatureCard
+              icon={<Calendar className="h-6 w-6" />}
+              iconBg="bg-blue-100 dark:bg-blue-900"
+              iconColor="text-blue-600 dark:text-blue-400"
+              title="Monthly Funding Tracking"
+              description="Track how much you've funded to each category this month, separate from balances. Never refund already-paid bills."
+            />
 
-            <Card className="border-2 border-primary/50 relative">
-              <div className="absolute top-2 right-2">
-                <Badge variant="secondary" className="text-xs">
-                  <Crown className="h-3 w-3 mr-1" />
-                  Premium
-                </Badge>
-              </div>
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center mb-4">
-                  <LineChart className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
-                </div>
-                <CardTitle>Retirement Planning & Net Worth</CardTitle>
-                <CardDescription>
-                  Project your financial future with comprehensive net worth forecasting. Plan for retirement with Social Security, RMDs, and distribution strategies.
-                </CardDescription>
-              </CardHeader>
-            </Card>
+            <PremiumFeatureCard
+              icon={<ListOrdered className="h-6 w-6" />}
+              iconBg="bg-slate-100 dark:bg-slate-900"
+              iconColor="text-slate-600 dark:text-slate-400"
+              title="Category Types & Priorities"
+              description="Mark envelopes as Monthly Expense, Accumulation, or Target Balance and set funding priorities when money is limited."
+            />
 
-            <Card className="border-2 border-primary/50 relative">
-              <div className="absolute top-2 right-2">
-                <Badge variant="secondary" className="text-xs">
-                  <Crown className="h-3 w-3 mr-1" />
-                  Premium
-                </Badge>
-              </div>
+            <PremiumFeatureCard
+              icon={<Layers className="h-6 w-6" />}
+              iconBg="bg-purple-100 dark:bg-purple-900"
+              iconColor="text-purple-600 dark:text-purple-400"
+              title="Smart Allocation"
+              description="Get intelligent suggestions for allocating funds based on your priorities. Review and approve—you make the final decisions."
+            />
+
+            <PremiumFeatureCard
+              icon={<PiggyBank className="h-6 w-6" />}
+              iconBg="bg-emerald-100 dark:bg-emerald-900"
+              iconColor="text-emerald-600 dark:text-emerald-400"
+              title="Income Buffer"
+              description="Smooth irregular income by storing large payments and releasing funds monthly. Perfect for freelancers and variable earners."
+            />
+
+            <PremiumFeatureCard
+              icon={<Landmark className="h-6 w-6" />}
+              iconBg="bg-amber-100 dark:bg-amber-900"
+              iconColor="text-amber-600 dark:text-amber-400"
+              title="Loans Management"
+              description="Track mortgages, auto loans, and other liabilities with amortization schedules and payoff progress."
+            />
+
+            <PremiumFeatureCard
+              icon={<Repeat className="h-6 w-6" />}
+              iconBg="bg-teal-100 dark:bg-teal-900"
+              iconColor="text-teal-600 dark:text-teal-400"
+              title="Recurring Transactions"
+              description="Detect subscriptions and bills automatically. Get notified about upcoming charges and missed payments."
+            />
+
+            <PremiumFeatureCard
+              icon={<LineChart className="h-6 w-6" />}
+              iconBg="bg-cyan-100 dark:bg-cyan-900"
+              iconColor="text-cyan-600 dark:text-cyan-400"
+              title="Retirement Planning & Net Worth"
+              description="Project your financial future with comprehensive net worth forecasting. Plan for retirement with Social Security, RMDs, and distribution strategies."
+            />
+
+            <PremiumFeatureCard
+              icon={<RefreshCw className="h-6 w-6" />}
+              iconBg="bg-violet-100 dark:bg-violet-900"
+              iconColor="text-violet-600 dark:text-violet-400"
+              title="Automatic Transaction Import"
+              description="Transactions sync automatically from your bank accounts. You still review, categorize, and allocate each one—staying in control."
+            />
+
+            <PremiumFeatureCard
+              icon={<Brain className="h-6 w-6" />}
+              iconBg="bg-rose-100 dark:bg-rose-900"
+              iconColor="text-rose-600 dark:text-rose-400"
+              title="AI-Powered Insights"
+              description="Get smart categorization suggestions and personalized advice. The AI helps you make better decisions—you're always the one making them."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* External API Section */}
+      <section id="developers" className="py-20 px-4 bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
+        <div className="container mx-auto max-w-6xl">
+          <div className="text-center mb-12">
+            <Badge className="mb-4" variant="secondary">
+              <Code2 className="h-3 w-3 mr-1" />
+              Premium
+            </Badge>
+            <h2 className="text-4xl font-bold mb-4">Build on Your Budget Data</h2>
+            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+              Connect external apps, custom dashboards, and AI assistants with our REST API.
+              Scoped keys let you control exactly what each integration can read or update.
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-8 items-start">
+            <Card className="border-2">
               <CardHeader>
                 <div className="h-12 w-12 rounded-lg bg-violet-100 dark:bg-violet-900 flex items-center justify-center mb-4">
-                  <RefreshCw className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+                  <KeyRound className="h-6 w-6 text-violet-600 dark:text-violet-400" />
                 </div>
-                <CardTitle>Automatic Transaction Import</CardTitle>
+                <CardTitle>Scoped API Keys</CardTitle>
                 <CardDescription>
-                  Transactions sync automatically from your bank accounts. You still review, categorize, and allocate each one—staying in control.
+                  Premium account owners create keys with fine-grained permissions—transactions, categories,
+                  accounts, reports, imports, and more. Test and live keys use standard Bearer authentication.
                 </CardDescription>
               </CardHeader>
+              <CardContent>
+                <ul className="space-y-3 text-sm">
+                  <li className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span>REST API at <code className="text-xs bg-muted px-1 py-0.5 rounded">/api/v1/*</code> with OpenAPI 3.1 documentation</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span>Read and write transactions, categories, goals, net worth, and dashboard summaries</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span>Reporting subset with 30 read-only endpoints optimized for AI tools and ChatGPT Actions</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span>Idempotent writes, rate limits, and usage logging for every request</span>
+                  </li>
+                </ul>
+              </CardContent>
             </Card>
 
-            <Card className="border-2 border-primary/50 relative">
-              <div className="absolute top-2 right-2">
-                <Badge variant="secondary" className="text-xs">
-                  <Crown className="h-3 w-3 mr-1" />
-                  Premium
-                </Badge>
-              </div>
+            <Card className="border-2 border-primary/30 bg-background/80">
               <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-rose-100 dark:bg-rose-900 flex items-center justify-center mb-4">
-                  <Brain className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+                <div className="h-12 w-12 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center mb-4">
+                  <Code2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 </div>
-                <CardTitle>AI-Powered Insights</CardTitle>
+                <CardTitle>API Documentation</CardTitle>
                 <CardDescription>
-                  Get smart categorization suggestions and personalized advice. The AI helps you make better decisions—you're always the one making them.
+                  Interactive docs and OpenAPI specs are public—explore the API before you subscribe.
+                  Create keys in Settings after upgrading to Premium.
                 </CardDescription>
               </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <a
+                    href="/api/v1/docs"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="font-medium">Full API reference</span>
+                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                  </a>
+                  <a
+                    href="/api/v1/openapi.json"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="font-medium">OpenAPI spec (JSON)</span>
+                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                  </a>
+                  <a
+                    href="/api/v1/docs-reporting"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="font-medium">Reporting API (AI tools)</span>
+                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                  </a>
+                  <a
+                    href="/api/v1/openapi-reporting.json"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="font-medium">Reporting OpenAPI spec</span>
+                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                  </a>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Authenticate with{' '}
+                  <code className="bg-muted px-1 py-0.5 rounded">Authorization: Bearer YOUR_KEY</code>.
+                  Discover endpoints with{' '}
+                  <code className="bg-muted px-1 py-0.5 rounded">GET /api/v1/me</code>.
+                </p>
+              </CardContent>
             </Card>
           </div>
         </div>
@@ -617,6 +735,10 @@ export default function HomePage() {
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span>Recurring Transactions</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                     <span>Loans Management</span>
                   </li>
                   <li className="flex items-start gap-2">
@@ -634,6 +756,13 @@ export default function HomePage() {
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                     <span>Priority Support</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span className="flex items-center gap-1">
+                      <Code2 className="h-4 w-4 text-blue-500" />
+                      External API & Scoped Keys
+                    </span>
                   </li>
                 </ul>
                 <Link href="/signup?plan=premium" className="block">
@@ -673,28 +802,34 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t py-12 px-4 bg-muted/50">
         <div className="container mx-auto max-w-6xl">
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Image
                   src="/icon.svg"
-                  alt="Budget App"
+                  alt={APP_NAME}
                   width={32}
                   height={32}
                   className="dark:hidden"
                 />
                 <Image
                   src="/icon-darkmode.svg"
-                  alt="Budget App"
+                  alt={APP_NAME}
                   width={32}
                   height={32}
                   className="hidden dark:block"
                 />
-                <span className="font-bold">Budget App</span>
+                <span className="font-bold">{APP_NAME}</span>
               </div>
               <p className="text-sm text-muted-foreground">
                 Envelope budgeting made simple
               </p>
+              <a
+                href={APP_URL}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                {APP_DOMAIN}
+              </a>
             </div>
             <div>
               <h3 className="font-semibold mb-4">Product</h3>
@@ -705,9 +840,49 @@ export default function HomePage() {
                   </Link>
                 </li>
                 <li>
+                  <Link href="#developers" className="text-muted-foreground hover:text-foreground">
+                    API
+                  </Link>
+                </li>
+                <li>
                   <Link href="#pricing" className="text-muted-foreground hover:text-foreground">
                     Pricing
                   </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">Developers</h3>
+              <ul className="space-y-2 text-sm">
+                <li>
+                  <a
+                    href="/api/v1/docs"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    API Documentation
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/api/v1/openapi.json"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    OpenAPI Spec
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/api/v1/docs-reporting"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Reporting API
+                  </a>
                 </li>
               </ul>
             </div>
@@ -728,7 +903,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="mt-8 pt-8 border-t text-center text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Budget App. All rights reserved.
+            © {new Date().getFullYear()} {APP_NAME}. All rights reserved.
           </div>
         </div>
       </footer>

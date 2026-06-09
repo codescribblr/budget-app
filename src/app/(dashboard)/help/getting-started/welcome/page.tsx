@@ -50,7 +50,7 @@ export default function WelcomePage() {
 
       {/* Hero */}
       <div className="rounded-xl border bg-muted/30 px-6 py-8 md:px-8">
-        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Welcome to Budget App</h1>
+        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Welcome to Every Dollar Budget App</h1>
         <p className="mt-2 text-lg text-muted-foreground">
           Your complete guide to mastering envelope budgeting
         </p>
@@ -94,7 +94,7 @@ export default function WelcomePage() {
       <section>
         <h2 className="mb-1 text-xl font-semibold">How This App Helps You Budget</h2>
         <p className="mb-5 text-sm text-muted-foreground">
-          Budget App gives you complete control over your finances with these pillars:
+          Every Dollar Budget App gives you complete control over your finances with these pillars:
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <Card>
