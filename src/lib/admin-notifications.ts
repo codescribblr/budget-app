@@ -438,27 +438,29 @@ export async function sendAdminNotification(adminNotificationId: number): Promis
             logoUrl = `${baseUrl}/icon-192.png`;
           }
 
+          const { buildNotificationMessageHtml } = await import('./notifications/email-message-formatter');
+
+          const messageHtml = buildNotificationMessageHtml(
+            'system_notification',
+            adminNotification.content
+          );
+          const templateVariables = {
+            Title: adminNotification.title,
+            Message: adminNotification.content,
+            MessageHTML: messageHtml,
+            ActionURL: notificationDetailUrl,
+            ActionLabel: 'View Notification',
+            UnsubscribeURL: `${baseUrl}/settings/notifications`,
+            LogoURL: logoUrl,
+          };
+
           // Render email template
           let html: string;
           try {
             const templateName = notificationType?.id.replace(/_/g, '-') || 'notification-generic';
-            html = emailUtils.renderEmailTemplate(`notifications/${templateName}`, {
-              Title: adminNotification.title,
-              Message: adminNotification.content,
-              ActionURL: notificationDetailUrl,
-              ActionLabel: 'View Notification',
-              UnsubscribeURL: `${baseUrl}/settings/notifications`,
-              LogoURL: logoUrl,
-            });
+            html = emailUtils.renderEmailTemplate(`notifications/${templateName}`, templateVariables);
           } catch (error) {
-            html = emailUtils.renderEmailTemplate('notifications/notification-generic', {
-              Title: adminNotification.title,
-              Message: adminNotification.content,
-              ActionURL: notificationDetailUrl,
-              ActionLabel: 'View Notification',
-              UnsubscribeURL: `${baseUrl}/settings/notifications`,
-              LogoURL: logoUrl,
-            });
+            html = emailUtils.renderEmailTemplate('notifications/notification-generic', templateVariables);
           }
 
           await emailUtils.sendEmail(user.email, adminNotification.title, html);

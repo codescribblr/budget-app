@@ -27,9 +27,9 @@
             <td style="padding: 40px;">
               <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600; color: #0f172a;">{{ .Title }}</h2>
               
-              <p style="margin: 0 0 32px; font-size: 16px; line-height: 24px; color: #475569;">
-                {{ .Message }}
-              </p>
+              <div style="margin: 0 0 32px; font-size: 16px; line-height: 24px; color: #475569;">
+                {{ .MessageHTML }}
+              </div>
 
               {{ if .ActionURL }}
               <!-- CTA Button -->

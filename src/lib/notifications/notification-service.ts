@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from '../supabase/server';
 import { sendEmail, renderEmailTemplate } from '../email-utils';
+import { buildNotificationMessageHtml } from './email-message-formatter';
 import type { NotificationData, NotificationPreferences, Notification } from './types';
 import { sendPushNotificationToUser } from '../push-notification-sender';
 import fs from 'fs';
@@ -307,26 +308,26 @@ export class NotificationService {
     }
     
     let html: string;
+    const messageHtml = buildNotificationMessageHtml(
+      notification.notification_type_id,
+      notification.message,
+      notification.metadata
+    );
+    const templateVariables = {
+      Title: notification.title,
+      Message: notification.message,
+      MessageHTML: messageHtml,
+      ActionURL: notification.action_url || '',
+      ActionLabel: notification.action_label || 'View Details',
+      UnsubscribeURL: `${baseUrl}/settings/notifications`,
+      LogoURL: logoUrl,
+    };
     try {
       const templateName = notificationType?.id.replace(/_/g, '-') || 'notification-generic';
-      html = renderEmailTemplate(`notifications/${templateName}`, {
-        Title: notification.title,
-        Message: notification.message,
-        ActionURL: notification.action_url || '',
-        ActionLabel: notification.action_label || 'View Details',
-        UnsubscribeURL: `${baseUrl}/settings/notifications`,
-        LogoURL: logoUrl,
-      });
+      html = renderEmailTemplate(`notifications/${templateName}`, templateVariables);
     } catch (error) {
       // Fall back to generic template
-      html = renderEmailTemplate('notifications/notification-generic', {
-        Title: notification.title,
-        Message: notification.message,
-        ActionURL: notification.action_url || '',
-        ActionLabel: notification.action_label || 'View Details',
-        UnsubscribeURL: `${baseUrl}/settings/notifications`,
-        LogoURL: logoUrl,
-      });
+      html = renderEmailTemplate('notifications/notification-generic', templateVariables);
     }
 
     await sendEmail(user.email, notification.title, html);
