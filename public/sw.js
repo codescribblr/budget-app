@@ -35,7 +35,7 @@ self.addEventListener('activate', (event) => {
 // Push event - handle incoming push notifications
 self.addEventListener('push', (event) => {
   let notificationData = {
-    title: 'Budget App',
+    title: 'Every Dollar Budget App',
     body: 'You have a new notification',
     icon: '/icon-192.png',
     badge: '/icon-192.png',

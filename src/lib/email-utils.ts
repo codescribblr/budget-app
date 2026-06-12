@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Resend } from 'resend';
+import { APP_NAME } from './branding';
 
 /**
  * Load email template and replace variables
@@ -43,6 +44,14 @@ export function renderEmailTemplate(
   return template;
 }
 
+/** Build the From header using APP_NAME and the address from SMTP_FROM_EMAIL. */
+function getFromEmail(): string {
+  const raw = process.env.SMTP_FROM_EMAIL?.trim() || 'onboarding@resend.dev';
+  const namedMatch = raw.match(/^(.+?)\s*<([^>]+)>$/);
+  const address = (namedMatch ? namedMatch[2] : raw).trim();
+  return `${APP_NAME} <${address}>`;
+}
+
 /**
  * Send email using Resend email service
  */
@@ -59,8 +68,7 @@ export async function sendEmail(
     throw new Error('Email service not configured: Missing API key');
   }
 
-  // Get sender email from environment
-  const fromEmail = process.env.SMTP_FROM_EMAIL || 'Every Dollar Budget App <onboarding@resend.dev>';
+  const fromEmail = getFromEmail();
 
   const resend = new Resend(apiKey);
 
@@ -114,7 +122,7 @@ export async function sendInvitationEmail(
 
   await sendEmail(
     to,
-    `You've been invited to collaborate on "${accountName}" - Every Dollar Budget App`,
+    `You've been invited to collaborate on "${accountName}" - ${APP_NAME}`,
     html
   );
 }
