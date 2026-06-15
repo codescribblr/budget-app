@@ -13,8 +13,7 @@ export type BalanceChangeType =
   | 'transfer_to'
   | 'manual_edit'
   | 'transaction_merge'
-  | 'income_buffer_fund'
-  | 'audit_backfill';
+  | 'income_buffer_fund';
 
 export interface BalanceChangeMetadata {
   transaction_id?: number;

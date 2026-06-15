@@ -588,7 +588,10 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
         </Card>
       )}
 
-      <CategoryBalanceAudit categoryId={category.id} />
+      <CategoryBalanceAudit
+        categoryId={category.id}
+        currentBalance={category.current_balance}
+      />
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[560px]">

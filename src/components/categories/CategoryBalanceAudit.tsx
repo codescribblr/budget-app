@@ -29,11 +29,12 @@ interface AuditRecord {
   description: string | null;
   metadata: any;
   created_at: string;
-  transaction_date?: string;
+  transaction_date?: string | null;
 }
 
 interface CategoryBalanceAuditProps {
   categoryId: number;
+  currentBalance?: number;
 }
 
 const CHANGE_TYPE_LABELS: Record<string, string> = {
@@ -49,16 +50,46 @@ const CHANGE_TYPE_LABELS: Record<string, string> = {
   manual_edit: 'Manual Edit',
   transaction_merge: 'Transaction Merged',
   income_buffer_fund: 'Income Buffer Funded',
-  audit_backfill: 'Balance History Reconciled',
 };
 
-export default function CategoryBalanceAudit({ categoryId }: CategoryBalanceAuditProps) {
+function getChangeTypeLabel(record: AuditRecord): string {
+  const base = CHANGE_TYPE_LABELS[record.change_type] || record.change_type;
+  const phase = record.metadata?.update_phase;
+
+  if (record.change_type === 'transaction_update' && phase === 'reverse') {
+    return `${base} (removed from category)`;
+  }
+  if (record.change_type === 'transaction_update' && phase === 'apply') {
+    return `${base} (assigned to category)`;
+  }
+
+  return base;
+}
+
+function getTransactionDateLabel(record: AuditRecord): string | null {
+  const dateValue = record.transaction?.date || record.transaction_date;
+  if (!dateValue) return null;
+
+  try {
+    return format(new Date(dateValue), 'MMM d, yyyy');
+  } catch {
+    return null;
+  }
+}
+
+export default function CategoryBalanceAudit({
+  categoryId,
+  currentBalance,
+}: CategoryBalanceAuditProps) {
   const [records, setRecords] = useState<AuditRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
+  const [resolvedCurrentBalance, setResolvedCurrentBalance] = useState<number | null>(
+    currentBalance ?? null
+  );
   const [viewingTransactionId, setViewingTransactionId] = useState<number | null>(null);
   const pageSize = 20;
 
@@ -80,15 +111,16 @@ export default function CategoryBalanceAudit({ categoryId }: CategoryBalanceAudi
       const data = await response.json();
       
       if (append) {
-        // Append new records to existing ones
         setRecords(prev => [...prev, ...(data.records || [])]);
       } else {
-        // Replace records
         setRecords(data.records || []);
       }
       
       setTotal(data.total || 0);
       setHasMore(data.hasMore || false);
+      if (typeof data.current_balance === 'number') {
+        setResolvedCurrentBalance(data.current_balance);
+      }
     } catch (err) {
       console.error('Error fetching audit trail:', err);
       setError('Failed to load audit trail');
@@ -103,8 +135,15 @@ export default function CategoryBalanceAudit({ categoryId }: CategoryBalanceAudi
   };
 
   useEffect(() => {
+    setResolvedCurrentBalance(currentBalance ?? null);
+  }, [currentBalance]);
+
+  useEffect(() => {
     fetchAuditTrail(0, false);
   }, [categoryId]);
+
+  const displayCurrentBalance =
+    resolvedCurrentBalance ?? currentBalance ?? records[0]?.new_balance ?? null;
 
   if (loading) {
     return (
@@ -128,6 +167,11 @@ export default function CategoryBalanceAudit({ categoryId }: CategoryBalanceAudi
     return (
       <Card className="p-6">
         <h2 className="text-lg font-semibold mb-4">Balance History</h2>
+        {displayCurrentBalance !== null && (
+          <p className="text-sm text-muted-foreground mb-4">
+            Current balance: <span className="font-medium text-foreground">{formatCurrency(displayCurrentBalance)}</span>
+          </p>
+        )}
         <div className="text-sm text-muted-foreground">No balance changes recorded yet.</div>
       </Card>
     );
@@ -135,12 +179,18 @@ export default function CategoryBalanceAudit({ categoryId }: CategoryBalanceAudi
 
   return (
     <Card className="p-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-start justify-between gap-4 mb-4">
         <div>
           <h2 className="text-lg font-semibold">Balance History</h2>
+          {displayCurrentBalance !== null && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Current balance:{' '}
+              <span className="font-medium text-foreground">{formatCurrency(displayCurrentBalance)}</span>
+            </p>
+          )}
           {total > 0 && (
             <p className="text-xs text-muted-foreground mt-1">
-              Showing {records.length} of {total} records
+              Showing {records.length} of {total} records · most recent changes first
             </p>
           )}
         </div>
@@ -150,7 +200,8 @@ export default function CategoryBalanceAudit({ categoryId }: CategoryBalanceAudi
         {records.map((record) => {
           const isIncrease = record.change_amount > 0;
           const isDecrease = record.change_amount < 0;
-          const changeTypeLabel = CHANGE_TYPE_LABELS[record.change_type] || record.change_type;
+          const changeTypeLabel = getChangeTypeLabel(record);
+          const transactionDateLabel = getTransactionDateLabel(record);
 
           return (
             <div
@@ -177,10 +228,8 @@ export default function CategoryBalanceAudit({ categoryId }: CategoryBalanceAudi
                 {record.transaction && (
                   <div className="text-xs text-muted-foreground mb-1">
                     {record.transaction.description}
-                    {record.metadata?.transaction_date && (
-                      <span className="ml-2">
-                        ({format(new Date(record.metadata.transaction_date), 'MMM d, yyyy')})
-                      </span>
+                    {transactionDateLabel && (
+                      <span className="ml-2">(Transaction date: {transactionDateLabel})</span>
                     )}
                   </div>
                 )}
@@ -194,12 +243,6 @@ export default function CategoryBalanceAudit({ categoryId }: CategoryBalanceAudi
                 {record.metadata?.import_file_name && (
                   <div className="text-xs text-muted-foreground mb-1">
                     Imported from: {record.metadata.import_file_name}
-                  </div>
-                )}
-
-                {record.change_type === 'audit_backfill' && (
-                  <div className="text-xs text-muted-foreground mb-1">
-                    Rebuilt to align balance history with the current envelope balance.
                   </div>
                 )}
 
