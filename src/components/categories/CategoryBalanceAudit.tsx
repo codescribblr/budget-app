@@ -49,6 +49,7 @@ const CHANGE_TYPE_LABELS: Record<string, string> = {
   manual_edit: 'Manual Edit',
   transaction_merge: 'Transaction Merged',
   income_buffer_fund: 'Income Buffer Funded',
+  audit_backfill: 'Balance History Reconciled',
 };
 
 export default function CategoryBalanceAudit({ categoryId }: CategoryBalanceAuditProps) {
@@ -193,6 +194,12 @@ export default function CategoryBalanceAudit({ categoryId }: CategoryBalanceAudi
                 {record.metadata?.import_file_name && (
                   <div className="text-xs text-muted-foreground mb-1">
                     Imported from: {record.metadata.import_file_name}
+                  </div>
+                )}
+
+                {record.change_type === 'audit_backfill' && (
+                  <div className="text-xs text-muted-foreground mb-1">
+                    Rebuilt to align balance history with the current envelope balance.
                   </div>
                 )}
 

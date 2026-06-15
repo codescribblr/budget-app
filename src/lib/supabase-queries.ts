@@ -2395,8 +2395,10 @@ export async function updateTransaction(
 
   // Reverse old splits (using old transaction_type)
   const oldTransactionType = existingTransaction.transaction_type || 'expense';
-  const oldBalanceMap = new Map<number, number>(); // categoryId -> oldBalance
-  
+  const newSplits = data.splits ?? existingTransaction.splits;
+  const previousCategoryIds = existingTransaction.splits.map((split) => split.category_id);
+  const newCategoryIds = newSplits.map((split) => split.category_id);
+
   for (const split of existingTransaction.splits) {
     const { data: category } = await supabase
       .from('categories')
@@ -2406,20 +2408,37 @@ export async function updateTransaction(
 
     if (category && !category.is_system) {
       const oldBalance = Number(category.current_balance);
-      oldBalanceMap.set(split.category_id, oldBalance);
       
       // Reverse the old transaction's impact
       const oldBalanceChange = oldTransactionType === 'income'
         ? -split.amount  // Reverse income: subtract
         : split.amount;   // Reverse expense: add back
 
+      const reversedBalance = oldBalance + oldBalanceChange;
+
       await supabase
         .from('categories')
         .update({
-          current_balance: oldBalance + oldBalanceChange,
+          current_balance: reversedBalance,
           updated_at: new Date().toISOString(),
         })
         .eq('id', split.category_id);
+
+      await logBalanceChange(
+        split.category_id,
+        oldBalance,
+        reversedBalance,
+        'transaction_update',
+        {
+          transaction_id: id,
+          transaction_description: existingTransaction.description,
+          transaction_date: existingTransaction.date,
+          update_phase: 'reverse',
+          split_amount: split.amount,
+          transaction_type: oldTransactionType,
+          new_category_ids: newCategoryIds,
+        }
+      );
     }
   }
 
@@ -2429,7 +2448,6 @@ export async function updateTransaction(
   const newMerchantGroupId = data.merchant_group_id !== undefined ? data.merchant_group_id : existingTransaction.merchant_group_id;
   const newMerchantOverrideId = data.merchant_override_id !== undefined ? data.merchant_override_id : existingTransaction.merchant_override_id;
   const newTransactionType = data.transaction_type ?? oldTransactionType;
-  const newSplits = data.splits ?? existingTransaction.splits;
   const newTotalAmount = newSplits.reduce((sum, split) => sum + split.amount, 0);
 
   // Update transaction
@@ -2485,10 +2503,12 @@ export async function updateTransaction(
         ? split.amount   // Income adds
         : -split.amount;  // Expense subtracts
 
+      const newBalance = oldBalance + newBalanceChange;
+
       const { error: balanceError } = await supabase
         .from('categories')
         .update({
-          current_balance: oldBalance + newBalanceChange,
+          current_balance: newBalance,
           updated_at: new Date().toISOString(),
         })
         .eq('id', split.category_id);
@@ -2499,11 +2519,16 @@ export async function updateTransaction(
       await logBalanceChange(
         split.category_id,
         oldBalance,
-        oldBalance + newBalanceChange,
+        newBalance,
         'transaction_update',
         {
           transaction_id: id,
           transaction_description: newDescription,
+          transaction_date: newDate,
+          update_phase: 'apply',
+          split_amount: split.amount,
+          transaction_type: newTransactionType,
+          previous_category_ids: previousCategoryIds,
         }
       );
     }

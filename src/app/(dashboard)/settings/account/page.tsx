@@ -24,7 +24,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Loader2, Trash2, Edit2, Check, X } from 'lucide-react';
+import { Loader2, Trash2, Edit2, Check, X, Copy } from 'lucide-react';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { clearBudgetAccountsCache } from '@/lib/budget-accounts-cache';
 
@@ -37,11 +37,13 @@ export default function AccountPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [accountCount, setAccountCount] = useState<number | null>(null);
   const [activeAccountId, setActiveAccountId] = useState<number | null>(null);
+  const [accountPublicId, setAccountPublicId] = useState<string | null>(null);
   const [accountName, setAccountName] = useState<string>('');
   const [editingName, setEditingName] = useState(false);
   const [newAccountName, setNewAccountName] = useState<string>('');
   const [isRenaming, setIsRenaming] = useState(false);
   const [loadingAccountInfo, setLoadingAccountInfo] = useState(true);
+  const [accountIdCopied, setAccountIdCopied] = useState(false);
 
   useEffect(() => {
     fetchAccountInfo();
@@ -59,11 +61,13 @@ export default function AccountPage() {
         // Find the current account name
         if (data.activeAccountId) {
           const currentAccount = accounts.find(
-            (acc: any) => acc.accountId === data.activeAccountId
+            (acc: { accountId: number; accountPublicId?: string }) =>
+              acc.accountId === data.activeAccountId
           );
           if (currentAccount) {
             setAccountName(currentAccount.accountName || '');
             setNewAccountName(currentAccount.accountName || '');
+            setAccountPublicId(currentAccount.accountPublicId ?? null);
           }
         }
       }
@@ -82,6 +86,20 @@ export default function AccountPage() {
   const handleCancelRename = () => {
     setNewAccountName(accountName);
     setEditingName(false);
+  };
+
+  const handleCopyAccountId = async () => {
+    if (!accountPublicId) return;
+
+    try {
+      await navigator.clipboard.writeText(accountPublicId);
+      setAccountIdCopied(true);
+      toast.success('Account reference copied');
+      setTimeout(() => setAccountIdCopied(false), 2000);
+    } catch (error) {
+      console.error('Error copying account ID:', error);
+      toast.error('Failed to copy account reference');
+    }
   };
 
   const handleSaveRename = async () => {
@@ -237,6 +255,38 @@ export default function AccountPage() {
 
   return (
     <>
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Account Reference</CardTitle>
+          <CardDescription>
+            A unique reference for this budget account. Share it with support or use it in admin scripts.
+            It cannot be used to guess or access other accounts.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 rounded-md border bg-muted px-3 py-2 text-sm font-mono break-all">
+              {loadingAccountInfo
+                ? 'Loading...'
+                : accountPublicId ?? 'No active account'}
+            </code>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyAccountId}
+              disabled={loadingAccountInfo || !accountPublicId}
+            >
+              {accountIdCopied ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+              <span className="sr-only">Copy account reference</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Account Name Section */}
       {isOwner && (
         <Card className="mb-6">
