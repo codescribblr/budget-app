@@ -3,7 +3,8 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { exportAccountData } from '@/lib/backup-utils';
 import { getActiveAccountId } from '@/lib/account-context';
 import { checkWriteAccess } from '@/lib/api-helpers';
-import { compressBackup } from '@/lib/backup-storage';
+import { compressBackup, decompressBackup } from '@/lib/backup-storage';
+import { validateBackupForStorage } from '@/lib/backup-validation';
 import { getUserSubscription, isPremiumUser } from '@/lib/subscription-utils';
 
 /**
@@ -90,6 +91,18 @@ export async function POST() {
 
     // Export all account data
     const backupData = await exportAccountData();
+
+    const validation = await validateBackupForStorage(
+      backupData,
+      compressBackup,
+      decompressBackup
+    );
+    if (!validation.valid) {
+      return NextResponse.json(
+        { error: `Backup validation failed: ${validation.error}` },
+        { status: 500 }
+      );
+    }
 
     // Compress backup data
     const compressedData = await compressBackup(backupData);

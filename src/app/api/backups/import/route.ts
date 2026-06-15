@@ -7,7 +7,90 @@ import {
   type UserBackupData,
   type BackupDataType,
 } from '@/lib/backup-utils';
+import { validateBackupJsonString, validateBackupPayload } from '@/lib/backup-validation';
 import { checkWriteAccess } from '@/lib/api-helpers';
+
+function parseSelectedTypes(raw: FormDataEntryValue | null): BackupDataType[] | undefined {
+  if (raw === null || raw === undefined || raw === '') {
+    return undefined;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(String(raw));
+  } catch {
+    throw new Error('selectedTypes must be a JSON array');
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error('selectedTypes must be an array');
+  }
+
+  const invalid = parsed.filter((type: unknown) => typeof type !== 'string' || !isBackupDataType(type));
+  if (invalid.length > 0) {
+    throw new Error(`Invalid data types: ${invalid.join(', ')}`);
+  }
+
+  const selectedTypes = parsed as BackupDataType[];
+  if (selectedTypes.length === 0) {
+    throw new Error('Select at least one data type to import');
+  }
+
+  return selectedTypes;
+}
+
+async function parseImportRequest(request: Request): Promise<{
+  backupData: UserBackupData;
+  selectedTypes?: BackupDataType[];
+}> {
+  const contentType = request.headers.get('content-type') || '';
+
+  if (contentType.includes('multipart/form-data')) {
+    const formData = await request.formData();
+    const file = formData.get('file');
+    if (!(file instanceof File)) {
+      throw new Error('Missing backup file');
+    }
+
+    const fileContent = await file.text();
+    const validation = validateBackupJsonString(fileContent);
+    if (!validation.valid) {
+      throw new Error(validation.error);
+    }
+
+    return {
+      backupData: validation.backup as UserBackupData,
+      selectedTypes: parseSelectedTypes(formData.get('selectedTypes')),
+    };
+  }
+
+  const bodyText = await request.text();
+  if (!bodyText.trim()) {
+    throw new Error('Request body is empty');
+  }
+
+  let body: { backupData?: UserBackupData; selectedTypes?: BackupDataType[] };
+  try {
+    body = JSON.parse(bodyText) as { backupData?: UserBackupData; selectedTypes?: BackupDataType[] };
+  } catch (error: unknown) {
+    const validation = validateBackupJsonString(bodyText);
+    if (!validation.valid) {
+      throw new Error(validation.error);
+    }
+    return { backupData: validation.backup as UserBackupData };
+  }
+
+  const backupCandidate = body.backupData ?? body;
+  const validation = validateBackupPayload(backupCandidate);
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+
+  return {
+    backupData: validation.backup as UserBackupData,
+    selectedTypes: body.selectedTypes,
+  };
+}
 
 /**
  * POST /api/backups/import
@@ -16,49 +99,15 @@ import { checkWriteAccess } from '@/lib/api-helpers';
  */
 export async function POST(request: Request) {
   try {
-    // Check if user has write access (owner or editor)
     const writeCheck = await checkWriteAccess();
     if (writeCheck) return writeCheck;
 
-    await getAuthenticatedUser(); // Verify authentication
+    await getAuthenticatedUser();
 
-    const body = await request.json();
-    const backupData: UserBackupData = body.backupData ?? body;
+    const { backupData, selectedTypes: rawSelectedTypes } = await parseImportRequest(request);
 
-    // Validate that the backup data has the required structure
-    if (!backupData.version || !backupData.created_at) {
-      return NextResponse.json(
-        { error: 'Invalid backup file format' },
-        { status: 400 }
-      );
-    }
-
-    let selectedTypes: BackupDataType[] | undefined;
-    if (body.selectedTypes) {
-      if (!Array.isArray(body.selectedTypes)) {
-        return NextResponse.json(
-          { error: 'selectedTypes must be an array' },
-          { status: 400 }
-        );
-      }
-      const invalid = body.selectedTypes.filter(
-        (type: string) => !isBackupDataType(type)
-      );
-      if (invalid.length > 0) {
-        return NextResponse.json(
-          { error: `Invalid data types: ${invalid.join(', ')}` },
-          { status: 400 }
-        );
-      }
-        selectedTypes = body.selectedTypes as BackupDataType[];
-
-        if (selectedTypes.length === 0) {
-        return NextResponse.json(
-          { error: 'Select at least one data type to import' },
-          { status: 400 }
-        );
-      }
-
+    let selectedTypes = rawSelectedTypes;
+    if (selectedTypes) {
       const validation = validateImportSelection(backupData, selectedTypes);
       if (!validation.valid) {
         return NextResponse.json(
@@ -71,30 +120,41 @@ export async function POST(request: Request) {
       }
     }
 
-    // Import the data (remaps user_id to current user and account_id to active account)
     await importUserDataFromFile(backupData, selectedTypes ? { selectedTypes } : undefined);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error importing backup:', error);
-    
-    // Check if this is a permission error
-    if (error.message?.includes('Unauthorized') || error.message?.includes('permission') || error.message?.includes('read-only') || error.message?.includes('Viewers can only view')) {
+
+    if (
+      error.message?.includes('Invalid backup') ||
+      error.message?.includes('Backup file') ||
+      error.message?.includes('Missing backup') ||
+      error.message?.includes('selectedTypes') ||
+      error.message?.includes('Request body is empty')
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    if (
+      error.message?.includes('Unauthorized') ||
+      error.message?.includes('permission') ||
+      error.message?.includes('read-only') ||
+      error.message?.includes('Viewers can only view')
+    ) {
       return NextResponse.json(
         { error: 'Unauthorized: Only account owners and editors can import backups.' },
         { status: 403 }
       );
     }
-    
+
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
+
     return NextResponse.json(
       { error: error.message || 'Failed to import backup' },
       { status: 500 }
     );
   }
 }
-
-

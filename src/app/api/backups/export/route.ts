@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { exportAccountData, isBackupDataType } from '@/lib/backup-utils';
 import type { BackupDataType } from '@/lib/backup-utils';
+import { validateBackupPayload } from '@/lib/backup-validation';
 import { checkWriteAccess } from '@/lib/api-helpers';
 
 /**
@@ -50,6 +51,14 @@ export async function POST(request: Request) {
     const backupData = await exportAccountData(
       selectedTypes ? { selectedTypes } : undefined
     );
+
+    const validation = validateBackupPayload(backupData);
+    if (!validation.valid) {
+      return NextResponse.json(
+        { error: `Export validation failed: ${validation.error}` },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(backupData);
   } catch (error: unknown) {

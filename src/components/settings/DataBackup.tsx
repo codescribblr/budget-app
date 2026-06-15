@@ -40,6 +40,7 @@ import {
   getTypesPresentInBackup,
   resolveBackupTypeSelection,
 } from '@/lib/backup-data-types';
+import { validateBackupJsonString } from '@/lib/backup-validation';
 
 interface Backup {
   id: number;
@@ -388,12 +389,14 @@ export default function DataBackup() {
 
     try {
       const fileContent = await file.text();
-      const backupData = JSON.parse(fileContent);
-      if (!backupData.version || !backupData.created_at) {
-        toast.error('Invalid backup file format');
+      const validation = validateBackupJsonString(fileContent);
+      if (!validation.valid) {
+        toast.error(validation.error);
         setImportFile(null);
         return;
       }
+
+      const backupData = validation.backup;
 
       const typesPresent = getTypesPresentInBackup(backupData);
       const recordCounts = Object.fromEntries(
@@ -435,15 +438,13 @@ export default function DataBackup() {
       );
       await new Promise((resolve) => setTimeout(resolve, 100));
 
+      const formData = new FormData();
+      formData.append('file', importFile);
+      formData.append('selectedTypes', JSON.stringify(importSelectedTypes));
+
       const response = await fetch('/api/backups/import', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          backupData: importBackupData,
-          selectedTypes: importSelectedTypes,
-        }),
+        body: formData,
       });
 
       if (!response.ok) {
