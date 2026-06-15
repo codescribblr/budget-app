@@ -6,6 +6,7 @@ import { createServiceRoleClient } from './supabase/server';
 
 export interface AccountMembership {
   accountId: number;
+  accountPublicId: string;
   role: 'owner' | 'editor' | 'viewer';
   accountName: string;
   isOwner: boolean;
@@ -245,7 +246,7 @@ export async function getUserAccounts(): Promise<AccountMembership[]> {
   // Get owned accounts first (owners might not be in account_users)
   const { data: ownedAccounts } = await supabase
     .from('budget_accounts')
-    .select('id, name, owner_id')
+    .select('id, public_id, name, owner_id')
     .eq('owner_id', user.id)
     .is('deleted_at', null);
   
@@ -265,6 +266,7 @@ export async function getUserAccounts(): Promise<AccountMembership[]> {
       ownedAccountIds.add(account.id);
       memberships.push({
         accountId: account.id,
+        accountPublicId: account.public_id,
         role: 'owner',
         accountName: account.name || 'My Budget',
         isOwner: true,
@@ -283,12 +285,12 @@ export async function getUserAccounts(): Promise<AccountMembership[]> {
       // Fetch all shared account details in one query
       const { data: sharedAccounts } = await supabase
         .from('budget_accounts')
-        .select('id, name, owner_id')
+        .select('id, public_id, name, owner_id')
         .in('id', sharedAccountIds)
         .is('deleted_at', null);
       
       // Create a map for quick lookup
-      const accountMap = new Map<number, { id: number; name: string | null; owner_id: string }>();
+      const accountMap = new Map<number, { id: number; public_id: string; name: string | null; owner_id: string }>();
       sharedAccounts?.forEach(account => {
         accountMap.set(account.id, account);
       });
@@ -304,6 +306,7 @@ export async function getUserAccounts(): Promise<AccountMembership[]> {
         if (account) {
           memberships.push({
             accountId: au.account_id,
+            accountPublicId: account.public_id,
             role: au.role as 'owner' | 'editor' | 'viewer',
             accountName: account.name || 'Unknown Account',
             isOwner: account.owner_id === user.id,

@@ -6,6 +6,7 @@
 interface BudgetAccountsData {
   accounts: Array<{
     accountId: number;
+    accountPublicId: string;
     accountName: string;
     role: 'owner' | 'editor' | 'viewer';
     isOwner: boolean;

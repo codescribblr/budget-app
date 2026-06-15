@@ -6,7 +6,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 /**
  * GET /api/categories/[id]/audit
  * Get audit trail for a category's balance changes
- * Query params: limit (optional, default 50), offset (optional, default 0)
+ * Query params: limit (optional, default 20), offset (optional, default 0)
  */
 export async function GET(
   request: NextRequest,
@@ -30,7 +30,7 @@ export async function GET(
     // Verify category exists and user has access
     const { data: category, error: categoryError } = await supabase
       .from('categories')
-      .select('id')
+      .select('id, current_balance')
       .eq('id', categoryId)
       .eq('account_id', accountId)
       .single();
@@ -44,21 +44,14 @@ export async function GET(
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
 
-    // For proper sorting by transaction_date (which is in metadata JSONB),
-    // we fetch batches ordered by created_at DESC (newest audit records first),
-    // then sort by transaction_date within each batch
-    // Newest items appear at the top for easier viewing
-    const batchSize = 200; // Fetch 200 records at a time for sorting
-    const batchNumber = Math.floor(offset / batchSize);
-    const fetchStart = batchNumber * batchSize;
-    
-    const { data: auditRecords, error: auditError } = await supabase
+    const { data: auditRecords, error: auditError, count } = await supabase
       .from('category_balance_audit')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('category_id', categoryId)
       .eq('account_id', accountId)
-      .order('created_at', { ascending: false }) // Newest audit records first
-      .range(fetchStart, fetchStart + batchSize - 1);
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (auditError) {
       console.error('Error fetching audit trail:', auditError);
@@ -66,17 +59,6 @@ export async function GET(
         { error: 'Failed to fetch audit trail' },
         { status: 500 }
       );
-    }
-
-    // Get total count for pagination
-    const { count, error: countError } = await supabase
-      .from('category_balance_audit')
-      .select('*', { count: 'exact', head: true })
-      .eq('category_id', categoryId)
-      .eq('account_id', accountId);
-
-    if (countError) {
-      console.error('Error counting audit records:', countError);
     }
 
     // Fetch related transactions if any exist
@@ -146,39 +128,20 @@ export async function GET(
         description: record.description,
         metadata: record.metadata,
         created_at: record.created_at,
-        // Extract transaction_date from metadata for sorting
-        transaction_date: record.metadata?.transaction_date || transaction?.date || record.created_at,
+        transaction_date: record.metadata?.transaction_date || transaction?.date || null,
       };
     });
 
-    // Sort by transaction date (descending - newest first, oldest last)
-    // If transaction_date is not available, fall back to created_at
-    formattedRecords.sort((a, b) => {
-      const dateA = new Date(a.transaction_date).getTime();
-      const dateB = new Date(b.transaction_date).getTime();
-      if (dateA !== dateB) {
-        return dateB - dateA; // Descending order (newest first)
-      }
-      // If dates are equal, use created_at as tiebreaker (newer operations first)
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-
-    // Apply pagination within this sorted batch
-    const batchOffset = offset % batchSize;
-    const paginatedRecords = formattedRecords.slice(batchOffset, batchOffset + limit);
-    
-    // Check if there are more records beyond what we fetched in this batch
-    const recordsInBatch = formattedRecords.length;
-    const hasMoreInBatch = batchOffset + limit < recordsInBatch;
-    const hasMoreBatches = (fetchStart + batchSize) < (count || 0);
-    const hasMoreRecords = hasMoreInBatch || hasMoreBatches;
+    const total = count || 0;
+    const hasMore = offset + limit < total;
 
     return NextResponse.json({
-      records: paginatedRecords,
-      total: count || 0,
+      records: formattedRecords,
+      total,
       limit,
       offset,
-      hasMore: hasMoreRecords,
+      hasMore,
+      current_balance: Number(category.current_balance),
     });
   } catch (error: any) {
     console.error('Error in GET /api/categories/[id]/audit:', error);
