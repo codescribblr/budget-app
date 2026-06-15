@@ -24,12 +24,7 @@ export function filterCategoriesForTransactionSelect(
     });
 }
 
-/** Non-goal envelopes first, then envelope goals, each group sorted by name. */
+/** Categories in the user's saved order (sort_order). */
 export function sortCategoriesForTransactionSelect(categories: Category[]): Category[] {
-  return [...categories].sort((a, b) => {
-    const aGoal = a.is_goal ? 1 : 0;
-    const bGoal = b.is_goal ? 1 : 0;
-    if (aGoal !== bGoal) return aGoal - bGoal;
-    return a.name.localeCompare(b.name);
-  });
+  return [...categories].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 }
