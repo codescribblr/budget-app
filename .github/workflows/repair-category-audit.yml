@@ -1,0 +1,62 @@
+name: Repair Category Audit (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      account_ref:
+        description: Budget account public UUID (Settings → Account)
+        required: true
+        type: string
+      category_id:
+        description: Optional category ID to repair (source category only)
+        required: false
+        type: string
+      dry_run:
+        description: Preview only (recommended first run)
+        required: true
+        type: boolean
+        default: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  repair:
+    name: Repair missing recategorization audit entries
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run repair script
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Missing GitHub secrets: NEXT_PUBLIC_SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY"
+            echo "Add them in Repository Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
+          ARGS=(--account-ref="${{ inputs.account_ref }}")
+
+          if [ -n "${{ inputs.category_id }}" ]; then
+            ARGS+=(--category-id="${{ inputs.category_id }}")
+          fi
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+
+          npm run repair:category-audit-recategorizations -- "${ARGS[@]}"
