@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { formatCurrency } from '@/lib/utils';
 import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface MonthlySpendingTrendProps {
   transactions: TransactionWithSplits[];
@@ -170,7 +170,6 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
 
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="month"
               tick={{ fontSize: 12 }}
@@ -187,8 +186,8 @@ export default function MonthlySpendingTrend({ transactions, categories }: Month
               stroke="#0088FE"
               strokeWidth={2}
               name="Total Spending"
-              dot={{ r: 4 }}
-              activeDot={{ r: 6 }}
+              dot={false}
+              activeDot={{ r: 5, fill: '#0088FE', stroke: '#ffffff', strokeWidth: 2 }}
             />
           </LineChart>
         </ResponsiveContainer>

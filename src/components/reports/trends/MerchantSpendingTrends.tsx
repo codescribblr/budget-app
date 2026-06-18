@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { formatCurrency } from '@/lib/utils';
 import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
@@ -166,7 +166,6 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
 
         <ResponsiveContainer width="100%" height={350}>
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="month"
               tick={{ fontSize: 12 }}
@@ -207,8 +206,8 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
                   dataKey={merchantName}
                   stroke={COLORS[index % COLORS.length]}
                   strokeWidth={2}
-                  dot={{ r: 3 }}
-                  activeDot={{ r: 5 }}
+                  dot={false}
+                  activeDot={{ r: 5, fill: COLORS[index % COLORS.length], stroke: '#ffffff', strokeWidth: 2 }}
                 />
               )
             ))}

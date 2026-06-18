@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { formatCurrency } from '@/lib/utils';
 import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts';
 
 interface BudgetVsActualTrendProps {
   transactions: TransactionWithSplits[];
@@ -112,7 +112,6 @@ export default function BudgetVsActualTrend({ transactions, categories }: Budget
 
         <ResponsiveContainer width="100%" height={350}>
           <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="month"
               tick={{ fontSize: 12 }}

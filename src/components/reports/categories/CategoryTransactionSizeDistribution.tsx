@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { formatCurrency } from '@/lib/utils';
 import { chartNumberYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface CategoryTransactionSizeDistributionProps {
   transactions: TransactionWithSplits[];
@@ -121,7 +121,6 @@ export default function CategoryTransactionSizeDistribution({ transactions, cate
 
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" />
           <XAxis
             dataKey="bucket"
             tick={{ fontSize: 12 }}

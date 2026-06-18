@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatCurrencyAbbreviated } from '@/lib/utils';
 import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart, ReferenceLine, ComposedChart, Scatter } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Area, AreaChart, ReferenceLine, ComposedChart, Scatter } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign, Calendar, Info, Palmtree, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -2582,7 +2582,6 @@ export default function ForecastPage() {
                   }
                 }}
               >
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis 
                   dataKey="label" 
                   className="text-xs"
@@ -2751,6 +2750,7 @@ export default function ForecastPage() {
                   fillOpacity={0.4}
                   strokeWidth={2}
                   dot={false}
+                  activeDot={{ r: 5, fill: '#10b981', stroke: '#ffffff', strokeWidth: 2 }}
                 />
                 <Line
                   type="monotone"
@@ -2758,6 +2758,7 @@ export default function ForecastPage() {
                   stroke="#8b5cf6"
                   strokeWidth={2}
                   dot={false}
+                  activeDot={{ r: 5, fill: '#8b5cf6', stroke: '#ffffff', strokeWidth: 2 }}
                 />
                 {/* Event Dots - Green dots for all events (loan payoffs, timeline events, cash runs out, liquid assets run out) */}
                 <Line
@@ -2869,7 +2870,6 @@ export default function ForecastPage() {
           <div className="h-[400px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis 
                   dataKey="label" 
                   className="text-xs"
@@ -3030,10 +3030,38 @@ export default function ForecastPage() {
                   }}
                 />
                 <Legend />
-                <Line type="monotone" dataKey="Cash Accounts" stroke="#3b82f6" strokeWidth={2} />
-                <Line type="monotone" dataKey="Non-cash Assets" stroke="#10b981" strokeWidth={2} />
-                <Line type="monotone" dataKey="Credit Cards" stroke="#ef4444" strokeWidth={2} />
-                <Line type="monotone" dataKey="Loans" stroke="#f59e0b" strokeWidth={2} />
+                <Line
+                  type="monotone"
+                  dataKey="Cash Accounts"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 5, fill: '#3b82f6', stroke: '#ffffff', strokeWidth: 2 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Non-cash Assets"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 5, fill: '#10b981', stroke: '#ffffff', strokeWidth: 2 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Credit Cards"
+                  stroke="#ef4444"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 5, fill: '#ef4444', stroke: '#ffffff', strokeWidth: 2 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Loans"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 5, fill: '#f59e0b', stroke: '#ffffff', strokeWidth: 2 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>

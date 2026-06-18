@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { formatCurrency } from '@/lib/utils';
 import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface CategoryDayOfWeekSpendingProps {
   transactions: TransactionWithSplits[];
@@ -101,7 +101,6 @@ export default function CategoryDayOfWeekSpending({ transactions, category }: Ca
 
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" />
           <XAxis
             dataKey="day"
             tick={{ fontSize: 12 }}

@@ -1,26 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { formatCurrency, formatCurrencyAbbreviated, cn } from '@/lib/utils';
+import { formatCurrency, cn } from '@/lib/utils';
 import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import { format, parseISO } from 'date-fns';
 import { buildNetWorthChartSeries, NET_WORTH_MONTHLY_CHART_MAX_SPAN_MONTHS } from '@/lib/net-worth';
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  LabelList,
-} from 'recharts';
+import { Area, AreaChart, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { ArrowRight, TrendingDown, TrendingUp } from 'lucide-react';
 
 interface NetWorthSummaryResponse {
@@ -52,7 +41,6 @@ interface SnapshotRow {
 type NetWorthChartPoint = { date: string; netWorth: number };
 
 export default function NetWorthTrackingPage() {
-  const areaFillGradientId = useId().replace(/:/g, '');
   const [summary, setSummary] = useState<NetWorthSummaryResponse | null>(null);
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,10 +108,8 @@ export default function NetWorthTrackingPage() {
     chartData.length === 0
       ? null
       : chartGranularity === 'month'
-        ? `Bars show the last snapshot in each month (history under ${NET_WORTH_MONTHLY_CHART_MAX_SPAN_MONTHS} months). Axis labels are abbreviated.`
-        : 'Area shows daily snapshots. Axis labels are abbreviated.';
-
-  const showBarValueLabels = chartGranularity === 'month' && chartData.length <= 24;
+        ? `Line shows the last snapshot in each month (history under ${NET_WORTH_MONTHLY_CHART_MAX_SPAN_MONTHS} months). Axis labels are abbreviated.`
+        : 'Line shows daily snapshots. Axis labels are abbreviated.';
 
   const tooltipContent = ({
     active,
@@ -257,64 +243,20 @@ export default function NetWorthTrackingPage() {
               This chart will become available as we capture your net worth history over time. Values come from
               automated snapshots when account, card, loan, or asset balances change.
             </p>
-          ) : chartGranularity === 'month' ? (
-            <ResponsiveContainer width="100%" height={showBarValueLabels ? 400 : 360}>
-              <BarChart
-                data={chartData}
-                margin={{ top: showBarValueLabels ? 28 : 12, right: 12, left: 4, bottom: 4 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={xAxisTickFormatter}
-                  minTickGap={8}
-                  angle={chartData.length > 10 ? -32 : 0}
-                  textAnchor={chartData.length > 10 ? 'end' : 'middle'}
-                  height={chartData.length > 10 ? 56 : 32}
-                />
-                <YAxis tick={{ fontSize: 11 }} {...chartCurrencyYAxisDefaults} />
-                <Tooltip
-                  content={tooltipContent}
-                  cursor={{ fill: 'var(--muted)', fillOpacity: 0.35 }}
-                />
-                <Bar
-                  dataKey="netWorth"
-                  name="Net worth"
-                  fill="var(--chart-1)"
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={56}
-                >
-                  {showBarValueLabels && (
-                    <LabelList
-                      position="top"
-                      offset={6}
-                      className="fill-muted-foreground"
-                      fontSize={10}
-                      valueAccessor={(entry) => {
-                        const row = entry.payload as NetWorthChartPoint;
-                        return formatCurrencyAbbreviated(Number(row.netWorth));
-                      }}
-                    />
-                  )}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
           ) : (
-            <ResponsiveContainer width="100%" height={360}>
+            <ResponsiveContainer
+              width="100%"
+              height={chartGranularity === 'month' && chartData.length > 10 ? 400 : 360}
+            >
               <AreaChart data={chartData} margin={{ top: 12, right: 12, left: 4, bottom: 4 }}>
-                <defs>
-                  <linearGradient id={areaFillGradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.45} />
-                    <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0.04} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 11 }}
                   tickFormatter={xAxisTickFormatter}
-                  minTickGap={20}
+                  minTickGap={chartGranularity === 'month' ? 8 : 20}
+                  angle={chartGranularity === 'month' && chartData.length > 10 ? -32 : 0}
+                  textAnchor={chartGranularity === 'month' && chartData.length > 10 ? 'end' : 'middle'}
+                  height={chartGranularity === 'month' && chartData.length > 10 ? 56 : 32}
                 />
                 <YAxis tick={{ fontSize: 11 }} {...chartCurrencyYAxisDefaults} />
                 <Tooltip content={tooltipContent} />
@@ -324,8 +266,8 @@ export default function NetWorthTrackingPage() {
                   name="Net worth"
                   stroke="var(--chart-1)"
                   strokeWidth={2}
-                  fill={`url(#${areaFillGradientId})`}
-                  fillOpacity={1}
+                  fill="var(--chart-1)"
+                  fillOpacity={0.2}
                   dot={false}
                   activeDot={{ r: 5, fill: 'var(--chart-1)', stroke: 'var(--background)' }}
                 />

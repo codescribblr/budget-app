@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { formatCurrency } from '@/lib/utils';
 import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart } from 'recharts';
 
 interface SpendingVelocityTrendProps {
   transactions: TransactionWithSplits[];
@@ -107,7 +107,6 @@ export default function SpendingVelocityTrend({ transactions, categories }: Spen
 
         <ResponsiveContainer width="100%" height={300}>
           <ComposedChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="month"
               tick={{ fontSize: 12 }}
@@ -143,6 +142,8 @@ export default function SpendingVelocityTrend({ transactions, categories }: Spen
               stroke="#8884d8"
               fillOpacity={0.3}
               name="Daily Average"
+              dot={false}
+              activeDot={{ r: 5, fill: '#8884d8', stroke: '#ffffff', strokeWidth: 2 }}
             />
             <Line
               type="monotone"
@@ -150,8 +151,8 @@ export default function SpendingVelocityTrend({ transactions, categories }: Spen
               stroke="#0088FE"
               strokeWidth={2}
               name="Daily Spending Rate"
-              dot={{ r: 4 }}
-              activeDot={{ r: 6 }}
+              dot={false}
+              activeDot={{ r: 5, fill: '#0088FE', stroke: '#ffffff', strokeWidth: 2 }}
             />
           </ComposedChart>
         </ResponsiveContainer>

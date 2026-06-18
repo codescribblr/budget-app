@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { formatCurrency } from '@/lib/utils';
 import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Tag } from '@/lib/types';
@@ -109,7 +109,6 @@ export default function TagSpendingReport({
           <div className="space-y-6">
             <ResponsiveContainer width="100%" height={400}>
               <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="name"
                   angle={-45}

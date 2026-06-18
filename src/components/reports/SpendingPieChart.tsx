@@ -313,6 +313,7 @@ export default function SpendingPieChart({
                 outerRadius={120}
                 fill="#8884d8"
                 dataKey="value"
+                stroke="none"
                 onClick={handlePieClick}
                 style={{ cursor: onCategoryClick && !selectedCategoryId ? 'pointer' : 'default' }}
               >

@@ -10,7 +10,6 @@ import {
   Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
@@ -105,7 +104,6 @@ export default function LoanBalanceChart({ loanId }: LoanBalanceChartProps) {
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="date"
               tick={{ fontSize: 12 }}
@@ -140,8 +138,8 @@ export default function LoanBalanceChart({ loanId }: LoanBalanceChartProps) {
               stroke="#0088FE"
               strokeWidth={2}
               name="Balance"
-              dot={{ r: 4 }}
-              activeDot={{ r: 6 }}
+              dot={false}
+              activeDot={{ r: 5, fill: '#0088FE', stroke: '#ffffff', strokeWidth: 2 }}
             />
           </LineChart>
         </ResponsiveContainer>

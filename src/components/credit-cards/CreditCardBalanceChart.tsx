@@ -10,7 +10,6 @@ import {
   Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
@@ -113,7 +112,6 @@ export default function CreditCardBalanceChart({ creditCardId }: CreditCardBalan
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="date"
               tick={{ fontSize: 12 }}
@@ -149,8 +147,8 @@ export default function CreditCardBalanceChart({ creditCardId }: CreditCardBalan
               stroke="#0088FE"
               strokeWidth={2}
               name="Balance"
-              dot={{ r: 4 }}
-              activeDot={{ r: 6 }}
+              dot={false}
+              activeDot={{ r: 5, fill: '#0088FE', stroke: '#ffffff', strokeWidth: 2 }}
             />
             <Line
               type="monotone"
@@ -158,8 +156,8 @@ export default function CreditCardBalanceChart({ creditCardId }: CreditCardBalan
               stroke="#00C49F"
               strokeWidth={2}
               name="Available Credit"
-              dot={{ r: 4 }}
-              activeDot={{ r: 6 }}
+              dot={false}
+              activeDot={{ r: 5, fill: '#00C49F', stroke: '#ffffff', strokeWidth: 2 }}
             />
           </LineChart>
         </ResponsiveContainer>
