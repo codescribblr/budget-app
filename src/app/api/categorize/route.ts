@@ -16,13 +16,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // Fetch all categories
-    // Exclude goal categories from transaction categorization
+    // Fetch all categories once
     const categories = await getAllCategories(true);
 
-    // Get suggestions for each merchant
-    const suggestions = await Promise.all(
-      merchants.map(async (merchant) => {
+    // Deduplicate merchants to avoid redundant categorization lookups
+    const merchantToIndices = new Map<string, number[]>();
+    merchants.forEach((merchant, index) => {
+      const key = merchant || '';
+      const existing = merchantToIndices.get(key);
+      if (existing) {
+        existing.push(index);
+      } else {
+        merchantToIndices.set(key, [index]);
+      }
+    });
+
+    const uniqueMerchants = Array.from(merchantToIndices.keys());
+    const uniqueSuggestions = await Promise.all(
+      uniqueMerchants.map(async (merchant) => {
         const suggestion = await getSmartCategorySuggestion(merchant, categories);
         return {
           merchant,
@@ -31,6 +42,19 @@ export async function POST(request: Request) {
           source: suggestion?.source,
         };
       })
+    );
+
+    const suggestionByMerchant = new Map(
+      uniqueSuggestions.map((suggestion) => [suggestion.merchant, suggestion])
+    );
+
+    const suggestions = merchants.map((merchant) =>
+      suggestionByMerchant.get(merchant || '') || {
+        merchant,
+        categoryId: undefined,
+        confidence: undefined,
+        source: undefined,
+      }
     );
 
     // Mark categorization task as complete if batchId provided

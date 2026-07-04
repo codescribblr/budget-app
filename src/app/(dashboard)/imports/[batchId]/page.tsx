@@ -873,12 +873,21 @@ export default function BatchReviewPage() {
     
     setIsRerunningCategorization(true);
     try {
-      // Get category suggestions
-      const merchants = transactions.map(t => t.merchant);
+      const nonDuplicateIndices = transactions.reduce<number[]>((indices, txn, index) => {
+        if (!txn.isDuplicate) indices.push(index);
+        return indices;
+      }, []);
+
+      if (nonDuplicateIndices.length === 0) {
+        toast.info('No non-duplicate transactions to categorize');
+        return;
+      }
+
+      const merchantsToCategorize = nonDuplicateIndices.map((index) => transactions[index].merchant);
       const response = await fetch('/api/categorize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ merchants, batchId }),
+        body: JSON.stringify({ merchants: merchantsToCategorize, batchId }),
       });
 
       if (!response.ok) {
@@ -891,18 +900,23 @@ export default function BatchReviewPage() {
       const categoriesResponse = await fetch('/api/categories?excludeGoals=false&includeArchived=all');
       const categories = categoriesResponse.ok ? await categoriesResponse.json() : [];
 
-      // Update transactions with categorization
+      // Update transactions with categorization (skip duplicates)
       const updatedTransactions = transactions.map((txn, index) => {
-        const suggestion = suggestions[index];
-        const suggestedCategory = suggestion?.categoryId;
-        const hasCategory = !!suggestedCategory;
-
-        // Preserve duplicate status
         const isDuplicate = txn.isDuplicate || false;
         const duplicateType = txn.duplicateType || null;
-        // Duplicates take precedence: if duplicate, always excluded
-        // Otherwise, exclude if uncategorized
-        const status = (isDuplicate ? 'excluded' : (!hasCategory ? 'excluded' : 'pending')) as 'pending' | 'confirmed' | 'excluded';
+
+        if (isDuplicate) {
+          return {
+            ...txn,
+            status: 'excluded' as const,
+          };
+        }
+
+        const nonDupIndex = nonDuplicateIndices.indexOf(index);
+        const suggestion = nonDupIndex >= 0 ? suggestions[nonDupIndex] : undefined;
+        const suggestedCategory = suggestion?.categoryId;
+        const hasCategory = !!suggestedCategory;
+        const status = (!hasCategory ? 'excluded' : 'pending') as 'pending' | 'confirmed' | 'excluded';
 
         return {
           ...txn,
@@ -915,6 +929,7 @@ export default function BatchReviewPage() {
               }]
             : [],
           status,
+          duplicateType,
         };
       });
 

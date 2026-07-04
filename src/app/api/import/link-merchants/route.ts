@@ -24,30 +24,44 @@ export async function POST(request: Request) {
       );
     }
 
-    // Link each description to a merchant group (which may link to global merchants)
-    // This ensures merchant groups exist before categorization
-    const results = await Promise.all(
-      descriptions.map(async (description) => {
-        try {
-          const result = await getOrCreateMerchantGroup(description, true);
-          return {
-            description,
-            merchantGroupId: result.group?.id || null,
-            isNew: result.isNew,
-            globalMerchantId: result.group?.global_merchant_id || null,
-          };
-        } catch (error) {
-          console.error(`Error linking merchant for "${description}":`, error);
-          return {
-            description,
-            merchantGroupId: null,
-            isNew: false,
-            globalMerchantId: null,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          };
-        }
-      })
-    );
+    const uniqueDescriptions = [...new Set(descriptions.filter(Boolean))];
+
+    // Link each unique description to a merchant group (which may link to global merchants)
+    const CONCURRENCY = 10;
+    const results: Array<{
+      description: string;
+      merchantGroupId: number | null;
+      isNew: boolean;
+      globalMerchantId: number | null;
+      error?: string;
+    }> = [];
+
+    for (let i = 0; i < uniqueDescriptions.length; i += CONCURRENCY) {
+      const chunk = uniqueDescriptions.slice(i, i + CONCURRENCY);
+      const chunkResults = await Promise.all(
+        chunk.map(async (description) => {
+          try {
+            const result = await getOrCreateMerchantGroup(description, true);
+            return {
+              description,
+              merchantGroupId: result.group?.id || null,
+              isNew: result.isNew,
+              globalMerchantId: result.group?.global_merchant_id || null,
+            };
+          } catch (error) {
+            console.error(`Error linking merchant for "${description}":`, error);
+            return {
+              description,
+              merchantGroupId: null,
+              isNew: false,
+              globalMerchantId: null,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            };
+          }
+        })
+      );
+      results.push(...chunkResults);
+    }
 
     // Note: Merchant linking is an internal optimization step that doesn't need to be tracked
     // as a separate processing task. It happens automatically before categorization.

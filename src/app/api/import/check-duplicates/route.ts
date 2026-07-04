@@ -10,6 +10,13 @@ interface TransactionData {
   amount: number;
 }
 
+interface ExistingTransaction {
+  id: number;
+  date: string;
+  description: string;
+  total_amount: number;
+}
+
 export async function POST(request: Request) {
   try {
     const { hashes, transactions, batchId } = await request.json() as {
@@ -27,21 +34,25 @@ export async function POST(request: Request) {
 
     const duplicateHashes = new Set<string>();
 
-    // Method 1: Check by hash against imported_transactions, but verify transaction exists in transactions table
-    // We check imported_transactions for hash lookup, but then verify the transaction actually exists
-    // in the transactions table (which is what users see). This prevents false positives from
-    // orphaned records in imported_transactions.
-    if (hashes && Array.isArray(hashes) && hashes.length > 0 && transactions && Array.isArray(transactions)) {
-      // Build a map of hash -> transaction data for quick lookup
+    if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
+      return NextResponse.json({ duplicates: [] });
+    }
+
+    // Fetch all existing transactions in the import date range once (avoids N+1 queries)
+    const existingTransactions = await fetchExistingTransactionsInRange(
+      supabase,
+      accountId,
+      transactions
+    );
+    const dateAmountIndex = buildDateAmountIndex(existingTransactions);
+
+    // Method 1: Check by hash against imported_transactions, verify against pre-fetched transactions
+    if (hashes && Array.isArray(hashes) && hashes.length > 0) {
       const hashToTransaction = new Map<string, TransactionData>();
       transactions.forEach(txn => {
         hashToTransaction.set(txn.hash, txn);
       });
 
-      // Get hashes from imported_transactions
-      // IMPORTANT: Check for records with matching account_id OR NULL account_id
-      // (NULL might exist from before migration, though migration should have set them)
-      // Also, the unique constraint is (user_id, hash), so same hash can exist with different account_ids
       const { data: importedHashes, error: importedError } = await supabase
         .from('imported_transactions')
         .select('hash, account_id')
@@ -51,142 +62,57 @@ export async function POST(request: Request) {
 
       if (importedError) throw importedError;
 
-      // For each imported hash, verify the corresponding transaction exists in transactions table
-      // Only mark as duplicate if:
-      // 1. The hash exists in imported_transactions with matching account_id (or NULL)
-      // 2. AND the transaction actually exists in transactions table
       if (importedHashes && importedHashes.length > 0) {
-        // Group by hash to avoid duplicate checks
         const uniqueHashes = new Set(importedHashes.map(h => h.hash));
-        
+
         for (const hash of uniqueHashes) {
           const txn = hashToTransaction.get(hash);
-          if (txn) {
-            const normalizedDate = normalizeDateForComparison(txn.date);
-            const normalizedAmount = Math.abs(txn.amount);
-            const normalizedDesc = normalizeDescriptionForComparison(txn.description);
-            
-            // Check if this transaction exists in the transactions table
-            // This is the source of truth - if it's not here, it's not a duplicate
-            const { data: existingTx, error: txError } = await supabase
-              .from('transactions')
-              .select('id, description')
-              .eq('budget_account_id', accountId)
-              .eq('date', normalizedDate)
-              .eq('total_amount', normalizedAmount)
-              .limit(10); // Get multiple to check description match
+          if (!txn) continue;
 
-            if (!txError && existingTx && existingTx.length > 0) {
-              // Check if description matches (fuzzy match)
-              const matching = existingTx.some(existingTxn => {
-                const existingDesc = normalizeDescriptionForComparison(existingTxn.description);
-                const existingLower = existingDesc.toLowerCase();
-                const normalizedLower = normalizedDesc.toLowerCase();
-                
-                // Exact match or substring match
-                return existingLower === normalizedLower || 
-                       existingLower.includes(normalizedLower) || 
-                       normalizedLower.includes(existingLower);
-              });
+          const normalizedDate = normalizeDateForComparison(txn.date);
+          const normalizedAmount = Math.abs(txn.amount);
+          const normalizedDesc = normalizeDescriptionForComparison(txn.description);
+          const candidates = dateAmountIndex.get(`${normalizedDate}|${normalizedAmount}`) || [];
 
-              if (matching) {
-                // Transaction exists in transactions table with matching description, so it's a real duplicate
-                duplicateHashes.add(hash);
-              }
-            }
-            // If transaction doesn't exist in transactions table, it's NOT a duplicate
-            // (might be orphaned data in imported_transactions from a different account or deleted transaction)
+          const matching = candidates.some(existingTxn =>
+            descriptionsMatchSimple(existingTxn.description, normalizedDesc)
+          );
+
+          if (matching) {
+            duplicateHashes.add(hash);
           }
         }
       }
     }
 
-    // Method 2: Fallback - Check by date + description + amount
-    // This catches duplicates even if hash generation changed (e.g., different originalData)
-    if (transactions && Array.isArray(transactions) && transactions.length > 0) {
-      // Get all unique date+description+amount combinations to check
-      const checkKeys = new Map<string, TransactionData[]>();
-      
-      transactions.forEach(txn => {
-        const normalizedDate = normalizeDateForComparison(txn.date);
-        const normalizedDesc = normalizeDescriptionForComparison(txn.description);
-        const normalizedAmount = Math.abs(txn.amount);
-        const key = `${normalizedDate}|${normalizedDesc}|${normalizedAmount}`;
-        
-        if (!checkKeys.has(key)) {
-          checkKeys.set(key, []);
-        }
-        checkKeys.get(key)!.push(txn);
-      });
+    // Method 2: Fallback - Check by date + description + amount using pre-fetched transactions
+    const checkKeys = new Map<string, TransactionData[]>();
 
-      // Check each unique combination against database
-      for (const [key, txns] of checkKeys.entries()) {
-        const [date, description, amountStr] = key.split('|');
-        const amount = parseFloat(amountStr);
+    transactions.forEach(txn => {
+      const normalizedDate = normalizeDateForComparison(txn.date);
+      const normalizedDesc = normalizeDescriptionForComparison(txn.description);
+      const normalizedAmount = Math.abs(txn.amount);
+      const key = `${normalizedDate}|${normalizedDesc}|${normalizedAmount}`;
 
-        // Check transactions table directly (what users actually see)
-        // Only mark as duplicate if transaction exists in transactions table
-        // This prevents false positives from orphaned records in imported_transactions
-        const { data: existingTransactions, error: txError } = await supabase
-          .from('transactions')
-          .select('id, date, description, total_amount')
-          .eq('budget_account_id', accountId)
-          .eq('date', date)
-          .eq('total_amount', amount);
+      if (!checkKeys.has(key)) {
+        checkKeys.set(key, []);
+      }
+      checkKeys.get(key)!.push(txn);
+    });
 
-        if (txError) throw txError;
+    for (const [key, txns] of checkKeys.entries()) {
+      const [date, description, amountStr] = key.split('|');
+      const amount = parseFloat(amountStr);
+      const candidates = dateAmountIndex.get(`${date}|${amount}`) || [];
 
-        if (existingTransactions && existingTransactions.length > 0) {
-          // Check if description matches using multiple strategies
-          const matching = existingTransactions.filter(existingTxn => {
-            const existingDesc = normalizeDescriptionForComparison(existingTxn.description);
-            const normalizedDesc = normalizeDescriptionForComparison(description);
-            
-            const existingLower = existingDesc.toLowerCase();
-            const normalizedLower = normalizedDesc.toLowerCase();
-            
-            // Strategy 1: Exact match (case-insensitive)
-            if (existingLower === normalizedLower) {
-              return true;
-            }
-            
-            // Strategy 2: Substring match - check if one contains the other
-            // This catches cases like "UNITED 0162353356601 UNITED.COM" vs "UNITED 0162353356601"
-            // Check both directions: longer contains shorter, or shorter contains longer
-            const longerDesc = existingLower.length >= normalizedLower.length ? existingLower : normalizedLower;
-            const shorterDesc = existingLower.length < normalizedLower.length ? existingLower : normalizedLower;
-            
-            if (longerDesc.includes(shorterDesc)) {
-              // But only if the shorter string is at least 10 characters (to avoid false positives)
-              if (shorterDesc.length >= 10) {
-                return true;
-              }
-            }
-            
-            // Strategy 3: Core merchant/transaction ID match
-            // Extract core parts (merchant name + transaction ID) and compare
-            const existingCore = extractCoreDescription(existingDesc);
-            const normalizedCore = extractCoreDescription(normalizedDesc);
-            if (existingCore && normalizedCore && existingCore === normalizedCore) {
-              return true;
-            }
-            
-            // Strategy 4: Fuzzy match for descriptions that are very similar
-            // Lower threshold to catch more cases (75% instead of 90%)
-            const descDistance = distance(existingLower, normalizedLower);
-            const maxLength = Math.max(existingDesc.length, normalizedDesc.length);
-            if (maxLength > 0 && (1 - descDistance / maxLength) > 0.75) {
-              return true;
-            }
-            
-            return false;
-          });
+      if (candidates.length === 0) continue;
 
-          if (matching.length > 0) {
-            // Found duplicate(s) by date + description + amount
-            txns.forEach(txn => duplicateHashes.add(txn.hash));
-          }
-        }
+      const matching = candidates.filter(existingTxn =>
+        descriptionsMatchFull(existingTxn.description, description)
+      );
+
+      if (matching.length > 0) {
+        txns.forEach(txn => duplicateHashes.add(txn.hash));
       }
     }
 
@@ -212,6 +138,75 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+async function fetchExistingTransactionsInRange(
+  supabase: Awaited<ReturnType<typeof getAuthenticatedUser>>['supabase'],
+  accountId: number,
+  transactions: TransactionData[]
+): Promise<ExistingTransaction[]> {
+  const normalizedDates = transactions.map(t => normalizeDateForComparison(t.date));
+  const minDate = normalizedDates.reduce((a, b) => (a < b ? a : b));
+  const maxDate = normalizedDates.reduce((a, b) => (a > b ? a : b));
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('id, date, description, total_amount')
+    .eq('budget_account_id', accountId)
+    .gte('date', minDate)
+    .lte('date', maxDate);
+
+  if (error) throw error;
+  return data || [];
+}
+
+function buildDateAmountIndex(
+  existingTransactions: ExistingTransaction[]
+): Map<string, ExistingTransaction[]> {
+  const index = new Map<string, ExistingTransaction[]>();
+  for (const tx of existingTransactions) {
+    const key = `${tx.date}|${Math.abs(tx.total_amount)}`;
+    const list = index.get(key) || [];
+    list.push(tx);
+    index.set(key, list);
+  }
+  return index;
+}
+
+function descriptionsMatchSimple(existingDescription: string, normalizedDesc: string): boolean {
+  const existingLower = normalizeDescriptionForComparison(existingDescription).toLowerCase();
+  const normalizedLower = normalizedDesc.toLowerCase();
+  return existingLower === normalizedLower ||
+    existingLower.includes(normalizedLower) ||
+    normalizedLower.includes(existingLower);
+}
+
+function descriptionsMatchFull(existingDescription: string, description: string): boolean {
+  const existingDesc = normalizeDescriptionForComparison(existingDescription);
+  const normalizedDesc = normalizeDescriptionForComparison(description);
+  const existingLower = existingDesc.toLowerCase();
+  const normalizedLower = normalizedDesc.toLowerCase();
+
+  if (existingLower === normalizedLower) {
+    return true;
+  }
+
+  const longerDesc = existingLower.length >= normalizedLower.length ? existingLower : normalizedLower;
+  const shorterDesc = existingLower.length < normalizedLower.length ? existingLower : normalizedLower;
+
+  if (longerDesc.includes(shorterDesc) && shorterDesc.length >= 10) {
+    return true;
+  }
+
+  const existingCore = extractCoreDescription(existingDesc);
+  const normalizedCore = extractCoreDescription(normalizedDesc);
+  if (existingCore && normalizedCore && existingCore === normalizedCore) {
+    return true;
+  }
+
+  const descDistance = distance(existingLower, normalizedLower);
+  const maxLength = Math.max(existingDesc.length, normalizedDesc.length);
+  return maxLength > 0 && (1 - descDistance / maxLength) > 0.75;
 }
 
 /**

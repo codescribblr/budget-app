@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
-import { Wallet, CreditCard, Clock, Trash2 } from 'lucide-react';
+import { Wallet, CreditCard, Clock, Trash2, CalendarClock } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -160,6 +160,17 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
     }
   };
 
+  const formatUploadedAt = (dateString: string) => {
+    if (!dateString) return null;
+    return new Date(dateString).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
   if (permissionsLoading || loading) {
     return (
       <div className="flex justify-center py-8">
@@ -276,9 +287,17 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0">
+              <CardContent className="pt-0 space-y-1">
+                {batch.created_at && (
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      Uploaded {formatUploadedAt(batch.created_at)}
+                    </span>
+                  </div>
+                )}
                 <div className="text-sm text-muted-foreground">
-                  {new Date(batch.date_range.start).toLocaleDateString()} –{' '}
+                  Transactions: {new Date(batch.date_range.start).toLocaleDateString()} –{' '}
                   {new Date(batch.date_range.end).toLocaleDateString()}
                 </div>
               </CardContent>

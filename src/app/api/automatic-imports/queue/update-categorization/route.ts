@@ -74,22 +74,28 @@ export async function POST(request: Request) {
       };
     }).filter((update): update is NonNullable<typeof update> => update !== null);
 
-    // Batch update queued imports
-    for (const update of updates) {
-      const { error } = await supabase
-        .from('queued_imports')
-        .update({
-          suggested_category_id: update.suggested_category_id,
-          status: update.status,
-          original_data: update.original_data,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', update.id)
-        .eq('account_id', accountId);
+    // Batch update queued imports in parallel chunks
+    const CHUNK_SIZE = 25;
+    for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
+      const chunk = updates.slice(i, i + CHUNK_SIZE);
+      await Promise.all(
+        chunk.map(async (update) => {
+          const { error } = await supabase
+            .from('queued_imports')
+            .update({
+              suggested_category_id: update.suggested_category_id,
+              status: update.status,
+              original_data: update.original_data,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', update.id)
+            .eq('account_id', accountId);
 
-      if (error) {
-        // Continue with other updates even if one fails
-      }
+          if (error) {
+            console.warn(`Failed to update queued import ${update.id}:`, error.message);
+          }
+        })
+      );
     }
 
     return NextResponse.json({

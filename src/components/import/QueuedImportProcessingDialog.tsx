@@ -156,6 +156,18 @@ export default function QueuedImportProcessingDialog({
       setCurrentProgress(0);
       setCurrentStage('Loading transactions...');
 
+      // Fetch current processing task status (may differ from cached state)
+      let processingTasks = status?.processingTasks;
+      try {
+        const statusResponse = await fetch(`/api/import/queue/${encodeURIComponent(batchId)}/processing-status`);
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json();
+          processingTasks = statusData.processingTasks;
+        }
+      } catch {
+        // Fall back to cached status
+      }
+
       // Fetch queued imports
       const response = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}`);
       if (!response.ok) {
@@ -175,23 +187,40 @@ export default function QueuedImportProcessingDialog({
       setCurrentStage(`Found ${queuedImports.length} transaction${queuedImports.length !== 1 ? 's' : ''}...`);
 
       // Convert to ParsedTransaction format
-      const initialTransactions: ParsedTransaction[] = queuedImports.map((qi: any) => ({
-        id: `queued-${qi.id}`,
-        date: qi.transaction_date,
-        description: qi.description,
-        amount: qi.amount,
-        transaction_type: qi.transaction_type,
-        merchant: qi.merchant,
-        suggestedCategory: qi.suggested_category_id || undefined,
-        account_id: qi.target_account_id || undefined,
-        credit_card_id: qi.target_credit_card_id || undefined,
-        is_historical: qi.is_historical || false,
-        splits: [],
-        status: 'pending' as const,
-        isDuplicate: false,
-        originalData: qi.original_data,
-        hash: qi.hash || '',
-      }));
+      const initialTransactions: ParsedTransaction[] = queuedImports.map((qi: any) => {
+        let isDuplicate = false;
+        let duplicateType: 'database' | 'within-file' | null = null;
+        try {
+          const originalData = typeof qi.original_data === 'string'
+            ? JSON.parse(qi.original_data)
+            : qi.original_data;
+          if (originalData?.isDuplicate) {
+            isDuplicate = true;
+            duplicateType = originalData.duplicateType ?? 'database';
+          }
+        } catch {
+          // ignore parse errors
+        }
+
+        return {
+          id: `queued-${qi.id}`,
+          date: qi.transaction_date,
+          description: qi.description,
+          amount: qi.amount,
+          transaction_type: qi.transaction_type,
+          merchant: qi.merchant,
+          suggestedCategory: qi.suggested_category_id || undefined,
+          account_id: qi.target_account_id || undefined,
+          credit_card_id: qi.target_credit_card_id || undefined,
+          is_historical: qi.is_historical || false,
+          splits: [],
+          status: 'pending' as const,
+          isDuplicate,
+          duplicateType,
+          originalData: qi.original_data,
+          hash: qi.hash || '',
+        };
+      });
 
       // Process transactions
       const updateProgress = (prog: number, stg: string) => {
@@ -206,7 +235,8 @@ export default function QueuedImportProcessingDialog({
         true, // Skip AI categorization - user can trigger it manually on review page
         updateProgress,
         undefined, // baseUrl
-        batchId // Pass batchId so tasks mark themselves complete
+        batchId,
+        { processingTasks }
       );
 
       // Calculate processing results from processed transactions

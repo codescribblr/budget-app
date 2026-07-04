@@ -4,6 +4,7 @@
  */
 
 import type { ParsedTransaction } from './import-types';
+import type { ProcessingTasksStatus, ProcessingTask } from './processing-tasks';
 import type { ColumnMapping } from './mapping-templates';
 import { parseDate, normalizeDate } from './date-parser';
 import { format } from 'date-fns';
@@ -329,8 +330,105 @@ function parseAmount(amountStr: string): number {
   return isNaN(amount) ? 0 : amount;
 }
 
+export interface ProcessTransactionsOptions {
+  processingTasks?: ProcessingTasksStatus;
+  /** Re-run specific tasks even if already marked complete (e.g. user-triggered duplicate re-check) */
+  forceTasks?: ProcessingTask[];
+}
+
+type CategorySuggestion = {
+  categoryId?: number;
+  confidence?: number;
+  source?: string;
+};
+
+function shouldRunTask(
+  task: ProcessingTask,
+  processingTasks?: ProcessingTasksStatus,
+  forceTasks?: ProcessingTask[]
+): boolean {
+  if (forceTasks?.includes(task)) return true;
+  if (!processingTasks) return true;
+  return processingTasks[task] !== true;
+}
+
+function getStoredDuplicateInfo(txn: ParsedTransaction): {
+  isDuplicate: boolean;
+  duplicateType: 'database' | 'within-file' | null;
+} {
+  if (txn.isDuplicate) {
+    return { isDuplicate: true, duplicateType: txn.duplicateType ?? 'database' };
+  }
+  try {
+    const data = typeof txn.originalData === 'string'
+      ? JSON.parse(txn.originalData)
+      : txn.originalData;
+    if (data?.isDuplicate) {
+      return {
+        isDuplicate: true,
+        duplicateType: data.duplicateType ?? 'database',
+      };
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return { isDuplicate: false, duplicateType: null };
+}
+
+function loadStoredDuplicateSets(transactions: ParsedTransaction[]): {
+  databaseDuplicateSet: Set<string>;
+  withinFileDuplicates: Set<number>;
+} {
+  const databaseDuplicateSet = new Set<string>();
+  const withinFileDuplicates = new Set<number>();
+
+  transactions.forEach((txn, index) => {
+    const info = getStoredDuplicateInfo(txn);
+    if (!info.isDuplicate) return;
+    if (info.duplicateType === 'within-file') {
+      withinFileDuplicates.add(index);
+    } else {
+      databaseDuplicateSet.add(txn.hash);
+    }
+  });
+
+  return { databaseDuplicateSet, withinFileDuplicates };
+}
+
+function getNonDuplicateIndices(
+  transactions: ParsedTransaction[],
+  databaseDuplicateSet: Set<string>,
+  withinFileDuplicates: Set<number>
+): number[] {
+  return transactions.reduce<number[]>((indices, txn, index) => {
+    if (!databaseDuplicateSet.has(txn.hash) && !withinFileDuplicates.has(index)) {
+      indices.push(index);
+    }
+    return indices;
+  }, []);
+}
+
+function getUniqueValuesWithIndexMap<T extends string>(
+  indices: number[],
+  getValue: (index: number) => T
+): { uniqueValues: T[]; valueToIndices: Map<T, number[]> } {
+  const valueToIndices = new Map<T, number[]>();
+  for (const index of indices) {
+    const value = getValue(index);
+    const existing = valueToIndices.get(value);
+    if (existing) {
+      existing.push(index);
+    } else {
+      valueToIndices.set(value, [index]);
+    }
+  }
+  return { uniqueValues: Array.from(valueToIndices.keys()), valueToIndices };
+}
+
 /**
- * Process transactions: check duplicates and auto-categorize
+ * Process transactions: check duplicates and auto-categorize.
+ * Skips steps already marked complete in processingTasks unless forceTasks overrides.
+ * Duplicates are excluded from merchant linking and categorization.
  */
 export async function processTransactions(
   transactions: ParsedTransaction[],
@@ -339,86 +437,130 @@ export async function processTransactions(
   skipAICategorization: boolean = false,
   progressCallback?: (progress: number, stage: string) => void,
   baseUrl?: string, // Optional base URL for server-side calls
-  batchId?: string // Optional batch ID for tracking processing tasks
+  batchId?: string, // Optional batch ID for tracking processing tasks
+  options?: ProcessTransactionsOptions
 ): Promise<ParsedTransaction[]> {
-  // Step 1: Check for duplicates within the file itself
-  if (progressCallback) progressCallback(45, 'Checking for duplicate transactions...');
-  const seenHashes = new Map<string, number>();
-  const withinFileDuplicates = new Set<number>();
+  const processingTasks = options?.processingTasks;
+  const forceTasks = options?.forceTasks;
 
-  transactions.forEach((txn, index) => {
-    if (seenHashes.has(txn.hash)) {
-      withinFileDuplicates.add(index);
-    } else {
-      seenHashes.set(txn.hash, index);
-    }
-  });
+  const runDuplicateDetection = shouldRunTask('duplicate_detection', processingTasks, forceTasks);
+  const runCategorization = shouldRunTask('categorization', processingTasks, forceTasks);
+  const runDefaultsAssignment = shouldRunTask('import_defaults_assignment', processingTasks, forceTasks);
 
-  // Step 2: Fetch existing transaction hashes for deduplication against database
-  // Also send transaction data for fallback duplicate detection (by date + description + amount)
-  if (progressCallback) progressCallback(50, 'Checking against existing transactions...');
-  const checkDuplicatesUrl = baseUrl 
-    ? `${baseUrl}/api/import/check-duplicates`
-    : '/api/import/check-duplicates';
-  const response = await fetch(checkDuplicatesUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      hashes: transactions.map(t => t.hash),
-      transactions: transactions.map(t => ({
-        hash: t.hash,
-        date: t.date,
-        description: t.description,
-        amount: t.amount,
-      })),
-      batchId, // Pass batchId to mark task complete
-    }),
-  });
+  let databaseDuplicateSet = new Set<string>();
+  let withinFileDuplicates = new Set<number>();
 
-  const { duplicates } = await response.json();
-  const databaseDuplicateSet = new Set(duplicates);
+  if (runDuplicateDetection) {
+    // Step 1: Check for duplicates within the file itself
+    if (progressCallback) progressCallback(45, 'Checking for duplicate transactions...');
+    const seenHashes = new Map<string, number>();
 
-  // Step 3: Link merchants to global merchants before categorization
-  // This ensures merchant groups exist so categorization can use merchant-based rules
-  if (progressCallback) progressCallback(55, 'Linking merchants to global merchants...');
-  const descriptions = transactions.map(t => t.description || t.merchant);
-  const linkMerchantsUrl = baseUrl ? `${baseUrl}/api/import/link-merchants` : '/api/import/link-merchants';
-  try {
-    const linkResponse = await fetch(linkMerchantsUrl, {
+    transactions.forEach((txn, index) => {
+      if (seenHashes.has(txn.hash)) {
+        withinFileDuplicates.add(index);
+      } else {
+        seenHashes.set(txn.hash, index);
+      }
+    });
+
+    // Step 2: Fetch existing transaction hashes for deduplication against database
+    if (progressCallback) progressCallback(50, 'Checking against existing transactions...');
+    const checkDuplicatesUrl = baseUrl
+      ? `${baseUrl}/api/import/check-duplicates`
+      : '/api/import/check-duplicates';
+    const response = await fetch(checkDuplicatesUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ descriptions, batchId }),
+      body: JSON.stringify({
+        hashes: transactions.map(t => t.hash),
+        transactions: transactions.map(t => ({
+          hash: t.hash,
+          date: t.date,
+          description: t.description,
+          amount: t.amount,
+        })),
+        batchId,
+      }),
     });
-    
-    if (!linkResponse.ok) {
-      console.warn('Failed to link merchants, continuing without linking:', linkResponse.statusText);
-    } else {
-      const linkData = await linkResponse.json();
-      if (linkData.linked > 0) {
-        console.log(`Linked ${linkData.linked} merchants to global merchants`);
-      }
-    }
-  } catch (error) {
-    // Log but don't fail - merchant linking is helpful but not critical
-    console.warn('Error linking merchants, continuing without linking:', error);
+
+    const { duplicates } = await response.json();
+    databaseDuplicateSet = new Set(duplicates);
+  } else {
+    if (progressCallback) progressCallback(50, 'Using existing duplicate detection results...');
+    ({ databaseDuplicateSet, withinFileDuplicates } = loadStoredDuplicateSets(transactions));
   }
 
-  // Step 4: Fetch categories for auto-categorization
-  if (progressCallback) progressCallback(60, 'Loading categories...');
-  const categoriesUrl = baseUrl ? `${baseUrl}/api/categories` : '/api/categories';
-  const categoriesResponse = await fetch(categoriesUrl);
-  const categories = await categoriesResponse.json();
+  const nonDuplicateIndices = getNonDuplicateIndices(
+    transactions,
+    databaseDuplicateSet,
+    withinFileDuplicates
+  );
 
-  // Step 5: Get smart category suggestions for all merchants
-  if (progressCallback) progressCallback(65, 'Applying categorization rules...');
-  const merchants = transactions.map(t => t.merchant);
-  const categorizeUrl = baseUrl ? `${baseUrl}/api/categorize` : '/api/categorize';
-  const categorizationResponse = await fetch(categorizeUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ merchants, batchId }), // Pass batchId to mark task complete
-  });
-  const { suggestions } = await categorizationResponse.json();
+  // Step 3: Link merchants only for non-duplicate transactions (needed before categorization)
+  if (runCategorization && nonDuplicateIndices.length > 0) {
+    if (progressCallback) progressCallback(55, 'Linking merchants to global merchants...');
+    const { uniqueValues: uniqueDescriptions } = getUniqueValuesWithIndexMap(
+      nonDuplicateIndices,
+      (index) => transactions[index].description || transactions[index].merchant
+    );
+    const linkMerchantsUrl = baseUrl ? `${baseUrl}/api/import/link-merchants` : '/api/import/link-merchants';
+    try {
+      const linkResponse = await fetch(linkMerchantsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descriptions: uniqueDescriptions, batchId }),
+      });
+
+      if (!linkResponse.ok) {
+        console.warn('Failed to link merchants, continuing without linking:', linkResponse.statusText);
+      } else {
+        const linkData = await linkResponse.json();
+        if (linkData.linked > 0) {
+          console.log(`Linked ${linkData.linked} merchants to global merchants`);
+        }
+      }
+    } catch (error) {
+      console.warn('Error linking merchants, continuing without linking:', error);
+    }
+  }
+
+  let categories: Array<{ id: number; name: string }> = [];
+  const suggestionsByIndex: Array<CategorySuggestion | undefined> = new Array(transactions.length);
+
+  if (runCategorization && nonDuplicateIndices.length > 0) {
+    if (progressCallback) progressCallback(60, 'Loading categories...');
+    const categoriesUrl = baseUrl ? `${baseUrl}/api/categories` : '/api/categories';
+    const categoriesResponse = await fetch(categoriesUrl);
+    categories = await categoriesResponse.json();
+
+    if (progressCallback) progressCallback(65, 'Applying categorization rules...');
+    const { uniqueValues: uniqueMerchants, valueToIndices } = getUniqueValuesWithIndexMap(
+      nonDuplicateIndices,
+      (index) => transactions[index].merchant
+    );
+    const categorizeUrl = baseUrl ? `${baseUrl}/api/categorize` : '/api/categorize';
+    const categorizationResponse = await fetch(categorizeUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ merchants: uniqueMerchants, batchId }),
+    });
+    const { suggestions: uniqueSuggestions } = await categorizationResponse.json();
+
+    uniqueMerchants.forEach((merchant, uniqueIndex) => {
+      const suggestion = uniqueSuggestions[uniqueIndex] as CategorySuggestion | undefined;
+      const indices = valueToIndices.get(merchant) || [];
+      indices.forEach((origIndex) => {
+        suggestionsByIndex[origIndex] = suggestion;
+      });
+    });
+  } else if (!runCategorization) {
+    if (progressCallback) progressCallback(65, 'Using existing categorization results...');
+    transactions.forEach((txn, index) => {
+      if (txn.suggestedCategory) {
+        suggestionsByIndex[index] = { categoryId: txn.suggestedCategory };
+      }
+    });
+  }
 
   // Step 6: Process each transaction with initial categorization
   if (progressCallback) progressCallback(70, 'Categorizing transactions...');
@@ -433,14 +575,21 @@ export async function processTransactions(
       ? 'within-file' as const
       : null;
 
-    const suggestion = suggestions[index];
-    const suggestedCategory = suggestion?.categoryId;
+    const suggestion = isDuplicate ? undefined : suggestionsByIndex[index];
+    const suggestedCategory = suggestion?.categoryId ?? (isDuplicate ? undefined : transaction.suggestedCategory);
     const hasSplits = !!suggestedCategory;
+
+    const accountId = runDefaultsAssignment
+      ? (transaction.account_id !== undefined ? transaction.account_id : (defaultAccountId || null))
+      : transaction.account_id;
+    const creditCardId = runDefaultsAssignment
+      ? (transaction.credit_card_id !== undefined ? transaction.credit_card_id : (defaultCreditCardId || null))
+      : transaction.credit_card_id;
 
     return {
       ...transaction,
-      account_id: transaction.account_id !== undefined ? transaction.account_id : (defaultAccountId || null),
-      credit_card_id: transaction.credit_card_id !== undefined ? transaction.credit_card_id : (defaultCreditCardId || null),
+      account_id: accountId,
+      credit_card_id: creditCardId,
       isDuplicate,
       duplicateType,
       status: (isDuplicate || !hasSplits ? 'excluded' : 'pending') as 'pending' | 'confirmed' | 'excluded',
@@ -448,25 +597,23 @@ export async function processTransactions(
       splits: suggestedCategory
         ? [{
             categoryId: suggestedCategory,
-            categoryName: categories.find((c: any) => c.id === suggestedCategory)?.name || '',
+            categoryName: categories.find((c) => c.id === suggestedCategory)?.name || '',
             amount: transaction.amount,
           }]
         : [],
     };
   });
 
-  // Mark default_account_assignment and historical_flag_assignment as complete
-  // These are applied above when setting account_id and is_historical
-  // Note: This is only called from client-side, so we use the API endpoint
-  if (batchId && (defaultAccountId !== undefined || defaultCreditCardId !== undefined)) {
+  if (
+    batchId &&
+    runDefaultsAssignment &&
+    (defaultAccountId !== undefined || defaultCreditCardId !== undefined)
+  ) {
     try {
-      // Use client-side API endpoint (this function is only called from client)
       const { markTaskCompleteForBatch } = await import('@/lib/processing-tasks-helpers');
-      await markTaskCompleteForBatch(batchId, 'default_account_assignment');
-      await markTaskCompleteForBatch(batchId, 'historical_flag_assignment');
+      await markTaskCompleteForBatch(batchId, 'import_defaults_assignment');
     } catch (error) {
-      // Log but don't fail - task tracking is not critical
-      console.warn('Failed to mark account/historical tasks complete:', error);
+      console.warn('Failed to mark import defaults task complete:', error);
     }
   }
 

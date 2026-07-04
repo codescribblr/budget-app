@@ -659,7 +659,7 @@ export async function getQueuedImportBatches() {
         start: dates[0],
         end: dates[dates.length - 1],
       },
-      created_at: firstItem.source_fetched_at,
+      created_at: firstItem.source_fetched_at || firstItem.created_at,
       status: items.every(i => i.status === 'approved') ? 'approved' as const
         : items.some(i => i.status === 'approved') ? 'partially_approved' as const
         : items.some(i => i.status === 'reviewing') ? 'reviewing' as const
@@ -672,7 +672,9 @@ export async function getQueuedImportBatches() {
     };
   });
 
-  return batchList;
+  return batchList.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 }
 
 /**
