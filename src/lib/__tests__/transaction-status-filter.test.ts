@@ -89,4 +89,31 @@ describe('parseCSVWithMapping upload path', () => {
     expect(transactions).toHaveLength(1);
     expect(transactions[0].description).toBe('Taco Bell');
   });
+
+  it('supports debit/credit fallback when amount column is not mapped', async () => {
+    const data = [
+      ['Date', 'Debit', 'Credit', 'Description', 'Status'],
+      ['2026-06-23', '12.00', '', 'Grocery Store', 'Posted'],
+      ['2026-06-24', '', '50.00', 'Paycheck', 'Posted'],
+    ];
+
+    const mapping: ColumnMapping = {
+      dateColumn: 0,
+      amountColumn: null,
+      descriptionColumn: 3,
+      debitColumn: 1,
+      creditColumn: 2,
+      transactionTypeColumn: null,
+      statusColumn: 4,
+      amountSignConvention: 'positive_is_expense',
+      dateFormat: 'yyyy-MM-dd',
+      hasHeaders: true,
+    };
+
+    const transactions = await parseCSVWithMapping(data, mapping, 'bank.csv');
+
+    expect(transactions).toHaveLength(2);
+    expect(transactions[0]).toMatchObject({ description: 'Grocery Store', amount: 12, transaction_type: 'expense' });
+    expect(transactions[1]).toMatchObject({ description: 'Paycheck', amount: 50, transaction_type: 'income' });
+  });
 });

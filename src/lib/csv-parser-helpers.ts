@@ -292,7 +292,8 @@ export async function parseCSVWithMapping(
       if (convention === 'separate_debit_credit') {
         // Handle separate debit/credit columns
         if (mapping.debitColumn === null || mapping.creditColumn === null) {
-          throw new Error('Both debit and credit columns must be mapped for separate_debit_credit convention');
+          console.warn(`Row ${i}: both debit and credit columns must be mapped for separate_debit_credit convention`);
+          continue;
         }
 
         const debitValue = parseAmount(row[mapping.debitColumn] || '0');
@@ -320,25 +321,52 @@ export async function parseCSVWithMapping(
 
         // Get amount from amountColumn
         if (mapping.amountColumn === null) {
-          throw new Error('Amount column must be mapped');
+          console.warn(`Row ${i}: amount column must be mapped for separate_column convention`);
+          continue;
         }
         amount = parseAmount(row[mapping.amountColumn]);
 
         transaction_type = determineTransactionTypeFromColumn(transactionTypeValue, amount);
         amount = Math.abs(amount); // Normalize to positive
       } else {
-        // Use amount column with sign convention
-        if (mapping.amountColumn === null) {
+        // Use amount column with sign convention, with debit/credit fallback
+        if (mapping.amountColumn !== null) {
+          amount = parseAmount(row[mapping.amountColumn]);
+
+          if (convention === 'positive_is_expense') {
+            transaction_type = amount >= 0 ? 'expense' : 'income';
+          } else { // positive_is_income
+            transaction_type = amount >= 0 ? 'income' : 'expense';
+          }
+          amount = Math.abs(amount); // Normalize to positive
+        } else if (mapping.debitColumn !== null && mapping.creditColumn !== null) {
+          const debit = parseAmount(row[mapping.debitColumn] || '0');
+          const credit = parseAmount(row[mapping.creditColumn] || '0');
+
+          if (debit > 0 && credit > 0) {
+            console.warn(`Row ${i} has both debit and credit values, using debit. Row: ${row.join(',')}`);
+            amount = debit;
+            transaction_type = 'expense';
+          } else if (debit > 0) {
+            amount = debit;
+            transaction_type = 'expense';
+          } else if (credit > 0) {
+            amount = credit;
+            transaction_type = 'income';
+          } else {
+            continue;
+          }
+        } else if (mapping.debitColumn !== null) {
+          amount = parseAmount(row[mapping.debitColumn]);
+          transaction_type = 'expense';
+          amount = Math.abs(amount);
+        } else if (mapping.creditColumn !== null) {
+          amount = parseAmount(row[mapping.creditColumn]);
+          transaction_type = 'income';
+          amount = Math.abs(amount);
+        } else {
           throw new Error('Amount column must be mapped');
         }
-        amount = parseAmount(row[mapping.amountColumn]);
-
-        if (convention === 'positive_is_expense') {
-          transaction_type = amount >= 0 ? 'expense' : 'income';
-        } else { // positive_is_income
-          transaction_type = amount >= 0 ? 'income' : 'expense';
-        }
-        amount = Math.abs(amount); // Normalize to positive
       }
 
       // Filter out pending/declined transactions using dedicated status column only
