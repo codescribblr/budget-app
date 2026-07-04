@@ -6,6 +6,7 @@
 import type { ParsedTransaction } from './import-types';
 import type { ProcessingTasksStatus, ProcessingTask } from './processing-tasks';
 import type { ColumnMapping } from './mapping-templates';
+import { fuzzyMatchHeader } from './fuzzy-matching';
 import { parseDate, normalizeDate } from './date-parser';
 import { format } from 'date-fns';
 import { parseLocalDate, formatLocalDate } from './date-utils';
@@ -30,21 +31,22 @@ export function extractMerchant(description: string): string {
 }
 
 /**
- * Check if a transaction is pending based on status column value
- * Returns true if the transaction should be filtered out (is pending)
- * Returns false if the transaction should be included (is cleared/posted)
- * Returns null if status cannot be determined (keep transaction to be safe)
+ * Check if a transaction should be excluded based on a dedicated status column value.
+ * Only evaluates the status column — never merchant/description text.
+ *
+ * Returns true if the transaction should be filtered out (pending/declined/etc).
+ * Returns false if it should be included (posted/cleared/etc).
+ * Returns null if status cannot be determined (keep transaction to be safe).
  */
-export function isPendingTransaction(statusValue: string | null | undefined): boolean | null {
+export function shouldExcludeTransactionByStatus(statusValue: string | null | undefined): boolean | null {
   if (!statusValue) {
-    // No status value - can't determine, so keep the transaction (be safe)
     return null;
   }
-  
+
   const normalizedStatus = statusValue.trim().toLowerCase();
-  
-  // Common pending status values
-  const pendingStatuses = [
+
+  const excludedStatuses = [
+    // Pending / not yet settled
     'pending',
     'processing',
     'authorized',
@@ -52,10 +54,20 @@ export function isPendingTransaction(statusValue: string | null | undefined): bo
     'on hold',
     'temporary',
     'temp',
+    // Declined / did not complete
+    'declined',
+    'denied',
+    'rejected',
+    'failed',
+    'void',
+    'voided',
+    'cancelled',
+    'canceled',
+    'not approved',
+    'unsuccessful',
   ];
-  
-  // Common cleared/posted status values
-  const clearedStatuses = [
+
+  const includedStatuses = [
     'posted',
     'cleared',
     'completed',
@@ -66,19 +78,124 @@ export function isPendingTransaction(statusValue: string | null | undefined): bo
     'confirmed',
     'approved',
   ];
-  
-  // Check if it's clearly pending
-  if (pendingStatuses.includes(normalizedStatus)) {
-    return true; // Filter out - it's pending
+
+  if (excludedStatuses.includes(normalizedStatus)) {
+    return true;
   }
-  
-  // Check if it's clearly cleared
-  if (clearedStatuses.includes(normalizedStatus)) {
-    return false; // Keep - it's cleared
+
+  if (includedStatuses.includes(normalizedStatus)) {
+    return false;
   }
-  
-  // If we can't determine, keep the transaction (be safe)
+
   return null;
+}
+
+/**
+ * @deprecated Use shouldExcludeTransactionByStatus
+ */
+export function isPendingTransaction(statusValue: string | null | undefined): boolean | null {
+  return shouldExcludeTransactionByStatus(statusValue);
+}
+
+const KNOWN_STATUS_VALUES = new Set([
+  'pending',
+  'processing',
+  'authorized',
+  'hold',
+  'on hold',
+  'temporary',
+  'temp',
+  'declined',
+  'denied',
+  'rejected',
+  'failed',
+  'void',
+  'voided',
+  'cancelled',
+  'canceled',
+  'not approved',
+  'unsuccessful',
+  'posted',
+  'cleared',
+  'completed',
+  'complete',
+  'settled',
+  'settlement',
+  'final',
+  'confirmed',
+  'approved',
+]);
+
+/**
+ * Detect a dedicated status column from CSV headers and sample row values.
+ * Returns null when no status-like column is found.
+ */
+export function detectStatusColumnIndex(
+  data: string[][],
+  hasHeaders: boolean,
+  excludeColumns: Set<number> = new Set()
+): number | null {
+  if (data.length === 0) return null;
+
+  const headers = hasHeaders ? data[0] : data[0].map((_, i) => `Column ${i + 1}`);
+  const startRow = hasHeaders ? 1 : 0;
+  const sampleSize = Math.min(30, data.length - startRow);
+
+  let bestMatch: { columnIndex: number; score: number } | null = null;
+
+  for (let columnIndex = 0; columnIndex < headers.length; columnIndex++) {
+    if (excludeColumns.has(columnIndex)) continue;
+
+    const header = headers[columnIndex] || '';
+    const headerScore = fuzzyMatchHeader(header, 'status');
+
+    let matchCount = 0;
+    let validValues = 0;
+
+    for (let i = startRow; i < startRow + sampleSize && i < data.length; i++) {
+      const row = data[i];
+      if (!row || row.length <= columnIndex) continue;
+
+      const value = row[columnIndex]?.trim();
+      if (!value) continue;
+
+      validValues++;
+      if (KNOWN_STATUS_VALUES.has(value.toLowerCase())) {
+        matchCount++;
+      }
+    }
+
+    const contentScore = validValues >= 3 ? matchCount / validValues : 0;
+    const combinedScore = Math.max(headerScore, headerScore * 0.6 + contentScore * 0.4);
+
+    if (headerScore >= 0.85 || (headerScore >= 0.5 && contentScore >= 0.5) || contentScore >= 0.7) {
+      const score = headerScore >= 0.85 ? headerScore : Math.max(combinedScore, contentScore);
+      if (!bestMatch || score > bestMatch.score) {
+        bestMatch = { columnIndex, score };
+      }
+    }
+  }
+
+  return bestMatch && bestMatch.score >= 0.5 ? bestMatch.columnIndex : null;
+}
+
+function resolveStatusColumnIndex(
+  data: string[][],
+  mapping: ColumnMapping
+): number | null {
+  if (mapping.statusColumn !== null && mapping.statusColumn !== undefined) {
+    return mapping.statusColumn;
+  }
+
+  const excludeColumns = new Set<number>();
+  if (mapping.dateColumn !== null) excludeColumns.add(mapping.dateColumn);
+  if (mapping.amountColumn !== null) excludeColumns.add(mapping.amountColumn);
+  if (mapping.descriptionColumn !== null) excludeColumns.add(mapping.descriptionColumn);
+  if (mapping.debitColumn !== null) excludeColumns.add(mapping.debitColumn);
+  if (mapping.creditColumn !== null) excludeColumns.add(mapping.creditColumn);
+  if (mapping.transactionTypeColumn !== null) excludeColumns.add(mapping.transactionTypeColumn);
+
+  return detectStatusColumnIndex(data, mapping.hasHeaders, excludeColumns);
 }
 
 /**
@@ -224,18 +341,16 @@ export async function parseCSVWithMapping(
         amount = Math.abs(amount); // Normalize to positive
       }
 
-      // Check status column if mapped - filter out pending transactions
-      if (mapping.statusColumn !== null && mapping.statusColumn !== undefined) {
-        const statusValue = row[mapping.statusColumn]?.trim() || null;
-        const isPending = isPendingTransaction(statusValue);
-        
-        // If we can reliably determine it's pending, skip this transaction
-        if (isPending === true) {
-          console.log(`Skipping pending transaction (row ${i}): ${descriptionValue || 'unknown'} - status: ${statusValue}`);
+      // Filter out pending/declined transactions using dedicated status column only
+      const statusColumnIndex = resolveStatusColumnIndex(data, mapping);
+      if (statusColumnIndex !== null) {
+        const statusValue = row[statusColumnIndex]?.trim() || null;
+        const shouldExclude = shouldExcludeTransactionByStatus(statusValue);
+
+        if (shouldExclude === true) {
+          console.log(`Skipping non-posted transaction (row ${i}): ${descriptionValue || 'unknown'} - status: ${statusValue}`);
           continue;
         }
-        // If isPending is null, we can't determine status, so keep it (be safe)
-        // If isPending is false, it's cleared, so keep it
       }
 
       // Validate required fields

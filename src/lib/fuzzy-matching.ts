@@ -76,6 +76,14 @@ export const FIELD_SYNONYMS = {
     'saldo',
     'guthaben',
   ],
+  status: [
+    'status',
+    'transaction status',
+    'txn status',
+    'trans status',
+    'posting status',
+    'state',
+  ],
 };
 
 export type FieldType = keyof typeof FIELD_SYNONYMS;

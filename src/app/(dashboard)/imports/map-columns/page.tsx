@@ -29,7 +29,7 @@ import type { CSVAnalysisResult, ColumnAnalysis } from '@/lib/column-analyzer';
 import type { ColumnMapping } from '@/lib/mapping-templates';
 import { CheckCircle2, AlertCircle, XCircle, ArrowLeft, Info } from 'lucide-react';
 import { saveTemplate } from '@/lib/mapping-templates';
-import { parseCSVWithMapping, processTransactions } from '@/lib/csv-parser-helpers';
+import { parseCSVWithMapping, processTransactions, detectStatusColumnIndex, shouldExcludeTransactionByStatus } from '@/lib/csv-parser-helpers';
 import type { ParsedTransaction } from '@/lib/import-types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { toast } from 'sonner';
@@ -329,7 +329,23 @@ export default function MapColumnsPage() {
           if (currentMapping.creditColumn !== null) initialMappings[currentMapping.creditColumn] = 'credit';
           setAmountSignConvention(currentMapping.amountSignConvention);
           setTransactionTypeColumn(currentMapping.transactionTypeColumn);
-          setStatusColumn(currentMapping.statusColumn);
+          if (currentMapping.statusColumn !== null) {
+            setStatusColumn(currentMapping.statusColumn);
+            initialMappings[currentMapping.statusColumn] = 'status';
+          } else {
+            const mappedColumns = new Set(
+              Object.keys(initialMappings).map((key) => parseInt(key, 10))
+            );
+            const detectedStatusColumn = detectStatusColumnIndex(
+              csvData,
+              analysisData.hasHeaders,
+              mappedColumns
+            );
+            if (detectedStatusColumn !== null) {
+              setStatusColumn(detectedStatusColumn);
+              initialMappings[detectedStatusColumn] = 'status';
+            }
+          }
         } else {
           // Initialize from analysis - only use the best match for each field type
           // The analysis already finds the highest confidence column for each type
@@ -414,6 +430,16 @@ export default function MapColumnsPage() {
           if (detectedTransactionTypeColumn !== null) {
             setTransactionTypeColumn(detectedTransactionTypeColumn);
           }
+
+          const detectedStatusColumn = detectStatusColumnIndex(
+            csvData,
+            analysisData.hasHeaders,
+            mappedColumns
+          );
+          if (detectedStatusColumn !== null) {
+            setStatusColumn(detectedStatusColumn);
+            initialMappings[detectedStatusColumn] = 'status';
+          }
         }
 
         setMappings(initialMappings);
@@ -443,8 +469,14 @@ export default function MapColumnsPage() {
 
       if (fieldType === 'ignore') {
         delete newMappings[columnIndex];
+        if (statusColumn === columnIndex) {
+          setStatusColumn(null);
+        }
       } else {
         newMappings[columnIndex] = fieldType;
+        if (fieldType === 'status') {
+          setStatusColumn(columnIndex);
+        }
       }
 
       return newMappings;
@@ -469,7 +501,7 @@ export default function MapColumnsPage() {
       debitColumn: findColumnForField('debit'),
       creditColumn: findColumnForField('credit'),
       transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
-      statusColumn: statusColumn,
+      statusColumn: statusColumn ?? findColumnForField('status'),
       amountSignConvention,
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
@@ -797,7 +829,7 @@ export default function MapColumnsPage() {
       debitColumn: findColumnForField('debit'),
       creditColumn: findColumnForField('credit'),
       transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
-      statusColumn: statusColumn,
+      statusColumn: statusColumn ?? findColumnForField('status'),
       amountSignConvention,
       dateFormat: analysis.dateFormat,
       hasHeaders: analysis.hasHeaders,
@@ -869,6 +901,21 @@ export default function MapColumnsPage() {
           amountDisplay = amountValue;
         } else {
           amountDisplay = 'No amount';
+        }
+      }
+
+      const effectiveStatusColumn = mapping.statusColumn;
+      if (effectiveStatusColumn !== null) {
+        const statusValue = dataRow[effectiveStatusColumn]?.trim() || null;
+        if (shouldExcludeTransactionByStatus(statusValue) === true) {
+          return {
+            date: dateValue || 'Not mapped',
+            description: descriptionValue || 'Not mapped',
+            amount: amountDisplay,
+            amountValue: amount,
+            transactionType,
+            isValid: false,
+          };
         }
       }
 
@@ -1106,7 +1153,7 @@ export default function MapColumnsPage() {
             <CardHeader>
               <CardTitle className="text-lg">Status Column (Optional)</CardTitle>
               <CardDescription>
-                Map a column containing transaction status (e.g., "pending", "cleared", "posted") to automatically filter out pending transactions
+                Map the column that contains transaction status (e.g. &quot;Posted&quot;, &quot;Declined&quot;, &quot;Pending&quot;). Declined and pending rows are excluded from import.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1129,8 +1176,8 @@ export default function MapColumnsPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground mt-1">
-                  If mapped, transactions with status "pending", "processing", "authorized", etc. will be automatically excluded from the import.
-                  Transactions with status "posted", "cleared", "completed", etc. will be included.
+                  If mapped, transactions with status &quot;Declined&quot;, &quot;Pending&quot;, &quot;Processing&quot;, etc. are excluded.
+                  Only completed transactions like &quot;Posted&quot; or &quot;Cleared&quot; are imported. Merchant/description text is never used for this filter.
                 </p>
               </div>
             </CardContent>
