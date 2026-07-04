@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { fetchBudgetAccounts } from '@/lib/budget-accounts-cache';
 
 interface Account {
   accountId: number;
@@ -34,14 +35,11 @@ export function BudgetAccountsProvider({ children }: { children: React.ReactNode
     fetchingRef.current = true;
 
     try {
-      const response = await fetch('/api/budget-accounts');
-      if (response.ok) {
-        const data = await response.json();
-        const accountsList = data.accounts || [];
-        setAccounts(accountsList);
-        setActiveAccountId(data.activeAccountId);
-        setHasOwnAccount(data.hasOwnAccount || false);
-      }
+      const data = await fetchBudgetAccounts();
+      const accountsList = data.accounts || [];
+      setAccounts(accountsList);
+      setActiveAccountId(data.activeAccountId);
+      setHasOwnAccount(data.hasOwnAccount || false);
     } catch (error) {
       console.error('Error loading budget accounts:', error);
     } finally {

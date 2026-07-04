@@ -74,112 +74,237 @@ export const getActiveAccountId = cache(async (): Promise<number | null> => {
   // Priority: owned accounts first, then shared accounts (collaborator accounts)
   // This ensures collaborators without their own account get their shared account activated
   
-  // First check if user owns any accounts
+  // First check if user owns any accounts (prefer oldest / primary account)
   const { data: ownedAccounts } = await supabase
     .from('budget_accounts')
     .select('id')
     .eq('owner_id', user.id)
     .is('deleted_at', null)
+    .order('id', { ascending: true })
     .limit(1);
-  
+
   if (ownedAccounts && ownedAccounts.length > 0) {
     return ownedAccounts[0].id;
   }
-  
+
   // If no owned accounts, check shared accounts (user is a collaborator)
-  // This handles the case where a user was invited and doesn't have their own account yet
   const { data: accountUsers } = await supabase
     .from('account_users')
     .select('account_id, role')
     .eq('user_id', user.id)
     .eq('status', 'active')
-    .order('role', { ascending: true }) // owners first (though owners shouldn't be here)
+    .order('account_id', { ascending: true })
     .limit(1);
-  
+
   if (accountUsers && accountUsers.length > 0) {
     return accountUsers[0].account_id;
   }
-  
-  // No accounts found - create one as a fallback
-  // This handles edge cases where account creation failed during signup
-  // First check if user has pending invitations - if so, don't create an account
-  try {
-    const { data: pendingInvitations } = await supabase
-      .from('account_invitations')
-      .select('id')
-      .eq('email', user.email?.toLowerCase() || '')
-      .is('accepted_at', null)
-      .limit(1);
-    
-    // If user has pending invitations, don't create an account
-    // They should accept the invitation first
-    if (pendingInvitations && pendingInvitations.length > 0) {
-      return null;
-    }
-    
-    // No pending invitations and no accounts - create one automatically
-    // Use service role client to bypass RLS policies
-    const adminSupabase = createServiceRoleClient();
-    const accountName = user.email?.split('@')[0] || 'My Budget';
-    const { data: newAccount, error: accountError } = await adminSupabase
-      .from('budget_accounts')
-      .insert({
-        owner_id: user.id,
-        name: accountName,
-      })
-      .select('id')
-      .single();
-    
-    if (accountError) {
-      console.error('Error creating fallback account:', accountError);
-      return null;
-    }
-    
-    if (!newAccount) {
-      console.error('Failed to create fallback account: No account returned');
-      return null;
-    }
-    
-    // Add user as owner in account_users
-    const { error: userError } = await adminSupabase
-      .from('account_users')
-      .insert({
-        account_id: newAccount.id,
-        user_id: user.id,
-        role: 'owner',
-        status: 'active',
-        accepted_at: new Date().toISOString(),
-      });
-    
-    if (userError) {
-      console.error('Error adding user to account_users:', userError);
-      // Account was created but user entry failed - still return the account ID
-      // The user entry can be fixed later if needed
-    }
-    
-    // Set the newly created account as the active account in cookie
-    try {
-      const cookieStore = await cookies();
-      cookieStore.set(ACTIVE_ACCOUNT_COOKIE, newAccount.id.toString(), {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 365, // 1 year
-      });
-    } catch (cookieError) {
-      // Cookie setting failed, but account was created - continue
-      console.error('Failed to set active account cookie:', cookieError);
-    }
-    
-    return newAccount.id;
-  } catch (error) {
-    // If account creation fails, log error and return null
-    console.error('Error creating fallback account:', error);
-  }
-  
-  // If all else fails, return null
+
+  // No accounts accessible — do not auto-create here. Account provisioning is handled
+  // explicitly during signup (auth callback) or via POST /api/budget-accounts.
   return null;
 });
+
+/**
+ * Provision a default budget account for new users who have none.
+ * Uses service role for reliable checks and must only be called from explicit
+ * provisioning flows (signup/auth callback), NOT from read-only GET handlers.
+ */
+export async function provisionDefaultBudgetAccountIfNeeded(): Promise<number | null> {
+  const { user } = await getAuthenticatedUser();
+  const adminSupabase = createServiceRoleClient();
+
+  const { data: pendingInvitations } = await adminSupabase
+    .from('account_invitations')
+    .select('id')
+    .eq('email', user.email?.toLowerCase() || '')
+    .is('accepted_at', null)
+    .limit(1);
+
+  if (pendingInvitations && pendingInvitations.length > 0) {
+    return null;
+  }
+
+  const findExistingOwnedAccount = async () => {
+    const { data } = await adminSupabase
+      .from('budget_accounts')
+      .select('id')
+      .eq('owner_id', user.id)
+      .is('deleted_at', null)
+      .order('id', { ascending: true })
+      .limit(1);
+    return data?.[0]?.id ?? null;
+  };
+
+  const existingOwnedId = await findExistingOwnedAccount();
+  if (existingOwnedId) {
+    await setActiveAccountIdCookie(existingOwnedId);
+    return existingOwnedId;
+  }
+
+  const { data: sharedAccounts } = await adminSupabase
+    .from('account_users')
+    .select('account_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .order('account_id', { ascending: true })
+    .limit(1);
+
+  if (sharedAccounts && sharedAccounts.length > 0) {
+    await setActiveAccountIdCookie(sharedAccounts[0].account_id);
+    return sharedAccounts[0].account_id;
+  }
+
+  const accountName = user.email?.split('@')[0] || 'My Budget';
+  const { data: newAccount, error: accountError } = await adminSupabase
+    .from('budget_accounts')
+    .insert({
+      owner_id: user.id,
+      name: accountName,
+    })
+    .select('id')
+    .single();
+
+  if (accountError) {
+    // Another concurrent request may have created the account — re-check
+    const racedId = await findExistingOwnedAccount();
+    if (racedId) {
+      await setActiveAccountIdCookie(racedId);
+      return racedId;
+    }
+    console.error('Error provisioning default budget account:', accountError);
+    return null;
+  }
+
+  if (!newAccount) {
+    return null;
+  }
+
+  await adminSupabase
+    .from('account_users')
+    .insert({
+      account_id: newAccount.id,
+      user_id: user.id,
+      role: 'owner',
+      status: 'active',
+      accepted_at: new Date().toISOString(),
+    });
+
+  await setActiveAccountIdCookie(newAccount.id);
+  return newAccount.id;
+}
+
+/**
+ * Resolve the best active account id for the current user without side effects.
+ * Prefers the oldest owned account when no valid cookie is set.
+ */
+export async function resolveActiveAccountId(
+  accounts: AccountMembership[]
+): Promise<number | null> {
+  const fromCookie = await getActiveAccountId();
+  if (fromCookie) {
+    return fromCookie;
+  }
+
+  if (accounts.length === 0) {
+    return null;
+  }
+
+  const ownedAccounts = accounts.filter((a) => a.isOwner);
+  if (ownedAccounts.length > 0) {
+    return ownedAccounts.reduce((oldest, account) =>
+      account.accountId < oldest.accountId ? account : oldest
+    ).accountId;
+  }
+
+  return accounts[0].accountId;
+}
+
+interface CleanupDuplicateAccountsResult {
+  cleaned: boolean;
+  keptAccountId: number | null;
+  deletedAccountIds: number[];
+}
+
+/**
+ * Remove duplicate empty owned budget accounts, keeping the one with the most data.
+ * Safe to call repeatedly — only deletes owned accounts with zero transactions.
+ */
+export async function cleanupDuplicateEmptyAccounts(): Promise<CleanupDuplicateAccountsResult> {
+  const { user } = await getAuthenticatedUser();
+  const admin = createServiceRoleClient();
+
+  const { data: ownedAccounts, error: ownedError } = await admin
+    .from('budget_accounts')
+    .select('id, name, created_at')
+    .eq('owner_id', user.id)
+    .is('deleted_at', null)
+    .order('id', { ascending: true });
+
+  if (ownedError) throw ownedError;
+
+  const accounts = ownedAccounts || [];
+  if (accounts.length <= 1) {
+    return { cleaned: false, keptAccountId: accounts[0]?.id ?? null, deletedAccountIds: [] };
+  }
+
+  const transactionCounts = await Promise.all(
+    accounts.map(async (account) => {
+      const { count } = await admin
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('budget_account_id', account.id);
+      return { accountId: account.id, count: count || 0 };
+    })
+  );
+
+  const countById = new Map(transactionCounts.map((row) => [row.accountId, row.count]));
+
+  const accountToKeep = accounts.reduce((best, account) => {
+    const bestCount = countById.get(best.id) || 0;
+    const accountCount = countById.get(account.id) || 0;
+    if (accountCount > bestCount) return account;
+    if (accountCount < bestCount) return best;
+    return account.id < best.id ? account : best;
+  });
+
+  const accountsToDelete = accounts.filter((account) => {
+    if (account.id === accountToKeep.id) return false;
+    return (countById.get(account.id) || 0) === 0;
+  });
+
+  if (accountsToDelete.length === 0) {
+    await setActiveAccountIdCookie(accountToKeep.id);
+    return { cleaned: false, keptAccountId: accountToKeep.id, deletedAccountIds: [] };
+  }
+
+  const deletedIds: number[] = [];
+  const now = new Date().toISOString();
+
+  for (const account of accountsToDelete) {
+    const { error: deleteError } = await admin
+      .from('budget_accounts')
+      .update({ deleted_at: now })
+      .eq('id', account.id)
+      .eq('owner_id', user.id);
+
+    if (deleteError) {
+      console.error(`Failed to delete duplicate account ${account.id}:`, deleteError);
+      continue;
+    }
+
+    await admin.from('account_users').delete().eq('account_id', account.id);
+    deletedIds.push(account.id);
+  }
+
+  await setActiveAccountIdCookie(accountToKeep.id);
+
+  return {
+    cleaned: deletedIds.length > 0,
+    keptAccountId: accountToKeep.id,
+    deletedAccountIds: deletedIds,
+  };
+}
 
 /**
  * Set the active account ID (stores in cookie)
