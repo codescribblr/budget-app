@@ -9,6 +9,10 @@ import type { ParsedTransaction } from '../import-types';
 import { generateTransactionHash } from '../csv-parser';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ProcessingTasksStatus } from '../processing-tasks';
+import {
+  descriptionsMatchForDuplicate,
+  getMerchantNameFromTransactionRow,
+} from '../duplicate-matching';
 
 /**
  * Get or create a single shared manual import setup for the current account
@@ -285,6 +289,7 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     date: t.date,
     amount: Math.abs(t.amount),
     description: t.description,
+    merchant: t.merchant,
   }));
 
   // Check transactions table for existing transactions
@@ -305,21 +310,38 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     
     const { data: existingTxns } = await supabase
       .from('transactions')
-      .select('date, description, total_amount')
+      .select(`
+        date,
+        description,
+        total_amount,
+        merchant_groups (
+          display_name,
+          global_merchants (
+            display_name
+          )
+        ),
+        merchant_override:global_merchants!merchant_override_id (
+          display_name
+        )
+      `)
       .eq('budget_account_id', accountId)
       .eq('date', date)
       .eq('total_amount', amount);
 
     if (existingTxns && existingTxns.length > 0) {
-      // Check if descriptions match (fuzzy match)
       txns.forEach(txn => {
-        const matches = existingTxns.some(existing => {
-          const existingDesc = existing.description.toLowerCase().trim();
-          const txnDesc = txn.description.toLowerCase().trim();
-          return existingDesc === txnDesc || 
-                 existingDesc.includes(txnDesc) || 
-                 txnDesc.includes(existingDesc);
-        });
+        const matches = existingTxns.some(existing =>
+          descriptionsMatchForDuplicate(
+            {
+              description: existing.description,
+              merchantName: getMerchantNameFromTransactionRow(existing),
+            },
+            {
+              description: txn.description,
+              merchant: txn.merchant,
+            }
+          )
+        );
         if (matches) {
           existingInTransactions.add(txn.hash);
         }

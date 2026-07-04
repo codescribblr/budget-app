@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
-import { distance } from 'fastest-levenshtein';
+import {
+  descriptionsMatchForDuplicate,
+  getMerchantNameFromTransactionRow,
+  normalizeAmountKey,
+  normalizeComparableDescription,
+  parseDateAmountDescriptionKey,
+} from '@/lib/duplicate-matching';
 
 interface TransactionData {
   hash: string;
   date: string;
   description: string;
   amount: number;
+  merchant?: string | null;
 }
 
 interface ExistingTransaction {
@@ -15,6 +22,28 @@ interface ExistingTransaction {
   date: string;
   description: string;
   total_amount: number;
+  merchantName: string | null;
+}
+
+function normalizeDateForComparison(date: string): string {
+  const trimmed = date.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  try {
+    const dateObj = new Date(trimmed);
+    if (!isNaN(dateObj.getTime())) {
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch {
+    // Fallback
+  }
+
+  return trimmed;
 }
 
 export async function POST(request: Request) {
@@ -27,7 +56,7 @@ export async function POST(request: Request) {
 
     const { supabase, user } = await getAuthenticatedUser();
     const accountId = await getActiveAccountId();
-    
+
     if (!accountId) {
       return NextResponse.json({ error: 'No active account' }, { status: 400 });
     }
@@ -38,7 +67,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ duplicates: [] });
     }
 
-    // Fetch all existing transactions in the import date range once (avoids N+1 queries)
     const existingTransactions = await fetchExistingTransactionsInRange(
       supabase,
       accountId,
@@ -46,10 +74,9 @@ export async function POST(request: Request) {
     );
     const dateAmountIndex = buildDateAmountIndex(existingTransactions);
 
-    // Method 1: Check by hash against imported_transactions, verify against pre-fetched transactions
     if (hashes && Array.isArray(hashes) && hashes.length > 0) {
       const hashToTransaction = new Map<string, TransactionData>();
-      transactions.forEach(txn => {
+      transactions.forEach((txn) => {
         hashToTransaction.set(txn.hash, txn);
       });
 
@@ -63,19 +90,27 @@ export async function POST(request: Request) {
       if (importedError) throw importedError;
 
       if (importedHashes && importedHashes.length > 0) {
-        const uniqueHashes = new Set(importedHashes.map(h => h.hash));
+        const uniqueHashes = new Set(importedHashes.map((h) => h.hash));
 
         for (const hash of uniqueHashes) {
           const txn = hashToTransaction.get(hash);
           if (!txn) continue;
 
           const normalizedDate = normalizeDateForComparison(txn.date);
-          const normalizedAmount = Math.abs(txn.amount);
-          const normalizedDesc = normalizeDescriptionForComparison(txn.description);
+          const normalizedAmount = normalizeAmountKey(txn.amount);
           const candidates = dateAmountIndex.get(`${normalizedDate}|${normalizedAmount}`) || [];
 
-          const matching = candidates.some(existingTxn =>
-            descriptionsMatchSimple(existingTxn.description, normalizedDesc)
+          const matching = candidates.some((existingTxn) =>
+            descriptionsMatchForDuplicate(
+              {
+                description: existingTxn.description,
+                merchantName: existingTxn.merchantName,
+              },
+              {
+                description: txn.description,
+                merchant: txn.merchant,
+              }
+            )
           );
 
           if (matching) {
@@ -85,13 +120,12 @@ export async function POST(request: Request) {
       }
     }
 
-    // Method 2: Fallback - Check by date + description + amount using pre-fetched transactions
     const checkKeys = new Map<string, TransactionData[]>();
 
-    transactions.forEach(txn => {
+    transactions.forEach((txn) => {
       const normalizedDate = normalizeDateForComparison(txn.date);
-      const normalizedDesc = normalizeDescriptionForComparison(txn.description);
-      const normalizedAmount = Math.abs(txn.amount);
+      const normalizedDesc = normalizeComparableDescription(txn.description);
+      const normalizedAmount = normalizeAmountKey(txn.amount);
       const key = `${normalizedDate}|${normalizedDesc}|${normalizedAmount}`;
 
       if (!checkKeys.has(key)) {
@@ -101,28 +135,35 @@ export async function POST(request: Request) {
     });
 
     for (const [key, txns] of checkKeys.entries()) {
-      const [date, description, amountStr] = key.split('|');
-      const amount = parseFloat(amountStr);
-      const candidates = dateAmountIndex.get(`${date}|${amount}`) || [];
+      const { date, description, amount } = parseDateAmountDescriptionKey(key);
+      const amountKey = normalizeAmountKey(amount);
+      const candidates = dateAmountIndex.get(`${date}|${amountKey}`) || [];
 
       if (candidates.length === 0) continue;
 
-      const matching = candidates.filter(existingTxn =>
-        descriptionsMatchFull(existingTxn.description, description)
+      const matching = candidates.filter((existingTxn) =>
+        descriptionsMatchForDuplicate(
+          {
+            description: existingTxn.description,
+            merchantName: existingTxn.merchantName,
+          },
+          {
+            description,
+            merchant: txns[0]?.merchant,
+          }
+        )
       );
 
       if (matching.length > 0) {
-        txns.forEach(txn => duplicateHashes.add(txn.hash));
+        txns.forEach((txn) => duplicateHashes.add(txn.hash));
       }
     }
 
-    // Mark duplicate_detection task as complete if batchId provided
     if (batchId) {
       try {
         const { markTaskCompleteForBatchServer } = await import('@/lib/processing-tasks-server');
         await markTaskCompleteForBatchServer(batchId, 'duplicate_detection');
       } catch (error) {
-        // Log but don't fail - task tracking is not critical
         console.warn('Failed to mark duplicate_detection complete:', error);
       }
     }
@@ -145,19 +186,40 @@ async function fetchExistingTransactionsInRange(
   accountId: number,
   transactions: TransactionData[]
 ): Promise<ExistingTransaction[]> {
-  const normalizedDates = transactions.map(t => normalizeDateForComparison(t.date));
+  const normalizedDates = transactions.map((t) => normalizeDateForComparison(t.date));
   const minDate = normalizedDates.reduce((a, b) => (a < b ? a : b));
   const maxDate = normalizedDates.reduce((a, b) => (a > b ? a : b));
 
   const { data, error } = await supabase
     .from('transactions')
-    .select('id, date, description, total_amount')
+    .select(`
+      id,
+      date,
+      description,
+      total_amount,
+      merchant_groups (
+        display_name,
+        global_merchants (
+          display_name
+        )
+      ),
+      merchant_override:global_merchants!merchant_override_id (
+        display_name
+      )
+    `)
     .eq('budget_account_id', accountId)
     .gte('date', minDate)
     .lte('date', maxDate);
 
   if (error) throw error;
-  return data || [];
+
+  return (data || []).map((transaction) => ({
+    id: transaction.id,
+    date: transaction.date,
+    description: transaction.description,
+    total_amount: transaction.total_amount,
+    merchantName: getMerchantNameFromTransactionRow(transaction),
+  }));
 }
 
 function buildDateAmountIndex(
@@ -165,132 +227,10 @@ function buildDateAmountIndex(
 ): Map<string, ExistingTransaction[]> {
   const index = new Map<string, ExistingTransaction[]>();
   for (const tx of existingTransactions) {
-    const key = `${tx.date}|${Math.abs(tx.total_amount)}`;
+    const key = `${tx.date}|${normalizeAmountKey(tx.total_amount)}`;
     const list = index.get(key) || [];
     list.push(tx);
     index.set(key, list);
   }
   return index;
 }
-
-function descriptionsMatchSimple(existingDescription: string, normalizedDesc: string): boolean {
-  const existingLower = normalizeDescriptionForComparison(existingDescription).toLowerCase();
-  const normalizedLower = normalizedDesc.toLowerCase();
-  return existingLower === normalizedLower ||
-    existingLower.includes(normalizedLower) ||
-    normalizedLower.includes(existingLower);
-}
-
-function descriptionsMatchFull(existingDescription: string, description: string): boolean {
-  const existingDesc = normalizeDescriptionForComparison(existingDescription);
-  const normalizedDesc = normalizeDescriptionForComparison(description);
-  const existingLower = existingDesc.toLowerCase();
-  const normalizedLower = normalizedDesc.toLowerCase();
-
-  if (existingLower === normalizedLower) {
-    return true;
-  }
-
-  const longerDesc = existingLower.length >= normalizedLower.length ? existingLower : normalizedLower;
-  const shorterDesc = existingLower.length < normalizedLower.length ? existingLower : normalizedLower;
-
-  if (longerDesc.includes(shorterDesc) && shorterDesc.length >= 10) {
-    return true;
-  }
-
-  const existingCore = extractCoreDescription(existingDesc);
-  const normalizedCore = extractCoreDescription(normalizedDesc);
-  if (existingCore && normalizedCore && existingCore === normalizedCore) {
-    return true;
-  }
-
-  const descDistance = distance(existingLower, normalizedLower);
-  const maxLength = Math.max(existingDesc.length, normalizedDesc.length);
-  return maxLength > 0 && (1 - descDistance / maxLength) > 0.75;
-}
-
-/**
- * Normalize date for comparison (YYYY-MM-DD format)
- */
-function normalizeDateForComparison(date: string): string {
-  const trimmed = date.trim();
-  // If already in YYYY-MM-DD format, return as-is
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return trimmed;
-  }
-  // Try to parse and normalize
-  try {
-    const dateObj = new Date(trimmed);
-    if (!isNaN(dateObj.getTime())) {
-      const year = dateObj.getFullYear();
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-  } catch {
-    // Fallback
-  }
-  return trimmed;
-}
-
-/**
- * Normalize description for comparison (trim and normalize whitespace)
- */
-function normalizeDescriptionForComparison(description: string): string {
-  return description.trim().replace(/\s+/g, ' ');
-}
-
-/**
- * Extract core description for comparison
- * Removes common suffixes like domain names (.COM, .NET, etc.) and extracts merchant + transaction ID
- * Example: "UNITED 0162353356601 UNITED.COM" -> "united 0162353356601"
- */
-function extractCoreDescription(description: string): string | null {
-  let normalized = description.trim();
-  
-  // Remove domain suffixes - handle both " WORD.COM" and "WORD.COM" patterns
-  // This catches cases like "UNITED 0162353356601 UNITED.COM"
-  normalized = normalized.replace(/\s+[A-Z0-9]+\.(COM|NET|ORG|EDU|GOV|IO|CO|US|UK|CA|AU)\b/gi, '');
-  
-  // Also remove standalone domain suffixes (in case they appear separately)
-  normalized = normalized.replace(/\s+\.(COM|NET|ORG|EDU|GOV|IO|CO|US|UK|CA|AU)\b/gi, '');
-  
-  // Remove duplicate words/phrases that might result from domain removal
-  // Split into words and remove duplicates while preserving order
-  const words = normalized.split(/\s+/);
-  const seen = new Set<string>();
-  const uniqueWords = words.filter(word => {
-    const lowerWord = word.toLowerCase();
-    if (seen.has(lowerWord)) {
-      return false;
-    }
-    seen.add(lowerWord);
-    return true;
-  });
-  normalized = uniqueWords.join(' ');
-  
-  // Remove common merchant suffixes that might appear at the end
-  const suffixes = [
-    /\s+INC\.?$/i,
-    /\s+LLC\.?$/i,
-    /\s+LTD\.?$/i,
-    /\s+CORP\.?$/i,
-    /\s+CO\.?$/i,
-    /\s+COMPANY$/i,
-  ];
-  
-  suffixes.forEach(suffix => {
-    normalized = normalized.replace(suffix, '');
-  });
-  
-  // Normalize whitespace
-  normalized = normalized.replace(/\s+/g, ' ').trim();
-  
-  // Return null if empty after normalization
-  if (!normalized || normalized.length < 5) {
-    return null;
-  }
-  
-  return normalized.toLowerCase();
-}
-

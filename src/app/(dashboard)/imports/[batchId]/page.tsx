@@ -617,6 +617,7 @@ export default function BatchReviewPage() {
             date: t.date,
             description: t.description,
             amount: t.amount,
+            merchant: t.merchant,
           })),
           batchId,
         }),
