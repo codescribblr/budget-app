@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   detectStatusColumnIndex,
   shouldExcludeTransactionByStatus,
+  parseCSVWithMapping,
 } from '../csv-parser-helpers';
+import type { ColumnMapping } from '../mapping-templates';
 
 const ROBINHOOD_HEADERS = [
   'Date',
@@ -58,5 +60,33 @@ describe('detectStatusColumnIndex', () => {
     ];
 
     expect(detectStatusColumnIndex(data, true)).toBe(null);
+  });
+});
+
+describe('parseCSVWithMapping upload path', () => {
+  const ROBINHOOD_TEMPLATE_MAPPING: ColumnMapping = {
+    dateColumn: 0,
+    amountColumn: 3,
+    descriptionColumn: 8,
+    debitColumn: null,
+    creditColumn: null,
+    transactionTypeColumn: null,
+    statusColumn: null,
+    amountSignConvention: 'positive_is_expense',
+    dateFormat: 'yyyy-MM-dd',
+    hasHeaders: true,
+  };
+
+  it('excludes declined rows when using saved template mapping without status column', async () => {
+    const data = [
+      ROBINHOOD_HEADERS,
+      ['2026-06-22', '11:49 AM', 'Jonathan Wadsworth', '336.34', '0', '', 'Declined', 'Cash Advance', 'Transact', ''],
+      ['2026-06-23', '9:00 AM', 'Jonathan Wadsworth', '12.00', '36', '', 'Posted', 'Purchase', 'Taco Bell', ''],
+    ];
+
+    const transactions = await parseCSVWithMapping(data, ROBINHOOD_TEMPLATE_MAPPING, 'card.csv');
+
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0].description).toBe('Taco Bell');
   });
 });
