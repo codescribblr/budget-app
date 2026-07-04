@@ -496,17 +496,44 @@ export async function getQueuedImports(options?: {
   batchId?: string;
   limit?: number;
   offset?: number;
+  /** Lean payload for review UI — excludes heavy csv_data/csv_analysis blobs */
+  forReview?: boolean;
 }) {
   const { supabase } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
-  // Explicitly select all fields including CSV mapping fields and processing tasks
-  // PostgREST requires explicit selection of JSONB fields - using * alone may not return them
-  // Use a simpler approach: select * and explicitly add CSV fields and processing_tasks
+  const reviewFields = [
+    'id',
+    'import_setup_id',
+    'transaction_date',
+    'description',
+    'merchant',
+    'amount',
+    'transaction_type',
+    'hash',
+    'original_data',
+    'suggested_category_id',
+    'target_account_id',
+    'target_credit_card_id',
+    'status',
+    'is_historical',
+    'tag_ids',
+    'source_batch_id',
+    'csv_file_name',
+    'csv_mapping_name',
+    'csv_mapping_template_id',
+    'csv_fingerprint',
+    'processing_tasks',
+  ].join(', ');
+
   let query = supabase
     .from('queued_imports')
-    .select('*, csv_data, csv_analysis, csv_file_name, csv_fingerprint, csv_mapping_template_id, csv_mapping_name, processing_tasks')
+    .select(
+      options?.forReview
+        ? reviewFields
+        : '*, csv_data, csv_analysis, csv_file_name, csv_fingerprint, csv_mapping_template_id, csv_mapping_name, processing_tasks'
+    )
     .eq('account_id', accountId);
 
   if (options?.status) {

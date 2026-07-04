@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -44,6 +45,9 @@ interface TransactionPreviewProps {
   onImportComplete: () => void;
   onSelectionChange?: (selectedIds: Set<string>) => void;
 }
+
+const VIRTUALIZE_THRESHOLD = 50;
+const ROW_HEIGHT = 53;
 
 interface EditingField {
   transactionId: string;
@@ -132,6 +136,8 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
     }
   }, [selectedTransactions, onSelectionChange]);
   const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const useVirtualTable = items.length >= VIRTUALIZE_THRESHOLD;
   const { stats, refreshStats } = useAIUsage();
   const { isPremium } = useSubscription();
   const aiChatEnabled = useFeature('ai_chat');
@@ -779,40 +785,68 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
   };
 
 
-  // Calculate counts for display and confirmation
-  const categorizedCount = items.filter(item =>
-    item.status !== 'excluded' &&
-    !item.isDuplicate &&
-    item.splits.length > 0
-  ).length;
+  const rowVirtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => tableScrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 15,
+  });
 
-  // Exclude duplicates from uncategorized count - duplicates take precedence
-  const uncategorizedCount = items.filter(item => 
-    !item.isDuplicate && 
-    !item.duplicateType && 
-    item.splits.length === 0
-  ).length;
-  
-  // Check if these are queued imports
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const paddingTop = useVirtualTable && virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom = useVirtualTable && virtualRows.length > 0
+    ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
+    : 0;
+
+  const transactionStats = useMemo(() => {
+    let categorizedCount = 0;
+    let uncategorizedCount = 0;
+    let databaseDuplicateCount = 0;
+    let withinFileDuplicateCount = 0;
+    let manuallyExcludedCount = 0;
+    let totalExcludedCount = 0;
+    const uncategorizedTransactions: ParsedTransaction[] = [];
+
+    for (const item of items) {
+      const isDup = item.isDuplicate || !!item.duplicateType;
+      if (item.status !== 'excluded' && !isDup && item.splits.length > 0) {
+        categorizedCount++;
+      }
+      if (!isDup && item.splits.length === 0) {
+        uncategorizedCount++;
+        uncategorizedTransactions.push(item);
+      }
+      if (item.duplicateType === 'database') databaseDuplicateCount++;
+      if (item.duplicateType === 'within-file') withinFileDuplicateCount++;
+      if (item.status === 'excluded' && !isDup && item.splits.length > 0) {
+        manuallyExcludedCount++;
+      }
+      if (item.status === 'excluded') totalExcludedCount++;
+    }
+
+    return {
+      categorizedCount,
+      uncategorizedCount,
+      databaseDuplicateCount,
+      withinFileDuplicateCount,
+      duplicateCount: databaseDuplicateCount + withinFileDuplicateCount,
+      manuallyExcludedCount,
+      totalExcludedCount,
+      uncategorizedTransactions,
+    };
+  }, [items]);
+
+  const {
+    categorizedCount,
+    uncategorizedCount,
+    databaseDuplicateCount,
+    withinFileDuplicateCount,
+    manuallyExcludedCount,
+    totalExcludedCount,
+    uncategorizedTransactions,
+  } = transactionStats;
+
   const isQueuedImport = items.some(item => typeof item.id === 'string' && item.id.startsWith('queued-'));
-  
-  // Get uncategorized transactions for AI categorization (both normal and queued imports)
-  const uncategorizedTransactions = items.filter(
-    item => !item.isDuplicate && 
-            (!item.splits || item.splits.length === 0)
-  );
-
-  const databaseDuplicateCount = items.filter(item => item.duplicateType === 'database').length;
-  const withinFileDuplicateCount = items.filter(item => item.duplicateType === 'within-file').length;
-  const duplicateCount = databaseDuplicateCount + withinFileDuplicateCount;
-
-  const manuallyExcludedCount = items.filter(item =>
-    item.status === 'excluded' &&
-    !item.isDuplicate &&
-    item.splits.length > 0
-  ).length;
-
-  const totalExcludedCount = items.filter(item => item.status === 'excluded').length;
 
   return (
     <div className="space-y-4 max-w-full overflow-hidden">
@@ -913,9 +947,12 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
         </div>
       </div>
 
-      <div className="border rounded-md overflow-x-auto">
+      <div
+        ref={tableScrollRef}
+        className="border rounded-md overflow-x-auto max-h-[min(70vh,800px)] overflow-y-auto"
+      >
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow className="border-border">
               <TableHead className="w-12">
                 <DropdownMenu>
@@ -973,7 +1010,16 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((transaction) => {
+            {useVirtualTable && paddingTop > 0 && (
+              <TableRow aria-hidden style={{ height: paddingTop, border: 0 }}>
+                <TableCell colSpan={10} className="p-0" />
+              </TableRow>
+            )}
+            {(useVirtualTable
+              ? virtualRows.map((virtualRow) => virtualRow.index)
+              : items.map((_, index) => index)
+            ).map((rowIndex) => {
+              const transaction = items[rowIndex];
               const isEditingDate = editingField?.transactionId === transaction.id && editingField?.field === 'date';
               const isEditingAmount = editingField?.transactionId === transaction.id && editingField?.field === 'amount';
               const isEditingCategory = editingField?.transactionId === transaction.id && editingField?.field === 'category';
@@ -1266,6 +1312,11 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
                 </TableRow>
               );
             })}
+            {useVirtualTable && paddingBottom > 0 && (
+              <TableRow aria-hidden style={{ height: paddingBottom, border: 0 }}>
+                <TableCell colSpan={10} className="p-0" />
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>

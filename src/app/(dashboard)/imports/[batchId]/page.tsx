@@ -168,8 +168,10 @@ export default function BatchReviewPage() {
       setLoading(true);
       setError(null);
 
-      // Fetch queued imports for this batch
-      const response = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}`);
+      // Fetch queued imports (lean payload — no heavy csv_data blobs)
+      const response = await fetch(
+        `/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}&forReview=true`
+      );
       if (!response.ok) {
         throw new Error('Failed to fetch batch transactions');
       }
@@ -183,90 +185,48 @@ export default function BatchReviewPage() {
         return;
       }
 
-      // Debug: Log first import to see what fields are available
-      if (queuedImports.length > 0) {
-        const firstImport = queuedImports[0];
-        console.log('First queued import fields:', {
-          has_csv_data: !!firstImport.csv_data,
-          has_csv_analysis: !!firstImport.csv_analysis,
-          csv_file_name: firstImport.csv_file_name,
-          csv_mapping_name: firstImport.csv_mapping_name,
-          csv_mapping_template_id: firstImport.csv_mapping_template_id,
-          source_batch_id: firstImport.source_batch_id,
-          id: firstImport.id,
-        });
-        
-        // If CSV fields are missing, try fetching them directly (workaround for PostgREST schema cache issues)
-        if (!firstImport.csv_data && !firstImport.csv_file_name) {
-          console.log('CSV fields missing from main query, fetching directly...');
-          try {
-            const csvResponse = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}&csvFields=true`);
-            if (csvResponse.ok) {
-              const csvData = await csvResponse.json();
-              if (csvData.csvFields) {
-                console.log('Fetched CSV fields directly:', csvData.csvFields);
-                // Update the first import with CSV fields
-                Object.assign(firstImport, csvData.csvFields);
-              }
-            }
-          } catch (err) {
-            console.warn('Failed to fetch CSV fields directly:', err);
-          }
-        }
-      }
+      const firstImport = queuedImports[0];
 
-      // Fetch setup info to determine if this is a manual upload
-      let isManualUpload = false;
-      let setupInfo: any = null;
-      if (queuedImports.length > 0) {
-        try {
-          const setupResponse = await fetch(`/api/automatic-imports/setups/${queuedImports[0].import_setup_id}`);
-          if (setupResponse.ok) {
-            const setup = await setupResponse.json();
-            setupInfo = setup.setup;
-            isManualUpload = setup.setup?.source_type === 'manual';
-          }
-        } catch (err) {
-          console.warn('Failed to fetch setup info:', err);
-        }
-      }
+      // Fetch metadata in parallel (categories, setup, template, account name)
+      const [
+        categories,
+        setupResult,
+        templateResult,
+        accountResult,
+      ] = await Promise.all([
+        fetch('/api/categories?excludeGoals=false&includeArchived=all')
+          .then((r) => (r.ok ? r.json() : []))
+          .catch(() => []),
+        firstImport.import_setup_id
+          ? fetch(`/api/automatic-imports/setups/${firstImport.import_setup_id}`)
+              .then((r) => (r.ok ? r.json() : null))
+              .catch(() => null)
+          : Promise.resolve(null),
+        firstImport.csv_mapping_template_id
+          ? fetch(`/api/import/templates/${firstImport.csv_mapping_template_id}`)
+              .then((r) => (r.ok ? r.json() : null))
+              .catch(() => null)
+          : Promise.resolve(null),
+        firstImport.target_account_id
+          ? fetch(`/api/accounts/${firstImport.target_account_id}`)
+              .then((r) => (r.ok ? r.json() : null))
+              .catch(() => null)
+          : firstImport.target_credit_card_id
+          ? fetch(`/api/credit-cards/${firstImport.target_credit_card_id}`)
+              .then((r) => (r.ok ? r.json() : null))
+              .catch(() => null)
+          : Promise.resolve(null),
+      ]);
 
-      // Fetch categories to populate category names in splits
-      let categories: any[] = [];
-      try {
-        const categoriesResponse = await fetch('/api/categories?excludeGoals=false&includeArchived=all');
-        if (categoriesResponse.ok) {
-          categories = await categoriesResponse.json();
-        }
-      } catch (err) {
-        console.warn('Failed to fetch categories:', err);
-      }
-
-      // Fetch merchant info for all descriptions to get linked merchant names
-      let merchantInfoMap = new Map<string, string>();
-      try {
-        const descriptions = queuedImports.map((qi: any) => qi.description);
-        const merchantInfoResponse = await fetch('/api/import/get-merchant-info', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ descriptions }),
-        });
-        if (merchantInfoResponse.ok) {
-          const merchantData = await merchantInfoResponse.json();
-          if (merchantData.merchantInfo) {
-            merchantData.merchantInfo.forEach((info: any) => {
-              merchantInfoMap.set(info.description, info.merchantName);
-            });
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to fetch merchant info:', err);
-      }
+      const setupInfo = setupResult?.setup ?? null;
+      const categoryById = new Map<number, { id: number; name: string }>(
+        categories.map((c: { id: number; name: string }) => [c.id, c])
+      );
 
       // Convert queued imports to ParsedTransaction format
       const initialTransactions: ParsedTransaction[] = queuedImports.map((qi: any) => {
-        const category = qi.suggested_category_id 
-          ? categories.find((c: any) => c.id === qi.suggested_category_id)
+        const category = qi.suggested_category_id
+          ? categoryById.get(qi.suggested_category_id)
           : null;
 
         // Extract duplicate information from original_data
@@ -274,27 +234,21 @@ export default function BatchReviewPage() {
         let duplicateType: 'database' | 'within-file' | null = null;
         if (qi.original_data) {
           try {
-            const originalData = typeof qi.original_data === 'string' 
-              ? JSON.parse(qi.original_data) 
+            const originalData = typeof qi.original_data === 'string'
+              ? JSON.parse(qi.original_data)
               : qi.original_data;
             isDuplicate = originalData.isDuplicate === true;
             duplicateType = originalData.duplicateType || null;
-          } catch (err) {
-            // If original_data is not valid JSON, ignore
-            console.warn('Failed to parse original_data for duplicate info:', err);
+          } catch {
+            // ignore parse errors
           }
         }
 
-        // Determine status: duplicates take precedence over uncategorized
-        // Duplicates should always be excluded, then uncategorized transactions
-        // Otherwise use database status
         const hasCategory = !!qi.suggested_category_id;
         let transactionStatus: 'pending' | 'confirmed' | 'excluded' = 'pending';
         if (isDuplicate) {
-          // Duplicates are always excluded (regardless of category status)
           transactionStatus = 'excluded';
         } else if (!hasCategory) {
-          // Uncategorized transactions are excluded (only if not duplicate)
           transactionStatus = 'excluded';
         } else if (qi.status === 'reviewing' || qi.status === 'pending') {
           transactionStatus = 'pending';
@@ -304,17 +258,13 @@ export default function BatchReviewPage() {
           transactionStatus = 'excluded';
         }
 
-        // Use linked merchant name if available, otherwise fall back to stored merchant or description
-        const linkedMerchantName = merchantInfoMap.get(qi.description);
-        const displayMerchant = linkedMerchantName || qi.merchant || qi.description;
-
         return {
           id: `queued-${qi.id}`,
           date: qi.transaction_date,
           description: qi.description,
           amount: qi.amount,
           transaction_type: qi.transaction_type,
-          merchant: displayMerchant,
+          merchant: qi.merchant || qi.description,
           suggestedCategory: qi.suggested_category_id || undefined,
           account_id: qi.target_account_id || undefined,
           credit_card_id: qi.target_credit_card_id || undefined,
@@ -328,181 +278,75 @@ export default function BatchReviewPage() {
           status: transactionStatus,
           isDuplicate,
           duplicateType,
-          originalData: typeof qi.original_data === 'string' ? qi.original_data : JSON.stringify(qi.original_data || {}),
+          originalData: typeof qi.original_data === 'string'
+            ? qi.original_data
+            : JSON.stringify(qi.original_data || {}),
           hash: qi.hash || '',
         };
       });
 
       // Check if processing is needed
-      const firstImport = queuedImports[0];
       const tasks = (firstImport?.processing_tasks as any) || null;
       const incompleteTasks = tasks ? getIncompleteTasks(tasks) : [];
       const needsProcessing = incompleteTasks.length > 0;
 
-      // Always load transactions - even if processing is needed, show them
-      // The dialog will handle processing if needed
       const processedTransactions = initialTransactions;
 
-      // If processing is needed and dialog isn't already shown, show it
-      // But don't return early - we still want to load and display transactions
       if (needsProcessing && !showProcessingDialog) {
         setShowProcessingDialog(true);
       }
 
-      // Fetch setup info for batch info (reuse the fetch we did earlier)
       let batchInfo = {
-        setup_name: 'Unknown',
-        source_type: 'unknown',
-        target_account_name: null as string | null,
-        is_credit_card: false,
-        is_historical: false as boolean | 'mixed',
+        setup_name: setupInfo?.integration_name || 'Unknown',
+        source_type: setupInfo?.source_type || 'unknown',
+        target_account_name: (accountResult?.name as string | null) ?? null,
+        is_credit_card: !!firstImport.target_credit_card_id,
+        is_historical: (queuedImports.every((qi: any) => qi.is_historical === true)
+          ? true
+          : queuedImports.some((qi: any) => qi.is_historical === true)
+          ? 'mixed'
+          : false) as boolean | 'mixed',
       };
 
-      if (queuedImports.length > 0) {
-        const firstImport = queuedImports[0];
-        batchInfo.is_credit_card = !!firstImport.target_credit_card_id;
-        const allHistorical = queuedImports.every((qi: any) => qi.is_historical === true);
-        const someHistorical = queuedImports.some((qi: any) => qi.is_historical === true);
-        batchInfo.is_historical = allHistorical ? true : someHistorical ? 'mixed' : false;
+      // CSV remap availability — metadata only (full csv_data loaded on remap page)
+      const csvDataExists = !!(
+        firstImport.csv_file_name ||
+        firstImport.csv_fingerprint ||
+        firstImport.csv_mapping_template_id
+      );
+      setHasCsvData(csvDataExists);
+      setMappingTemplateId(firstImport.csv_mapping_template_id || null);
+      setImportFileName(firstImport.csv_file_name || null);
 
-        // Check if CSV data exists (for re-mapping capability)
-        // CSV data is stored on the first transaction of the batch
-        // Also check csv_analysis as indicator that CSV data should be available
-        const csvDataExists = !!firstImport.csv_data || !!firstImport.csv_analysis;
-        console.log('Setting CSV data state:', {
-          csv_data: !!firstImport.csv_data,
-          csv_analysis: !!firstImport.csv_analysis,
-          csv_file_name: firstImport.csv_file_name,
-          csv_mapping_name: firstImport.csv_mapping_name,
-          csvDataExists,
-        });
-        setHasCsvData(csvDataExists);
-        setMappingTemplateId(firstImport.csv_mapping_template_id || null);
-        setImportFileName(firstImport.csv_file_name || null);
-        
-        // Get mapping name - use stored value or generate from analysis if available
-        let mappingNameValue = firstImport.csv_mapping_name || null;
-        
-        // If no mapping name stored but we have CSV analysis, generate one
-        if (!mappingNameValue && firstImport.csv_analysis) {
-          try {
-            const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
-            const analysis = firstImport.csv_analysis;
-            const fileName = firstImport.csv_file_name || 'unknown.csv';
-            mappingNameValue = generateAutomaticMappingName(analysis, fileName);
-          } catch (err) {
-            console.warn('Failed to generate mapping name:', err);
-          }
-        }
-        
-        // Fallback to "Automatic Mapping" if still no name
-        if (!mappingNameValue) {
-          mappingNameValue = firstImport.csv_mapping_template_id ? 'Template Mapping' : 'Automatic Mapping';
-        }
-        
-        setMappingName(mappingNameValue);
-        
-        // Fetch template name if template ID exists
-        if (firstImport.csv_mapping_template_id) {
-          try {
-            const templateResponse = await fetch(`/api/import/templates/${firstImport.csv_mapping_template_id}`);
-            if (templateResponse.ok) {
-              const template = await templateResponse.json();
-              setMappingTemplateName(template.template_name || null);
-            }
-          } catch (err) {
-            console.warn('Failed to fetch template name:', err);
-          }
-        }
-
-        // Use setup info we already fetched
-        if (setupInfo) {
-          batchInfo.setup_name = setupInfo.integration_name || 'Unknown';
-          batchInfo.source_type = setupInfo.source_type || 'unknown';
-        }
-        
-        // Fetch account/credit card name if mapped
-        try {
-          if (firstImport.target_account_id) {
-            const accountResponse = await fetch(`/api/accounts/${firstImport.target_account_id}`);
-            if (accountResponse.ok) {
-              const account = await accountResponse.json();
-              batchInfo.target_account_name = account.name;
-            }
-          } else if (firstImport.target_credit_card_id) {
-            const cardResponse = await fetch(`/api/credit-cards/${firstImport.target_credit_card_id}`);
-            if (cardResponse.ok) {
-              const card = await cardResponse.json();
-              batchInfo.target_account_name = card.name;
-            }
-          }
-        } catch (err) {
-          console.warn('Failed to fetch account/card name:', err);
-        }
+      let mappingNameValue = firstImport.csv_mapping_name || null;
+      if (!mappingNameValue) {
+        mappingNameValue = firstImport.csv_mapping_template_id ? 'Template Mapping' : 'Automatic Mapping';
       }
+      setMappingName(mappingNameValue);
+      setMappingTemplateName(templateResult?.template_name || null);
 
       // Sort transactions by date descending (newest first)
       const sortedTransactions = [...processedTransactions].sort((a, b) => {
-        // Compare dates (YYYY-MM-DD format sorts correctly as strings)
         const dateComparison = b.date.localeCompare(a.date);
-        // If same date, maintain original order (by ID if available)
         if (dateComparison === 0) {
-          // Try to extract numeric ID from string ID (format: "queued-123")
-          const idA = typeof a.id === 'string' && a.id.startsWith('queued-') 
-            ? parseInt(a.id.replace('queued-', '')) || 0 
+          const idA = typeof a.id === 'string' && a.id.startsWith('queued-')
+            ? parseInt(a.id.replace('queued-', '')) || 0
             : 0;
           const idB = typeof b.id === 'string' && b.id.startsWith('queued-')
             ? parseInt(b.id.replace('queued-', '')) || 0
             : 0;
-          return idB - idA; // Descending by ID as tiebreaker
+          return idB - idA;
         }
         return dateComparison;
       });
 
       setTransactions(sortedTransactions);
       setBatchInfo(batchInfo);
-      
-      // Calculate duplicate counts from processed transactions
+
       const databaseDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'database').length;
       const withinFileDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'within-file').length;
       setDuplicateCounts({ database: databaseDups, withinFile: withinFileDups });
-      
-      // Ensure mapping info is set even if not in first import (for old imports)
-      if (queuedImports.length > 0 && !mappingName) {
-        const firstImport = queuedImports[0];
-        let mappingNameValue = firstImport.csv_mapping_name || null;
-        
-        // If no mapping name stored but we have CSV analysis, generate one
-        if (!mappingNameValue && firstImport.csv_analysis) {
-          try {
-            const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
-            const analysis = firstImport.csv_analysis;
-            const fileName = firstImport.csv_file_name || 'unknown.csv';
-            mappingNameValue = generateAutomaticMappingName(analysis, fileName);
-          } catch (err) {
-            console.warn('Failed to generate mapping name:', err);
-          }
-        }
-        
-        // Fallback to "Automatic Mapping" if still no name
-        if (!mappingNameValue) {
-          mappingNameValue = firstImport.csv_mapping_template_id ? 'Template Mapping' : 'Automatic Mapping';
-        }
-        
-        if (mappingNameValue) {
-          setMappingName(mappingNameValue);
-        }
-        
-        if (!importFileName && firstImport.csv_file_name) {
-          setImportFileName(firstImport.csv_file_name);
-        }
-        
-        // Also ensure hasCsvData is set if csv_data or csv_analysis exists
-        if (!hasCsvData && (firstImport.csv_data || firstImport.csv_analysis)) {
-          setHasCsvData(true);
-        }
-      }
-      
+
       setLoading(false);
     } catch (err: any) {
       console.error('Error loading from database:', err);

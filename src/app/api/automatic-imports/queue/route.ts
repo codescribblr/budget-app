@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     const batchId = searchParams.get('batchId') || undefined;
     const batches = searchParams.get('batches') === 'true';
     const csvFieldsOnly = searchParams.get('csvFields') === 'true';
+    const forReview = searchParams.get('forReview') === 'true';
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined;
     const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : undefined;
 
@@ -62,6 +63,7 @@ export async function GET(request: Request) {
         batchId,
         limit,
         offset,
+        forReview,
       });
       return NextResponse.json({ imports });
     }
