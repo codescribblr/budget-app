@@ -761,12 +761,45 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
       }
 
       const result = await response.json();
-      const { imported } = result;
+      const { imported, skipped, requested, skippedItems, errors } = result;
+      const attempted = requested ?? toImport.length;
+      const importedTotal = imported ?? 0;
+      const skippedTotal = skipped ?? 0;
 
-      // Show success
+      setImportedCount(importedTotal);
+
+      if (!response.ok) {
+        const errorMessage = result.error
+          || errors?.[0]
+          || (skippedItems?.length
+            ? skippedItems.slice(0, 5).map((item: { description: string; reason: string }) => `${item.description}: ${item.reason}`).join('; ')
+            : null)
+          || 'Failed to import transactions';
+        setProgressStatus('error');
+        setProgressMessage(errorMessage);
+        return;
+      }
+
+      if (importedTotal === 0 && attempted > 0) {
+        const detail = skippedItems?.length
+          ? skippedItems.slice(0, 5).map((item: { description: string; reason: string }) => `${item.description}: ${item.reason}`).join('; ')
+          : errors?.[0] || 'No transactions were imported.';
+        setProgressStatus('error');
+        setProgressMessage(detail);
+        return;
+      }
+
+      if (importedTotal < attempted) {
+        const detail = skippedItems?.length
+          ? skippedItems.slice(0, 5).map((item: { description: string; reason: string }) => `${item.description}: ${item.reason}`).join('; ')
+          : `${skippedTotal} transaction${skippedTotal !== 1 ? 's' : ''} skipped.`;
+        setProgressStatus('error');
+        setProgressMessage(`Imported ${importedTotal} of ${attempted}. ${detail}`);
+        return;
+      }
+
       setProgressStatus('success');
       setProgressMessage('All transactions have been processed successfully.');
-      setImportedCount(imported);
     } catch (error) {
       console.error('Error importing transactions:', error);
       setProgressStatus('error');

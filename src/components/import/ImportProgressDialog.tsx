@@ -78,7 +78,7 @@ export default function ImportProgressDialog({
                 </>
               )}
 
-              {isSuccess && (
+              {isSuccess && importedCount !== undefined && importedCount > 0 && (
                 <>
                   <p className="text-lg font-medium text-green-900 dark:text-green-100">
                     Successfully imported {importedCount} transaction{importedCount !== 1 ? 's' : ''}

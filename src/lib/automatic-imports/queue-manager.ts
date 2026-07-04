@@ -881,11 +881,23 @@ export async function approveAndImportQueuedTransactions(queuedImportIds: number
   // Use per-transaction is_historical if provided, otherwise fall back to false
   // The transactions array should already have is_historical set from convertQueuedImportToParsedTransaction
   // or from the UI when transactionsWithSplits is provided
-  const importedCount = await importTransactions(
+  const importResult = await importTransactions(
     validTransactions,
     false, // Global flag - per-transaction is_historical is used instead
     `Automatic Import - Batch ${batchId}`
   );
+  const importedCount = importResult.imported;
+
+  if (importedCount === 0 && validTransactions.length > 0) {
+    const detail = importResult.skippedItems
+      .slice(0, 5)
+      .map(item => `${item.description}: ${item.reason}`)
+      .join('; ');
+    throw new Error(
+      importResult.errors[0]
+        || (detail ? `No transactions were imported. ${detail}` : 'No transactions were imported')
+    );
+  }
 
   // Map validTransactions back to queued import IDs
   // If transactionsWithSplits was provided, extract IDs from transaction.id (queued-{id})
@@ -984,6 +996,12 @@ export async function approveAndImportQueuedTransactions(queuedImportIds: number
       .in('id', importedQueuedIds);
   }
 
-  return { imported: importedCount };
+  return {
+    imported: importedCount,
+    skipped: importResult.skipped,
+    requested: importResult.requested,
+    skippedItems: importResult.skippedItems,
+    errors: importResult.errors,
+  };
 }
 

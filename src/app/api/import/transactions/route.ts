@@ -22,8 +22,27 @@ export async function POST(request: Request) {
       );
     }
 
-    // Import transactions using Supabase
-    const importedCount = await importTransactions(transactions, isHistorical || false, fileName || 'Unknown');
+    const importResult = await importTransactions(transactions, isHistorical || false, fileName || 'Unknown');
+    const importedCount = importResult.imported;
+
+    if (importedCount === 0 && transactions.some(txn => txn.splits?.length > 0)) {
+      const detail = importResult.skippedItems
+        .slice(0, 5)
+        .map(item => `${item.description}: ${item.reason}`)
+        .join('; ');
+      return NextResponse.json(
+        {
+          error: importResult.errors[0]
+            || (detail ? `No transactions were imported. ${detail}` : 'No transactions were imported'),
+          imported: 0,
+          skipped: importResult.skipped,
+          requested: importResult.requested,
+          skippedItems: importResult.skippedItems,
+          errors: importResult.errors,
+        },
+        { status: 409 }
+      );
+    }
 
     // Learn from the imported transactions
     // Use description instead of merchant since that's what was used to create merchant groups
@@ -43,6 +62,10 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       imported: importedCount,
+      skipped: importResult.skipped,
+      requested: importResult.requested,
+      skippedItems: importResult.skippedItems,
+      errors: importResult.errors,
     });
   } catch (error: any) {
     console.error('Error importing transactions:', error);

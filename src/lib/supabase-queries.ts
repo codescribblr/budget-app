@@ -2727,7 +2727,35 @@ export async function checkDuplicateHash(hash: string): Promise<boolean> {
   return data !== null;
 }
 
-export async function importTransactions(transactions: any[], isHistorical: boolean = false, fileName: string = 'Unknown'): Promise<number> {
+export interface ImportTransactionsSkippedItem {
+  description: string;
+  reason: string;
+}
+
+export interface ImportTransactionsResult {
+  imported: number;
+  skipped: number;
+  requested: number;
+  skippedItems: ImportTransactionsSkippedItem[];
+  errors: string[];
+}
+
+export async function importTransactions(
+  transactions: any[],
+  isHistorical: boolean = false,
+  fileName: string = 'Unknown'
+): Promise<ImportTransactionsResult> {
+  const emptyResult = (
+    overrides: Partial<ImportTransactionsResult> = {}
+  ): ImportTransactionsResult => ({
+    imported: 0,
+    skipped: 0,
+    requested: 0,
+    skippedItems: [],
+    errors: [],
+    ...overrides,
+  });
+
   const { supabase, user } = await getAuthenticatedUser();
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
@@ -2738,156 +2766,170 @@ export async function importTransactions(transactions: any[], isHistorical: bool
   const validTransactions = transactions.filter(txn => txn.splits && txn.splits.length > 0);
 
   if (validTransactions.length === 0) {
-    return 0;
+    return emptyResult({
+      requested: transactions.length,
+      errors: ['No transactions with category splits to import'],
+    });
   }
 
-  // ===== STEP 1: Batch insert imported_transactions =====
-  // Determine source type based on filename extension
+  // ===== STEP 1: Resolve imported_transactions records =====
   const isImageImport = fileName.match(/\.(jpg|jpeg|png|pdf)$/i) !== null;
   const sourceType = isImageImport ? 'Image Import' : 'CSV Import';
 
-  const importedTransactionsData = validTransactions.map(txn => {
-    // Parse originalData if it's a JSON string, otherwise use empty object
-    let originalRowData = {};
-    try {
-      if (txn.originalData) {
-        originalRowData = typeof txn.originalData === 'string' 
-          ? JSON.parse(txn.originalData) 
-          : txn.originalData;
-      }
-    } catch (e) {
-      console.warn('Failed to parse originalData:', e);
+  const hashToImportedId = new Map<string, number>();
+  const skippedItems: ImportTransactionsSkippedItem[] = [];
+  const hashes = validTransactions.map(txn => txn.hash).filter((hash): hash is string => !!hash);
+
+  if (hashes.length > 0) {
+    const { data: existingImported, error: existingImportedError } = await supabase
+      .from('imported_transactions')
+      .select('id, hash')
+      .eq('user_id', user.id)
+      .in('hash', hashes);
+
+    if (existingImportedError) throw existingImportedError;
+
+    const existingIds = (existingImported || []).map(record => record.id);
+    const linkedImportedIds = new Set<number>();
+
+    if (existingIds.length > 0) {
+      const { data: existingLinks, error: linksLookupError } = await supabase
+        .from('imported_transaction_links')
+        .select('imported_transaction_id')
+        .in('imported_transaction_id', existingIds);
+
+      if (linksLookupError) throw linksLookupError;
+      existingLinks?.forEach(link => linkedImportedIds.add(link.imported_transaction_id));
     }
 
-    // Build metadata object with original row data and other useful info
-    const metadata: any = {
-      originalRow: originalRowData,
-      suggestedCategory: txn.suggestedCategory || null,
-      suggestedMerchant: txn.merchant || null,
-    };
+    const fullyImportedHashes = new Set<string>();
+    for (const record of existingImported || []) {
+      hashToImportedId.set(record.hash, record.id);
+      if (linkedImportedIds.has(record.id)) {
+        fullyImportedHashes.add(record.hash);
+        const txn = validTransactions.find(t => t.hash === record.hash);
+        skippedItems.push({
+          description: txn?.description || record.hash,
+          reason: 'Already imported',
+        });
+      }
+    }
 
-    return {
-      user_id: user.id,
-      account_id: accountId,
-      import_date: importDate,
-      source_type: sourceType,
-      source_identifier: fileName,
-      transaction_date: txn.date,
-      merchant: txn.merchant || txn.description,
-      description: txn.description,
-      amount: txn.amount,
-      hash: txn.hash,
-      metadata: metadata,
-    };
-  });
+    const transactionsToImport = validTransactions.filter(txn => !fullyImportedHashes.has(txn.hash));
 
-  let { data: importedTxs, error: importError } = await supabase
-    .from('imported_transactions')
-    .insert(importedTransactionsData)
-    .select('id, hash');
+    if (transactionsToImport.length === 0) {
+      return emptyResult({
+        requested: validTransactions.length,
+        skipped: skippedItems.length,
+        skippedItems,
+        errors: skippedItems.length > 0
+          ? ['All transactions were already imported']
+          : ['No transactions available to import'],
+      });
+    }
 
-  if (importError) {
-    // If there are duplicate hashes, filter them out and retry
-    if (importError.code === '23505') {
-      console.log('Duplicate hashes detected, filtering and retrying...');
-
-      // Get existing hashes for this user (unique constraint is on user_id + hash, not account_id)
-      const hashes = validTransactions.map(txn => txn.hash).filter(h => h); // Filter out empty hashes
-      const { data: existingHashes } = await supabase
-        .from('imported_transactions')
-        .select('hash')
-        .eq('user_id', user.id)
-        .in('hash', hashes);
-
-      const existingHashSet = new Set(existingHashes?.map(h => h.hash) || []);
-
-      console.log(`Found ${existingHashSet.size} existing hashes out of ${hashes.length} total`);
-
-      // Filter out duplicates
-      const nonDuplicates = validTransactions.filter(txn => !existingHashSet.has(txn.hash));
-      const nonDuplicateData = importedTransactionsData.filter((_, i) =>
-        !existingHashSet.has(validTransactions[i].hash)
-      );
-
-      if (nonDuplicateData.length === 0) {
-        console.log('All transactions are duplicates, skipping import');
-        return 0; // All duplicates
+    const buildImportedTransactionRow = (txn: any) => {
+      let originalRowData = {};
+      try {
+        if (txn.originalData) {
+          originalRowData = typeof txn.originalData === 'string'
+            ? JSON.parse(txn.originalData)
+            : txn.originalData;
+        }
+      } catch (e) {
+        console.warn('Failed to parse originalData:', e);
       }
 
-      console.log(`Retrying with ${nonDuplicateData.length} non-duplicate transactions`);
+      return {
+        user_id: user.id,
+        account_id: accountId,
+        import_date: importDate,
+        source_type: sourceType,
+        source_identifier: fileName,
+        transaction_date: txn.date,
+        merchant: txn.merchant || txn.description,
+        description: txn.description,
+        amount: txn.amount,
+        hash: txn.hash,
+        metadata: {
+          originalRow: originalRowData,
+          suggestedCategory: txn.suggestedCategory || null,
+          suggestedMerchant: txn.merchant || null,
+        },
+      };
+    };
 
-      // Retry with non-duplicates
-      const { data: retryImportedTxs, error: retryError } = await supabase
+    const newImportedRows = transactionsToImport
+      .filter(txn => !hashToImportedId.has(txn.hash))
+      .map(buildImportedTransactionRow);
+
+    if (newImportedRows.length > 0) {
+      const { data: insertedImported, error: insertError } = await supabase
         .from('imported_transactions')
-        .insert(nonDuplicateData)
+        .insert(newImportedRows)
         .select('id, hash');
 
-      if (retryError) {
-        console.error('Retry failed:', retryError);
-        
-        // If still getting duplicate error, check which hashes are causing issues
-        if (retryError.code === '23505') {
-          // Get all hashes we're trying to insert
-          const insertHashes = nonDuplicateData.map(d => d.hash).filter(h => h);
-          
-          // Check for duplicates by user_id (matching the constraint)
-          const { data: conflictingHashes } = await supabase
-            .from('imported_transactions')
-            .select('hash, transaction_date, description, amount')
-            .eq('user_id', user.id)
-            .in('hash', insertHashes);
-          
-          const conflictingHashSet = new Set(conflictingHashes?.map(h => h.hash) || []);
-          const trulyNonDuplicates = nonDuplicateData.filter(d => !conflictingHashSet.has(d.hash));
-          
-          console.log(`Found ${conflictingHashSet.size} conflicting hashes by user_id (constraint check)`);
-          console.log(`Filtering to ${trulyNonDuplicates.length} truly non-duplicate transactions`);
-          
-          if (trulyNonDuplicates.length === 0) {
-            console.log('All transactions are duplicates after user_id check, skipping import');
-            return 0;
-          }
-          
-          // Final retry with truly non-duplicate transactions
-          const { data: finalImportedTxs, error: finalError } = await supabase
-            .from('imported_transactions')
-            .insert(trulyNonDuplicates)
-            .select('id, hash');
-          
-          if (finalError) {
-            console.error('Final retry failed:', finalError);
-            throw finalError;
-          }
-          
-          // Update validTransactions and importedTxs
-          const trulyNonDuplicateTransactions = validTransactions.filter((txn, i) => 
-            !conflictingHashSet.has(nonDuplicateData[i]?.hash)
-          );
-          validTransactions.splice(0, validTransactions.length, ...trulyNonDuplicateTransactions);
-          importedTxs = finalImportedTxs;
-          
-          console.log(`Successfully imported ${importedTxs?.length || 0} non-duplicate transactions after user_id check`);
-        } else {
-          throw retryError;
+      if (insertError) throw insertError;
+      insertedImported?.forEach(record => hashToImportedId.set(record.hash, record.id));
+    }
+
+    validTransactions.splice(0, validTransactions.length, ...transactionsToImport);
+  } else {
+    const importedTransactionsData = validTransactions.map(txn => {
+      let originalRowData = {};
+      try {
+        if (txn.originalData) {
+          originalRowData = typeof txn.originalData === 'string'
+            ? JSON.parse(txn.originalData)
+            : txn.originalData;
         }
+      } catch (e) {
+        console.warn('Failed to parse originalData:', e);
       }
 
-      // Update validTransactions and importedTxs to only include non-duplicates
-      validTransactions.splice(0, validTransactions.length, ...nonDuplicates);
-      importedTxs = retryImportedTxs;
+      return {
+        user_id: user.id,
+        account_id: accountId,
+        import_date: importDate,
+        source_type: sourceType,
+        source_identifier: fileName,
+        transaction_date: txn.date,
+        merchant: txn.merchant || txn.description,
+        description: txn.description,
+        amount: txn.amount,
+        hash: txn.hash,
+        metadata: {
+          originalRow: originalRowData,
+          suggestedCategory: txn.suggestedCategory || null,
+          suggestedMerchant: txn.merchant || null,
+        },
+      };
+    });
 
-      console.log(`Successfully imported ${importedTxs?.length || 0} non-duplicate transactions`);
-    } else {
-      throw importError;
-    }
+    const { data: insertedImported, error: insertError } = await supabase
+      .from('imported_transactions')
+      .insert(importedTransactionsData)
+      .select('id, hash');
+
+    if (insertError) throw insertError;
+    insertedImported?.forEach(record => hashToImportedId.set(record.hash, record.id));
   }
 
-  if (!importedTxs || importedTxs.length === 0) {
-    return 0;
+  if (validTransactions.length === 0) {
+    return emptyResult({
+      requested: transactions.length,
+      skipped: skippedItems.length,
+      skippedItems,
+      errors: ['No transactions available to import after duplicate resolution'],
+    });
   }
 
-  // Create hash-to-id map for linking later
-  const hashToImportedId = new Map(importedTxs.map(tx => [tx.hash, tx.id]));
+  const missingImportedIds = validTransactions.filter(txn => !hashToImportedId.has(txn.hash));
+  if (missingImportedIds.length > 0) {
+    throw new Error(
+      `Failed to resolve imported transaction records for ${missingImportedIds.length} transaction(s)`
+    );
+  }
 
   // ===== STEP 2: Batch get/create merchant groups =====
   const { getOrCreateMerchantGroup } = await import('@/lib/db/merchant-groups');
@@ -3127,7 +3169,13 @@ export async function importTransactions(transactions: any[], isHistorical: bool
     scheduleCategoryOverBudgetCheck(accountId, Array.from(allCategoryIds));
   }
 
-  return createdTransactions.length;
+  return {
+    imported: createdTransactions.length,
+    skipped: skippedItems.length,
+    requested: validTransactions.length + skippedItems.length,
+    skippedItems,
+    errors: [],
+  };
 }
 
 // =====================================================

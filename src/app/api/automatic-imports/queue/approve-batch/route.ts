@@ -128,6 +128,10 @@ export async function POST(request: Request) {
     // Return format compatible with TransactionPreview expectations
     return NextResponse.json({
       imported: result.imported || 0,
+      skipped: result.skipped || 0,
+      requested: result.requested || queuedImportIds.length,
+      skippedItems: result.skippedItems || [],
+      errors: result.errors || [],
     });
   } catch (error: any) {
     console.error('Error in POST /api/automatic-imports/queue/approve-batch:', error);
