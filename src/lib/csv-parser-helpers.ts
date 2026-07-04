@@ -479,6 +479,7 @@ export async function processTransactions(
           description: t.description,
           amount: t.amount,
           merchant: t.merchant,
+          originalData: t.originalData,
         })),
         batchId,
       }),

@@ -1,13 +1,21 @@
 import { distance } from 'fastest-levenshtein';
 
+const ORIGINAL_DATA_METADATA_KEYS = new Set([
+  'isDuplicate',
+  'duplicateType',
+  '_uploadFileName',
+]);
+
 export interface DuplicateMatchInput {
   description: string;
   merchant?: string | null;
+  originalData?: unknown;
 }
 
 export interface ExistingTransactionForDuplicateMatch {
   description: string;
   merchantName?: string | null;
+  originalImportTexts?: string[];
 }
 
 export function normalizeComparableDescription(description: string): string {
@@ -27,6 +35,70 @@ export function getPrimaryMerchantKey(description: string, merchant?: string | n
   const firstWord = source.split(/\s+/)[0] || '';
   const key = normalizeMerchantKey(firstWord);
   return key.length >= 4 ? key : null;
+}
+
+export function extractComparableTextsFromOriginalData(data: unknown): string[] {
+  if (data === null || data === undefined) return [];
+
+  let parsed: unknown = data;
+  if (typeof data === 'string') {
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      const text = data.trim();
+      return text ? [text] : [];
+    }
+  }
+
+  const texts: string[] = [];
+  const addText = (value: unknown) => {
+    if (typeof value === 'string' || typeof value === 'number') {
+      const text = String(value).trim();
+      if (text) texts.push(text);
+    }
+  };
+
+  if (Array.isArray(parsed)) {
+    parsed.forEach(addText);
+    return texts;
+  }
+
+  if (typeof parsed === 'object' && parsed !== null) {
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (ORIGINAL_DATA_METADATA_KEYS.has(key)) continue;
+      if (typeof value === 'object' && value !== null) continue;
+      addText(value);
+    }
+  }
+
+  return texts;
+}
+
+export function extractOriginalImportTexts(metadata: unknown): string[] {
+  if (!metadata || typeof metadata !== 'object') return [];
+
+  const originalRow = (metadata as { originalRow?: unknown }).originalRow;
+  return extractComparableTextsFromOriginalData(originalRow);
+}
+
+function getImportComparisonTexts(importTxn: DuplicateMatchInput): string[] {
+  const texts = new Set<string>();
+  if (importTxn.description?.trim()) texts.add(importTxn.description.trim());
+  if (importTxn.merchant?.trim()) texts.add(importTxn.merchant.trim());
+  for (const text of extractComparableTextsFromOriginalData(importTxn.originalData)) {
+    texts.add(text);
+  }
+  return Array.from(texts);
+}
+
+function getExistingComparisonTexts(existing: ExistingTransactionForDuplicateMatch): string[] {
+  const texts = new Set<string>();
+  if (existing.description?.trim()) texts.add(existing.description.trim());
+  if (existing.merchantName?.trim()) texts.add(existing.merchantName.trim());
+  for (const text of existing.originalImportTexts || []) {
+    if (text.trim()) texts.add(text.trim());
+  }
+  return Array.from(texts);
 }
 
 function extractCoreDescription(description: string): string | null {
@@ -75,25 +147,17 @@ function merchantKeysMatch(importKey: string, existingKey: string): boolean {
   return existingKey.startsWith(importKey) || importKey.startsWith(existingKey);
 }
 
-/**
- * Compare import text against an existing transaction description/merchant.
- * Date and amount are expected to match before calling this.
- */
-export function descriptionsMatchForDuplicate(
-  existing: ExistingTransactionForDuplicateMatch,
-  importTxn: DuplicateMatchInput
-): boolean {
-  const existingDesc = normalizeComparableDescription(existing.description);
-  const importDesc = normalizeComparableDescription(importTxn.description);
-  const importMerchant = importTxn.merchant?.trim()
-    ? normalizeComparableDescription(importTxn.merchant)
-    : '';
+function merchantTokenAppearsInText(text: string, token: string): boolean {
+  if (!token || token.length < 4) return false;
+  const normalizedText = normalizeMerchantKey(text);
+  return normalizedText.includes(token);
+}
+
+function textsMatchPair(existingText: string, importText: string): boolean {
+  const existingDesc = normalizeComparableDescription(existingText);
+  const importDesc = normalizeComparableDescription(importText);
 
   if (existingDesc === importDesc) {
-    return true;
-  }
-
-  if (importMerchant && (existingDesc === importMerchant || importMerchant === existingDesc)) {
     return true;
   }
 
@@ -104,42 +168,42 @@ export function descriptionsMatchForDuplicate(
     return true;
   }
 
-  if (importMerchant) {
-    if (existingDesc.includes(importMerchant) || importMerchant.includes(existingDesc)) {
-      return true;
-    }
-  }
-
-  const importToken = getPrimaryMerchantKey(importTxn.description, importTxn.merchant);
+  const importToken = getPrimaryMerchantKey(importText);
   if (importToken) {
-    const existingFirstToken = normalizeMerchantKey(existing.description.split(/\s+/)[0] || '');
+    const existingFirstToken = normalizeMerchantKey(existingText.split(/\s+/)[0] || '');
     if (merchantKeysMatch(importToken, existingFirstToken)) {
       return true;
     }
-
-    const existingMerchantName = existing.merchantName?.trim();
-    if (existingMerchantName) {
-      const existingMerchantToken = getPrimaryMerchantKey(existingMerchantName);
-      if (existingMerchantToken && merchantKeysMatch(importToken, existingMerchantToken)) {
-        return true;
-      }
+    if (merchantTokenAppearsInText(existingText, importToken)) {
+      return true;
     }
   }
 
-  const existingCore = extractCoreDescription(existing.description);
-  const importCore = extractCoreDescription(importTxn.description);
+  const existingCore = extractCoreDescription(existingText);
+  const importCore = extractCoreDescription(importText);
   if (existingCore && importCore && existingCore === importCore) {
     return true;
   }
 
-  const comparisonTargets = [importDesc, importMerchant].filter(Boolean);
-  const existingTargets = [existingDesc, existing.merchantName?.trim().toLowerCase() || ''].filter(Boolean);
+  const descDistance = distance(existingDesc, importDesc);
+  const maxLength = Math.max(existingDesc.length, importDesc.length);
+  return maxLength > 0 && (1 - descDistance / maxLength) > 0.75;
+}
 
-  for (const target of comparisonTargets) {
-    for (const existingTarget of existingTargets) {
-      const descDistance = distance(existingTarget, target);
-      const maxLength = Math.max(existingTarget.length, target.length);
-      if (maxLength > 0 && (1 - descDistance / maxLength) > 0.75) {
+/**
+ * Compare import text against an existing transaction description/merchant/raw import data.
+ * Date and amount are expected to match before calling this.
+ */
+export function descriptionsMatchForDuplicate(
+  existing: ExistingTransactionForDuplicateMatch,
+  importTxn: DuplicateMatchInput
+): boolean {
+  const importTexts = getImportComparisonTexts(importTxn);
+  const existingTexts = getExistingComparisonTexts(existing);
+
+  for (const importText of importTexts) {
+    for (const existingText of existingTexts) {
+      if (textsMatchPair(existingText, importText)) {
         return true;
       }
     }
@@ -196,4 +260,39 @@ export function getMerchantNameFromTransactionRow(transaction: {
   if (groupName) return groupName;
 
   return null;
+}
+
+export function getOriginalImportTextsFromLinks(
+  links: Array<{
+    imported_transactions?:
+      | {
+          description?: string | null;
+          merchant?: string | null;
+          metadata?: unknown;
+        }
+      | {
+          description?: string | null;
+          merchant?: string | null;
+          metadata?: unknown;
+        }[]
+      | null;
+  }> | null | undefined
+): string[] {
+  if (!links || links.length === 0) return [];
+
+  const texts = new Set<string>();
+  for (const link of links) {
+    const imported = Array.isArray(link.imported_transactions)
+      ? link.imported_transactions[0]
+      : link.imported_transactions;
+    if (!imported) continue;
+
+    if (imported.description?.trim()) texts.add(imported.description.trim());
+    if (imported.merchant?.trim()) texts.add(imported.merchant.trim());
+    for (const text of extractOriginalImportTexts(imported.metadata)) {
+      texts.add(text);
+    }
+  }
+
+  return Array.from(texts);
 }

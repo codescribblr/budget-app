@@ -4,6 +4,7 @@ import { getActiveAccountId } from '@/lib/account-context';
 import {
   descriptionsMatchForDuplicate,
   getMerchantNameFromTransactionRow,
+  getOriginalImportTextsFromLinks,
   normalizeAmountKey,
   normalizeComparableDescription,
   parseDateAmountDescriptionKey,
@@ -15,6 +16,7 @@ interface TransactionData {
   description: string;
   amount: number;
   merchant?: string | null;
+  originalData?: unknown;
 }
 
 interface ExistingTransaction {
@@ -23,6 +25,7 @@ interface ExistingTransaction {
   description: string;
   total_amount: number;
   merchantName: string | null;
+  originalImportTexts: string[];
 }
 
 function normalizeDateForComparison(date: string): string {
@@ -105,10 +108,12 @@ export async function POST(request: Request) {
               {
                 description: existingTxn.description,
                 merchantName: existingTxn.merchantName,
+                originalImportTexts: existingTxn.originalImportTexts,
               },
               {
                 description: txn.description,
                 merchant: txn.merchant,
+                originalData: txn.originalData,
               }
             )
           );
@@ -146,10 +151,12 @@ export async function POST(request: Request) {
           {
             description: existingTxn.description,
             merchantName: existingTxn.merchantName,
+            originalImportTexts: existingTxn.originalImportTexts,
           },
           {
             description,
             merchant: txns[0]?.merchant,
+            originalData: txns[0]?.originalData,
           }
         )
       );
@@ -205,6 +212,13 @@ async function fetchExistingTransactionsInRange(
       ),
       merchant_override:global_merchants!merchant_override_id (
         display_name
+      ),
+      imported_transaction_links (
+        imported_transactions (
+          description,
+          merchant,
+          metadata
+        )
       )
     `)
     .eq('budget_account_id', accountId)
@@ -219,6 +233,7 @@ async function fetchExistingTransactionsInRange(
     description: transaction.description,
     total_amount: transaction.total_amount,
     merchantName: getMerchantNameFromTransactionRow(transaction),
+    originalImportTexts: getOriginalImportTextsFromLinks(transaction.imported_transaction_links),
   }));
 }
 

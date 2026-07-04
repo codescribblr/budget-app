@@ -290,6 +290,7 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
     amount: Math.abs(t.amount),
     description: t.description,
     merchant: t.merchant,
+    originalData: t.originalData,
   }));
 
   // Check transactions table for existing transactions
@@ -339,6 +340,7 @@ export async function queueTransactions(options: QueueTransactionOptions): Promi
             {
               description: txn.description,
               merchant: txn.merchant,
+              originalData: txn.originalData,
             }
           )
         );

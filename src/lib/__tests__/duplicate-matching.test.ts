@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { descriptionsMatchForDuplicate } from '../duplicate-matching';
+import {
+  descriptionsMatchForDuplicate,
+  extractComparableTextsFromOriginalData,
+} from '../duplicate-matching';
 
 describe('descriptionsMatchForDuplicate', () => {
   it('matches short import merchant names against full bank descriptions', () => {
@@ -39,5 +42,55 @@ describe('descriptionsMatchForDuplicate', () => {
         { description: "Zaxby's", merchant: "Zaxby's" }
       )
     ).toBe(true);
+  });
+
+  it('matches short import labels using raw CSV original data', () => {
+    const originalData = {
+      0: '04/27/2026',
+      1: 'SCGOV866-340-7105DMV0049 GREER SC',
+      2: '26.43',
+      3: 'scdmv',
+      _uploadFileName: 'card-export.csv',
+    };
+
+    expect(
+      descriptionsMatchForDuplicate(
+        { description: 'SCGOV866-340-7105DMV0049 GREER SC' },
+        { description: 'scdmv', merchant: 'scdmv', originalData }
+      )
+    ).toBe(true);
+  });
+
+  it('matches when existing transaction has stored original import row text', () => {
+    expect(
+      descriptionsMatchForDuplicate(
+        {
+          description: 'scdmv',
+          originalImportTexts: ['SCGOV866-340-7105DMV0049 GREER SC', '26.43'],
+        },
+        {
+          description: 'scdmv',
+          merchant: 'scdmv',
+          originalData: {
+            0: '04/27/2026',
+            1: 'SCGOV866-340-7105DMV0049 GREER SC',
+            2: '26.43',
+          },
+        }
+      )
+    ).toBe(true);
+  });
+});
+
+describe('extractComparableTextsFromOriginalData', () => {
+  it('extracts CSV row values and skips metadata keys', () => {
+    expect(
+      extractComparableTextsFromOriginalData({
+        0: '04/27/2026',
+        1: 'SCGOV866-340-7105DMV0049 GREER SC',
+        isDuplicate: true,
+        _uploadFileName: 'card-export.csv',
+      })
+    ).toEqual(['04/27/2026', 'SCGOV866-340-7105DMV0049 GREER SC']);
   });
 });
