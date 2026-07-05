@@ -15,6 +15,7 @@ export async function GET() {
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .eq('is_read', false)
+      .eq('is_archived', false)
       .eq('in_app_created', true);
 
     if (error) throw error;

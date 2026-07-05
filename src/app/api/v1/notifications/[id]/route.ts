@@ -27,6 +27,15 @@ export const PATCH = externalApiIdRoute('notifications', async (request, context
     updateData.read_at = body.isRead ? new Date().toISOString() : null;
   }
 
+  if (body.isArchived !== undefined) {
+    updateData.is_archived = body.isArchived;
+    updateData.archived_at = body.isArchived ? new Date().toISOString() : null;
+    if (body.isArchived) {
+      updateData.is_read = true;
+      updateData.read_at = new Date().toISOString();
+    }
+  }
+
   const supabase = getExternalDb();
   const { data, error } = await supabase
     .from('notifications')
@@ -42,12 +51,24 @@ export const PATCH = externalApiIdRoute('notifications', async (request, context
 
 export const DELETE = externalApiIdRoute('notifications', async (_request, context, id) => {
   const supabase = getExternalDb();
-  const { error } = await supabase
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
     .from('notifications')
-    .delete()
+    .update({
+      is_archived: true,
+      archived_at: now,
+      is_read: true,
+      read_at: now,
+      updated_at: now,
+    })
     .eq('id', id)
-    .eq('budget_account_id', context.budgetAccountId);
+    .eq('budget_account_id', context.budgetAccountId)
+    .eq('is_archived', false)
+    .select('id');
 
   if (error) throw error;
-  return NextResponse.json(externalApiData({ success: true }, context));
+  if (!data || data.length === 0) {
+    throw new ExternalApiNotFoundError('Notification not found');
+  }
+  return NextResponse.json(externalApiData({ success: true, archived: true }, context));
 });

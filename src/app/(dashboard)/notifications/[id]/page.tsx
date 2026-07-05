@@ -35,8 +35,11 @@ export default async function NotificationDetailPage({
       .update({
         is_read: true,
         read_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq('id', notificationId);
+
+    notification.is_read = true;
   }
 
   return <NotificationDetail notification={notification} />;

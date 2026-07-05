@@ -9,7 +9,8 @@ export const GET = withExternalApi('notifications', async (_request, context) =>
     .select('*', { count: 'exact', head: true })
     .eq('budget_account_id', context.budgetAccountId)
     .eq('user_id', context.createdBy)
-    .eq('is_read', false);
+    .eq('is_read', false)
+    .eq('is_archived', false);
 
   if (error) throw error;
   return NextResponse.json(externalApiData({ unreadCount: count ?? 0 }, context));

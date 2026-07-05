@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
-import { createClient } from '@/lib/supabase/server';
+
+const DEFAULT_LIMIT = 25;
+const MAX_LIMIT = 100;
 
 /**
  * GET /api/notifications
  * Get notifications for the current user
+ * Query params:
+ *   - archived: 'true' for archived history, omitted/false for active inbox
+ *   - isRead: filter by read state
+ *   - type: notification type id
+ *   - limit, offset: pagination
  */
 export async function GET(request: NextRequest) {
   try {
@@ -13,15 +20,19 @@ export async function GET(request: NextRequest) {
 
     const type = searchParams.get('type');
     const isRead = searchParams.get('isRead');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const archived = searchParams.get('archived') === 'true';
+    const limit = Math.min(
+      Math.max(parseInt(searchParams.get('limit') || String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT, 1),
+      MAX_LIMIT
+    );
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0);
 
     let query = supabase
       .from('notifications')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+      .eq('in_app_created', true)
+      .eq('is_archived', archived);
 
     if (type) {
       query = query.eq('notification_type_id', type);
@@ -31,11 +42,27 @@ export async function GET(request: NextRequest) {
       query = query.eq('is_read', isRead === 'true');
     }
 
-    const { data: notifications, error } = await query;
+    if (archived) {
+      query = query.order('archived_at', { ascending: false, nullsFirst: false });
+    } else {
+      query = query.order('created_at', { ascending: false });
+    }
+
+    query = query.range(offset, offset + limit - 1);
+
+    const { data: notifications, error, count } = await query;
 
     if (error) throw error;
 
-    return NextResponse.json({ notifications: notifications || [] });
+    const total = count ?? 0;
+
+    return NextResponse.json({
+      notifications: notifications || [],
+      total,
+      limit,
+      offset,
+      hasMore: offset + (notifications?.length || 0) < total,
+    });
   } catch (error: any) {
     console.error('Error fetching notifications:', error);
     if (error.message === 'Unauthorized') {
@@ -47,7 +74,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
-
-
-

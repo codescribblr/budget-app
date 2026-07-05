@@ -5,14 +5,12 @@ import { useRouter } from 'next/navigation';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bell, Check, X, ExternalLink } from 'lucide-react';
+import { Bell, ExternalLink, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { getNotificationPreview } from '@/lib/notification-utils';
@@ -29,6 +27,12 @@ interface Notification {
   metadata?: Record<string, any>;
 }
 
+/** Prevent Radix dropdown from swallowing button clicks inside the menu */
+function preventDropdownClose(event: React.PointerEvent | React.MouseEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 export function NotificationCenter() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -37,16 +41,20 @@ export function NotificationCenter() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    fetchNotifications();
     fetchUnreadCount();
 
-    // Poll for new notifications every 30 seconds
     const interval = setInterval(() => {
       fetchUnreadCount();
     }, 30000);
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      fetchNotifications();
+    }
+  }, [open]);
 
   const fetchNotifications = async () => {
     try {
@@ -56,15 +64,12 @@ export function NotificationCenter() {
         const data = await response.json();
         setNotifications(data.notifications || []);
       } else if (response.status === 401) {
-        // User is not authenticated - silently handle this
         setNotifications([]);
       } else {
-        // Only log non-401 errors
         console.error('Error fetching notifications:', response.status, response.statusText);
         setNotifications([]);
       }
     } catch (error) {
-      // Network errors or other unexpected errors
       console.error('Error fetching notifications:', error);
       setNotifications([]);
     } finally {
@@ -79,15 +84,12 @@ export function NotificationCenter() {
         const data = await response.json();
         setUnreadCount(data.count || 0);
       } else if (response.status === 401) {
-        // User is not authenticated - silently handle this
         setUnreadCount(0);
       } else {
-        // Only log non-401 errors
         console.error('Error fetching unread count:', response.status, response.statusText);
         setUnreadCount(0);
       }
     } catch (error) {
-      // Network errors or other unexpected errors
       console.error('Error fetching unread count:', error);
       setUnreadCount(0);
     }
@@ -106,49 +108,73 @@ export function NotificationCenter() {
           prev.map(n => n.id === id ? { ...n, is_read: true } : n)
         );
         setUnreadCount(prev => Math.max(0, prev - 1));
+        return true;
       }
+
+      const data = await response.json().catch(() => ({}));
+      toast.error(data.error || 'Failed to mark notification as read');
+      return false;
     } catch (error) {
       console.error('Error marking notification as read:', error);
+      toast.error('Failed to mark notification as read');
+      return false;
     }
   };
 
   const handleMarkAllAsRead = async () => {
     try {
-      const unreadNotifications = notifications.filter(n => !n.is_read);
-      await Promise.all(
-        unreadNotifications.map(n => handleMarkAsRead(n.id))
+      const response = await fetch('/api/notifications/mark-all-read', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || 'Failed to mark all as read');
+        return;
+      }
+
+      const data = await response.json();
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+      toast.success(
+        data.markedRead > 0
+          ? `Marked ${data.markedRead} notification${data.markedRead !== 1 ? 's' : ''} as read`
+          : 'All notifications are already read'
       );
-      toast.success('All notifications marked as read');
     } catch (error) {
       console.error('Error marking all as read:', error);
       toast.error('Failed to mark all as read');
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleArchive = async (id: number) => {
     try {
       const response = await fetch(`/api/notifications/${id}`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
+        const archived = notifications.find(n => n.id === id);
         setNotifications(prev => prev.filter(n => n.id !== id));
-        const deleted = notifications.find(n => n.id === id);
-        if (deleted && !deleted.is_read) {
+        if (archived && !archived.is_read) {
           setUnreadCount(prev => Math.max(0, prev - 1));
         }
+        toast.success('Notification archived');
+        return;
       }
+
+      const data = await response.json().catch(() => ({}));
+      toast.error(data.error || 'Failed to archive notification');
     } catch (error) {
-      console.error('Error deleting notification:', error);
-      toast.error('Failed to delete notification');
+      console.error('Error archiving notification:', error);
+      toast.error('Failed to archive notification');
     }
   };
 
-  const handleNotificationClick = (notification: Notification) => {
+  const handleNotificationClick = async (notification: Notification) => {
     if (!notification.is_read) {
-      handleMarkAsRead(notification.id);
+      await handleMarkAsRead(notification.id);
     }
-    // Always navigate to notification detail page
     router.push(`/notifications/${notification.id}`);
     setOpen(false);
   };
@@ -175,6 +201,7 @@ export function NotificationCenter() {
             <Button
               variant="ghost"
               size="sm"
+              onPointerDown={preventDropdownClose}
               onClick={handleMarkAllAsRead}
               className="h-auto py-1 text-xs"
             >
@@ -222,12 +249,14 @@ export function NotificationCenter() {
                         variant="ghost"
                         size="sm"
                         className="h-6 w-6 p-0"
+                        title="Archive notification"
+                        onPointerDown={preventDropdownClose}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDelete(notification.id);
+                          handleArchive(notification.id);
                         }}
                       >
-                        <X className="h-3 w-3" />
+                        <Archive className="h-3 w-3" />
                       </Button>
                     </div>
                   </div>
@@ -236,6 +265,7 @@ export function NotificationCenter() {
                       variant="outline"
                       size="sm"
                       className="h-7 text-xs"
+                      onPointerDown={preventDropdownClose}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleNotificationClick(notification);
@@ -255,6 +285,7 @@ export function NotificationCenter() {
             variant="ghost"
             size="sm"
             className="w-full"
+            onPointerDown={preventDropdownClose}
             onClick={() => {
               router.push('/notifications');
               setOpen(false);
@@ -267,7 +298,3 @@ export function NotificationCenter() {
     </DropdownMenu>
   );
 }
-
-
-
-

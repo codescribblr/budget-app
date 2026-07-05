@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
-import { createClient } from '@/lib/supabase/server';
 
 /**
  * GET /api/notifications/[id]
- * Get a specific notification
+ * Get a specific notification (including archived)
  */
 export async function GET(
   request: NextRequest,
@@ -43,7 +42,7 @@ export async function GET(
 
 /**
  * PATCH /api/notifications/[id]
- * Update a notification (e.g., mark as read)
+ * Update a notification (mark read, archive, unarchive)
  */
 export async function PATCH(
   request: NextRequest,
@@ -53,18 +52,23 @@ export async function PATCH(
     const { user, supabase } = await getAuthenticatedUser();
     const { id } = await params;
     const body = await request.json();
-    const { isRead } = body as { isRead?: boolean };
+    const { isRead, isArchived } = body as { isRead?: boolean; isArchived?: boolean };
 
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
 
     if (isRead !== undefined) {
       updateData.is_read = isRead;
-      if (isRead) {
+      updateData.read_at = isRead ? new Date().toISOString() : null;
+    }
+
+    if (isArchived !== undefined) {
+      updateData.is_archived = isArchived;
+      updateData.archived_at = isArchived ? new Date().toISOString() : null;
+      if (isArchived) {
+        updateData.is_read = true;
         updateData.read_at = new Date().toISOString();
-      } else {
-        updateData.read_at = null;
       }
     }
 
@@ -98,7 +102,7 @@ export async function PATCH(
 
 /**
  * DELETE /api/notifications/[id]
- * Delete a notification
+ * Archive a notification (soft delete — history is retained)
  */
 export async function DELETE(
   request: NextRequest,
@@ -107,28 +111,53 @@ export async function DELETE(
   try {
     const { user, supabase } = await getAuthenticatedUser();
     const { id } = await params;
+    const now = new Date().toISOString();
 
-    const { error } = await supabase
+    const { data: archivedRows, error } = await supabase
       .from('notifications')
-      .delete()
+      .update({
+        is_archived: true,
+        archived_at: now,
+        is_read: true,
+        read_at: now,
+        updated_at: now,
+      })
       .eq('id', parseInt(id))
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .eq('is_archived', false)
+      .select('id');
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
+    if (!archivedRows || archivedRows.length === 0) {
+      const { data: existing } = await supabase
+        .from('notifications')
+        .select('id, is_archived')
+        .eq('id', parseInt(id))
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!existing) {
+        return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
+      }
+      if (existing.is_archived) {
+        return NextResponse.json({ success: true, archived: true });
+      }
+      return NextResponse.json(
+        { error: 'Notification could not be archived' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true, archived: true });
   } catch (error: any) {
-    console.error('Error deleting notification:', error);
+    console.error('Error archiving notification:', error);
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     return NextResponse.json(
-      { error: 'Failed to delete notification' },
+      { error: 'Failed to archive notification' },
       { status: 500 }
     );
   }
 }
-
-
-
-
