@@ -3,14 +3,15 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { recordMonthlyFunding, isFeatureEnabled } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
-import { logBalanceChanges } from '@/lib/audit/category-balance-audit';
+import { logBalanceChange, logBalanceChanges } from '@/lib/audit/category-balance-audit';
 
 /**
  * POST /api/allocations/batch
  * Batch allocate funds to multiple categories in a single request
  * Body: { 
  *   allocations: Array<{ categoryId: number, amount: number }>,
- *   month?: string 
+ *   month?: string,
+ *   bufferWithdrawAmount?: number
  * }
  */
 export async function POST(request: NextRequest) {
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { allocations, month } = body;
+    const { allocations, month, bufferWithdrawAmount } = body;
 
     // Validate input
     if (!allocations || !Array.isArray(allocations) || allocations.length === 0) {
@@ -55,6 +56,83 @@ export async function POST(request: NextRequest) {
 
     // Default to current month if not provided
     const allocationMonth = month || new Date().toISOString().slice(0, 7) + '-01';
+
+    let bufferWithdrawn = 0;
+    let bufferCategoryId: number | null = null;
+    let bufferBalanceBeforeWithdraw: number | null = null;
+
+    if (bufferWithdrawAmount !== undefined && bufferWithdrawAmount !== null) {
+      if (typeof bufferWithdrawAmount !== 'number' || bufferWithdrawAmount <= 0) {
+        return NextResponse.json(
+          { error: 'Invalid bufferWithdrawAmount. Must be a positive number' },
+          { status: 400 }
+        );
+      }
+
+      const incomeBufferEnabled = await isFeatureEnabled('income_buffer');
+      if (!incomeBufferEnabled) {
+        return NextResponse.json(
+          { error: 'Income Buffer feature is not enabled' },
+          { status: 403 }
+        );
+      }
+
+      const { data: bufferCategory, error: bufferError } = await supabase
+        .from('categories')
+        .select('id, current_balance')
+        .eq('account_id', accountId)
+        .eq('name', 'Income Buffer')
+        .eq('is_system', true)
+        .single();
+
+      if (bufferError || !bufferCategory) {
+        return NextResponse.json(
+          { error: 'Income Buffer category not found' },
+          { status: 404 }
+        );
+      }
+
+      if (bufferCategory.current_balance < bufferWithdrawAmount) {
+        return NextResponse.json(
+          {
+            error: 'Insufficient funds in buffer',
+            available: bufferCategory.current_balance,
+            requested: bufferWithdrawAmount,
+          },
+          { status: 400 }
+        );
+      }
+
+      bufferCategoryId = bufferCategory.id;
+      bufferBalanceBeforeWithdraw = bufferCategory.current_balance;
+      const newBufferBalance = bufferCategory.current_balance - bufferWithdrawAmount;
+
+      const { error: bufferUpdateError } = await supabase
+        .from('categories')
+        .update({
+          current_balance: newBufferBalance,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', bufferCategory.id);
+
+      if (bufferUpdateError) {
+        console.error('Error withdrawing from buffer:', bufferUpdateError);
+        return NextResponse.json(
+          { error: 'Failed to withdraw funds from buffer' },
+          { status: 500 }
+        );
+      }
+
+      await logBalanceChange(
+        bufferCategory.id,
+        bufferCategory.current_balance,
+        newBufferBalance,
+        'income_buffer_fund',
+        { source: 'allocation_batch' }
+      );
+
+      bufferWithdrawn = bufferWithdrawAmount;
+    }
 
     // Get all categories in one query
     const categoryIds = allocations.map(a => a.categoryId);
@@ -110,6 +188,30 @@ export async function POST(request: NextRequest) {
     const updateError = updateResults.find(result => result.error);
     if (updateError?.error) {
       console.error('Error updating category balances:', updateError.error);
+
+      // Restore buffer balance if allocation failed after a buffer withdrawal
+      if (bufferWithdrawn > 0 && bufferCategoryId !== null && bufferBalanceBeforeWithdraw !== null) {
+        const { error: revertError } = await supabase
+          .from('categories')
+          .update({
+            current_balance: bufferBalanceBeforeWithdraw,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', bufferCategoryId);
+
+        if (revertError) {
+          console.error('Error reverting buffer withdrawal after failed allocation:', revertError);
+        } else {
+          await logBalanceChange(
+            bufferCategoryId,
+            bufferBalanceBeforeWithdraw - bufferWithdrawn,
+            bufferBalanceBeforeWithdraw,
+            'income_buffer_fund',
+            { source: 'allocation_batch_revert' }
+          );
+        }
+      }
+
       return NextResponse.json(
         { error: 'Failed to update category balances' },
         { status: 500 }
@@ -162,6 +264,7 @@ export async function POST(request: NextRequest) {
       totalAmount: allocations.reduce((sum, a) => sum + a.amount, 0),
       month: allocationMonth,
       fundingTracked,
+      bufferWithdrawn,
     });
   } catch (error: any) {
     console.error('Error in POST /api/allocations/batch:', error);

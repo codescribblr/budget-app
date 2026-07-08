@@ -14,12 +14,16 @@ import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
 import { Loader2, Sparkles, Info } from 'lucide-react';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
+import { UseBufferForAllocationDialog } from '@/components/money-movement/UseBufferForAllocationDialog';
+import { shouldOfferBufferWithdraw } from '@/lib/buffer-allocation';
 
 interface SmartAllocationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   categories: Category[];
   availableToSave: number;
+  bufferBalance?: number;
+  incomeBufferEnabled?: boolean;
   onSuccess: () => void;
 }
 
@@ -28,6 +32,8 @@ export function SmartAllocationDialog({
   onOpenChange,
   categories,
   availableToSave,
+  bufferBalance = 0,
+  incomeBufferEnabled = false,
   onSuccess,
 }: SmartAllocationDialogProps) {
   const router = useRouter();
@@ -38,6 +44,7 @@ export function SmartAllocationDialog({
   const [remainingFunds, setRemainingFunds] = useState(0);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [isBufferWithdrawOpen, setIsBufferWithdrawOpen] = useState(false);
 
   const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
 
@@ -114,32 +121,35 @@ export function SmartAllocationDialog({
     setRemainingFunds(amountNum - newTotal);
   };
 
-  const handleApply = async () => {
+  const buildBatchAllocations = () => {
+    return allocations
+      .filter((allocation) => {
+        const editedAmount = editedAllocations[allocation.categoryId] || 0;
+        return editedAmount > 0;
+      })
+      .map((allocation) => ({
+        categoryId: allocation.categoryId,
+        amount: editedAllocations[allocation.categoryId],
+      }));
+  };
+
+  const performApply = async (bufferWithdrawAmount = 0) => {
+    const batchAllocations = buildBatchAllocations();
+
+    if (batchAllocations.length === 0) {
+      toast.error('No allocations to apply');
+      return;
+    }
+
     setApplying(true);
     try {
-      // Build array of allocations with amounts > 0
-      const batchAllocations = allocations
-        .filter(allocation => {
-          const editedAmount = editedAllocations[allocation.categoryId] || 0;
-          return editedAmount > 0;
-        })
-        .map(allocation => ({
-          categoryId: allocation.categoryId,
-          amount: editedAllocations[allocation.categoryId],
-        }));
-
-      if (batchAllocations.length === 0) {
-        toast.error('No allocations to apply');
-        return;
-      }
-
-      // Execute batch allocation in a single request
       const response = await fetch('/api/allocations/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           allocations: batchAllocations,
           month: currentMonth,
+          ...(bufferWithdrawAmount > 0 ? { bufferWithdrawAmount } : {}),
         }),
       });
 
@@ -149,21 +159,47 @@ export function SmartAllocationDialog({
       }
 
       const result = await response.json();
-      toast.success(`Successfully allocated ${formatCurrency(totalAllocated)} across ${result.allocationsProcessed} categories`);
+      const bufferNote =
+        result.bufferWithdrawn > 0
+          ? ` Withdrew ${formatCurrency(result.bufferWithdrawn)} from Income Buffer.`
+          : '';
+      toast.success(
+        `Successfully allocated ${formatCurrency(totalAllocated)} across ${result.allocationsProcessed} categories.${bufferNote}`
+      );
       onSuccess();
       onOpenChange(false);
+      setIsBufferWithdrawOpen(false);
       setAmount('');
       setAllocations([]);
       setEditedAllocations({});
-      
-      // Redirect to dashboard after successful allocation
+
       router.push('/dashboard');
     } catch (error) {
       console.error('Error applying allocation:', error);
-      // Error toast already shown by handleApiError
     } finally {
       setApplying(false);
     }
+  };
+
+  const handleApply = async () => {
+    if (totalAllocated === 0) {
+      toast.error('No allocations to apply');
+      return;
+    }
+
+    if (
+      shouldOfferBufferWithdraw(
+        incomeBufferEnabled,
+        bufferBalance,
+        availableToSave,
+        totalAllocated
+      )
+    ) {
+      setIsBufferWithdrawOpen(true);
+      return;
+    }
+
+    await performApply(0);
   };
 
   const getCategoryTypeBadge = (type: string) => {
@@ -328,6 +364,17 @@ export function SmartAllocationDialog({
           )}
         </div>
       </DialogContent>
+
+      <UseBufferForAllocationDialog
+        open={isBufferWithdrawOpen}
+        onOpenChange={setIsBufferWithdrawOpen}
+        availableToSave={availableToSave}
+        totalAllocated={totalAllocated}
+        bufferBalance={bufferBalance}
+        onAllocateWithBuffer={performApply}
+        onAllocateWithoutBuffer={() => performApply(0)}
+        isSubmitting={applying}
+      />
     </Dialog>
   );
 }

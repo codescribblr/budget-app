@@ -11,6 +11,8 @@ import type { Category, GoalWithDetails } from '@/lib/types';
 import { Target, Info, Sparkles, Wallet } from 'lucide-react';
 import { SmartAllocationDialog } from '@/components/allocations/SmartAllocationDialog';
 import { AddToBufferDialog } from './AddToBufferDialog';
+import { UseBufferForAllocationDialog } from './UseBufferForAllocationDialog';
+import { shouldOfferBufferWithdraw } from '@/lib/buffer-allocation';
 import { useFeature } from '@/contexts/FeatureContext';
 import { handleApiError } from '@/lib/api-error-handler';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
@@ -32,6 +34,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
   const [monthlyFunding, setMonthlyFunding] = useState<{ [key: number]: number }>({});
   const [isSmartAllocationOpen, setIsSmartAllocationOpen] = useState(false);
   const [isAddToBufferOpen, setIsAddToBufferOpen] = useState(false);
+  const [isBufferWithdrawOpen, setIsBufferWithdrawOpen] = useState(false);
 
   const smartAllocationEnabled = useFeature('smart_allocation');
   const incomeBufferEnabled = useFeature('income_buffer');
@@ -127,6 +130,10 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
 
   const totalMonthlyBudget = envelopeCategories.reduce((sum, cat) => sum + cat.monthly_amount, 0);
   const availableToAllocate = currentSavings;
+  const bufferCategory = categories.find(
+    (cat) => cat.is_buffer || (cat.is_system && cat.name === 'Income Buffer')
+  );
+  const bufferBalance = bufferCategory?.current_balance ?? 0;
 
   const handleUseMonthlyAmounts = () => {
     const newAllocations: { [key: number]: number } = {};
@@ -241,6 +248,97 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
     return availableToAllocate - getTotalAllocated();
   };
 
+  const buildBatchAllocations = () => {
+    const batchAllocations: Array<{ categoryId: number; amount: number }> = [];
+
+    categories
+      .filter((cat) => allocations[cat.id] > 0)
+      .forEach((cat) => {
+        batchAllocations.push({
+          categoryId: cat.id,
+          amount: allocations[cat.id],
+        });
+      });
+
+    envelopeGoals
+      .filter(
+        (goal) =>
+          goal.linked_category_id !== null && goalAllocations[goal.linked_category_id] > 0
+      )
+      .forEach((goal) => {
+        if (goal.linked_category_id) {
+          batchAllocations.push({
+            categoryId: goal.linked_category_id,
+            amount: goalAllocations[goal.linked_category_id],
+          });
+        }
+      });
+
+    return batchAllocations;
+  };
+
+  const performAllocate = async (bufferWithdrawAmount = 0) => {
+    const totalAllocated = getTotalAllocated();
+
+    if (totalAllocated === 0) {
+      toast.error('No allocations', {
+        description: 'Please allocate funds to at least one category.',
+      });
+      return;
+    }
+
+    const batchAllocations = buildBatchAllocations();
+    if (batchAllocations.length === 0) {
+      toast.error('No allocations', {
+        description: 'Please allocate funds to at least one category.',
+      });
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const response = await fetch('/api/allocations/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          allocations: batchAllocations,
+          ...(bufferWithdrawAmount > 0 ? { bufferWithdrawAmount } : {}),
+        }),
+      });
+
+      if (!response.ok) {
+        await handleApiError(response, 'Failed to allocate funds');
+        throw new Error('Failed to allocate funds');
+      }
+
+      setAllocations({});
+      setGoalAllocations({});
+      setIsBufferWithdrawOpen(false);
+
+      if (monthlyFundingEnabled) {
+        await fetchMonthlyFunding();
+      }
+
+      onSuccess();
+
+      const result = await response.json();
+      const bufferNote =
+        result.bufferWithdrawn > 0
+          ? ` Withdrew ${formatCurrency(result.bufferWithdrawn)} from Income Buffer.`
+          : '';
+      toast.success('Funds allocated successfully', {
+        description: `Successfully allocated ${formatCurrency(totalAllocated)} to envelopes.${bufferNote}`,
+      });
+
+      router.push('/dashboard');
+    } catch (error) {
+      console.error('Error allocating funds:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleAllocate = async () => {
     const totalAllocated = getTotalAllocated();
 
@@ -251,77 +349,19 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
       return;
     }
 
-    try {
-      setIsSubmitting(true);
-
-      // Build allocations array for batch API
-      const batchAllocations: Array<{ categoryId: number; amount: number }> = [];
-
-      // Add regular category allocations
-      categories
-        .filter(cat => allocations[cat.id] > 0)
-        .forEach(cat => {
-          batchAllocations.push({
-            categoryId: cat.id,
-            amount: allocations[cat.id],
-          });
-        });
-
-      // Add goal category allocations
-      envelopeGoals
-        .filter(goal => goal.linked_category_id !== null && goalAllocations[goal.linked_category_id] > 0)
-        .forEach(goal => {
-          if (goal.linked_category_id) {
-            batchAllocations.push({
-              categoryId: goal.linked_category_id,
-              amount: goalAllocations[goal.linked_category_id],
-            });
-          }
-        });
-
-      if (batchAllocations.length === 0) {
-        toast.error('No allocations', {
-          description: 'Please allocate funds to at least one category.',
-        });
-        return;
-      }
-
-      // Use batch allocation API which includes audit logging
-      const response = await fetch('/api/allocations/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          allocations: batchAllocations,
-        }),
-      });
-
-      if (!response.ok) {
-        await handleApiError(response, 'Failed to allocate funds');
-        throw new Error('Failed to allocate funds');
-      }
-
-      // Reset form
-      setAllocations({});
-      setGoalAllocations({});
-      
-      // Refetch monthly funding data to show updated "funded this month" amounts (only if feature enabled)
-      if (monthlyFundingEnabled) {
-        await fetchMonthlyFunding();
-      }
-      
-      onSuccess();
-      toast.success('Funds allocated successfully', {
-        description: `Successfully allocated ${formatCurrency(totalAllocated)} to envelopes.`,
-      });
-      
-      // Redirect to dashboard after successful allocation
-      router.push('/dashboard');
-    } catch (error) {
-      console.error('Error allocating funds:', error);
-      // Error toast already shown by handleApiError
-    } finally {
-      setIsSubmitting(false);
+    if (
+      shouldOfferBufferWithdraw(
+        incomeBufferEnabled,
+        bufferBalance,
+        availableToAllocate,
+        totalAllocated
+      )
+    ) {
+      setIsBufferWithdrawOpen(true);
+      return;
     }
+
+    await performAllocate(0);
   };
 
   const showStickyFooter = !isAvailableBalanceVisible && !isBottomSummaryVisible;
@@ -833,6 +873,8 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
         onOpenChange={setIsSmartAllocationOpen}
         categories={categories}
         availableToSave={currentSavings}
+        bufferBalance={bufferBalance}
+        incomeBufferEnabled={incomeBufferEnabled}
         onSuccess={onSuccess}
       />
 
@@ -842,6 +884,18 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
         onOpenChange={setIsAddToBufferOpen}
         availableToSave={currentSavings}
         onSuccess={onSuccess}
+      />
+
+      {/* Use Buffer for Over-Allocation Dialog */}
+      <UseBufferForAllocationDialog
+        open={isBufferWithdrawOpen}
+        onOpenChange={setIsBufferWithdrawOpen}
+        availableToSave={availableToAllocate}
+        totalAllocated={getTotalAllocated()}
+        bufferBalance={bufferBalance}
+        onAllocateWithBuffer={performAllocate}
+        onAllocateWithoutBuffer={() => performAllocate(0)}
+        isSubmitting={isSubmitting}
       />
     </div>
   );
