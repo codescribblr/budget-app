@@ -1,6 +1,29 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GEMINI_MODELS } from './constants';
+import {
+  getAppWorkflowDocumentation,
+  buildWorkflowPromptInstructions,
+  buildUserSituationSummary,
+} from './workflow-guide';
+import { getCreditCardBalanceOwed, getCreditCardStatementBalance } from '@/lib/credit-card-balance';
 import type { CategorySuggestion, MonthlyInsights, UserContext, ChatMessage } from './types';
+
+function formatCreditCardForPrompt(cc: {
+  name: string;
+  current_balance: number;
+  credit_limit: number;
+  available_credit: number;
+  statement_balance?: number | null;
+  statement_balance_as_of?: string | null;
+}): string {
+  const owed = getCreditCardBalanceOwed(cc);
+  const stmt = getCreditCardStatementBalance(cc);
+  const stmtPart =
+    stmt != null
+      ? ` | Statement: $${stmt.toFixed(2)}${cc.statement_balance_as_of ? ` (${cc.statement_balance_as_of})` : ''}`
+      : '';
+  return `- ${cc.name}: Owed $${owed.toFixed(2)} / Limit $${cc.credit_limit.toFixed(2)} (Available: $${cc.available_credit.toFixed(2)}${stmtPart})`;
+}
 
 const API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
 
@@ -501,7 +524,7 @@ ${userData.accounts && userData.accounts.length > 0 ? `Bank Accounts:
 ${userData.accounts.map((a) => `- ${a.name} (${a.account_type}): $${a.balance.toFixed(2)}`).join('\n')}` : ''}
 
 ${userData.creditCards && userData.creditCards.length > 0 ? `Credit Cards:
-${userData.creditCards.map((cc) => `- ${cc.name}: Balance $${cc.current_balance.toFixed(2)} / Limit $${cc.credit_limit.toFixed(2)} (Available: $${cc.available_credit.toFixed(2)})`).join('\n')}` : ''}
+${userData.creditCards.map((cc) => formatCreditCardForPrompt(cc)).join('\n')}` : ''}
 
 ${userData.loans && userData.loans.length > 0 ? `Loans:
 ${userData.loans.map((l) => `- ${l.name}: Balance $${l.balance.toFixed(2)}${l.interest_rate ? `, Interest Rate: ${l.interest_rate.toFixed(2)}%` : ''}${l.minimum_payment ? `, Minimum Payment: $${l.minimum_payment.toFixed(2)}` : ''}`).join('\n')}` : ''}
@@ -787,9 +810,20 @@ RETIREMENT & NET WORTH CONTEXT (use when the user asks about retirement, forecas
 - Non-cash assets may be RMD-qualified (e.g. IRA/401k – subject to Required Minimum Distributions at 73+), and liquid vs illiquid (affects how quickly they can be used for income).
 `;
 
+    const workflowDocumentation = getAppWorkflowDocumentation();
+    const userSituationSummary = buildUserSituationSummary(context);
+    const workflowInstructions = buildWorkflowPromptInstructions();
+
     const prompt = `You are a helpful financial assistant for a budgeting app. You have access to the user's detailed financial data.
 
 ${helpDocumentation}
+
+${workflowDocumentation}
+
+USER SITUATION SUMMARY (for tailoring workflow recommendations):
+${userSituationSummary}
+
+${workflowInstructions}
 
 User's Financial Context:
 - Current Budget: $${context.currentBudget.total.toFixed(2)} (Spent: $${context.currentBudget.spent.toFixed(2)}, Remaining: $${context.currentBudget.remaining.toFixed(2)})
@@ -844,7 +878,7 @@ Bank Accounts (${context.accounts.length} total):
 ${context.accounts.length > 0 ? context.accounts.map((a) => `- ${a.name}: $${a.balance.toFixed(2)}`).join('\n') : 'No accounts'}
 
 ${context.creditCards && context.creditCards.length > 0 ? `Credit Cards (${context.creditCards.length} total):
-${context.creditCards.map((cc) => `- ${cc.name}: Balance $${cc.current_balance.toFixed(2)} / Limit $${cc.credit_limit.toFixed(2)} (Available: $${cc.available_credit.toFixed(2)})`).join('\n')}` : ''}
+${context.creditCards.map((cc) => formatCreditCardForPrompt(cc)).join('\n')}` : ''}
 
 ${context.nonCashAssets && context.nonCashAssets.length > 0 ? `Non-Cash Assets (${context.nonCashAssets.length} total):
 ${context.nonCashAssets.map((a) => {

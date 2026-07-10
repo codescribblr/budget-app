@@ -12,7 +12,6 @@ import { useAIUsage } from '@/hooks/use-ai-usage';
 import { useRotatingLoadingMessage } from '@/hooks/use-rotating-loading-message';
 import { DataSummary } from '@/components/ai/DataSummary';
 import { MarkdownRenderer } from '@/components/ai/MarkdownRenderer';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { ChatMessage } from '@/lib/ai/types';
 
@@ -27,6 +26,32 @@ interface AIChatInterfaceProps {
   onConversationCreated?: (conversationId: string) => void;
 }
 
+interface ChatQuickAction {
+  id: string;
+  label: string;
+  query: string;
+}
+
+const FALLBACK_QUICK_ACTIONS: ChatQuickAction[] = [
+  {
+    id: 'income-workflow',
+    label: 'My Income Workflow',
+    query:
+      'Recommend a step-by-step workflow for using this budgeting app based on how I earn income. Reference specific app features and help pages.',
+  },
+  {
+    id: 'budget-check',
+    label: 'Budget Check',
+    query: 'Am I on track with my budget this month? Highlight any categories that need attention.',
+  },
+  {
+    id: 'debt-workflow',
+    label: 'Pay Down Debt',
+    query:
+      'I want to pay down credit card debt using this app. Recommend a concrete monthly workflow with categories, allocation, and tracking.',
+  },
+];
+
 export function AIChatInterface({ 
   conversationId, 
   onConversationUpdate,
@@ -35,6 +60,7 @@ export function AIChatInterface({
   const [input, setInput] = useState('');
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(conversationId || null);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [quickActions, setQuickActions] = useState<ChatQuickAction[]>(FALLBACK_QUICK_ACTIONS);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const previousConversationIdRef = useRef<string | null>(conversationId || null);
   
@@ -52,6 +78,29 @@ export function AIChatInterface({
   });
   const { stats, refreshStats } = useAIUsage();
   const loadingMessage = useRotatingLoadingMessage(5000, loading);
+
+  // Load personalized quick actions based on income/debt profile
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSuggestions() {
+      try {
+        const response = await fetch('/api/ai/chat/suggestions');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled && Array.isArray(data.quickActions) && data.quickActions.length > 0) {
+          setQuickActions(data.quickActions);
+        }
+      } catch {
+        // Keep fallback actions on error
+      }
+    }
+
+    loadSuggestions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load conversation when conversationId prop changes
   // But don't load if we just created it (to preserve messages)
@@ -79,18 +128,17 @@ export function AIChatInterface({
 
   const remainingQueries = stats ? stats.chat.limit - stats.chat.used : 0;
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const sendQuery = async (messageContent: string) => {
+    const trimmed = messageContent.trim();
+    if (!trimmed) return;
 
     if (remainingQueries === 0) {
       toast.error('Daily AI query limit reached. Try again tomorrow.');
       return;
     }
 
-    const messageContent = input.trim();
-    setInput(''); // Clear input immediately for better UX
-    
-    // Create conversation callback that uses the message content
+    setInput('');
+
     const createConversation = async (): Promise<string | null> => {
       try {
         const response = await fetch('/api/ai/conversations', {
@@ -99,7 +147,7 @@ export function AIChatInterface({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            title: messageContent.slice(0, 60) + (messageContent.length > 60 ? '...' : ''),
+            title: trimmed.slice(0, 60) + (trimmed.length > 60 ? '...' : ''),
             messages: [],
           }),
         });
@@ -113,23 +161,14 @@ export function AIChatInterface({
       }
       return null;
     };
-    
-    await sendMessage(messageContent, createConversation);
+
+    await sendMessage(trimmed, createConversation);
     refreshStats();
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+  const handleSend = async () => {
+    await sendQuery(input);
   };
-
-  const quickActions = [
-    { label: 'Dining Analysis', query: 'How much did I spend on dining last month?' },
-    { label: 'Budget Check', query: 'Am I on track with my budget?' },
-    { label: 'Savings Tips', query: 'Where can I save money?' },
-  ];
 
   return (
     <Card className="flex flex-col h-full">
@@ -152,7 +191,10 @@ export function AIChatInterface({
               {messages.length === 0 && !loading ? (
                 <div className="text-center text-muted-foreground py-8">
                   <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-sm">Ask me anything about your spending, budget, or goals!</p>
+                  <p className="text-sm font-medium text-foreground mb-1">Ask me anything about your finances</p>
+                  <p className="text-xs">
+                    Get personalized workflows for your income type, debt payoff plans, budget checks, and more — tap a suggestion to start.
+                  </p>
                 </div>
               ) : (
                 <>
@@ -215,17 +257,18 @@ export function AIChatInterface({
           </ScrollArea>
         </div>
 
-        {/* Quick action buttons */}
+        {/* Quick action buttons — one tap sends immediately */}
         {messages.length === 0 && (
           <div className="shrink-0 px-4 pb-2">
+            <p className="text-xs text-muted-foreground mb-2">Try asking:</p>
             <div className="flex flex-wrap gap-2">
               {quickActions.map((action) => (
                 <Button
-                  key={action.label}
+                  key={action.id}
                   size="sm"
                   variant="outline"
-                  onClick={() => setInput(action.query)}
-                  disabled={remainingQueries === 0}
+                  onClick={() => sendQuery(action.query)}
+                  disabled={loading || remainingQueries === 0}
                 >
                   {action.label}
                 </Button>

@@ -7,7 +7,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GEMINI_MODELS } from './constants';
 
 const API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
-const MODEL = process.env.GEMINI_MERCHANT_SUGGESTIONS_MODEL || GEMINI_MODELS.pro;
+const MODEL = process.env.GEMINI_MERCHANT_SUGGESTIONS_MODEL || GEMINI_MODELS.pro; // defaults to gemini-2.5-flash (free tier)
 
 export interface UngroupedPattern {
   id: number;

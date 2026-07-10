@@ -179,6 +179,8 @@ function calculateCreditCardBalance(card: any): CreditCard {
   return {
     ...card,
     current_balance: card.credit_limit - card.available_credit,
+    statement_balance: card.statement_balance ?? null,
+    statement_balance_as_of: card.statement_balance_as_of ?? null,
   };
 }
 

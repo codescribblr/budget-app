@@ -16,6 +16,7 @@ import type {
   DashboardSummary,
 } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
+import { getCreditCardBalanceOwed } from '@/lib/credit-card-balance';
 import { Info, Wallet, CreditCard as CreditCardIcon, FileText, Landmark, Target, Mail, ChevronUp, TrendingUp, ArrowRight, LayoutGrid } from 'lucide-react';
 import Link from 'next/link';
 import CategoryList from './CategoryList';
@@ -75,7 +76,7 @@ function calculateSummary(
 
   const totalCreditCardBalances = creditCards
     .filter(cc => cc.include_in_totals === true)
-    .reduce((sum, cc) => sum + Number(cc.current_balance), 0);
+    .reduce((sum, cc) => sum + getCreditCardBalanceOwed(cc), 0);
 
   // Calculate pending checks total: expenses subtract, income adds
   // Income is positive (adds to available funds), expense is negative (subtracts from available funds)

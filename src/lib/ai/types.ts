@@ -120,6 +120,8 @@ export interface UserContext {
     current_balance: number;
     credit_limit: number;
     available_credit: number;
+    statement_balance?: number | null;
+    statement_balance_as_of?: string | null;
   }>;
   tags?: Array<{ id: number; name: string }>;
   nonCashAssets?: Array<{
@@ -187,6 +189,8 @@ export interface UserContext {
       value: number;
     }> | null;
   };
+  /** Feature flags enabled for this account (for workflow recommendations) */
+  enabledFeatures?: string[];
   // Additional context for better analysis
   dateRange?: {
     start: string;

@@ -24,6 +24,7 @@ import { getActiveAccountId } from './account-context';
 import { getExternalApiAuthOverride } from './external-api-overrides';
 import { cache } from 'react';
 import { logBalanceChange, logBalanceChanges } from './audit/category-balance-audit';
+import { getCreditCardBalanceOwed } from './credit-card-balance';
 
 // =====================================================
 // HELPER: Get authenticated user
@@ -571,6 +572,8 @@ export async function createCreditCard(data: {
   name: string;
   credit_limit?: number;
   available_credit?: number;
+  statement_balance?: number | null;
+  statement_balance_as_of?: string | null;
   include_in_totals?: boolean;
   sort_order?: number;
 }): Promise<CreditCard> {
@@ -591,6 +594,8 @@ export async function createCreditCard(data: {
       credit_limit: creditLimit,
       available_credit: availableCredit,
       current_balance: currentBalance,
+      statement_balance: data.statement_balance ?? null,
+      statement_balance_as_of: data.statement_balance_as_of ?? null,
       include_in_totals: data.include_in_totals ?? true,
       sort_order: data.sort_order ?? 0,
     })
@@ -607,6 +612,8 @@ export async function updateCreditCard(
     name: string;
     credit_limit: number;
     available_credit: number;
+    statement_balance: number | null;
+    statement_balance_as_of: string | null;
     current_balance: number;
     include_in_totals: boolean;
     sort_order: number;
@@ -1387,7 +1394,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   const totalCreditCardBalances = (creditCards as CreditCard[])
     .filter(cc => cc.include_in_totals === true)
-    .reduce((sum, cc) => sum + Number(cc.current_balance), 0);
+    .reduce((sum, cc) => sum + getCreditCardBalanceOwed(cc), 0);
 
   // Calculate pending checks total: expenses subtract, income adds
   // Income is positive (adds to available funds), expense is negative (subtracts from available funds)
@@ -3213,7 +3220,7 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
         currentBalance = goal.linked_account.balance || 0;
       } else if (goal.goal_type === 'debt-paydown') {
         if (goal.linked_credit_card) {
-          currentBalance = goal.linked_credit_card.current_balance || 0;
+          currentBalance = getCreditCardBalanceOwed(goal.linked_credit_card);
         } else if (goal.linked_loan) {
           currentBalance = goal.linked_loan.balance || 0;
         }
@@ -3288,7 +3295,7 @@ export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
     currentBalance = goal.linked_account.balance || 0;
   } else if (goal.goal_type === 'debt-paydown') {
     if (goal.linked_credit_card) {
-      currentBalance = goal.linked_credit_card.current_balance || 0;
+      currentBalance = getCreditCardBalanceOwed(goal.linked_credit_card);
     } else if (goal.linked_loan) {
       currentBalance = goal.linked_loan.balance || 0;
     }

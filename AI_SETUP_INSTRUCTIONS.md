@@ -42,13 +42,16 @@ The error shows your API key has a quota limit of 0. This usually means:
    - Make sure the key is active
    - Check quota limits in the dashboard
 
-3. **Model Availability**: The model `gemini-2.0-flash-exp` might not be available in your region
-   - Try using `gemini-1.5-flash` or `gemini-1.5-pro` instead
+3. **Model Selection (Free Tier)**: Use only free-tier models to avoid billing charges:
+   - `gemini-2.5-flash` — reasoning tasks (chat, insights, merchant suggestions)
+   - `gemini-2.5-flash-lite` — fast tasks (transaction categorization)
+   - Avoid `gemini-2.5-pro` (expensive on paid tier) and `gemini-flash-latest` (alias)
    - Update in `.env.local`:
      ```
-     GEMINI_PRO_MODEL=gemini-1.5-pro
-     GEMINI_FLASH_MODEL=gemini-1.5-flash
+     GEMINI_PRO_MODEL=gemini-2.5-flash
+     GEMINI_FLASH_MODEL=gemini-2.5-flash-lite
      ```
+   - If you have billing enabled on your Google AI Studio project, usage is charged per token even for free-tier models once daily quotas are exceeded. Check quotas at https://aistudio.google.com/
 
 ## Step 3: Verify Setup
 

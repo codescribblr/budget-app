@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { formatCurrency } from '@/lib/utils';
+import { getCreditCardBalanceOwed } from '@/lib/credit-card-balance';
 import type { CreditCard } from '@/lib/types';
 import { toast } from 'sonner';
 import { Check, X, MoreVertical, Edit, Trash2 } from 'lucide-react';
@@ -159,7 +160,10 @@ export default function CreditCardList({ creditCards, onUpdate, onUpdateSummary,
     }
   };
 
-  const totalBalance = creditCards.reduce((sum, card) => sum + card.current_balance, 0);
+  const totalBalance = creditCards.reduce(
+    (sum, card) => sum + getCreditCardBalanceOwed(card),
+    0
+  );
 
   return (
     <>

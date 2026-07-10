@@ -255,7 +255,7 @@ export async function createNetWorthSnapshot(): Promise<void> {
     // Get all credit cards (all credit cards are liabilities for net worth)
     const { data: creditCards } = await supabase
       .from('credit_cards')
-      .select('current_balance')
+      .select('current_balance, credit_limit, available_credit')
       .eq('account_id', budgetAccountId);
 
     // Get all loans (only those included in net worth)

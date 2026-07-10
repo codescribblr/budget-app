@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/utils';
+import { getCreditCardBalanceOwed, getCreditCardStatementBalance } from '@/lib/credit-card-balance';
 import type { CreditCard } from '@/lib/types';
 import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
@@ -71,8 +72,10 @@ export default function CreditCardDetailPage({ creditCardId }: { creditCardId: s
     );
   }
 
+  const balanceOwed = getCreditCardBalanceOwed(creditCard);
+  const statementBalance = getCreditCardStatementBalance(creditCard);
   const utilizationPercentage = creditCard.credit_limit > 0
-    ? ((creditCard.current_balance / creditCard.credit_limit) * 100).toFixed(1)
+    ? ((balanceOwed / creditCard.credit_limit) * 100).toFixed(1)
     : '0';
 
   return (
@@ -102,8 +105,11 @@ export default function CreditCardDetailPage({ creditCardId }: { creditCardId: s
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">Current Balance</div>
-          <div className="text-lg font-semibold">{formatCurrency(creditCard.current_balance)}</div>
+          <div className="text-xs text-muted-foreground">Balance Owed</div>
+          <div className="text-lg font-semibold">{formatCurrency(balanceOwed)}</div>
+          <div className="text-xs text-muted-foreground mt-1">
+            Limit − available · used for net worth
+          </div>
         </Card>
         <Card className="p-4">
           <div className="text-xs text-muted-foreground">Available Credit</div>
@@ -117,6 +123,22 @@ export default function CreditCardDetailPage({ creditCardId }: { creditCardId: s
           </div>
         </Card>
       </div>
+
+      {statementBalance != null && (
+        <Card className="p-4">
+          <div className="text-sm font-medium">Statement Balance</div>
+          <div className="text-lg font-semibold mt-1">{formatCurrency(statementBalance)}</div>
+          {creditCard.statement_balance_as_of && (
+            <div className="text-xs text-muted-foreground mt-1">
+              As of {creditCard.statement_balance_as_of}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground mt-2">
+            From your monthly statement — for payoff planning. Net worth uses live balance owed above.
+            Category envelopes track in-month spending from transactions.
+          </p>
+        </Card>
+      )}
 
       {creditCard.id && (
         <>

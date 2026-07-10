@@ -1,5 +1,6 @@
 import { differenceInCalendarMonths, parseISO } from 'date-fns';
-import type { Account, CreditCard, Loan, NonCashAsset } from '@/lib/types';
+import type { Account, Loan, NonCashAsset } from '@/lib/types';
+import { getCreditCardBalanceOwed, type CreditCardOwedFields } from '@/lib/credit-card-balance';
 
 export interface NetWorthBreakdown {
   totalAccounts: number;
@@ -15,7 +16,7 @@ export interface NetWorthBreakdown {
  */
 export function computeNetWorthBreakdown(
   accounts: Pick<Account, 'balance' | 'include_in_totals'>[],
-  creditCards: Pick<CreditCard, 'current_balance'>[],
+  creditCards: CreditCardOwedFields[],
   loans: Pick<Loan, 'balance' | 'include_in_net_worth'>[],
   assets: Pick<NonCashAsset, 'current_value'>[]
 ): NetWorthBreakdown {
@@ -24,7 +25,7 @@ export function computeNetWorthBreakdown(
     .reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
 
   const totalCreditCards = creditCards.reduce(
-    (sum, cc) => sum + Number(cc.current_balance || 0),
+    (sum, cc) => sum + getCreditCardBalanceOwed(cc),
     0
   );
 

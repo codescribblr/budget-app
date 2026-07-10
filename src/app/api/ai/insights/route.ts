@@ -291,7 +291,7 @@ export async function POST(request: NextRequest) {
     // SECURITY: Filtered by account_id = accountId
     const { data: creditCards } = await supabase
       .from('credit_cards')
-      .select('id, name, current_balance, credit_limit, available_credit')
+      .select('id, name, current_balance, credit_limit, available_credit, statement_balance, statement_balance_as_of')
       .eq('account_id', accountId)
       .order('sort_order', { ascending: true });
 
@@ -484,6 +484,8 @@ export async function POST(request: NextRequest) {
         current_balance: cc.current_balance || 0,
         credit_limit: cc.credit_limit || 0,
         available_credit: cc.available_credit || 0,
+        statement_balance: cc.statement_balance ?? null,
+        statement_balance_as_of: cc.statement_balance_as_of ?? null,
       })),
       loans: (loans || []).map((l) => ({
         name: l.name,

@@ -159,7 +159,7 @@ export async function buildUserContext(userId: string, dateRange?: { start: stri
   // Get credit cards (for net worth / debt context in chat)
   const { data: creditCards } = await supabase
     .from('credit_cards')
-    .select('id, name, current_balance, credit_limit, available_credit')
+    .select('id, name, current_balance, credit_limit, available_credit, statement_balance, statement_balance_as_of')
     .eq('account_id', accountId)
     .order('sort_order', { ascending: true });
 
@@ -249,6 +249,15 @@ export async function buildUserContext(userId: string, dateRange?: { start: stri
     .eq('budget_account_id', accountId)
     .order('snapshot_date', { ascending: false })
     .limit(24);
+
+  // Enabled feature flags (for workflow recommendations in chat)
+  const { data: featureFlags } = await supabase
+    .from('user_feature_flags')
+    .select('feature_name')
+    .eq('account_id', accountId)
+    .eq('enabled', true);
+
+  const enabledFeatures = (featureFlags || []).map((f: { feature_name: string }) => f.feature_name);
 
   // Get income - prefer income streams, fallback to legacy settings
   let incomeSettings: UserContext['incomeSettings'] = {
@@ -455,6 +464,8 @@ export async function buildUserContext(userId: string, dateRange?: { start: stri
       current_balance: cc.current_balance || 0,
       credit_limit: cc.credit_limit || 0,
       available_credit: cc.available_credit || 0,
+      statement_balance: cc.statement_balance ?? null,
+      statement_balance_as_of: cc.statement_balance_as_of ?? null,
     })),
     tags: (tags || []).map((t: any) => ({ id: t.id, name: t.name })),
     nonCashAssets: (nonCashAssets || []).map((a: any) => ({
@@ -502,6 +513,7 @@ export async function buildUserContext(userId: string, dateRange?: { start: stri
       monthly_amount: incomeBufferCategory.monthly_amount || 0,
     } : null,
     incomeSettings,
+    enabledFeatures: enabledFeatures.length > 0 ? enabledFeatures : undefined,
     dateRange: {
       start: startDate.toISOString().split('T')[0],
       end: endDate.toISOString().split('T')[0],

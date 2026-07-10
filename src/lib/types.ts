@@ -38,6 +38,10 @@ export interface CreditCard {
   credit_limit: number;
   available_credit: number;
   current_balance: number; // Calculated: credit_limit - available_credit
+  /** Balance from last statement; updated at monthly import/reconcile. Used for debt tracking. */
+  statement_balance: number | null;
+  /** Date of the statement or when statement_balance was last entered. */
+  statement_balance_as_of: string | null;
   include_in_totals: boolean;
   sort_order: number;
   created_at: string;
@@ -375,6 +379,8 @@ export interface CreateCreditCardRequest {
   name: string;
   credit_limit: number;
   available_credit: number;
+  statement_balance?: number | null;
+  statement_balance_as_of?: string | null;
   include_in_totals?: boolean;
   sort_order?: number;
 }
@@ -383,6 +389,8 @@ export interface UpdateCreditCardRequest {
   name?: string;
   credit_limit?: number;
   available_credit?: number;
+  statement_balance?: number | null;
+  statement_balance_as_of?: string | null;
   include_in_totals?: boolean;
   sort_order?: number;
 }

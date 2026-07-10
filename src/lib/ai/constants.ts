@@ -15,9 +15,14 @@ export const GLOBAL_LIMITS = {
   requestsPerDay: 1500,
 } as const;
 
+// Free-tier models (Google AI Studio): gemini-2.5-flash, gemini-2.5-flash-lite.
+// Avoid gemini-2.5-pro and gemini-flash-latest — Pro is ~25x costlier on paid tier,
+// and -latest aliases can resolve to preview models outside the free tier.
 export const GEMINI_MODELS = {
-  pro: process.env.GEMINI_PRO_MODEL || 'gemini-2.0-flash-exp',
-  flash: process.env.GEMINI_FLASH_MODEL || 'gemini-2.0-flash-exp',
+  // Reasoning tasks: chat, insights, merchant suggestions
+  pro: process.env.GEMINI_PRO_MODEL || 'gemini-2.5-flash',
+  // Fast tasks: transaction categorization
+  flash: process.env.GEMINI_FLASH_MODEL || 'gemini-2.5-flash-lite',
 } as const;
 
 export const CACHE_DURATION = {

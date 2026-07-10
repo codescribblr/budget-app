@@ -155,8 +155,7 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Use Gemini 2.5 Pro for more accurate analysis
-    const modelName = GEMINI_MODELS.pro;
+    const modelName = GEMINI_MODELS.pro; // defaults to gemini-2.5-flash (free tier)
     const model = genAI.getGenerativeModel({ model: modelName });
 
     const prompt = `You are analyzing financial transactions to identify which merchants represent CURRENTLY ACTIVE recurring transactions that users care about tracking.

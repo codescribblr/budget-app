@@ -133,6 +133,8 @@ export const OPENAPI_COMPONENT_SCHEMAS: Record<string, Record<string, unknown>> 
       credit_limit: { type: 'number' },
       available_credit: { type: 'number' },
       current_balance: { type: 'number' },
+      statement_balance: { type: 'number', nullable: true },
+      statement_balance_as_of: { type: 'string', format: 'date', nullable: true },
       include_in_totals: { type: 'boolean' },
       sort_order: { type: 'integer' },
       created_at: { type: 'string', format: 'date-time' },

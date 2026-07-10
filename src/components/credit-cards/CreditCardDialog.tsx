@@ -27,6 +27,8 @@ export default function CreditCardDialog({ isOpen, onClose, creditCard, onSucces
   const [cardName, setCardName] = useState('');
   const [creditLimit, setCreditLimit] = useState('');
   const [availableCredit, setAvailableCredit] = useState('');
+  const [statementBalance, setStatementBalance] = useState('');
+  const [statementBalanceAsOf, setStatementBalanceAsOf] = useState('');
   const [includeInTotals, setIncludeInTotals] = useState(true);
   const [loading, setLoading] = useState(false);
 
@@ -37,12 +39,18 @@ export default function CreditCardDialog({ isOpen, onClose, creditCard, onSucces
         setCardName(creditCard.name);
         setCreditLimit(creditCard.credit_limit.toString());
         setAvailableCredit(creditCard.available_credit.toString());
+        setStatementBalance(
+          creditCard.statement_balance != null ? creditCard.statement_balance.toString() : ''
+        );
+        setStatementBalanceAsOf(creditCard.statement_balance_as_of || '');
         setIncludeInTotals(creditCard.include_in_totals);
       } else {
         // Add mode
         setCardName('');
         setCreditLimit('0');
         setAvailableCredit('0');
+        setStatementBalance('');
+        setStatementBalanceAsOf('');
         setIncludeInTotals(true);
       }
     }
@@ -56,17 +64,23 @@ export default function CreditCardDialog({ isOpen, onClose, creditCard, onSucces
 
     setLoading(true);
     try {
+      const parsedStatement =
+        statementBalance.trim() === '' ? null : parseFloat(statementBalance) || 0;
+      const payload = {
+        name: cardName.trim(),
+        credit_limit: parseFloat(creditLimit) || 0,
+        available_credit: parseFloat(availableCredit) || 0,
+        statement_balance: parsedStatement,
+        statement_balance_as_of: statementBalanceAsOf.trim() || null,
+        include_in_totals: includeInTotals,
+      };
+
       if (creditCard) {
         // Update existing credit card
         const response = await fetch(`/api/credit-cards/${creditCard.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: cardName.trim(),
-            credit_limit: parseFloat(creditLimit) || 0,
-            available_credit: parseFloat(availableCredit) || 0,
-            include_in_totals: includeInTotals,
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
@@ -80,12 +94,7 @@ export default function CreditCardDialog({ isOpen, onClose, creditCard, onSucces
         const response = await fetch('/api/credit-cards', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: cardName.trim(),
-            credit_limit: parseFloat(creditLimit) || 0,
-            available_credit: parseFloat(availableCredit) || 0,
-            include_in_totals: includeInTotals,
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
@@ -161,8 +170,40 @@ export default function CreditCardDialog({ isOpen, onClose, creditCard, onSucces
             />
           </div>
           <div className="p-3 bg-muted rounded-md">
-            <div className="text-sm text-muted-foreground">Balance Owed (calculated)</div>
+            <div className="text-sm text-muted-foreground">Live balance owed (from available credit)</div>
             <div className="text-lg font-semibold">{formatCurrency(calculatedBalance)}</div>
+          </div>
+
+          <div className="border-t pt-4 space-y-4">
+            <div>
+              <p className="text-sm font-medium">Statement balance (optional)</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Enter the balance from your monthly statement when you import or reconcile.
+                Used for payoff planning — net worth always uses live balance (limit − available credit).
+                Category envelopes track in-month spending separately.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="statement-balance">Statement Balance</Label>
+              <Input
+                id="statement-balance"
+                type="number"
+                step="0.01"
+                min="0"
+                value={statementBalance}
+                onChange={(e) => setStatementBalance(e.target.value)}
+                placeholder="From your latest statement"
+              />
+            </div>
+            <div>
+              <Label htmlFor="statement-date">Statement Date</Label>
+              <Input
+                id="statement-date"
+                type="date"
+                value={statementBalanceAsOf}
+                onChange={(e) => setStatementBalanceAsOf(e.target.value)}
+              />
+            </div>
           </div>
           <div className="flex items-center space-x-2">
             <input
