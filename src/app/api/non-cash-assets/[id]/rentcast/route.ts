@@ -51,6 +51,8 @@ export async function GET(
         rentcast_enabled: asset.rentcast_enabled ?? false,
         rentcast_last_sync_at: asset.rentcast_last_sync_at ?? null,
         rentcast_last_error: asset.rentcast_last_error ?? null,
+        rentcast_value_preference: asset.rentcast_value_preference ?? 'estimate',
+        current_value: asset.current_value,
         property_type: asset.property_type ?? null,
         bedrooms: asset.bedrooms ?? null,
         bathrooms: asset.bathrooms ?? null,

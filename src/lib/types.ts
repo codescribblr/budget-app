@@ -74,6 +74,8 @@ export interface NonCashAsset {
   square_footage?: number | null;
   rentcast_last_sync_at?: string | null;
   rentcast_last_error?: string | null;
+  /** Which RentCast figure to store as current_value: estimate | low | high */
+  rentcast_value_preference?: 'estimate' | 'low' | 'high';
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -93,6 +95,7 @@ export interface CreateNonCashAssetRequest {
   bedrooms?: number | null;
   bathrooms?: number | null;
   square_footage?: number | null;
+  rentcast_value_preference?: 'estimate' | 'low' | 'high';
   sort_order?: number;
 }
 
@@ -110,6 +113,7 @@ export interface UpdateNonCashAssetRequest {
   bedrooms?: number | null;
   bathrooms?: number | null;
   square_footage?: number | null;
+  rentcast_value_preference?: 'estimate' | 'low' | 'high';
   sort_order?: number;
 }
 

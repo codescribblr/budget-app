@@ -157,19 +157,27 @@ export async function markJobFailed(jobId: number, errorMessage: string): Promis
 /**
  * Schedule recurring jobs (called after job completion to schedule next run)
  */
+function isMonthlyOnFirstSchedule(schedule: string): boolean {
+  // Matches "0 0 1 * *", "0 9 1 * *", etc. (minute hour day-of-month month day-of-week)
+  const parts = schedule.trim().split(/\s+/);
+  return parts.length === 5 && parts[2] === '1' && parts[3] === '*' && parts[4] === '*';
+}
+
 export async function scheduleNextRun(jobType: string, metadata?: Record<string, any>): Promise<void> {
   const schedule = metadata?.schedule || '0 8 * * *'; // Default to daily at 8 AM
   
   let nextRun: Date;
   
-  if (schedule === '0 0 1 * *') {
-    // Monthly on 1st at midnight UTC
-    // Note: With daily cron at 8 AM UTC, this will execute at 8 AM UTC on the 1st
-    // If cron frequency increases in the future, it will execute closer to midnight
+  if (isMonthlyOnFirstSchedule(schedule)) {
+    // Monthly on the 1st. Preserve hour from cron when present (e.g. "0 9 1 * *" → 09:00 UTC).
+    // Note: With daily cron at 8 AM UTC, jobs scheduled before 8 AM run at the next cron tick.
+    const parts = schedule.trim().split(/\s+/);
+    const hour = Number.parseInt(parts[1], 10);
+    const minute = Number.parseInt(parts[0], 10);
     nextRun = new Date();
-    nextRun.setMonth(nextRun.getMonth() + 1);
-    nextRun.setDate(1);
-    nextRun.setHours(0, 0, 0, 0);
+    nextRun.setUTCMonth(nextRun.getUTCMonth() + 1);
+    nextRun.setUTCDate(1);
+    nextRun.setUTCHours(Number.isFinite(hour) ? hour : 0, Number.isFinite(minute) ? minute : 0, 0, 0);
   } else if (schedule === '0 8 * * *') {
     // Daily at 8 AM
     nextRun = new Date();

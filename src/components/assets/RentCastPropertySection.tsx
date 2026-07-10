@@ -7,12 +7,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { formatCurrency } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { handleApiError } from '@/lib/api-error-handler';
 import { toast } from 'sonner';
 import type { NonCashAsset, RentCastIntegrationSettingsResponse, RentCastValuationSummary } from '@/lib/types';
-import { RENTCAST_AFFILIATE_URL, RENTCAST_PROMO_CODE, RENTCAST_PROMO_DISCOUNT } from '@/lib/integrations/rentcast/types';
-import { ExternalLink, Home, RefreshCw } from 'lucide-react';
+import {
+  RENTCAST_AFFILIATE_URL,
+  RENTCAST_PROMO_CODE,
+  RENTCAST_PROMO_DISCOUNT,
+  type RentCastValuePreference,
+} from '@/lib/integrations/rentcast/types';
+import { Check, ExternalLink, Home, RefreshCw } from 'lucide-react';
 
 interface RentCastPropertySectionProps {
   asset: NonCashAsset;
@@ -24,6 +29,8 @@ interface RentCastResponse {
     rentcast_enabled: boolean;
     rentcast_last_sync_at: string | null;
     rentcast_last_error: string | null;
+    rentcast_value_preference: RentCastValuePreference;
+    current_value: number;
     property_type: string | null;
     bedrooms: number | null;
     bathrooms: number | null;
@@ -33,9 +40,55 @@ interface RentCastResponse {
   valuation: RentCastValuationSummary | null;
 }
 
+function ValuationChoiceCard({
+  label,
+  value,
+  preference,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  label: string;
+  value: number;
+  preference: RentCastValuePreference;
+  selected: boolean;
+  disabled?: boolean;
+  onSelect: (preference: RentCastValuePreference) => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onSelect(preference)}
+      className={cn(
+        'rounded-md border p-3 text-left transition-colors w-full',
+        'hover:border-primary/60 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        selected && 'border-primary bg-primary/10 ring-1 ring-primary/40',
+        disabled && 'opacity-60 cursor-not-allowed'
+      )}
+      aria-pressed={selected}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        {selected && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-primary">
+            <Check className="h-3 w-3" />
+            Active
+          </span>
+        )}
+      </div>
+      <div className="text-lg font-semibold mt-1">{formatCurrency(value)}</div>
+      <div className="text-[11px] text-muted-foreground mt-1">
+        {selected ? 'Used as property value' : 'Click to use as property value'}
+      </div>
+    </button>
+  );
+}
+
 export default function RentCastPropertySection({ asset, onAssetUpdated }: RentCastPropertySectionProps) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [selecting, setSelecting] = useState(false);
   const [data, setData] = useState<RentCastResponse | null>(null);
 
   const fetchRentCastData = async () => {
@@ -59,7 +112,8 @@ export default function RentCastPropertySection({ asset, onAssetUpdated }: RentC
     if (asset.asset_type === 'real_estate') {
       fetchRentCastData();
     }
-  }, [asset.id, asset.asset_type, asset.rentcast_enabled, asset.rentcast_last_sync_at]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asset.id, asset.asset_type, asset.rentcast_enabled, asset.rentcast_last_sync_at, asset.current_value]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -84,6 +138,31 @@ export default function RentCastPropertySection({ asset, onAssetUpdated }: RentC
     }
   };
 
+  const handleSelectValue = async (preference: RentCastValuePreference) => {
+    if (!data?.valuation || selecting) return;
+    if ((data.asset.rentcast_value_preference || 'estimate') === preference) return;
+
+    setSelecting(true);
+    try {
+      const response = await fetch(`/api/non-cash-assets/${asset.id}/rentcast/select-value`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preference }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to update property value');
+      }
+      toast.success(`Property value set to RentCast ${preference}`);
+      await fetchRentCastData();
+      onAssetUpdated();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update property value');
+    } finally {
+      setSelecting(false);
+    }
+  };
+
   if (asset.asset_type !== 'real_estate') {
     return null;
   }
@@ -91,6 +170,7 @@ export default function RentCastPropertySection({ asset, onAssetUpdated }: RentC
   const integrationEnabled = data?.integration?.is_enabled ?? false;
   const trackingEnabled = asset.rentcast_enabled ?? false;
   const valuation = data?.valuation;
+  const activePreference = data?.asset.rentcast_value_preference ?? 'estimate';
   const subject = valuation?.subject_property as Record<string, unknown> | null | undefined;
   const comparables = (valuation?.comparables as Record<string, unknown>[] | null | undefined) ?? [];
 
@@ -105,6 +185,7 @@ export default function RentCastPropertySection({ asset, onAssetUpdated }: RentC
             </CardTitle>
             <CardDescription>
               Automated property value estimates from RentCast.io using your own API key.
+              Click a value below to use it as this property&apos;s stored value.
             </CardDescription>
           </div>
           {trackingEnabled && integrationEnabled && (
@@ -112,7 +193,7 @@ export default function RentCastPropertySection({ asset, onAssetUpdated }: RentC
               variant="outline"
               size="sm"
               onClick={handleSync}
-              disabled={syncing || data?.integration?.monthly_limit_reached}
+              disabled={syncing || selecting || data?.integration?.monthly_limit_reached}
             >
               {syncing ? <LoadingSpinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4 mr-2" />}
               Sync Now
@@ -181,21 +262,33 @@ export default function RentCastPropertySection({ asset, onAssetUpdated }: RentC
             {valuation ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="rounded-md border p-3">
-                    <div className="text-xs text-muted-foreground">Estimated Value</div>
-                    <div className="text-lg font-semibold">{formatCurrency(valuation.estimated_value)}</div>
-                  </div>
+                  <ValuationChoiceCard
+                    label="Estimated Value"
+                    value={valuation.estimated_value}
+                    preference="estimate"
+                    selected={activePreference === 'estimate'}
+                    disabled={selecting || syncing}
+                    onSelect={handleSelectValue}
+                  />
                   {valuation.price_range_low != null && (
-                    <div className="rounded-md border p-3">
-                      <div className="text-xs text-muted-foreground">Low Range</div>
-                      <div className="text-lg font-semibold">{formatCurrency(valuation.price_range_low)}</div>
-                    </div>
+                    <ValuationChoiceCard
+                      label="Low Range"
+                      value={valuation.price_range_low}
+                      preference="low"
+                      selected={activePreference === 'low'}
+                      disabled={selecting || syncing}
+                      onSelect={handleSelectValue}
+                    />
                   )}
                   {valuation.price_range_high != null && (
-                    <div className="rounded-md border p-3">
-                      <div className="text-xs text-muted-foreground">High Range</div>
-                      <div className="text-lg font-semibold">{formatCurrency(valuation.price_range_high)}</div>
-                    </div>
+                    <ValuationChoiceCard
+                      label="High Range"
+                      value={valuation.price_range_high}
+                      preference="high"
+                      selected={activePreference === 'high'}
+                      disabled={selecting || syncing}
+                      onSelect={handleSelectValue}
+                    />
                   )}
                 </div>
 

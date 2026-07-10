@@ -8,10 +8,41 @@ import {
   RentCastRateLimitError,
   RentCastSyncResult,
   type RentCastAssetFields,
+  type RentCastValuePreference,
   type RentCastValueEstimateResponse,
 } from './types';
 import { fetchRentCastValueEstimate } from './client';
 import { validateRentCastAssetReadiness } from './validation';
+
+/**
+ * Resolve which dollar amount to store from a RentCast estimate based on user preference.
+ * Falls back to estimate when low/high is missing.
+ */
+export function resolveRentCastStoredValue(
+  estimate: Pick<RentCastValueEstimateResponse, 'price' | 'priceRangeLow' | 'priceRangeHigh'>,
+  preference: RentCastValuePreference | null | undefined
+): { value: number; appliedPreference: RentCastValuePreference } {
+  const pref = preference === 'low' || preference === 'high' ? preference : 'estimate';
+
+  if (pref === 'low' && estimate.priceRangeLow != null) {
+    return { value: Number(estimate.priceRangeLow), appliedPreference: 'low' };
+  }
+  if (pref === 'high' && estimate.priceRangeHigh != null) {
+    return { value: Number(estimate.priceRangeHigh), appliedPreference: 'high' };
+  }
+  return { value: Number(estimate.price), appliedPreference: 'estimate' };
+}
+
+function wasSyncedThisUtcMonth(lastSyncAt: string | null | undefined): boolean {
+  if (!lastSyncAt) return false;
+  const synced = new Date(lastSyncAt);
+  if (Number.isNaN(synced.getTime())) return false;
+  const now = new Date();
+  return (
+    synced.getUTCFullYear() === now.getUTCFullYear() &&
+    synced.getUTCMonth() === now.getUTCMonth()
+  );
+}
 
 interface IntegrationRow {
   id: number;
@@ -221,10 +252,18 @@ export async function syncRentCastAsset(
   supabase: SupabaseClient,
   accountId: number,
   asset: RentCastAssetFields,
-  options?: { skipIfLimitReached?: boolean }
+  options?: { skipIfLimitReached?: boolean; skipIfSyncedThisMonth?: boolean }
 ): Promise<RentCastSyncResult> {
   if (!asset.rentcast_enabled) {
     return { success: false, skipped: true, error: 'RentCast tracking is disabled for this asset' };
+  }
+
+  if (options?.skipIfSyncedThisMonth && wasSyncedThisUtcMonth(asset.rentcast_last_sync_at)) {
+    return {
+      success: false,
+      skipped: true,
+      error: 'Already synced this month',
+    };
   }
 
   const readiness = validateRentCastAssetReadiness(asset);
@@ -269,7 +308,10 @@ export async function syncRentCastAsset(
   try {
     const estimate = await fetchRentCastValueEstimate(apiKey, asset);
     const oldValue = Number(asset.current_value);
-    const newValue = Number(estimate.price);
+    const { value: newValue, appliedPreference } = resolveRentCastStoredValue(
+      estimate,
+      asset.rentcast_value_preference
+    );
     const ownerId = await getAccountOwnerId(supabase, accountId);
 
     await storeRentCastValuation(supabase, accountId, asset.id, estimate);
@@ -295,6 +337,8 @@ export async function syncRentCastAsset(
       newValue,
       metadata: {
         source: 'rentcast',
+        value_preference: appliedPreference,
+        estimated_value: estimate.price,
         price_range_low: estimate.priceRangeLow ?? null,
         price_range_high: estimate.priceRangeHigh ?? null,
       },
@@ -315,7 +359,7 @@ export async function syncRentCastAsset(
 
     return {
       success: true,
-      estimatedValue: newValue,
+      estimatedValue: Number(estimate.price),
       oldValue,
       newValue,
     };
@@ -355,7 +399,7 @@ export async function syncAllRentCastAssetsForAccount(
   const { data: assets, error } = await supabase
     .from('non_cash_assets')
     .select(
-      'id, account_id, name, asset_type, address, current_value, rentcast_enabled, property_type, bedrooms, bathrooms, square_footage, rentcast_last_sync_at, rentcast_last_error'
+      'id, account_id, name, asset_type, address, current_value, rentcast_enabled, property_type, bedrooms, bathrooms, square_footage, rentcast_last_sync_at, rentcast_last_error, rentcast_value_preference'
     )
     .eq('account_id', accountId)
     .eq('asset_type', 'real_estate')
@@ -377,6 +421,7 @@ export async function syncAllRentCastAssetsForAccount(
 
     const result = await syncRentCastAsset(supabase, accountId, asset as RentCastAssetFields, {
       skipIfLimitReached: true,
+      skipIfSyncedThisMonth: true,
     });
 
     if (result.success) {

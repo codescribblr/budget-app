@@ -102,6 +102,10 @@ export interface RentCastValuationRecord {
   created_at: string;
 }
 
+export type RentCastValuePreference = 'estimate' | 'low' | 'high';
+
+export const RENTCAST_VALUE_PREFERENCES = ['estimate', 'low', 'high'] as const;
+
 export interface RentCastAssetFields {
   id: number;
   account_id: number;
@@ -116,6 +120,7 @@ export interface RentCastAssetFields {
   square_footage: number | null;
   rentcast_last_sync_at: string | null;
   rentcast_last_error: string | null;
+  rentcast_value_preference?: RentCastValuePreference | null;
 }
 
 export interface RentCastSyncResult {

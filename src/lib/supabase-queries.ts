@@ -800,6 +800,7 @@ export async function updateNonCashAsset(
     bathrooms: number | null;
     square_footage: number | null;
     sort_order: number;
+    rentcast_value_preference?: 'estimate' | 'low' | 'high';
   }>
 ): Promise<NonCashAsset | null> {
   const { supabase } = await getAuthenticatedUser();
