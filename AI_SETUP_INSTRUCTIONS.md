@@ -42,16 +42,29 @@ The error shows your API key has a quota limit of 0. This usually means:
    - Make sure the key is active
    - Check quota limits in the dashboard
 
-3. **Model Selection (Free Tier)**: Use only free-tier models to avoid billing charges:
-   - `gemini-2.5-flash` — reasoning tasks (chat, insights, merchant suggestions)
-   - `gemini-2.5-flash-lite` — fast tasks (transaction categorization)
-   - Avoid `gemini-2.5-pro` (expensive on paid tier) and `gemini-flash-latest` (alias)
-   - Update in `.env.local`:
+3. **Stay on Free Tier (billing)**: Google does **not** charge only after you exceed
+   free rate limits. Behavior is project-based:
+   - **Free Tier project** (no billing linked): models marked "Free of charge" cost $0;
+     exceeding RPM/RPD/TPM returns `429`, it does not start billing.
+   - **Paid Tier project** (billing linked): **every token is charged** from the first
+     request — there is no free allowance inside a paid project ([Google forum confirmation](https://discuss.ai.google.dev/t/clarification-on-gemini-api-free-tier-vs-paid-tier-after-billing-activation/96995)).
+   - Check the project’s Billing Tier in [Google AI Studio](https://aistudio.google.com/).
+     To stay free, use an API key from a project that still shows Free (not Tier 1+).
+
+4. **Model Selection (Free Tier)**: Use stable Flash models that list **Free of charge**
+   on [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing):
+   - `gemini-3.5-flash` — reasoning (chat, insights, merchant suggestions)
+   - `gemini-3.1-flash-lite` — fast tasks (transaction categorization)
+   - Avoid `gemini-2.5-pro` (very expensive if the project is paid)
+   - Avoid `gemini-2.5-flash` / `gemini-2.5-flash-lite` — many keys get
+     404 "no longer available to new users"
+   - Prefer stable IDs over `gemini-flash-latest` / `gemini-flash-lite-latest`
+     (aliases can hot-swap to preview models)
+   - Update in `.env.local` **and** Vercel production env:
      ```
-     GEMINI_PRO_MODEL=gemini-2.5-flash
-     GEMINI_FLASH_MODEL=gemini-2.5-flash-lite
+     GEMINI_PRO_MODEL=gemini-3.5-flash
+     GEMINI_FLASH_MODEL=gemini-3.1-flash-lite
      ```
-   - If you have billing enabled on your Google AI Studio project, usage is charged per token even for free-tier models once daily quotas are exceeded. Check quotas at https://aistudio.google.com/
 
 ## Step 3: Verify Setup
 

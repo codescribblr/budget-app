@@ -157,9 +157,10 @@ export async function buildUserContext(userId: string, dateRange?: { start: stri
     .order('sort_order', { ascending: true });
 
   // Get credit cards (for net worth / debt context in chat)
+  // Select * so optional columns (e.g. statement_balance) don't break if a migration is pending
   const { data: creditCards } = await supabase
     .from('credit_cards')
-    .select('id, name, current_balance, credit_limit, available_credit, statement_balance, statement_balance_as_of')
+    .select('*')
     .eq('account_id', accountId)
     .order('sort_order', { ascending: true });
 

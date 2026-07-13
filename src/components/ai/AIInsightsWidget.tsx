@@ -111,11 +111,11 @@ export function AIInsightsWidget() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
         if (response.status === 429) {
           toast.error('Daily insights limit reached. Try again tomorrow.');
         } else {
-          toast.error(error.error || 'Failed to generate insights');
+          toast.error(error.message || error.error || 'Failed to generate insights');
         }
         return;
       }

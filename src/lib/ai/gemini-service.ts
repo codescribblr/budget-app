@@ -375,6 +375,8 @@ IMPORTANT:
         current_balance: number;
         credit_limit: number;
         available_credit: number;
+        statement_balance?: number | null;
+        statement_balance_as_of?: string | null;
       }>;
       loans?: Array<{
         name: string;
@@ -608,17 +610,26 @@ Only return the JSON object, no other text.`;
       };
     } catch (error: any) {
       console.error('Error generating insights:', error);
-      
+      const msg = error.message || String(error);
+
       // Check for quota/rate limit errors
-      if (error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('Quota exceeded')) {
-        const retryAfter = error.message?.match(/retry in ([\d.]+)s/i)?.[1];
+      if (msg.includes('429') || msg.includes('quota') || msg.includes('Quota exceeded')) {
+        const retryAfter = msg.match(/retry in ([\d.]+)s/i)?.[1];
         throw new Error(
           `AI service quota exceeded. ${retryAfter ? `Please retry in ${Math.ceil(parseFloat(retryAfter))} seconds.` : 'Please try again later.'} ` +
           `If this persists, check your Google Gemini API key configuration in Google AI Studio.`
         );
       }
-      
-      throw new Error(`Failed to generate insights: ${error.message}`);
+
+      // Older Flash IDs often 404 for newer API keys — point at current free-tier stables
+      if (msg.includes('404') || msg.includes('not found') || msg.includes('no longer available')) {
+        throw new Error(
+          `Gemini model unavailable (${GEMINI_MODELS.pro}). Set GEMINI_PRO_MODEL=gemini-3.5-flash ` +
+          `and GEMINI_FLASH_MODEL=gemini-3.1-flash-lite on a Free Tier (no billing) project. Details: ${msg}`
+        );
+      }
+
+      throw new Error(`Failed to generate insights: ${msg}`);
     }
   }
 

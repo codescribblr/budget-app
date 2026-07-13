@@ -289,11 +289,16 @@ export async function POST(request: NextRequest) {
 
     // Get credit cards
     // SECURITY: Filtered by account_id = accountId
-    const { data: creditCards } = await supabase
+    // Select * so optional columns (e.g. statement_balance) don't break if a migration is pending
+    const { data: creditCards, error: creditCardsError } = await supabase
       .from('credit_cards')
-      .select('id, name, current_balance, credit_limit, available_credit, statement_balance, statement_balance_as_of')
+      .select('*')
       .eq('account_id', accountId)
       .order('sort_order', { ascending: true });
+
+    if (creditCardsError) {
+      console.error('Error fetching credit cards for insights:', creditCardsError);
+    }
 
     // Get loans
     // SECURITY: Filtered by account_id = accountId
