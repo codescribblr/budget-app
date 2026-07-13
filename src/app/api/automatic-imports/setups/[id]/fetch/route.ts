@@ -5,6 +5,7 @@ import { checkWriteAccess } from '@/lib/api-helpers';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { fetchAndQueueTellerTransactions, fetchTellerAccounts } from '@/lib/automatic-imports/providers/teller-service';
 import { getDecryptedAccessToken } from '@/lib/automatic-imports/helpers';
+import { dedupeErrors, formatTellerErrorForStorage } from '@/lib/automatic-imports/teller-errors';
 
 /**
  * POST /api/automatic-imports/setups/[id]/fetch
@@ -88,14 +89,14 @@ export async function POST(
             }).catch(err => ({
               fetched: 0,
               queued: 0,
-              errors: [err.message],
+              errors: [formatTellerErrorForStorage(err)],
             }))
           )
         );
         
         const totalFetched = results.reduce((sum, r) => sum + r.fetched, 0);
         const totalQueued = results.reduce((sum, r) => sum + r.queued, 0);
-        const allErrors = results.flatMap(r => r.errors);
+        const allErrors = dedupeErrors(results.flatMap(r => r.errors));
 
         await serviceSupabase
           .from('automatic_import_setups')
@@ -130,14 +131,14 @@ export async function POST(
           }).catch(err => ({
             fetched: 0,
             queued: 0,
-            errors: [err.message],
+            errors: [formatTellerErrorForStorage(err)],
           }))
         )
       );
 
       const totalFetched = results.reduce((sum, r) => sum + r.fetched, 0);
       const totalQueued = results.reduce((sum, r) => sum + r.queued, 0);
-      const allErrors = results.flatMap(r => r.errors);
+      const allErrors = dedupeErrors(results.flatMap(r => r.errors));
 
       // Update setup status
       await serviceSupabase

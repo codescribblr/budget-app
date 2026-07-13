@@ -11,6 +11,7 @@ import { extractMerchant } from '../../csv-parser-helpers';
 import type { ColumnMapping } from '../../mapping-templates';
 import { convertApiTransactionsToVirtualCSV, analyzeVirtualCSV } from '../api-to-csv-converter';
 import { analyzeCSV } from '../../column-analyzer';
+import { formatTellerErrorForStorage } from '../teller-errors';
 
 export interface TellerTransaction {
   id: string;
@@ -119,7 +120,7 @@ export async function fetchTellerTransactions(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Teller API error: ${response.status} ${errorText}`);
+    throw new Error(formatTellerErrorForStorage(`Teller API error: ${response.status} ${errorText}`));
   }
 
   const transactions = await response.json();
@@ -151,7 +152,7 @@ export async function fetchTellerAccount(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Teller API error: ${response.status} ${errorText}`);
+    throw new Error(formatTellerErrorForStorage(`Teller API error: ${response.status} ${errorText}`));
   }
 
   return await response.json() as TellerAccount;
@@ -608,8 +609,8 @@ export async function fetchAndQueueTellerTransactions(options: {
       errors,
     };
   } catch (error: any) {
-    const errorMessage = error.message || 'Unknown error';
-    errors.push(`Error fetching Teller transactions: ${errorMessage}`);
+    const errorMessage = formatTellerErrorForStorage(error);
+    errors.push(errorMessage);
     console.error('Error fetching Teller transactions:', error);
     return {
       fetched: 0,

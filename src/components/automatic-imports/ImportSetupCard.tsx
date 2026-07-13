@@ -1,14 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Trash2, Edit, Mail, AlertCircle, CheckCircle2, RefreshCw, CreditCard, Settings, Loader2, ExternalLink } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Trash2, Mail, AlertCircle, CheckCircle2, RefreshCw, CreditCard, Settings, Loader2, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import TellerConnect from './providers/TellerConnect';
 import TellerAccountMappingDialog from './TellerAccountMappingDialog';
+import { parseTellerError } from '@/lib/automatic-imports/teller-errors';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,6 +75,14 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
   } | null>(null);
   const [accountNames, setAccountNames] = useState<Record<number, string>>({});
   const [creditCardNames, setCreditCardNames] = useState<Record<number, string>>({});
+  const [reconnecting, setReconnecting] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  const formattedError = setup.last_error ? parseTellerError(setup.last_error) : null;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Get account mappings for Teller integrations
   const accountMappings = setup.source_config?.account_mappings || [];
@@ -171,11 +184,26 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
       }
 
       const data = await response.json();
-      alert(`Fetched ${data.fetched} transactions, queued ${data.queued} for review`);
+      const errors: string[] = data.errors || [];
+
+      if (errors.length > 0) {
+        const parsedErrors = errors.map(parseTellerError);
+        const primaryError = parsedErrors[0];
+
+        toast.error('Could not fetch transactions', {
+          description: primaryError.message,
+          duration: 8000,
+        });
+      } else if (data.fetched === 0 && data.queued === 0) {
+        toast.info('No new transactions found');
+      } else {
+        toast.success(`Fetched ${data.fetched} transactions, queued ${data.queued} for review`);
+      }
+
       onUpdated();
     } catch (error: any) {
       console.error('Error fetching transactions:', error);
-      alert(error.message || 'Failed to fetch transactions');
+      toast.error(error.message || 'Failed to fetch transactions');
     } finally {
       setFetching(false);
     }
@@ -218,6 +246,53 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
     setShowEditAccounts(false);
     setMappingData(null);
     onUpdated();
+  };
+
+  const handleStartReconnect = () => {
+    setReconnecting(true);
+  };
+
+  const handleReconnectSuccess = async (enrollment: {
+    accessToken: string;
+    enrollmentId: string;
+    institutionName: string;
+    userId: string;
+  }) => {
+    try {
+      const response = await fetch('/api/automatic-imports/teller/reconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          setupId: setup.id,
+          accessToken: enrollment.accessToken,
+          enrollmentId: enrollment.enrollmentId,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to reconnect bank account');
+      }
+
+      toast.success(`${setup.bank_name || 'Bank account'} reconnected`, {
+        description: 'Automatic imports should resume on the next fetch.',
+      });
+      onUpdated();
+    } catch (error: any) {
+      console.error('Error reconnecting Teller account:', error);
+      toast.error(error.message || 'Failed to reconnect bank account');
+    } finally {
+      setReconnecting(false);
+    }
+  };
+
+  const handleReconnectError = (error: Error) => {
+    toast.error(error.message || 'Failed to connect with Teller');
+    setReconnecting(false);
+  };
+
+  const handleReconnectExit = () => {
+    setReconnecting(false);
   };
 
   const handleRemapLatestBatch = async () => {
@@ -389,6 +464,20 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
 
   return (
     <>
+      {reconnecting && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="w-full max-w-md p-6">
+            <TellerConnect
+              onExit={handleReconnectExit}
+              onSuccess={handleReconnectSuccess}
+              onError={handleReconnectError}
+              autoOpen={true}
+            />
+          </div>
+        </div>,
+        document.body
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between">
@@ -594,14 +683,37 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
               <span>{setup.last_successful_fetch_at ? formatDate(setup.last_successful_fetch_at) : 'Never'}</span>
             </div>
             
-            {setup.error_count > 0 && (
-              <div className="flex items-center gap-2 text-sm text-destructive">
+            {setup.error_count > 0 && formattedError && (
+              <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <span>{setup.error_count} error(s)</span>
-                {setup.last_error && (
-                  <span className="text-muted-foreground">• {setup.last_error.substring(0, 50)}...</span>
-                )}
-              </div>
+                <AlertTitle>
+                  Import error{setup.error_count > 1 ? ` (${setup.error_count} recent failures)` : ''}
+                </AlertTitle>
+                <AlertDescription className="space-y-3">
+                  <p>{formattedError.message}</p>
+                  {formattedError.action === 'reconnect' && setup.source_type === 'teller' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleStartReconnect}
+                      disabled={reconnecting}
+                      className="bg-background"
+                    >
+                      {reconnecting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Connecting...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          {formattedError.actionLabel || 'Reconnect bank account'}
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </AlertDescription>
+              </Alert>
             )}
 
             {setup.error_count === 0 && setup.last_successful_fetch_at && (

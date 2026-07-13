@@ -45,12 +45,30 @@ export async function POST(request: Request) {
       .single();
 
     if (existingSetup) {
-      // Setup already exists, return it so user can edit mappings
-      const { data: setup } = await supabase
+      // Setup already exists — refresh the access token (e.g. after reconnection)
+      const encryptedAccessToken = encrypt(accessToken);
+
+      const { data: setup, error: setupFetchError } = await supabase
         .from('automatic_import_setups')
         .select('*')
         .eq('id', existingSetup.id)
         .single();
+
+      if (setupFetchError || !setup) {
+        return NextResponse.json({ error: 'Import setup not found' }, { status: 404 });
+      }
+
+      await supabase
+        .from('automatic_import_setups')
+        .update({
+          source_config: {
+            ...setup.source_config,
+            access_token: encryptedAccessToken,
+          },
+          last_error: null,
+          error_count: 0,
+        })
+        .eq('id', setup.id);
 
       // Fetch accounts from Teller
       let tellerAccounts: any[] = [];
@@ -68,7 +86,7 @@ export async function POST(request: Request) {
         setupId: setup.id,
         enrollmentId,
         institutionName,
-        accessToken: setup.source_config?.access_token, // Return encrypted token from existing setup
+        accessToken: encryptedAccessToken,
         accounts: tellerAccounts.map(acc => ({
           id: acc.id,
           name: acc.name,
