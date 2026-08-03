@@ -49,6 +49,14 @@ interface TransactionPreviewProps {
 const VIRTUALIZE_THRESHOLD = 50;
 const ROW_HEIGHT = 53;
 
+function isDuplicateTransaction(t: ParsedTransaction) {
+  return (
+    t.duplicateType === 'database' ||
+    t.duplicateType === 'within-file' ||
+    !!t.isDuplicate
+  );
+}
+
 interface EditingField {
   transactionId: string;
   field: 'date' | 'amount' | 'category' | 'account';
@@ -113,6 +121,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
   const [items, setItems] = useState<ParsedTransaction[]>(transactions);
   const [categories, setCategories] = useState<Category[]>([]);
   const [showArchivedCategories, setShowArchivedCategories] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [editingTransaction, setEditingTransaction] = useState<ParsedTransaction | null>(null);
@@ -137,34 +146,27 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
   }, [selectedTransactions, onSelectionChange]);
   const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
   const tableScrollRef = useRef<HTMLDivElement>(null);
-  const useVirtualTable = items.length >= VIRTUALIZE_THRESHOLD;
   const { stats, refreshStats } = useAIUsage();
   const { isPremium } = useSubscription();
   const aiChatEnabled = useFeature('ai_chat');
 
   // Helper functions for selection modes
   const getDuplicateTransactions = () => {
-    return items.filter(t => 
-      t.duplicateType === 'database' || 
-      t.duplicateType === 'within-file' || 
-      t.isDuplicate
-    );
+    return items.filter(isDuplicateTransaction);
   };
 
   const getUncategorizedTransactions = () => {
-    return items.filter(t => {
-      const isDuplicate = t.duplicateType === 'database' || t.duplicateType === 'within-file' || t.isDuplicate;
-      return !isDuplicate && t.splits.length === 0;
-    });
+    return items.filter(t => !isDuplicateTransaction(t) && t.splits.length === 0);
   };
 
   const getNonDuplicateTransactions = () => {
-    return items.filter(t => 
-      t.duplicateType !== 'database' && 
-      t.duplicateType !== 'within-file' && 
-      !t.isDuplicate
-    );
+    return items.filter(t => !isDuplicateTransaction(t));
   };
+
+  const visibleItems = useMemo(
+    () => (showDuplicates ? items : items.filter(t => !isDuplicateTransaction(t))),
+    [items, showDuplicates]
+  );
 
   const handleSelectAll = () => {
     setSelectedTransactions(new Set(items.map(t => t.id)));
@@ -189,9 +191,9 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
     setSelectedTransactions(new Set());
   };
 
-  // Shift-click selection handler
+  // Shift-click selection handler (ordered by what's visible on screen)
   const handleCheckboxClick = useShiftClickSelection(
-    items,
+    visibleItems,
     (item) => item.id,
     selectedTransactions,
     setSelectedTransactions
@@ -818,8 +820,10 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
   };
 
 
+  const useVirtualTable = visibleItems.length >= VIRTUALIZE_THRESHOLD;
+
   const rowVirtualizer = useVirtualizer({
-    count: items.length,
+    count: visibleItems.length,
     getScrollElement: () => tableScrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 15,
@@ -916,15 +920,29 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
               <span className="font-medium">Excluded:</span> {totalExcludedCount}
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Checkbox
-              id="show-archived-categories"
-              checked={showArchivedCategories}
-              onCheckedChange={(v) => setShowArchivedCategories(!!v)}
-            />
-            <Label htmlFor="show-archived-categories" className="font-normal">
-              Show archived categories
-            </Label>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+            {(databaseDuplicateCount > 0 || withinFileDuplicateCount > 0) && (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="show-duplicates"
+                  checked={showDuplicates}
+                  onCheckedChange={(v) => setShowDuplicates(!!v)}
+                />
+                <Label htmlFor="show-duplicates" className="font-normal">
+                  Show duplicates ({databaseDuplicateCount + withinFileDuplicateCount})
+                </Label>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="show-archived-categories"
+                checked={showArchivedCategories}
+                onCheckedChange={(v) => setShowArchivedCategories(!!v)}
+              />
+              <Label htmlFor="show-archived-categories" className="font-normal">
+                Show archived categories
+              </Label>
+            </div>
           </div>
           <div className="flex gap-2 shrink-0">
             {selectedTransactions.size > 0 && (
@@ -1043,6 +1061,16 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
             </TableRow>
           </TableHeader>
           <TableBody>
+            {visibleItems.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                  {items.length > 0 && !showDuplicates
+                    ? 'All transactions in this import are duplicates. Enable "Show duplicates" to review them.'
+                    : 'No transactions to review.'}
+                </TableCell>
+              </TableRow>
+            ) : (
+              <>
             {useVirtualTable && paddingTop > 0 && (
               <TableRow aria-hidden style={{ height: paddingTop, border: 0 }}>
                 <TableCell colSpan={10} className="p-0" />
@@ -1050,9 +1078,9 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
             )}
             {(useVirtualTable
               ? virtualRows.map((virtualRow) => virtualRow.index)
-              : items.map((_, index) => index)
+              : visibleItems.map((_, index) => index)
             ).map((rowIndex) => {
-              const transaction = items[rowIndex];
+              const transaction = visibleItems[rowIndex];
               const isEditingDate = editingField?.transactionId === transaction.id && editingField?.field === 'date';
               const isEditingAmount = editingField?.transactionId === transaction.id && editingField?.field === 'amount';
               const isEditingCategory = editingField?.transactionId === transaction.id && editingField?.field === 'category';
@@ -1060,7 +1088,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
 
               // Determine row background color based on transaction status
               // Duplicates take precedence over uncategorized status
-              const isDuplicate = transaction.duplicateType === 'database' || transaction.duplicateType === 'within-file' || transaction.isDuplicate;
+              const isDuplicate = isDuplicateTransaction(transaction);
               const isUncategorized = !isDuplicate && transaction.splits.length === 0;
               const isManuallyExcluded = transaction.status === 'excluded' && transaction.splits.length > 0 && !isDuplicate;
               const isReadyToImport = !isUncategorized && 
@@ -1349,6 +1377,8 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
               <TableRow aria-hidden style={{ height: paddingBottom, border: 0 }}>
                 <TableCell colSpan={10} className="p-0" />
               </TableRow>
+            )}
+              </>
             )}
           </TableBody>
         </Table>
