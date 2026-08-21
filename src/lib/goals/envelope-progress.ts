@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { envelopeGoalProgressAmount } from '@/lib/goals/calculations';
+import {
+  buildEnvelopeGoalBreakdown,
+  envelopeGoalProgressAmount,
+  type EnvelopeGoalBreakdown,
+  type EnvelopeGoalTransactionRow,
+} from '@/lib/goals/calculations';
 
 const PAGE_SIZE = 1000;
 
@@ -75,4 +80,54 @@ export function applyEnvelopeGoalProgress(
     return envelopeGoalProgressAmount(envelopeBalance, 0);
   }
   return envelopeGoalProgressAmount(envelopeBalance, spendingByCategory[categoryId] || 0);
+}
+
+export async function getEnvelopeGoalBreakdown(
+  supabase: SupabaseClient,
+  categoryId: number | null | undefined,
+  envelopeBalance: number,
+  budgetAccountId?: number
+): Promise<EnvelopeGoalBreakdown> {
+  if (!categoryId) {
+    return buildEnvelopeGoalBreakdown(envelopeBalance, []);
+  }
+
+  const transactions: EnvelopeGoalTransactionRow[] = [];
+  let from = 0;
+  while (true) {
+    let query = supabase
+      .from('transaction_splits')
+      .select('amount, transaction_id, transactions!inner(id, date, description, transaction_type, budget_account_id)')
+      .eq('category_id', categoryId);
+
+    if (budgetAccountId) {
+      query = query.eq('transactions.budget_account_id', budgetAccountId);
+    }
+
+    const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+
+    const rows = data || [];
+    for (const row of rows) {
+      const related = row.transactions as
+        | { id?: number; date?: string; description?: string; transaction_type?: string }
+        | { id?: number; date?: string; description?: string; transaction_type?: string }[]
+        | null;
+      const tx = Array.isArray(related) ? related[0] : related;
+      transactions.push({
+        date: tx?.date || null,
+        description: tx?.description || 'Transaction',
+        amount: Number(row.amount) || 0,
+        transaction_id: Number(tx?.id || row.transaction_id),
+        transaction_type: tx?.transaction_type || 'expense',
+      });
+    }
+
+    if (rows.length < PAGE_SIZE) {
+      break;
+    }
+    from += PAGE_SIZE;
+  }
+
+  return buildEnvelopeGoalBreakdown(envelopeBalance, transactions);
 }

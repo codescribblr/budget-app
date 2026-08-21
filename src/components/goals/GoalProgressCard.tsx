@@ -12,8 +12,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { GoalWithDetails } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
-import { MoreVertical, Edit, Trash2, Play, Pause, Target, Calendar, TrendingUp, CreditCard } from 'lucide-react';
+import { MoreVertical, Edit, Trash2, Play, Pause, Target, Calendar, TrendingUp } from 'lucide-react';
 import { parseLocalDate } from '@/lib/date-utils';
+import Link from 'next/link';
 
 interface GoalProgressCardProps {
   goal: GoalWithDetails;
@@ -67,7 +68,11 @@ export default function GoalProgressCard({
       <CardHeader>
         <div className="flex justify-between items-start">
           <div className="flex-1">
-            <CardTitle className="text-lg">{goal.name}</CardTitle>
+            <CardTitle className="text-lg">
+              <Link href={`/goals/${goal.id}`} className="hover:underline">
+                {goal.name}
+              </Link>
+            </CardTitle>
             <CardDescription className="mt-1">
               {getStatusBadge()}
               {goal.goal_type === 'account-linked' && goal.linked_account && (
@@ -143,6 +148,22 @@ export default function GoalProgressCard({
             <div className="font-semibold">{formatCurrency(goal.monthly_contribution)}</div>
           </div>
         </div>
+
+        {goal.goal_type === 'envelope' && (
+          <div className="text-xs text-muted-foreground space-y-1">
+            <div className="flex justify-between">
+              <span>Still in envelope</span>
+              <span>{formatCurrency(goal.envelope_leftover || 0)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Paid from this category</span>
+              <span>{formatCurrency(goal.categorized_spending || 0)}</span>
+            </div>
+            <Link href={`/goals/${goal.id}`} className="inline-block hover:underline">
+              See how this total is calculated
+            </Link>
+          </div>
+        )}
 
         {/* Timeline Info */}
         {goal.target_date && (

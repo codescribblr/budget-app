@@ -556,6 +556,8 @@ export interface Goal {
   
   // Computed fields (not in DB)
   current_balance?: number; // Envelope: leftover + categorized spending. Debt-paydown: remaining card/loan balance.
+  envelope_leftover?: number | null; // Envelope only: money still in the category
+  categorized_spending?: number | null; // Envelope only: transactions still in the category
   progress_percentage?: number; // For debt-paydown: (target_amount - current_balance) / target_amount * 100
   remaining_amount?: number; // For debt-paydown: current_balance (how much debt is left to pay)
   months_remaining?: number | null;

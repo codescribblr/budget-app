@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGoalById, getAuthenticatedUser } from '@/lib/supabase-queries';
 import { calculateGoalProgress } from '@/lib/goals/calculations';
+import { getEnvelopeGoalBreakdown } from '@/lib/goals/envelope-progress';
 import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
 import { getActiveAccountId } from '@/lib/account-context';
 
@@ -13,7 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { user } = await getAuthenticatedUser();
+    const { supabase } = await getAuthenticatedUser();
     const accountId = await getActiveAccountId();
     if (!accountId) {
       return NextResponse.json(
@@ -43,6 +44,16 @@ export async function GET(
     }
     
     const progress = calculateGoalProgress(goal, goal.current_balance || 0);
+
+    let breakdown = null;
+    if (goal.goal_type === 'envelope') {
+      breakdown = await getEnvelopeGoalBreakdown(
+        supabase,
+        goal.linked_category_id,
+        goal.linked_category?.current_balance || 0,
+        accountId
+      );
+    }
     
     return NextResponse.json({
       goal: {
@@ -52,8 +63,11 @@ export async function GET(
         target_date: goal.target_date,
         monthly_contribution: goal.monthly_contribution,
         current_balance: goal.current_balance,
+        envelope_leftover: goal.envelope_leftover,
+        categorized_spending: goal.categorized_spending,
       },
       progress,
+      breakdown,
     });
   } catch (error: any) {
     if (error instanceof PremiumRequiredError) {

@@ -20,6 +20,78 @@ export function envelopeGoalProgressAmount(
   return Math.round(Math.max(0, total) * 100) / 100;
 }
 
+export type EnvelopeGoalBreakdownItem = {
+  kind: 'leftover' | 'transaction';
+  date: string | null;
+  description: string;
+  amount: number;
+  transaction_id?: number;
+};
+
+export type EnvelopeGoalBreakdown = {
+  leftover: number;
+  categorized_spending: number;
+  total: number;
+  items: EnvelopeGoalBreakdownItem[];
+};
+
+export type EnvelopeGoalTransactionRow = {
+  date: string | null;
+  description: string;
+  amount: number;
+  transaction_id: number;
+  transaction_type?: string | null;
+};
+
+export function signedGoalSpending(amount: number, transactionType?: string | null): number {
+  const value = Number(amount) || 0;
+  return transactionType === 'income' ? -value : value;
+}
+
+export function buildEnvelopeGoalBreakdown(
+  envelopeBalance: number,
+  transactions: EnvelopeGoalTransactionRow[]
+): EnvelopeGoalBreakdown {
+  const leftover = Math.max(0, Number(envelopeBalance) || 0);
+  const items: EnvelopeGoalBreakdownItem[] = [];
+
+  const sorted = [...transactions].sort((a, b) => {
+    const dateA = a.date || '';
+    const dateB = b.date || '';
+    if (dateA !== dateB) return dateA.localeCompare(dateB);
+    return a.transaction_id - b.transaction_id;
+  });
+
+  let categorizedSpending = 0;
+  for (const tx of sorted) {
+    const amount = signedGoalSpending(tx.amount, tx.transaction_type);
+    categorizedSpending += amount;
+    items.push({
+      kind: 'transaction',
+      date: tx.date,
+      description: tx.description,
+      amount,
+      transaction_id: tx.transaction_id,
+    });
+  }
+
+  if (leftover > 0) {
+    items.push({
+      kind: 'leftover',
+      date: null,
+      description: 'Still in this envelope',
+      amount: leftover,
+    });
+  }
+
+  return {
+    leftover,
+    categorized_spending: Math.round(categorizedSpending * 100) / 100,
+    total: envelopeGoalProgressAmount(envelopeBalance, categorizedSpending),
+    items,
+  };
+}
+
 /**
  * Calculate goal progress and tracking metrics
  */

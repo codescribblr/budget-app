@@ -3224,8 +3224,12 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
   const goalsWithDetails: GoalWithDetails[] = await Promise.all(
     (goals || []).map(async (goal: any) => {
       let currentBalance = 0;
+      let envelopeLeftover: number | null = null;
+      let categorizedSpending: number | null = null;
       
       if (goal.goal_type === 'envelope' && goal.linked_category) {
+        envelopeLeftover = Math.max(0, Number(goal.linked_category.current_balance) || 0);
+        categorizedSpending = envelopeSpending[goal.linked_category_id] || 0;
         currentBalance = applyEnvelopeGoalProgress(
           goal.linked_category.current_balance || 0,
           envelopeSpending,
@@ -3262,6 +3266,8 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
         linked_credit_card: goal.linked_credit_card || null,
         linked_loan: goal.linked_loan || null,
         current_balance: currentBalance,
+        envelope_leftover: envelopeLeftover,
+        categorized_spending: categorizedSpending,
         progress_percentage: progress.progress_percentage,
         remaining_amount: progress.remaining_amount,
         months_remaining: progress.months_remaining,
@@ -3304,12 +3310,16 @@ export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
   if (!goal) return null;
   
   let currentBalance = 0;
+  let envelopeLeftover: number | null = null;
+  let categorizedSpending: number | null = null;
   if (goal.goal_type === 'envelope' && goal.linked_category) {
     const envelopeSpending = await sumCategorizedSpendingByCategory(
       supabase,
       goal.linked_category_id ? [goal.linked_category_id] : [],
       accountId
     );
+    envelopeLeftover = Math.max(0, Number(goal.linked_category.current_balance) || 0);
+    categorizedSpending = envelopeSpending[goal.linked_category_id] || 0;
     currentBalance = applyEnvelopeGoalProgress(
       goal.linked_category.current_balance || 0,
       envelopeSpending,
@@ -3333,6 +3343,8 @@ export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
     linked_credit_card: goal.linked_credit_card || null,
     linked_loan: goal.linked_loan || null,
     current_balance: currentBalance,
+    envelope_leftover: envelopeLeftover,
+    categorized_spending: categorizedSpending,
     progress_percentage: progress.progress_percentage,
     remaining_amount: progress.remaining_amount,
     months_remaining: progress.months_remaining,

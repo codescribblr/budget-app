@@ -468,7 +468,7 @@ export function CommandPalette() {
                     key={goal.id}
                     value={goal.name}
                     onSelect={() => {
-                      runCommand(() => router.push('/goals'))
+                      runCommand(() => router.push(`/goals/${goal.id}`))
                     }}
                   >
                     <Target className="mr-2 h-4 w-4" />
