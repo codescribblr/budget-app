@@ -1,5 +1,6 @@
 import { createClient } from '../supabase/server';
 import { getActiveAccountId } from '../account-context';
+import { applyEnvelopeGoalProgress, sumCategorizedSpendingByCategory } from '../goals/envelope-progress';
 import type { UserContext } from './types';
 
 /**
@@ -141,6 +142,15 @@ export async function buildUserContext(userId: string, dateRange?: { start: stri
     .eq('account_id', accountId)
     .order('status', { ascending: true })
     .order('created_at', { ascending: false });
+
+  const envelopeCategoryIds = (goals || [])
+    .filter((g) => g.goal_type === 'envelope' && g.linked_category_id)
+    .map((g) => g.linked_category_id as number);
+  const envelopeSpending = await sumCategorizedSpendingByCategory(
+    supabase,
+    envelopeCategoryIds,
+    accountId
+  );
 
   // Get bank accounts (checking, savings, cash)
   const { data: accounts } = await supabase
@@ -426,7 +436,14 @@ export async function buildUserContext(userId: string, dateRange?: { start: stri
       // Calculate current_amount based on goal type
       let current_amount = 0;
       if (g.goal_type === 'envelope' && g.linked_category) {
-        current_amount = g.linked_category.current_balance || 0;
+        const linkedCategory = Array.isArray(g.linked_category)
+          ? g.linked_category[0]
+          : g.linked_category;
+        current_amount = applyEnvelopeGoalProgress(
+          linkedCategory?.current_balance || 0,
+          envelopeSpending,
+          g.linked_category_id
+        );
       } else if (g.goal_type === 'account-linked' && g.linked_account) {
         current_amount = g.linked_account.balance || 0;
       }

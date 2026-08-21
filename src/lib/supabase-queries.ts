@@ -20,6 +20,7 @@ import type {
 } from './types';
 import { calculateAggregateMonthlyNetIncome } from './income-calculations';
 import { calculateGoalProgress, calculateGoalStatus } from './goals/calculations';
+import { applyEnvelopeGoalProgress, sumCategorizedSpendingByCategory } from './goals/envelope-progress';
 import { getActiveAccountId } from './account-context';
 import { getExternalApiAuthOverride } from './external-api-overrides';
 import { cache } from 'react';
@@ -3209,6 +3210,15 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
     .order('created_at', { ascending: false });
   
   if (error) throw error;
+
+  const envelopeCategoryIds = (goals || [])
+    .filter((goal: any) => goal.goal_type === 'envelope' && goal.linked_category_id)
+    .map((goal: any) => goal.linked_category_id as number);
+  const envelopeSpending = await sumCategorizedSpendingByCategory(
+    supabase,
+    envelopeCategoryIds,
+    accountId
+  );
   
   // Calculate current balance and progress for each goal
   const goalsWithDetails: GoalWithDetails[] = await Promise.all(
@@ -3216,7 +3226,11 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
       let currentBalance = 0;
       
       if (goal.goal_type === 'envelope' && goal.linked_category) {
-        currentBalance = goal.linked_category.current_balance || 0;
+        currentBalance = applyEnvelopeGoalProgress(
+          goal.linked_category.current_balance || 0,
+          envelopeSpending,
+          goal.linked_category_id
+        );
       } else if (goal.goal_type === 'account-linked' && goal.linked_account) {
         currentBalance = goal.linked_account.balance || 0;
       } else if (goal.goal_type === 'debt-paydown') {
@@ -3291,7 +3305,16 @@ export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
   
   let currentBalance = 0;
   if (goal.goal_type === 'envelope' && goal.linked_category) {
-    currentBalance = goal.linked_category.current_balance || 0;
+    const envelopeSpending = await sumCategorizedSpendingByCategory(
+      supabase,
+      goal.linked_category_id ? [goal.linked_category_id] : [],
+      accountId
+    );
+    currentBalance = applyEnvelopeGoalProgress(
+      goal.linked_category.current_balance || 0,
+      envelopeSpending,
+      goal.linked_category_id
+    );
   } else if (goal.goal_type === 'account-linked' && goal.linked_account) {
     currentBalance = goal.linked_account.balance || 0;
   } else if (goal.goal_type === 'debt-paydown') {

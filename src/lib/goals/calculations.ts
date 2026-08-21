@@ -1,6 +1,26 @@
 import type { Goal, GoalProgress } from '@/lib/types';
 
 /**
+ * Envelope goal progress: leftover in the envelope plus transactions
+ * still categorized to that envelope.
+ *
+ * Transfers and manual take-outs only change leftover, so they reduce
+ * the total. A payment stays in the total because it remains a
+ * transaction on the goal category.
+ */
+export function envelopeGoalProgressAmount(
+  envelopeBalance: number,
+  categorizedSpending: number
+): number {
+  const leftover = Number(envelopeBalance) || 0;
+  const spent = Number(categorizedSpending) || 0;
+  // Negative leftover is unfunded spending already counted in `spent`.
+  // Using max(leftover, 0) keeps that payment in the goal total.
+  const total = Math.max(0, leftover) + spent;
+  return Math.round(Math.max(0, total) * 100) / 100;
+}
+
+/**
  * Calculate goal progress and tracking metrics
  */
 export function calculateGoalProgress(goal: Goal, currentBalance: number): GoalProgress {
