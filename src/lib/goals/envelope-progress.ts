@@ -5,8 +5,7 @@ import {
   type EnvelopeGoalBreakdown,
   type EnvelopeGoalTransactionRow,
 } from '@/lib/goals/calculations';
-
-const PAGE_SIZE = 1000;
+import { nextStableSplitRange, SPLIT_PAGE_SIZE } from '@/lib/goals/stable-range';
 
 /**
  * Net spending still assigned to the given categories.
@@ -37,7 +36,10 @@ export async function sumCategorizedSpendingByCategory(
       query = query.eq('transactions.budget_account_id', budgetAccountId);
     }
 
-    const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
+    const page = nextStableSplitRange(from);
+    const { data, error } = await query
+      .order(page.orderColumn, { ascending: page.ascending })
+      .range(page.from, page.to);
 
     if (error) throw error;
 
@@ -62,10 +64,10 @@ export async function sumCategorizedSpendingByCategory(
       }
     }
 
-    if (rows.length < PAGE_SIZE) {
+    if (rows.length < SPLIT_PAGE_SIZE) {
       break;
     }
-    from += PAGE_SIZE;
+    from += SPLIT_PAGE_SIZE;
   }
 
   return totals;
@@ -104,7 +106,10 @@ export async function getEnvelopeGoalBreakdown(
       query = query.eq('transactions.budget_account_id', budgetAccountId);
     }
 
-    const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
+    const page = nextStableSplitRange(from);
+    const { data, error } = await query
+      .order(page.orderColumn, { ascending: page.ascending })
+      .range(page.from, page.to);
     if (error) throw error;
 
     const rows = data || [];
@@ -123,10 +128,10 @@ export async function getEnvelopeGoalBreakdown(
       });
     }
 
-    if (rows.length < PAGE_SIZE) {
+    if (rows.length < SPLIT_PAGE_SIZE) {
       break;
     }
-    from += PAGE_SIZE;
+    from += SPLIT_PAGE_SIZE;
   }
 
   return buildEnvelopeGoalBreakdown(envelopeBalance, transactions);

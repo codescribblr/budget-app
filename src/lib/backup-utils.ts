@@ -1214,7 +1214,7 @@ export async function importUserDataFromFile(
   }
 
   // Insert imported transactions (batch)
-  // Note: imported_transactions has UNIQUE(user_id, hash) constraint, so duplicates will fail
+  // Note: imported_transactions has UNIQUE(account_id, hash) constraint, so duplicates will fail
   if (backupData.imported_transactions && backupData.imported_transactions.length > 0) {
     const importedTransactionsToInsert = backupData.imported_transactions.map(({ id, account_id, user_id, ...importedTx }) => ({
       ...importedTx,

@@ -21,6 +21,11 @@ import type {
 import { calculateAggregateMonthlyNetIncome } from './income-calculations';
 import { calculateGoalProgress, calculateGoalStatus } from './goals/calculations';
 import { applyEnvelopeGoalProgress, sumCategorizedSpendingByCategory } from './goals/envelope-progress';
+import {
+  assertNoUpdateErrors,
+  findRetryTransactionMatch,
+  resolveImportedHashes,
+} from './import/import-hash-resolution';
 import { getActiveAccountId } from './account-context';
 import { getExternalApiAuthOverride } from './external-api-overrides';
 import { cache } from 'react';
@@ -2788,40 +2793,46 @@ export async function importTransactions(
   const hashToImportedId = new Map<string, number>();
   const skippedItems: ImportTransactionsSkippedItem[] = [];
   const hashes = validTransactions.map(txn => txn.hash).filter((hash): hash is string => !!hash);
+  let orphanedHashes = new Set<string>();
 
   if (hashes.length > 0) {
     const { data: existingImported, error: existingImportedError } = await supabase
       .from('imported_transactions')
-      .select('id, hash')
+      .select('id, hash, account_id')
       .eq('user_id', user.id)
+      .eq('account_id', accountId)
       .in('hash', hashes);
 
     if (existingImportedError) throw existingImportedError;
 
     const existingIds = (existingImported || []).map(record => record.id);
-    const linkedImportedIds = new Set<number>();
 
+    let existingLinks: { imported_transaction_id: number }[] = [];
     if (existingIds.length > 0) {
-      const { data: existingLinks, error: linksLookupError } = await supabase
+      const { data: linkRows, error: linksLookupError } = await supabase
         .from('imported_transaction_links')
         .select('imported_transaction_id')
         .in('imported_transaction_id', existingIds);
 
       if (linksLookupError) throw linksLookupError;
-      existingLinks?.forEach(link => linkedImportedIds.add(link.imported_transaction_id));
+      existingLinks = linkRows || [];
     }
 
-    const fullyImportedHashes = new Set<string>();
-    for (const record of existingImported || []) {
-      hashToImportedId.set(record.hash, record.id);
-      if (linkedImportedIds.has(record.id)) {
-        fullyImportedHashes.add(record.hash);
-        const txn = validTransactions.find(t => t.hash === record.hash);
-        skippedItems.push({
-          description: txn?.description || record.hash,
-          reason: 'Already imported',
-        });
-      }
+    const resolved = resolveImportedHashes(
+      accountId,
+      existingImported || [],
+      existingLinks
+    );
+    resolved.hashToImportedId.forEach((id, hash) => hashToImportedId.set(hash, id));
+    const fullyImportedHashes = resolved.fullyImportedHashes;
+    orphanedHashes = resolved.orphanedHashes;
+
+    for (const hash of fullyImportedHashes) {
+      const txn = validTransactions.find(t => t.hash === hash);
+      skippedItems.push({
+        description: txn?.description || hash,
+        reason: 'Already imported',
+      });
     }
 
     const transactionsToImport = validTransactions.filter(txn => !fullyImportedHashes.has(txn.hash));
@@ -2940,6 +2951,64 @@ export async function importTransactions(
     );
   }
 
+  const reuseTransactionByHash = new Map<string, number>();
+  const orphanedTxns = validTransactions.filter(
+    (txn) => txn.hash && orphanedHashes.has(txn.hash)
+  );
+  if (orphanedTxns.length > 0) {
+    const orphanDates = [...new Set(orphanedTxns.map((txn) => txn.date))];
+    const { data: retryCandidates, error: retryCandidateError } = await supabase
+      .from('transactions')
+      .select('id, date, description, total_amount')
+      .eq('budget_account_id', accountId)
+      .in('date', orphanDates);
+
+    if (retryCandidateError) throw retryCandidateError;
+
+    const candidateIds = (retryCandidates || []).map((row) => row.id);
+    const linkedTransactionIds = new Set<number>();
+    if (candidateIds.length > 0) {
+      const { data: existingTxLinks, error: existingTxLinksError } = await supabase
+        .from('imported_transaction_links')
+        .select('transaction_id')
+        .in('transaction_id', candidateIds);
+
+      if (existingTxLinksError) throw existingTxLinksError;
+      existingTxLinks?.forEach((link) => linkedTransactionIds.add(link.transaction_id));
+    }
+
+    const unlinkedCandidates = (retryCandidates || []).filter(
+      (row) => !linkedTransactionIds.has(row.id)
+    );
+
+    for (const txn of orphanedTxns) {
+      const matchId = findRetryTransactionMatch(unlinkedCandidates, {
+        date: txn.date,
+        description: txn.description,
+        amount: txn.amount ?? txn.splits?.reduce((sum: number, split: any) => sum + (split.amount || 0), 0),
+      });
+      if (matchId !== null) {
+        reuseTransactionByHash.set(txn.hash, matchId);
+        const usedIndex = unlinkedCandidates.findIndex((row) => row.id === matchId);
+        if (usedIndex >= 0) {
+          unlinkedCandidates.splice(usedIndex, 1);
+        }
+      }
+    }
+  }
+
+  const reusedTransactionIds = [...reuseTransactionByHash.values()];
+  const reusedIdsWithSplits = new Set<number>();
+  if (reusedTransactionIds.length > 0) {
+    const { data: existingReuseSplits, error: existingReuseSplitsError } = await supabase
+      .from('transaction_splits')
+      .select('transaction_id')
+      .in('transaction_id', reusedTransactionIds);
+
+    if (existingReuseSplitsError) throw existingReuseSplitsError;
+    existingReuseSplits?.forEach((row) => reusedIdsWithSplits.add(row.transaction_id));
+  }
+
   // ===== STEP 2: Batch get/create merchant groups =====
   const { getOrCreateMerchantGroup } = await import('@/lib/db/merchant-groups');
   const merchantGroupPromises = validTransactions.map(async (txn) => {
@@ -2983,15 +3052,35 @@ export async function importTransactions(
     };
   });
 
-  const { data: createdTransactions, error: txError } = await supabase
-    .from('transactions')
-    .insert(transactionsData)
-    .select('id');
+  const insertIndexes = validTransactions
+    .map((txn, index) => (txn.hash && reuseTransactionByHash.has(txn.hash) ? -1 : index))
+    .filter((index) => index >= 0);
+  const transactionsToInsert = insertIndexes.map((index) => transactionsData[index]);
 
-  if (txError) throw txError;
-  if (!createdTransactions || createdTransactions.length === 0) {
+  const insertedIds: number[] = [];
+  if (transactionsToInsert.length > 0) {
+    const { data: createdTransactions, error: txError } = await supabase
+      .from('transactions')
+      .insert(transactionsToInsert)
+      .select('id');
+
+    if (txError) throw txError;
+    if (!createdTransactions || createdTransactions.length !== transactionsToInsert.length) {
+      throw new Error('Failed to create transactions');
+    }
+    insertedIds.push(...createdTransactions.map((row) => row.id));
+  } else if (reuseTransactionByHash.size === 0) {
     throw new Error('Failed to create transactions');
   }
+
+  let insertCursor = 0;
+  const createdTransactionIds = validTransactions.map((txn) => {
+    if (txn.hash && reuseTransactionByHash.has(txn.hash)) {
+      return reuseTransactionByHash.get(txn.hash)!;
+    }
+    return insertedIds[insertCursor++];
+  });
+  const createdTransactions = createdTransactionIds.map((id) => ({ id }));
 
   // ===== STEP 4: Batch insert transaction splits =====
   const splitsData: any[] = [];
@@ -3054,6 +3143,9 @@ export async function importTransactions(
   // Process transactions in date order (ascending) to build splits and track audit logs
   for (const { txn, originalIdx } of transactionsWithIndices) {
     const transactionId = transactionIdMap.get(originalIdx)!;
+    if (reusedIdsWithSplits.has(transactionId)) {
+      continue;
+    }
     const transactionType = transactionsData[originalIdx].transaction_type;
     const transactionIsHistorical = txn.is_historical !== undefined ? txn.is_historical : isHistorical;
 
@@ -3093,11 +3185,13 @@ export async function importTransactions(
     });
   }
 
-  const { error: splitsError } = await supabase
-    .from('transaction_splits')
-    .insert(splitsData);
+  if (splitsData.length > 0) {
+    const { error: splitsError } = await supabase
+      .from('transaction_splits')
+      .insert(splitsData);
 
-  if (splitsError) throw splitsError;
+    if (splitsError) throw splitsError;
+  }
 
   // ===== STEP 5: Batch update category balances =====
   if (!isHistorical && categoryBalanceUpdates.size > 0) {
@@ -3123,7 +3217,8 @@ export async function importTransactions(
           .eq('id', cat.id);
       });
 
-    await Promise.all(updatePromises);
+    const updateResults = await Promise.all(updatePromises);
+    assertNoUpdateErrors(updateResults);
 
     // Log individual balance changes for each transaction (already sorted by date ascending)
     const auditChanges = transactionAuditLogs.map(log => ({

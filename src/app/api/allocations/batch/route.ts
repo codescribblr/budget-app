@@ -4,6 +4,7 @@ import { getActiveAccountId } from '@/lib/account-context';
 import { recordMonthlyFunding, isFeatureEnabled } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import { logBalanceChange, logBalanceChanges } from '@/lib/audit/category-balance-audit';
+import { successfulUpdateIndexes } from '@/lib/allocations/batch-revert';
 
 /**
  * POST /api/allocations/batch
@@ -188,6 +189,28 @@ export async function POST(request: NextRequest) {
     const updateError = updateResults.find(result => result.error);
     if (updateError?.error) {
       console.error('Error updating category balances:', updateError.error);
+
+      const succeededIndexes = successfulUpdateIndexes(updateResults);
+      if (succeededIndexes.length > 0) {
+        const revertResults = await Promise.all(
+          succeededIndexes.map((index) => {
+            const allocation = allocations[index];
+            const category = categoryMap.get(allocation.categoryId);
+            return supabase
+              .from('categories')
+              .update({
+                current_balance: category?.current_balance || 0,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', allocation.categoryId)
+              .eq('account_id', accountId);
+          })
+        );
+        const revertError = revertResults.find((result) => result.error);
+        if (revertError?.error) {
+          console.error('Error reverting successful allocations after partial failure:', revertError.error);
+        }
+      }
 
       // Restore buffer balance if allocation failed after a buffer withdrawal
       if (bufferWithdrawn > 0 && bufferCategoryId !== null && bufferBalanceBeforeWithdraw !== null) {
