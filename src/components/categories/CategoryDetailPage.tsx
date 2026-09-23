@@ -94,6 +94,7 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [auditRefreshKey, setAuditRefreshKey] = useState(0);
 
   const updateURL = useCallback((start: string, end: string, range: string) => {
     if (isNaN(numericId)) return;
@@ -120,20 +121,24 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
     setIsInitialized(true);
   }, [searchParams]);
 
-  const fetchBudgetData = useCallback(async () => {
+  const fetchBudgetData = useCallback(async (options?: { silent?: boolean }) => {
     if (isNaN(numericId)) return;
 
     try {
-      setLoading(true);
+      if (!options?.silent) setLoading(true);
 
       const [categoryRes, monthlyRes, ytdRes, activityRes] = await Promise.all([
-        fetch(`/api/categories/${categoryId}`),
-        fetch('/api/categories/monthly-spending'),
-        fetch('/api/categories/ytd-spending'),
-        fetch(`/api/categories/${categoryId}/activity`),
+        fetch(`/api/categories/${categoryId}`, { cache: 'no-store' }),
+        fetch('/api/categories/monthly-spending', { cache: 'no-store' }),
+        fetch('/api/categories/ytd-spending', { cache: 'no-store' }),
+        fetch(`/api/categories/${categoryId}/activity`, { cache: 'no-store' }),
       ]);
 
       if (!categoryRes.ok) {
+        if (options?.silent) {
+          console.error('Failed to refresh category after transaction edit');
+          return;
+        }
         const msg = await handleApiError(categoryRes, 'Failed to load category');
         throw new Error(msg || 'Failed to load category');
       }
@@ -158,10 +163,12 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
       }
     } catch (e) {
       console.error(e);
-      toast.error('Failed to load category');
-      setCategory(null);
+      if (!options?.silent) {
+        toast.error('Failed to load category');
+        setCategory(null);
+      }
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, [categoryId, numericId]);
 
@@ -169,33 +176,41 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
     fetchBudgetData();
   }, [fetchBudgetData]);
 
-  useEffect(() => {
+  const fetchReportData = useCallback(async () => {
     if (!showAdvancedReports || !isInitialized || isNaN(numericId)) return;
 
-    const fetchReportData = async () => {
-      try {
-        const transactionsUrl = new URL('/api/transactions', window.location.origin);
-        if (startDate) transactionsUrl.searchParams.set('startDate', startDate);
-        if (endDate) transactionsUrl.searchParams.set('endDate', endDate);
+    try {
+      const transactionsUrl = new URL('/api/transactions', window.location.origin);
+      if (startDate) transactionsUrl.searchParams.set('startDate', startDate);
+      if (endDate) transactionsUrl.searchParams.set('endDate', endDate);
 
-        const [categoriesRes, transactionsRes] = await Promise.all([
-          fetch('/api/categories?includeArchived=all'),
-          fetch(transactionsUrl.toString()),
-        ]);
+      const [categoriesRes, transactionsRes] = await Promise.all([
+        fetch('/api/categories?includeArchived=all', { cache: 'no-store' }),
+        fetch(transactionsUrl.toString(), { cache: 'no-store' }),
+      ]);
 
-        if (categoriesRes.ok) {
-          setCategories(await categoriesRes.json());
-        }
-        if (transactionsRes.ok) {
-          setTransactions(await transactionsRes.json());
-        }
-      } catch (error) {
-        console.error('Error fetching report data:', error);
+      if (categoriesRes.ok) {
+        setCategories(await categoriesRes.json());
       }
-    };
-
-    fetchReportData();
+      if (transactionsRes.ok) {
+        setTransactions(await transactionsRes.json());
+      }
+    } catch (error) {
+      console.error('Error fetching report data:', error);
+    }
   }, [showAdvancedReports, isInitialized, numericId, startDate, endDate]);
+
+  useEffect(() => {
+    fetchReportData();
+  }, [fetchReportData]);
+
+  const handleTransactionsUpdated = useCallback(async () => {
+    await Promise.all([
+      fetchBudgetData({ silent: true }),
+      fetchReportData(),
+    ]);
+    setAuditRefreshKey((key) => key + 1);
+  }, [fetchBudgetData, fetchReportData]);
 
   useEffect(() => {
     if (!isInitialized || !showAdvancedReports) return;
@@ -551,6 +566,8 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
             selectedCategoryId={numericId}
             startDate={startDate}
             endDate={endDate}
+            editable={canEdit}
+            onUpdate={handleTransactionsUpdated}
           />
         </>
       ) : (
@@ -591,6 +608,7 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
       <CategoryBalanceAudit
         categoryId={category.id}
         currentBalance={category.current_balance}
+        refreshKey={auditRefreshKey}
       />
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

@@ -35,6 +35,7 @@ interface AuditRecord {
 interface CategoryBalanceAuditProps {
   categoryId: number;
   currentBalance?: number;
+  refreshKey?: number;
 }
 
 const CHANGE_TYPE_LABELS: Record<string, string> = {
@@ -80,6 +81,7 @@ function getTransactionDateLabel(record: AuditRecord): string | null {
 export default function CategoryBalanceAudit({
   categoryId,
   currentBalance,
+  refreshKey = 0,
 }: CategoryBalanceAuditProps) {
   const [records, setRecords] = useState<AuditRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,7 +104,10 @@ export default function CategoryBalanceAudit({
       }
       setError(null);
       
-      const response = await fetch(`/api/categories/${categoryId}/audit?limit=${pageSize}&offset=${offset}`);
+      const response = await fetch(
+        `/api/categories/${categoryId}/audit?limit=${pageSize}&offset=${offset}`,
+        { cache: 'no-store' },
+      );
       
       if (!response.ok) {
         throw new Error('Failed to fetch audit trail');
@@ -140,7 +145,7 @@ export default function CategoryBalanceAudit({
 
   useEffect(() => {
     fetchAuditTrail(0, false);
-  }, [categoryId]);
+  }, [categoryId, refreshKey]);
 
   const displayCurrentBalance =
     resolvedCurrentBalance ?? currentBalance ?? records[0]?.new_balance ?? null;

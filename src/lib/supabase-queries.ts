@@ -30,6 +30,7 @@ import { getActiveAccountId } from './account-context';
 import { getExternalApiAuthOverride } from './external-api-overrides';
 import { cache } from 'react';
 import { logBalanceChange, logBalanceChanges } from './audit/category-balance-audit';
+import { splitRowsDiffer, splitsAffectEnvelopesDifferently } from './category-transaction-edits';
 import { getCreditCardBalanceOwed } from './credit-card-balance';
 
 // =====================================================
@@ -2407,13 +2408,27 @@ export async function updateTransaction(
     throw new Error('Transaction cannot be linked to both an account and a credit card');
   }
 
-  // Reverse old splits (using old transaction_type)
+  // Reverse old splits (using old transaction_type).
+  // Historical transactions never changed envelope balances, so edits must not either.
   const oldTransactionType = existingTransaction.transaction_type || 'expense';
+  const isHistorical = !!existingTransaction.is_historical;
   const newSplits = data.splits ?? existingTransaction.splits;
   const previousCategoryIds = existingTransaction.splits.map((split) => split.category_id);
   const newCategoryIds = newSplits.map((split) => split.category_id);
+  const newTransactionType = data.transaction_type ?? oldTransactionType;
+  const envelopesChanged = splitsAffectEnvelopesDifferently(
+    existingTransaction.splits,
+    newSplits,
+    oldTransactionType,
+    newTransactionType,
+  );
+  const shouldAdjustEnvelopes = !isHistorical && envelopesChanged;
+  const shouldReplaceSplits = data.splits !== undefined && (
+    envelopesChanged || splitRowsDiffer(existingTransaction.splits, newSplits)
+  );
 
   for (const split of existingTransaction.splits) {
+    if (!shouldAdjustEnvelopes) break;
     const { data: category } = await supabase
       .from('categories')
       .select('is_system, current_balance')
@@ -2461,8 +2476,9 @@ export async function updateTransaction(
   const newDescription = data.description ?? existingTransaction.description;
   const newMerchantGroupId = data.merchant_group_id !== undefined ? data.merchant_group_id : existingTransaction.merchant_group_id;
   const newMerchantOverrideId = data.merchant_override_id !== undefined ? data.merchant_override_id : existingTransaction.merchant_override_id;
-  const newTransactionType = data.transaction_type ?? oldTransactionType;
-  const newTotalAmount = newSplits.reduce((sum, split) => sum + split.amount, 0);
+  const newTotalAmount = shouldReplaceSplits
+    ? newSplits.reduce((sum, split) => sum + Number(split.amount), 0)
+    : existingTransaction.total_amount;
 
   // Update transaction
   const { error: txError } = await supabase
@@ -2482,6 +2498,7 @@ export async function updateTransaction(
 
   if (txError) throw txError;
 
+  if (shouldReplaceSplits) {
   // Delete old splits
   const { error: deleteSplitsError } = await supabase
     .from('transaction_splits')
@@ -2502,15 +2519,16 @@ export async function updateTransaction(
       });
 
     if (splitError) throw splitError;
+    if (!shouldAdjustEnvelopes) continue;
 
-    // Update category balance (only for non-system categories)
+    // Update category balance (non-system categories only; historical transactions are excluded)
     const { data: category } = await supabase
       .from('categories')
       .select('is_system, current_balance')
       .eq('id', split.category_id)
       .single();
 
-    if (category && !category.is_system) {
+    if (!isHistorical && category && !category.is_system) {
       const oldBalance = Number(category.current_balance);
       // Update category balance based on transaction type
       const newBalanceChange = newTransactionType === 'income'
@@ -2547,6 +2565,7 @@ export async function updateTransaction(
       );
     }
   }
+  }
 
   // Update tags if provided
   if (data.tag_ids !== undefined) {
@@ -2562,7 +2581,7 @@ export async function updateTransaction(
   existingTransaction.splits.forEach((s) => affectedCategoryIds.add(s.category_id));
   newSplits.forEach((s) => affectedCategoryIds.add(s.category_id));
   const budgetAccountId = await getActiveAccountId();
-  if (budgetAccountId && affectedCategoryIds.size > 0) {
+  if (shouldAdjustEnvelopes && budgetAccountId && affectedCategoryIds.size > 0) {
     const { scheduleCategoryOverBudgetCheck } = await import('@/lib/budget/budget-alert-check');
     scheduleCategoryOverBudgetCheck(budgetAccountId, Array.from(affectedCategoryIds));
   }
@@ -2578,9 +2597,10 @@ export async function deleteTransaction(id: number): Promise<void> {
   const transaction = await getTransactionById(id);
   if (!transaction) return;
 
-  // Reverse splits (reverse the transaction's impact on category balances)
+  // Reverse splits. Historical transactions never changed envelope balances.
   const transactionType = transaction.transaction_type || 'expense';
   for (const split of transaction.splits) {
+    if (transaction.is_historical) break;
     const { data: category } = await supabase
       .from('categories')
       .select('is_system, current_balance')
