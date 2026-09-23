@@ -38,7 +38,6 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
 
   const smartAllocationEnabled = useFeature('smart_allocation');
   const incomeBufferEnabled = useFeature('income_buffer');
-  const monthlyFundingEnabled = useFeature('monthly_funding_tracking');
   const [isAvailableBalanceVisible, setIsAvailableBalanceVisible] = useState(true);
   const [isBottomSummaryVisible, setIsBottomSummaryVisible] = useState(true);
   const availableBalanceRef = useRef<HTMLDivElement>(null);
@@ -73,7 +72,6 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
     }
   };
 
-  // Fetch all goals and monthly funding data (only if feature enabled)
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -84,17 +82,14 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
           setAllGoals(goalsData);
         }
 
-        // Fetch monthly funding separately if feature is enabled
-        if (monthlyFundingEnabled) {
-          await fetchMonthlyFunding();
-        }
+        await fetchMonthlyFunding();
       } catch (error) {
         console.error('Error fetching data:', error);
       }
     };
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthlyFundingEnabled]);
+  }, []);
 
   // Track visibility of available balance section (top) and summary section (bottom)
   useEffect(() => {
@@ -316,9 +311,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
       setGoalAllocations({});
       setIsBufferWithdrawOpen(false);
 
-      if (monthlyFundingEnabled) {
-        await fetchMonthlyFunding();
-      }
+      await fetchMonthlyFunding();
 
       onSuccess();
 
@@ -478,15 +471,12 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
                     <span className="text-sm font-medium">{formatCurrency(category.monthly_amount)}</span>
                   </div>
 
-                  {/* Funded This Month (if enabled) */}
-                  {monthlyFundingEnabled && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Funded This Month</span>
-                      <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                        {formatCurrency(fundedThisMonth)}
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Funded This Month</span>
+                    <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                      {formatCurrency(fundedThisMonth)}
+                    </span>
+                  </div>
 
                   {/* Current Balance */}
                   <div className="flex justify-between items-center">
@@ -527,9 +517,7 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
               <TableRow>
                 <TableHead>Category</TableHead>
                 <TableHead className="text-right">Monthly Amount</TableHead>
-                {monthlyFundingEnabled && (
-                  <TableHead className="text-right">Funded This Month</TableHead>
-                )}
+                <TableHead className="text-right">Funded This Month</TableHead>
                 <TableHead className="text-right">Current Balance</TableHead>
                 <TableHead className="text-right">Allocate</TableHead>
                 <TableHead className="text-right">New Balance</TableHead>
@@ -554,11 +542,9 @@ export default function AllocateIncome({ categories, currentSavings, onSuccess }
                     <TableCell className="text-right text-muted-foreground">
                       {formatCurrency(category.monthly_amount)}
                     </TableCell>
-                    {monthlyFundingEnabled && (
-                      <TableCell className="text-right text-blue-600 dark:text-blue-400">
-                        {formatCurrency(fundedThisMonth)}
-                      </TableCell>
-                    )}
+                    <TableCell className="text-right text-blue-600 dark:text-blue-400">
+                      {formatCurrency(fundedThisMonth)}
+                    </TableCell>
                     <TableCell className="text-right">
                       {formatCurrency(category.current_balance)}
                     </TableCell>

@@ -20,21 +20,16 @@ export function FundingProgressIndicator({
   ytdSpent,
   showSpentForAccumulation = false,
 }: FundingProgressIndicatorProps) {
-  const monthlyFundingEnabled = useFeature('monthly_funding_tracking');
   const categoryTypesEnabled = useFeature('category_types');
 
   const budget = category.monthly_amount;
   const remaining = budget - spent;
   const percentUsed = budget > 0 ? (spent / budget) * 100 : 0;
 
-  // Determine what to show based on enabled features
-  if (monthlyFundingEnabled && categoryTypesEnabled && category.category_type) {
+  if (categoryTypesEnabled && category.category_type) {
     return renderCategoryTypeProgress();
-  } else if (monthlyFundingEnabled) {
-    return renderMonthlyFundingProgress();
-  } else {
-    return renderDefaultProgress();
   }
+  return renderMonthlyFundingProgress();
 
   function renderDefaultProgress() {
     if (budget <= 0) {

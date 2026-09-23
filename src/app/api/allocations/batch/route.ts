@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '@/lib/supabase-queries';
+import { getAuthenticatedUser, recordMonthlyFunding, isFeatureEnabled } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
-import { recordMonthlyFunding } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import { logBalanceChange, logBalanceChanges } from '@/lib/audit/category-balance-audit';
 import { successfulUpdateIndexes } from '@/lib/allocations/batch-revert';
