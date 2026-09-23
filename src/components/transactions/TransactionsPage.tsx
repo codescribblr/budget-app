@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { TransactionWithSplits, Category, MerchantGroup, Tag, Account, CreditCard } from '@/lib/types';
+import { transactionMatchesListFilters, type TransactionListFilters } from '@/lib/transaction-list-filters';
 import TransactionList from './TransactionList';
 import AddTransactionDialog from './AddTransactionDialog';
 import EditTransactionDialog from './EditTransactionDialog';
@@ -163,6 +164,34 @@ export default function TransactionsPage() {
   // Track if fetch is in progress to prevent duplicate calls
   const fetchingRef = useRef(false);
 
+  // Read at call time so a refresh after an inline edit uses the filters on screen,
+  // not a stale closure from an earlier render.
+  const queryRef = useRef({
+    categoryIds,
+    merchantGroupIds,
+    transactionTypes,
+    tagIds,
+    accountFilterIds,
+    startDate: startDateParam,
+    endDate: endDateParam,
+    searchQuery,
+    sortBy,
+    sortDirection,
+    currentPage,
+    pageSize,
+  });
+
+  const listFilters: TransactionListFilters = {
+    categoryIds,
+    accountIds: accountFilterIds.filter((item) => item.type === 'account').map((item) => item.id),
+    creditCardIds: accountFilterIds.filter((item) => item.type === 'card').map((item) => item.id),
+    transactionTypes,
+    merchantGroupIds,
+    tagIds,
+    startDate: startDateParam,
+    endDate: endDateParam,
+  };
+
   const fetchData = async (overrideParams?: {
     categoryIds?: number[];
     merchantGroupIds?: number[];
@@ -188,24 +217,25 @@ export default function TransactionsPage() {
         setLoading(true);
       }
       
-      // Build transactions URL with all filters and pagination
-      // Use overrideParams if provided, otherwise use state values
+      // Build transactions URL with all filters and pagination.
+      // Prefer explicit overrides, then the latest URL filters (queryRef).
+      const latestQuery = queryRef.current;
       const params = new URLSearchParams();
-      const pageToUse = overrideParams?.page ?? currentPage;
+      const pageToUse = overrideParams?.page ?? latestQuery.currentPage;
       params.set('page', pageToUse.toString());
-      params.set('pageSize', pageSize.toString());
+      params.set('pageSize', latestQuery.pageSize.toString());
       
-      const startDateToUse = overrideParams?.startDate !== undefined ? overrideParams.startDate : startDateParam;
-      const endDateToUse = overrideParams?.endDate !== undefined ? overrideParams.endDate : endDateParam;
-      const categoryIdsToUse = overrideParams?.categoryIds ?? debouncedCategoryIds;
-      const merchantGroupIdsToUse = overrideParams?.merchantGroupIds ?? debouncedMerchantGroupIds;
-      const transactionTypesToUse = overrideParams?.transactionTypes ?? debouncedTransactionTypes;
-      const tagIdsToUse = overrideParams?.tagIds ?? debouncedTagIds;
-      const accountFilterIdsToUse = overrideParams?.accountFilterIds ?? debouncedAccountFilterIds;
+      const startDateToUse = overrideParams?.startDate !== undefined ? overrideParams.startDate : latestQuery.startDate;
+      const endDateToUse = overrideParams?.endDate !== undefined ? overrideParams.endDate : latestQuery.endDate;
+      const categoryIdsToUse = overrideParams?.categoryIds ?? latestQuery.categoryIds;
+      const merchantGroupIdsToUse = overrideParams?.merchantGroupIds ?? latestQuery.merchantGroupIds;
+      const transactionTypesToUse = overrideParams?.transactionTypes ?? latestQuery.transactionTypes;
+      const tagIdsToUse = overrideParams?.tagIds ?? latestQuery.tagIds;
+      const accountFilterIdsToUse = overrideParams?.accountFilterIds ?? latestQuery.accountFilterIds;
       
       if (startDateToUse) params.set('startDate', startDateToUse);
       if (endDateToUse) params.set('endDate', endDateToUse);
-      if (debouncedSearchQuery.trim()) params.set('q', debouncedSearchQuery.trim());
+      if (latestQuery.searchQuery.trim()) params.set('q', latestQuery.searchQuery.trim());
       if (categoryIdsToUse.length > 0) params.set('categoryId', categoryIdsToUse.join(','));
       if (merchantGroupIdsToUse.length > 0) params.set('merchantGroupId', merchantGroupIdsToUse.join(','));
       if (transactionTypesToUse.length > 0) params.set('transactionType', transactionTypesToUse.join(','));
@@ -216,8 +246,8 @@ export default function TransactionsPage() {
         ).join(',');
         params.set('accountId', accountFilterString);
       }
-      params.set('sortBy', sortBy);
-      params.set('sortDirection', sortDirection);
+      params.set('sortBy', latestQuery.sortBy);
+      params.set('sortDirection', latestQuery.sortDirection);
       
       // Use absolute URL to avoid routing issues (only in browser)
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
@@ -393,6 +423,53 @@ export default function TransactionsPage() {
   const debouncedTransactionTypes = useDebounceValue(transactionTypes, 300);
   const debouncedTagIds = useDebounceValue(tagIds, 300);
   const debouncedAccountFilterIds = useDebounceValue(accountFilterIds, 300);
+
+  queryRef.current = {
+    categoryIds,
+    merchantGroupIds,
+    transactionTypes,
+    tagIds,
+    accountFilterIds,
+    startDate: startDateParam,
+    endDate: endDateParam,
+    searchQuery: debouncedSearchQuery,
+    sortBy,
+    sortDirection,
+    currentPage,
+    pageSize,
+  };
+
+  const transactionsRef = useRef(transactions);
+  transactionsRef.current = transactions;
+
+  const handleTransactionUpdated = (updated: TransactionWithSplits) => {
+    const query = queryRef.current;
+    const filters: TransactionListFilters = {
+      categoryIds: query.categoryIds,
+      accountIds: query.accountFilterIds.filter((item) => item.type === 'account').map((item) => item.id),
+      creditCardIds: query.accountFilterIds.filter((item) => item.type === 'card').map((item) => item.id),
+      transactionTypes: query.transactionTypes,
+      merchantGroupIds: query.merchantGroupIds,
+      tagIds: query.tagIds,
+      startDate: query.startDate,
+      endDate: query.endDate,
+    };
+    const exists = transactionsRef.current.some((transaction) => transaction.id === updated.id);
+    if (!exists) return;
+
+    const stillMatches = transactionMatchesListFilters(updated, filters);
+    if (!stillMatches) {
+      transactionsRef.current = transactionsRef.current.filter((transaction) => transaction.id !== updated.id);
+      setTransactions(transactionsRef.current);
+      setTotalTransactions((count) => Math.max(0, count - 1));
+      return;
+    }
+
+    transactionsRef.current = transactionsRef.current.map((transaction) =>
+      transaction.id === updated.id ? { ...transaction, ...updated } : transaction,
+    );
+    setTransactions(transactionsRef.current);
+  };
 
   useEffect(() => {
     // Fetch data on mount
@@ -1120,6 +1197,8 @@ export default function TransactionsPage() {
               transactions={paginatedTransactions}
               categories={categories}
               onUpdate={fetchData}
+              onTransactionUpdated={handleTransactionUpdated}
+              listFilters={listFilters}
               sortBy={sortBy}
               sortDirection={sortDirection}
               onSort={handleSort}

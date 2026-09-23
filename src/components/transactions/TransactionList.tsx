@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
 import type { TransactionWithSplits, Category, Account, CreditCard } from '@/lib/types';
+import { transactionMatchesListFilters, type TransactionListFilters } from '@/lib/transaction-list-filters';
 import EditTransactionDialog from './EditTransactionDialog';
 import BulkEditDialog, { BulkEditUpdates } from '@/components/import/BulkEditDialog';
 import BulkTagDialog from '@/components/tags/BulkTagDialog';
@@ -39,6 +40,8 @@ interface TransactionListProps {
   transactions: TransactionWithSplits[];
   categories: Category[];
   onUpdate: () => void;
+  onTransactionUpdated?: (transaction: TransactionWithSplits) => void;
+  listFilters?: TransactionListFilters;
   sortBy?: 'date' | 'description' | 'merchant' | 'amount';
   sortDirection?: 'asc' | 'desc';
   onSort?: (column: 'date' | 'description' | 'merchant' | 'amount') => void;
@@ -53,6 +56,8 @@ export default function TransactionList({
   transactions, 
   categories, 
   onUpdate,
+  onTransactionUpdated,
+  listFilters,
   sortBy = 'date',
   sortDirection = 'desc',
   onSort
@@ -140,8 +145,25 @@ export default function TransactionList({
     }) || dateString;
   };
 
+  const applySavedTransaction = (transactionId: number, saved: TransactionWithSplits) => {
+    setLocalTransactions((prev) => {
+      const next = prev.map((transaction) =>
+        transaction.id === transactionId ? { ...transaction, ...saved } : transaction,
+      );
+      if (!listFilters) return next;
+      return next.filter(
+        (transaction) => transaction.id !== transactionId || transactionMatchesListFilters(transaction, listFilters),
+      );
+    });
+    setEditingField(null);
+    onTransactionUpdated?.(saved);
+  };
+
   // Inline editing handlers
   const handleInlineDateChange = async (transactionId: number, newDate: string) => {
+    const transaction = localTransactions.find((item) => item.id === transactionId);
+    if (!transaction) return;
+
     try {
       const response = await fetch(`/api/transactions/${transactionId}`, {
         method: 'PATCH',
@@ -153,12 +175,8 @@ export default function TransactionList({
         throw new Error('Failed to update date');
       }
 
-      // Update local state
-      setLocalTransactions(prev => prev.map(t => 
-        t.id === transactionId ? { ...t, date: newDate } : t
-      ));
-      setEditingField(null);
-      onUpdate(); // Refresh data
+      const saved = (await response.json()) as TransactionWithSplits;
+      applySavedTransaction(transactionId, saved?.id ? saved : { ...transaction, date: newDate });
     } catch (error) {
       console.error('Error updating date:', error);
       toast.error('Failed to update date');
@@ -184,31 +202,27 @@ export default function TransactionList({
         throw new Error('Failed to update category');
       }
 
-      // Update local state
+      const saved = (await response.json()) as TransactionWithSplits;
+      if (saved?.id) {
+        applySavedTransaction(transactionId, saved);
+        return;
+      }
+
       const category = categoryId ? categories.find(c => c.id === categoryId) : null;
-      setLocalTransactions(prev => prev.map(t => {
-        if (t.id === transactionId) {
-          if (categoryId) {
-            const existingSplit = t.splits[0];
-            return {
-              ...t,
-              splits: [{
-                id: existingSplit?.id || 0,
-                transaction_id: t.id,
-                category_id: categoryId,
-                amount: transaction.total_amount,
-                category_name: category?.name || '',
-                created_at: existingSplit?.created_at || new Date().toISOString(),
-              }],
-            };
-          } else {
-            return { ...t, splits: [] };
+      const fallback: TransactionWithSplits = categoryId
+        ? {
+            ...transaction,
+            splits: [{
+              id: transaction.splits[0]?.id || 0,
+              transaction_id: transaction.id,
+              category_id: categoryId,
+              amount: transaction.total_amount,
+              category_name: category?.name || '',
+              created_at: transaction.splits[0]?.created_at || new Date().toISOString(),
+            }],
           }
-        }
-        return t;
-      }));
-      setEditingField(null);
-      onUpdate(); // Refresh data
+        : { ...transaction, splits: [] };
+      applySavedTransaction(transactionId, fallback);
     } catch (error) {
       console.error('Error updating category:', error);
       toast.error('Failed to update category');
@@ -216,6 +230,9 @@ export default function TransactionList({
   };
 
   const handleInlineAccountChange = async (transactionId: number, accountId: number | null, creditCardId: number | null) => {
+    const transaction = localTransactions.find((item) => item.id === transactionId);
+    if (!transaction) return;
+
     try {
       const response = await fetch(`/api/transactions/${transactionId}`, {
         method: 'PATCH',
@@ -230,22 +247,21 @@ export default function TransactionList({
         throw new Error('Failed to update account');
       }
 
-      // Update local state
+      const saved = (await response.json()) as TransactionWithSplits;
+      if (saved?.id) {
+        applySavedTransaction(transactionId, saved);
+        return;
+      }
+
       const account = accountId ? accounts.find(a => a.id === accountId) : null;
       const creditCard = creditCardId ? creditCards.find(c => c.id === creditCardId) : null;
-      setLocalTransactions(prev => prev.map(t => 
-        t.id === transactionId 
-          ? { 
-              ...t, 
-              account_id: accountId,
-              credit_card_id: creditCardId,
-              account_name: account?.name || null,
-              credit_card_name: creditCard?.name || null,
-            } 
-          : t
-      ));
-      setEditingField(null);
-      onUpdate(); // Refresh data
+      applySavedTransaction(transactionId, {
+        ...transaction,
+        account_id: accountId,
+        credit_card_id: creditCardId,
+        account_name: account?.name || null,
+        credit_card_name: creditCard?.name || null,
+      });
     } catch (error) {
       console.error('Error updating account:', error);
       toast.error('Failed to update account');
