@@ -29,7 +29,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { TransactionCategorySelectLabel } from '@/components/transactions/TransactionCategorySelectLabel';
 import EditTransactionDialog from '@/components/transactions/EditTransactionDialog';
 import { handleApiError } from '@/lib/api-error-handler';
-import { splitsAfterCategoryMove } from '@/lib/category-transaction-edits';
+import { previousCalendarDay, splitsAfterCategoryMove } from '@/lib/category-transaction-edits';
 import {
   filterCategoriesForTransactionSelect,
   sortCategoriesForTransactionSelect,
@@ -45,6 +45,9 @@ interface CategoryTransactionListProps {
   endDate?: string;
   editable?: boolean;
   onUpdate?: () => void;
+  initialCount?: number;
+  loadMoreCount?: number;
+  loadOlder?: boolean;
 }
 
 interface EditingField {
@@ -52,7 +55,50 @@ interface EditingField {
   field: 'category' | 'account';
 }
 
-const TRANSACTIONS_PER_PAGE = 50;
+const DEFAULT_PAGE_SIZE = 50;
+
+async function fetchOlderCategoryTransactions(options: {
+  categoryId: number;
+  endDate: string;
+  knownIds: Set<number>;
+  limit: number;
+}): Promise<TransactionWithSplits[]> {
+  const collected: TransactionWithSplits[] = [];
+  let page = 1;
+
+  while (collected.length < options.limit && page <= 40) {
+    const url = new URL('/api/transactions', window.location.origin);
+    url.searchParams.set('categoryId', String(options.categoryId));
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('pageSize', String(options.limit));
+    url.searchParams.set('endDate', options.endDate);
+    url.searchParams.set('sortBy', 'date');
+    url.searchParams.set('sortDirection', 'desc');
+
+    const response = await fetch(url.toString(), { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('Failed to load transactions');
+    }
+
+    const payload = await response.json();
+    const batch: TransactionWithSplits[] = Array.isArray(payload)
+      ? payload
+      : payload.transactions ?? [];
+    if (batch.length === 0) break;
+
+    for (const transaction of batch) {
+      if (options.knownIds.has(transaction.id)) continue;
+      if (collected.some((item) => item.id === transaction.id)) continue;
+      collected.push(transaction);
+      if (collected.length >= options.limit) break;
+    }
+
+    if (batch.length < options.limit) break;
+    page += 1;
+  }
+
+  return collected.slice(0, options.limit);
+}
 
 function accountSelectValue(transaction: TransactionWithSplits): string {
   if (transaction.account_id) return `account-${transaction.account_id}`;
@@ -183,8 +229,13 @@ export default function CategoryTransactionList({
   endDate = '',
   editable = false,
   onUpdate,
+  initialCount = DEFAULT_PAGE_SIZE,
+  loadMoreCount = DEFAULT_PAGE_SIZE,
+  loadOlder = false,
 }: CategoryTransactionListProps) {
-  const [displayCount, setDisplayCount] = useState(TRANSACTIONS_PER_PAGE);
+  const [displayCount, setDisplayCount] = useState(initialCount);
+  const [olderTransactions, setOlderTransactions] = useState<TransactionWithSplits[]>([]);
+  const [noMoreOlder, setNoMoreOlder] = useState(!loadOlder || !startDate);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [localTransactions, setLocalTransactions] = useState<TransactionWithSplits[]>(transactions);
   const [editingField, setEditingField] = useState<EditingField | null>(null);
@@ -199,6 +250,12 @@ export default function CategoryTransactionList({
   useEffect(() => {
     setLocalTransactions(transactions);
   }, [transactions]);
+
+  useEffect(() => {
+    setDisplayCount(initialCount);
+    setOlderTransactions([]);
+    setNoMoreOlder(!loadOlder || !startDate);
+  }, [selectedCategoryId, startDate, endDate, initialCount, loadOlder]);
 
   useEffect(() => {
     if (!editable) return;
@@ -228,10 +285,15 @@ export default function CategoryTransactionList({
   const sourceTransactions = editable ? localTransactions : transactions;
 
   const filteredTransactions = useMemo(() => {
-    return sourceTransactions.filter((transaction) =>
+    const byId = new Map<number, TransactionWithSplits>();
+    for (const transaction of [...sourceTransactions, ...olderTransactions]) {
+      byId.set(transaction.id, transaction);
+    }
+
+    return [...byId.values()].filter((transaction) =>
       transaction.splits.some((split) => split.category_id === selectedCategoryId)
     );
-  }, [sourceTransactions, selectedCategoryId]);
+  }, [sourceTransactions, olderTransactions, selectedCategoryId]);
 
   const sortedTransactions = useMemo(() => {
     return [...filteredTransactions].sort((a, b) => {
@@ -251,13 +313,53 @@ export default function CategoryTransactionList({
   }, [categories, selectedCategoryId]);
 
   const displayedTransactions = sortedTransactions.slice(0, displayCount);
-  const hasMore = sortedTransactions.length > displayCount;
+  const moreInMemory = sortedTransactions.length > displayCount;
+  const canFetchOlder = loadOlder && Boolean(startDate) && !noMoreOlder && selectedCategoryId !== null;
+  const hasMore = moreInMemory || canFetchOlder;
 
   const handleLoadMore = async () => {
+    if (isLoadingMore) return;
+
+    const hiddenInMemory = Math.max(0, sortedTransactions.length - displayCount);
+    const reveal = Math.min(loadMoreCount, hiddenInMemory);
+    if (reveal > 0) {
+      setDisplayCount((prev) => prev + reveal);
+    }
+
+    const stillNeeded = loadMoreCount - reveal;
+    if (stillNeeded === 0 || !canFetchOlder || selectedCategoryId === null) return;
+
+    const oldestLoadedDate = sortedTransactions[sortedTransactions.length - 1]?.date;
+    const endDateForOlder = olderTransactions.length > 0 && oldestLoadedDate
+      ? oldestLoadedDate
+      : previousCalendarDay(startDate);
+
     setIsLoadingMore(true);
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    setDisplayCount((prev) => prev + TRANSACTIONS_PER_PAGE);
-    setIsLoadingMore(false);
+    try {
+      const knownIds = new Set(sortedTransactions.map((transaction) => transaction.id));
+      const older = await fetchOlderCategoryTransactions({
+        categoryId: selectedCategoryId,
+        endDate: endDateForOlder,
+        knownIds,
+        limit: stillNeeded,
+      });
+
+      if (older.length === 0) {
+        setNoMoreOlder(true);
+        return;
+      }
+
+      setOlderTransactions((prev) => [...prev, ...older]);
+      setDisplayCount((prev) => prev + older.length);
+      if (older.length < stillNeeded) {
+        setNoMoreOlder(true);
+      }
+    } catch (error) {
+      console.error('Error loading more transactions:', error);
+      toast.error('Failed to load more transactions');
+    } finally {
+      setIsLoadingMore(false);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -270,9 +372,11 @@ export default function CategoryTransactionList({
   };
 
   const applyUpdatedTransaction = (updated: TransactionWithSplits) => {
-    setLocalTransactions((prev) => prev.map((item) => (
+    const merge = (item: TransactionWithSplits) => (
       item.id === updated.id ? { ...item, ...updated } : item
-    )));
+    );
+    setLocalTransactions((prev) => prev.map(merge));
+    setOlderTransactions((prev) => prev.map(merge));
   };
 
   const handleInlineCategoryChange = async (transaction: TransactionWithSplits, categoryId: number) => {
@@ -380,6 +484,7 @@ export default function CategoryTransactionList({
       }
 
       setLocalTransactions((prev) => prev.filter((item) => item.id !== transactionId));
+      setOlderTransactions((prev) => prev.filter((item) => item.id !== transactionId));
       setDeleteDialogOpen(false);
       setTransactionToDelete(null);
       toast.success('Transaction deleted');
@@ -685,13 +790,13 @@ export default function CategoryTransactionList({
                     Loading...
                   </>
                 ) : (
-                  `Load More (${sortedTransactions.length - displayCount} remaining)`
+                  'Load more'
                 )}
               </Button>
             </div>
           )}
 
-          {!hasMore && displayedTransactions.length > TRANSACTIONS_PER_PAGE && (
+          {!hasMore && displayedTransactions.length > initialCount && (
             <div className="text-center text-xs md:text-sm text-muted-foreground mt-3 md:mt-4">
               Showing all {filteredTransactions.length} transactions
             </div>

@@ -1,10 +1,19 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  previousCalendarDay,
   splitRowsDiffer,
   splitsAffectEnvelopesDifferently,
   splitsAfterCategoryMove,
 } from '../category-transaction-edits';
+
+describe('previousCalendarDay', () => {
+  it('steps back one day, including month and year boundaries', () => {
+    assert.equal(previousCalendarDay('2026-03-01'), '2026-02-28');
+    assert.equal(previousCalendarDay('2024-03-01'), '2024-02-29');
+    assert.equal(previousCalendarDay('2026-01-01'), '2025-12-31');
+  });
+});
 
 describe('splitsAfterCategoryMove', () => {
   it('replaces a single-category transaction with one split for the full amount', () => {

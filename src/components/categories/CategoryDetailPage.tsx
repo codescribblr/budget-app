@@ -568,6 +568,9 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
             endDate={endDate}
             editable={canEdit}
             onUpdate={handleTransactionsUpdated}
+            initialCount={10}
+            loadMoreCount={15}
+            loadOlder
           />
         </>
       ) : (
