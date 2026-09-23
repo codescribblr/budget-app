@@ -126,7 +126,6 @@ export async function POST(request: Request) {
 
         // Auto-enable all premium features
         const premiumFeatures = [
-          'monthly_funding_tracking',
           'category_types',
           'priority_system',
           'smart_allocation',

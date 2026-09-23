@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
-import { recordMonthlyFunding, isFeatureEnabled } from '@/lib/supabase-queries';
+import { recordMonthlyFunding } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import { logBalanceChange } from '@/lib/audit/category-balance-audit';
 
@@ -90,19 +90,15 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    // Record monthly funding if feature is enabled
     let fundingTracked = false;
     try {
-      const monthlyFundingEnabled = await isFeatureEnabled('monthly_funding_tracking');
-      if (monthlyFundingEnabled) {
-        await recordMonthlyFunding(
-          categoryId,
-          allocationMonth,
-          amount,
-          category.monthly_amount
-        );
-        fundingTracked = true;
-      }
+      await recordMonthlyFunding(
+        categoryId,
+        allocationMonth,
+        amount,
+        category.monthly_amount
+      );
+      fundingTracked = true;
     } catch (fundingError) {
       console.error('Error recording monthly funding:', fundingError);
       // Don't fail the request if funding tracking fails

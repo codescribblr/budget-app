@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withExternalApiService, externalApiData } from '@/lib/external-api/handler';
-import { recordMonthlyFunding, isFeatureEnabled } from '@/lib/supabase-queries';
+import { recordMonthlyFunding } from '@/lib/supabase-queries';
 import { ExternalApiNotFoundError, ExternalApiValidationError, getExternalDb } from '@/lib/external-api/query-helpers';
 import { logBalanceChange } from '@/lib/audit/category-balance-audit';
 
@@ -45,9 +45,11 @@ export const POST = withExternalApiService('categories', async (request, context
   });
 
   let fundingTracked = false;
-  if (await isFeatureEnabled('monthly_funding_tracking')) {
+  try {
     await recordMonthlyFunding(categoryId, allocationMonth, amount, category.monthly_amount);
     fundingTracked = true;
+  } catch (fundingError) {
+    console.error('Error recording monthly funding:', fundingError);
   }
 
   const { data: updatedCategory } = await supabase

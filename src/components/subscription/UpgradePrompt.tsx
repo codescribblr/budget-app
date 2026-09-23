@@ -12,7 +12,6 @@ interface UpgradePromptProps {
 }
 
 const PREMIUM_BENEFITS = [
-  'Monthly Funding Tracking',
   'Category Types & Priorities',
   'Smart Allocation',
   'Income Buffer',

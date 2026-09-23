@@ -11,7 +11,6 @@
 export const FEATURE_KEYS = [
   'tags',
   'non_cash_assets',
-  'monthly_funding_tracking',
   'category_types',
   'priority_system',
   'smart_allocation',
@@ -20,6 +19,7 @@ export const FEATURE_KEYS = [
   'loans',
   'advanced_reporting',
   'ai_chat',
+  'ai_onboarding',
   'automatic_imports',
   'retirement_planning',
   'recurring_transactions',

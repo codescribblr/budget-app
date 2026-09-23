@@ -42,7 +42,6 @@ export async function POST() {
 
     // Enable all premium features
     const premiumFeatures = [
-      'monthly_funding_tracking',
       'category_types',
       'priority_system',
       'smart_allocation',

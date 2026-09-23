@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
-import { recordMonthlyFunding, isFeatureEnabled } from '@/lib/supabase-queries';
+import { recordMonthlyFunding } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import { logBalanceChange, logBalanceChanges } from '@/lib/audit/category-balance-audit';
 import { successfulUpdateIndexes } from '@/lib/allocations/batch-revert';
@@ -257,25 +257,21 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    // Record monthly funding if feature is enabled
+    // Record how much was funded this month (partial paycheck allocations)
     let fundingTracked = false;
     try {
-      const monthlyFundingEnabled = await isFeatureEnabled('monthly_funding_tracking');
-      if (monthlyFundingEnabled) {
-        // Record funding for each allocation
-        await Promise.all(
-          allocations.map(allocation => {
-            const category = categoryMap.get(allocation.categoryId);
-            return recordMonthlyFunding(
-              allocation.categoryId,
-              allocationMonth,
-              allocation.amount,
-              category?.monthly_amount || 0
-            );
-          })
-        );
-        fundingTracked = true;
-      }
+      await Promise.all(
+        allocations.map(allocation => {
+          const category = categoryMap.get(allocation.categoryId);
+          return recordMonthlyFunding(
+            allocation.categoryId,
+            allocationMonth,
+            allocation.amount,
+            category?.monthly_amount || 0
+          );
+        })
+      );
+      fundingTracked = true;
     } catch (fundingError) {
       console.error('Error recording monthly funding:', fundingError);
       // Don't fail the request if funding tracking fails

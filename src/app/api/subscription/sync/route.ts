@@ -234,7 +234,6 @@ export async function POST(request: Request) {
       // Re-enable premium access if Stripe says active but DB thinks inactive
       if (dbThinksInactive) {
         const premiumFeatures = [
-          'monthly_funding_tracking',
           'category_types',
           'priority_system',
           'smart_allocation',
@@ -274,7 +273,6 @@ export async function POST(request: Request) {
         // Only enable premium features if this is an upgrade (free -> premium)
         // Don't re-enable features if user was already premium (they may have disabled some)
         const premiumFeatures = [
-          'monthly_funding_tracking',
           'category_types',
           'priority_system',
           'smart_allocation',

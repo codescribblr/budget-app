@@ -41,7 +41,6 @@ export async function disablePremiumAccess(accountId: number): Promise<void> {
   // NOTE: This only disables feature flags - NO DATA IS DELETED
   // All user data (goals, loans, monthly funding records, etc.) remains intact
   const premiumFeatures = [
-    'monthly_funding_tracking',
     'category_types',
     'priority_system',
     'smart_allocation',

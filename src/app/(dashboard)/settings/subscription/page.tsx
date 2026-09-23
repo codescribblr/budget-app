@@ -12,7 +12,6 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 const PREMIUM_FEATURES = [
-  'Monthly Funding Tracking',
   'Category Types & Priorities',
   'Smart Allocation',
   'Income Buffer',
@@ -29,6 +28,7 @@ const FREE_FEATURES = [
   'Unlimited Categories',
   'Unlimited Transactions',
   'CSV Import',
+  'Partial paycheck funding tracking',
   'Basic Reports',
   'Data Backup & Restore',
 ];
