@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Settings, Crown } from 'lucide-react';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { HabitGuideTip } from '@/components/onboarding/HabitGuideTip';
+import { HABIT_PAGE_TIPS } from '@/lib/onboarding/habit-guide-copy';
 
 export default function ImportsPage() {
   const { isPremium, loading: subscriptionLoading } = useSubscription();
@@ -42,6 +44,13 @@ export default function ImportsPage() {
           </div>
         )}
       </div>
+      <HabitGuideTip
+        tipId={HABIT_PAGE_TIPS.import.tipId}
+        message={HABIT_PAGE_TIPS.import.message}
+        ctaHref={null}
+        completeStep="import"
+        showWhen="after-first-transaction"
+      />
       <ImportTransactionsPage />
     </div>
   );

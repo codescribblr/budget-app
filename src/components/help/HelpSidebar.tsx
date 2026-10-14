@@ -35,6 +35,7 @@ const navigationSections: NavSection[] = [
       { label: 'Quick Start Guide', href: '/help/getting-started/quick-start' },
       { label: 'Core Concepts', href: '/help/getting-started/core-concepts' },
       { label: 'Your First Budget', href: '/help/getting-started/first-budget' },
+      { label: 'Budget Habit Guide', href: '/help/getting-started/habit-loop' },
     ],
   },
   {

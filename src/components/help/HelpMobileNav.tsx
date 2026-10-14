@@ -18,6 +18,7 @@ const allPages = [
   { label: 'Quick Start Guide', href: '/help/getting-started/quick-start', section: 'Getting Started' },
   { label: 'Core Concepts', href: '/help/getting-started/core-concepts', section: 'Getting Started' },
   { label: 'Your First Budget', href: '/help/getting-started/first-budget', section: 'Getting Started' },
+  { label: 'Budget Habit Guide', href: '/help/getting-started/habit-loop', section: 'Getting Started' },
 
   // Features
   { label: 'Dashboard', href: '/help/features/dashboard', section: 'Features' },

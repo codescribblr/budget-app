@@ -43,3 +43,6 @@ next-env.d.ts
 
 # database backups
 /database/backups/
+# Narrated UI walkthroughs (local only)
+/docs/screenshots/
+scripts/screencast/node_modules/

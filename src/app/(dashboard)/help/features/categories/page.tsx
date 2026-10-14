@@ -402,7 +402,7 @@ export default function CategoriesFeaturePage() {
               <div className="flex-1">
                 <CardTitle className="text-xl mb-2">Funded This Month</CardTitle>
                 <CardDescription className="text-base">
-                  Available if Monthly Funding Tracking feature is enabled
+                  Always on — separate from the current envelope balance
                 </CardDescription>
               </div>
             </div>

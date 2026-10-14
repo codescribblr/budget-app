@@ -9,6 +9,8 @@ import type { Category } from '@/lib/types';
 import TransferBetweenEnvelopes from './TransferBetweenEnvelopes';
 import AllocateIncome from './AllocateIncome';
 import { FeatureTeaser } from '@/components/FeatureTeaser';
+import { HabitGuideTip } from '@/components/onboarding/HabitGuideTip';
+import { HABIT_PAGE_TIPS } from '@/lib/onboarding/habit-guide-copy';
 
 const VALID_TABS = ['allocate', 'transfer'] as const;
 type TabValue = (typeof VALID_TABS)[number];
@@ -84,6 +86,14 @@ export default function MoneyMovementPage() {
 
   return (
     <div className="space-y-6">
+      <HabitGuideTip
+        tipId={HABIT_PAGE_TIPS.moneyMovement.tipId}
+        message={HABIT_PAGE_TIPS.moneyMovement.message}
+        ctaLabel={HABIT_PAGE_TIPS.moneyMovement.ctaLabel}
+        ctaHref={HABIT_PAGE_TIPS.moneyMovement.ctaHref}
+        categories={categories}
+        showWhen="money-movement"
+      />
       <FeatureTeaser
         storageKey="income-buffer"
         featureKey="income_buffer"

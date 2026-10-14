@@ -42,6 +42,8 @@ import TransactionList from './TransactionList';
 import AddTransactionDialog from './AddTransactionDialog';
 import EditTransactionDialog from './EditTransactionDialog';
 import { FeatureTeaser } from '@/components/FeatureTeaser';
+import { HabitGuideTip } from '@/components/onboarding/HabitGuideTip';
+import { HABIT_PAGE_TIPS } from '@/lib/onboarding/habit-guide-copy';
 import { format } from 'date-fns';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import { useFeature } from '@/contexts/FeatureContext';
@@ -791,6 +793,14 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-6">
+      <HabitGuideTip
+        tipId={HABIT_PAGE_TIPS.transactions.tipId}
+        message={HABIT_PAGE_TIPS.transactions.message}
+        ctaLabel={HABIT_PAGE_TIPS.transactions.ctaLabel}
+        ctaHref={HABIT_PAGE_TIPS.transactions.ctaHref}
+        showWhen="empty-transactions"
+        transactionCount={totalTransactions}
+      />
       <FeatureTeaser
         storageKey="recurring-transactions"
         featureKey="recurring_transactions"

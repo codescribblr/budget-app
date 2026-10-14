@@ -23,7 +23,6 @@ import {
   Rocket,
   Brain,
   MessageSquare,
-  Calendar,
   Layers,
   PiggyBank,
   LineChart,
@@ -425,14 +424,6 @@ export default function HomePage() {
             />
 
             <PremiumFeatureCard
-              icon={<Calendar className="h-6 w-6" />}
-              iconBg="bg-blue-100 dark:bg-blue-900"
-              iconColor="text-blue-600 dark:text-blue-400"
-              title="Monthly Funding Tracking"
-              description="Track how much you've funded to each category this month, separate from balances. Never refund already-paid bills."
-            />
-
-            <PremiumFeatureCard
               icon={<ListOrdered className="h-6 w-6" />}
               iconBg="bg-slate-100 dark:bg-slate-900"
               iconColor="text-slate-600 dark:text-slate-400"
@@ -663,6 +654,10 @@ export default function HomePage() {
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span>Partial paycheck funding tracking</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                     <span>Data Backup & Restore</span>
                   </li>
                 </ul>
@@ -712,10 +707,6 @@ export default function HomePage() {
                   </li>
                   <li className="flex items-start gap-2 ml-6">
                     <span className="text-xs text-muted-foreground">• AI Budget Insights & Reports</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span>Monthly Funding Tracking</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />

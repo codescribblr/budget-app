@@ -13,6 +13,7 @@ const allHelpPages = [
   { title: 'Quick Start Guide', href: '/help/getting-started/quick-start', category: 'Getting Started', keywords: ['quick', 'start', 'begin', 'new', 'first'] },
   { title: 'Core Concepts', href: '/help/getting-started/core-concepts', category: 'Getting Started', keywords: ['concepts', 'basics', 'fundamentals', 'learn', 'understand'] },
   { title: 'Your First Budget', href: '/help/getting-started/first-budget', category: 'Getting Started', keywords: ['first', 'budget', 'setup', 'create', 'new'] },
+  { title: 'Budget Habit Guide', href: '/help/getting-started/habit-loop', category: 'Getting Started', keywords: ['habit', 'loop', 'spend', 'transaction', 'envelope', 'next', 'guide', 'tips'] },
   
   // Features
   { title: 'Dashboard Overview', href: '/help/features/dashboard', category: 'Features', keywords: ['dashboard', 'home', 'overview', 'summary'] },

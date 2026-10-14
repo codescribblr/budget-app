@@ -1,0 +1,9 @@
+{
+  "name": "budget-screencast",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Playwright runtime for narrated UI walkthroughs",
+  "dependencies": {
+    "playwright": "1.55.0"
+  }
+}

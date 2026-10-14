@@ -32,7 +32,7 @@ const IRREGULAR_INCOME_KEYWORDS = /\b(freelance|contract|commission|1099|gig|con
 const CC_PAYMENT_CATEGORY_PATTERN =
   /\b(credit\s*card|cc\s*payment|card\s*payment|debt\s*payment|pay\s*off\s*card)\b/i;
 
-const HELP_LINKS = {
+export const HELP_LINKS = {
   irregularIncome: '/help/tutorials/irregular-income',
   incomeBuffer: '/help/features/income-buffer',
   incomeBufferWizard: '/help/wizards/income-buffer',
@@ -43,6 +43,8 @@ const HELP_LINKS = {
   loans: '/help/features/loans',
   quickStart: '/help/getting-started/quick-start',
   firstBudget: '/help/tutorials/first-budget',
+  coreConcepts: '/help/getting-started/core-concepts',
+  habitLoop: '/help/getting-started/habit-loop',
 } as const;
 
 function sumCreditCardDebt(context: UserContext): number {
@@ -179,7 +181,7 @@ function buildIncomeWorkflowQuery(profile: UserWorkflowProfile): ChatQuickAction
   const freq = profile.payFrequencies[0] || 'regular';
   const fundingNote =
     freq === 'bi-weekly' || freq === 'semi-monthly'
-      ? 'I get paid more than once per month — address Monthly Funding Tracking and how to allocate each paycheck without double-funding categories.'
+      ? 'I get paid more than once per month — explain Funded This Month and how to allocate each paycheck without double-funding categories.'
       : 'Walk me through the ideal monthly cycle from paycheck to allocation to spending.';
 
   return {
@@ -331,7 +333,7 @@ INCOME WORKFLOWS BY TYPE:
 1. REGULAR PAYCHECK (bi-weekly, semi-monthly, monthly):
    - Configure income in Settings → Income (streams with pay frequency and tax rate)
    - On payday: update checking account balance, then use Money Movement to allocate to categories
-   - If paid more than once per month: enable Monthly Funding Tracking so categories aren't double-funded
+   - If paid more than once per month: use Funded This Month so categories aren't double-funded
    - Use category priorities (1=highest) so essentials get funded first when money is tight
    - Optional: Smart Allocation automates distribution by priority
 

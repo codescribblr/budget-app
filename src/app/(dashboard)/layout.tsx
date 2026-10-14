@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/layout/app-layout"
 import { FeatureProvider } from "@/contexts/FeatureContext"
 import { AccountSelectionGuard } from "@/components/account-selection/AccountSelectionGuard"
 import { FirstLoginWizard } from "@/components/wizards/FirstLoginWizard"
+import { OnboardingAgentHost } from "@/components/onboarding/OnboardingAgentHost"
 
 export default function DashboardLayout({
   children,
@@ -26,6 +27,7 @@ export default function DashboardLayout({
     <FeatureProvider>
       <AccountSelectionGuard>
         <AppLayout>
+          <OnboardingAgentHost />
           <FirstLoginWizard />
           {children}
         </AppLayout>

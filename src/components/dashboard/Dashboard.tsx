@@ -37,6 +37,7 @@ import { useLocalStorage } from '@/hooks/use-local-storage';
 import { SetupWizardBanner } from '@/components/wizards/SetupWizardBanner';
 import { WizardCompletionDialog } from '@/components/wizards/WizardCompletionDialog';
 import { WizardCompletionBanner } from '@/components/wizards/WizardCompletionBanner';
+import { BudgetHabitGuide } from '@/components/onboarding/BudgetHabitGuide';
 import {
   parseDashboardCardVisibility,
   DASHBOARD_CARD_VISIBILITY_KEY,
@@ -424,6 +425,12 @@ export default function Dashboard() {
         incomeSettings={incomeSettings}
         hasIncomeConfigured={hasIncomeStreams || parseFloat(incomeSettings.annual_income || incomeSettings.annual_salary || '0') > 0}
         onOpenDialog={() => setShowCompletionDialog(true)}
+      />
+
+      {/* Habit Guide — next milestone only after setup */}
+      <BudgetHabitGuide
+        categories={categories}
+        availableToSave={summary?.current_savings}
       />
 
       {/* Setup Wizard Banner - Show if user skipped wizard and needs help */}

@@ -25,6 +25,7 @@ export function useAIUsage() {
         chat: { used: 0, limit: 15 },
         categorization: { used: 0, limit: 5 },
         dashboard_insights: { used: 0, limit: 1 },
+        onboarding: { used: 0, limit: 40 },
       });
     } finally {
       setLoading(false);

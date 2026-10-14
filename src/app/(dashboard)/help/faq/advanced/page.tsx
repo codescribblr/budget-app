@@ -83,31 +83,22 @@ export default function AdvancedFAQPage() {
         />
 
         <FAQItem
-          question="What is Monthly Funding Tracking and when should I use it?"
+          question="What is Funded This Month and why does it matter?"
           answer={
             <>
               <p>
-                Monthly Funding Tracking keeps track of how much you've allocated to each category
-                in the current month, separate from the category balance.
+                Funded This Month is always on. It keeps track of how much you've allocated to each
+                category in the current month, separate from the category balance.
               </p>
               <p className="mt-2">
-                <strong>Why use it?</strong>
-              </p>
-              <p className="mt-1">
-                It prevents accidentally re-funding categories for bills you've already paid. For
-                example, if you allocated $100 to Electric in January and spent $95, the balance is
-                $5. Without funding tracking, you might allocate another $100 in February, giving
-                you $105 total. With funding tracking, you know you already funded Electric this
-                month.
+                That prevents accidentally re-funding a bill you already covered. For example, if you
+                allocated $100 to Electric and spent $95, the balance is $5 — but Funded This Month
+                still shows $100, so the next paycheck can skip that envelope and finish the rest.
               </p>
               <p className="mt-2">
-                <strong>When to use it:</strong>
+                This is especially useful if you get paid more than once per month or allocate each
+                paycheck incrementally.
               </p>
-              <ul className="list-disc list-inside mt-1 space-y-1">
-                <li>You get paid multiple times per month</li>
-                <li>You want to ensure each category is only funded once per month</li>
-                <li>You're using the Income Buffer feature</li>
-              </ul>
             </>
           }
         />

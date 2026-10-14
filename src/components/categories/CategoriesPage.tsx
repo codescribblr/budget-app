@@ -46,6 +46,7 @@ import {
 import { Slider } from '@/components/ui/slider';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
+import { HabitGuideVisitMarker } from '@/components/onboarding/HabitGuideVisitMarker';
 import { formatCurrency } from '@/lib/utils';
 import type { Category } from '@/lib/types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
@@ -777,6 +778,7 @@ export default function CategoriesPage() {
 
   return (
     <div className="space-y-6">
+      <HabitGuideVisitMarker categories={categories} />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl md:text-3xl font-bold">Categories</h1>

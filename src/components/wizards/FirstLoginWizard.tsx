@@ -18,6 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Callout } from '@/components/help/Callout';
 import { Rocket, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAiOnboardingActive } from '@/components/onboarding/OnboardingAgentHost';
 
 const DEFAULT_CATEGORIES = [
   { name: 'Rent/Mortgage', monthly_amount: 0 },
@@ -60,6 +61,7 @@ const DEFAULT_SELECTED_CATEGORIES = [
 
 export function FirstLoginWizard() {
   const router = useRouter();
+  const aiOnboardingActive = useAiOnboardingActive();
   const [open, setOpen] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -77,6 +79,12 @@ export function FirstLoginWizard() {
   useEffect(() => {
     const checkFirstLogin = async () => {
       try {
+        // AI onboarding host owns first-run when enabled
+        if (aiOnboardingActive) {
+          setIsChecking(false);
+          return;
+        }
+
         const [accountsRes, categoriesRes, settingsRes] = await Promise.all([
           fetch('/api/accounts'),
           fetch('/api/categories'),
@@ -92,12 +100,18 @@ export function FirstLoginWizard() {
 
           // Check if user has skipped the wizard
           const hasSkipped = settings?.budget_wizard_skipped === 'true';
+          const hasAiCompleted = Boolean(settings?.ai_onboarding_completed);
 
           // Filter out system categories
           const userCategories = categories.filter((cat: any) => !cat.is_system);
 
           // If no accounts AND no user categories AND hasn't skipped, show wizard
-          if (accounts.length === 0 && userCategories.length === 0 && !hasSkipped) {
+          if (
+            accounts.length === 0 &&
+            userCategories.length === 0 &&
+            !hasSkipped &&
+            !hasAiCompleted
+          ) {
             setOpen(true);
           }
         }
@@ -109,7 +123,7 @@ export function FirstLoginWizard() {
     };
 
     checkFirstLogin();
-  }, []);
+  }, [aiOnboardingActive]);
 
   const handleComplete = async () => {
     setIsCreating(true);
@@ -165,6 +179,14 @@ export function FirstLoginWizard() {
         const settingsToSave: Array<{ key: string; value: string }> = [
           {
             key: 'budget_wizard_completed',
+            value: new Date().toISOString(),
+          },
+          {
+            key: 'habit_guide_enabled',
+            value: 'true',
+          },
+          {
+            key: 'habit_guide_started_at',
             value: new Date().toISOString(),
           },
         ];

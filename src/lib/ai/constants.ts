@@ -5,7 +5,8 @@ export const USER_LIMITS = {
     chat: 15,
     categorization: 5,
     dashboard_insights: 1, // For dashboard widget insights
-    total: 21, // Updated total: 15 + 5 + 1 = 21
+    onboarding: 40, // Multi-turn setup; separate from chat quota
+    total: 61, // 15 + 5 + 1 + 40
   },
 } as const;
 

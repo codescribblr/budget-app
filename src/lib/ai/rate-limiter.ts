@@ -140,6 +140,10 @@ class AIRateLimiter {
         used: counts.dashboard_insights || 0,
         limit: USER_LIMITS.daily.dashboard_insights,
       },
+      onboarding: {
+        used: counts.onboarding || 0,
+        limit: USER_LIMITS.daily.onboarding,
+      },
     };
   }
 
@@ -160,6 +164,7 @@ class AIRateLimiter {
       chat: { used: 0, limit: USER_LIMITS.daily.chat },
       categorization: { used: 0, limit: USER_LIMITS.daily.categorization },
       dashboard_insights: { used: 0, limit: USER_LIMITS.daily.dashboard_insights },
+      onboarding: { used: 0, limit: USER_LIMITS.daily.onboarding },
     };
   }
 }

@@ -119,6 +119,7 @@ const navigationSections = [
         subItems: [
           { label: "Budget Setup", path: "/help/wizards/budget-setup" },
           { label: "Income Buffer", path: "/help/wizards/income-buffer", featureKey: "income_buffer" },
+          { label: "Budget Habit Guide", path: "/help/getting-started/habit-loop" },
         ],
       },
     ],

@@ -59,6 +59,7 @@ export function AIUsageIndicator() {
             <div>Chat: {stats.chat.used}/{stats.chat.limit}</div>
             <div>Categorization: {stats.categorization.used}/{stats.categorization.limit}</div>
             <div>Dashboard Insights: {stats.dashboard_insights.used}/{stats.dashboard_insights.limit}</div>
+            <div>Onboarding: {stats.onboarding?.used ?? 0}/{stats.onboarding?.limit ?? 40}</div>
           </div>
         </TooltipContent>
       </Tooltip>

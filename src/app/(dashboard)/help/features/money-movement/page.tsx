@@ -341,15 +341,15 @@ export default function MoneyMovementFeaturePage() {
               <div className="flex-1">
                 <CardTitle className="text-xl mb-2">Funded This Month</CardTitle>
                 <CardDescription className="text-base">
-                  Available if Monthly Funding Tracking is enabled
+                  Always on — tracks partial paycheck allocations
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              If you have Monthly Funding Tracking enabled, you'll see how much you've allocated to
-              each category in the current month. This prevents accidentally re-funding categories.
+              Funded This Month shows how much you've already allocated to each category this month.
+              That way a later paycheck can finish the job without accidentally re-funding a bill you already covered.
             </p>
           </CardContent>
         </Card>
