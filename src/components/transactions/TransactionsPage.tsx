@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useImportPaths } from '@/components/import/use-import-paths';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -68,6 +69,7 @@ function fuzzyMatch(text: string, search: string): boolean {
 
 export default function TransactionsPage() {
   const router = useRouter();
+  const { importsBase, transactionsPath } = useImportPaths();
   const searchParams = useSearchParams();
   const merchantFilter = searchParams.get('merchant');
   
@@ -538,8 +540,8 @@ export default function TransactionsPage() {
       params.delete('q');
     }
     params.set('page', '1');
-    router.replace(`/transactions?${params.toString()}`);
-  }, [debouncedSearchQuery, searchParams, router]);
+    router.replace(`${transactionsPath}?${params.toString()}`);
+  }, [debouncedSearchQuery, searchParams, router, transactionsPath]);
 
   // Open edit dialog if editId is in URL
   useEffect(() => {
@@ -553,11 +555,11 @@ export default function TransactionsPage() {
         // Remove editId from URL after opening dialog
         const params = new URLSearchParams(searchParams.toString());
         params.delete('editId');
-        const newUrl = params.toString() ? `/transactions?${params.toString()}` : '/transactions';
+        const newUrl = params.toString() ? `${transactionsPath}?${params.toString()}` : transactionsPath;
         router.replace(newUrl);
       }
     }
-  }, [editIdParam, transactions, isEditDialogOpen, searchParams, router]);
+  }, [editIdParam, transactions, isEditDialogOpen, searchParams, router, transactionsPath]);
 
   // Initialize date objects from URL parameters
   useEffect(() => {
@@ -623,11 +625,11 @@ export default function TransactionsPage() {
   }
 
   const handleClearMerchantFilter = () => {
-    router.push('/transactions');
+    router.push(transactionsPath);
   };
 
   const handleClearFilters = () => {
-    router.push('/transactions');
+    router.push(transactionsPath);
     setStartDateObj(undefined);
     setEndDateObj(undefined);
   };
@@ -700,7 +702,7 @@ export default function TransactionsPage() {
     // Reset to page 1 when filters change
     params.set('page', '1');
 
-    const newUrl = `/transactions?${params.toString()}`;
+    const newUrl = `${transactionsPath}?${params.toString()}`;
     console.log('[TransactionsPage] updateFilters calling router.replace with URL:', newUrl);
     
     // Mark that filters were updated via updateFilters to prevent duplicate fetch from useEffect
@@ -731,7 +733,7 @@ export default function TransactionsPage() {
     if (size !== undefined) {
       params.set('pageSize', size.toString());
     }
-    router.push(`/transactions?${params.toString()}`);
+    router.push(`${transactionsPath}?${params.toString()}`);
   };
 
   const handleCategoryToggle = (categoryId: number) => {
@@ -868,7 +870,7 @@ export default function TransactionsPage() {
               </Button>
             )}
             <Button variant="outline" asChild className="w-full sm:w-auto">
-              <Link href="/imports">
+              <Link href={importsBase}>
                 <Upload className="mr-2 h-4 w-4" />
                 Import Transactions
               </Link>
@@ -1179,7 +1181,7 @@ export default function TransactionsPage() {
                     Add transaction
                   </Button>
                   <Button variant="outline" asChild>
-                    <Link href="/imports">Import from CSV</Link>
+                    <Link href={importsBase}>Import from CSV</Link>
                   </Button>
                 </div>
               </CardContent>

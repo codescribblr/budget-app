@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -31,7 +31,10 @@ interface MerchantGroupStat {
 
 export default function ReportsPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const reportsPath = pathname.startsWith('/new/') ? '/new/reports' : '/reports';
   const searchParams = useSearchParams();
+  const checkin = searchParams.get('checkin');
   const [transactions, setTransactions] = useState<TransactionWithSplits[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
@@ -67,7 +70,7 @@ export default function ReportsPage() {
       if (dateRangeParam) setDateRange(dateRangeParam);
     } else {
       // No URL params, use default (current-month)
-      setDateRange('current-month');
+      setDateRange(checkin === 'weekly' ? 'week' : checkin === 'monthly' ? 'last-month' : 'current-month');
     }
 
     if (categoryParam) {
@@ -129,14 +132,15 @@ export default function ReportsPage() {
   // Update URL when filters change
   const updateURL = useCallback((start: string, end: string, range: string, categoryId: number | null) => {
     const params = new URLSearchParams();
+    if (checkin) params.set('checkin', checkin);
 
     if (start) params.set('startDate', start);
     if (end) params.set('endDate', end);
     if (range) params.set('dateRange', range);
     if (categoryId !== null) params.set('category', categoryId.toString());
 
-    router.push(`/reports?${params.toString()}`, { scroll: false });
-  }, [router]);
+    router.push(`${reportsPath}?${params.toString()}`, { scroll: false });
+  }, [router, reportsPath, checkin]);
 
   // Update dates when date range preset changes
   useEffect(() => {
@@ -355,9 +359,9 @@ export default function ReportsPage() {
             setSelectedCategoryId(newCategoryId);
             // Update URL
             if (newCategoryId) {
-              router.push(`/reports?category=${newCategoryId}`);
+              router.push(`${reportsPath}?category=${newCategoryId}${checkin ? `&checkin=${checkin}` : ''}`);
             } else {
-              router.push('/reports');
+              router.push(checkin ? `${reportsPath}?checkin=${checkin}` : reportsPath);
             }
           }}
         >

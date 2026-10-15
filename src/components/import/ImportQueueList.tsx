@@ -1,4 +1,5 @@
 'use client';
+import { useImportPaths } from './use-import-paths';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,6 +42,7 @@ interface ImportQueueListProps {
 }
 
 export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
+  const { importsBase } = useImportPaths();
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [batches, setBatches] = useState<QueuedImportBatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +80,7 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
     try {
       if (sourceType === 'manual') {
         sessionStorage.setItem('queuedBatchId', batchId);
-        window.location.href = `/imports/${batchId}`;
+        window.location.href = `${importsBase}/${batchId}`;
         return;
       }
 
@@ -105,7 +107,7 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
             const setup = await setupResponse.json();
             if (setup.setup?.source_type === 'manual') {
               sessionStorage.setItem('queuedBatchId', batchId);
-              window.location.href = `/imports/${batchId}`;
+              window.location.href = `${importsBase}/${batchId}`;
               return;
             }
           }
@@ -156,7 +158,7 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
     const batchId = processingBatchId;
     setProcessingBatchId(null);
     if (batchId) {
-      window.location.href = `/imports/${batchId}`;
+      window.location.href = `${importsBase}/${batchId}`;
     }
   };
 

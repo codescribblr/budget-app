@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext"
 import { NotificationCenter } from "@/components/notifications/NotificationCenter"
 import { SubscriptionBanner } from "@/components/subscription/SubscriptionBanner"
+import { InterfaceSwitch } from "@/components/new-look/interface-switch"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -20,6 +21,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
             <div className="flex flex-1 items-center gap-3 justify-end">
+              <InterfaceSwitch target="new" />
               <CommandPaletteTrigger />
               <NotificationCenter />
               <ThemeToggle />

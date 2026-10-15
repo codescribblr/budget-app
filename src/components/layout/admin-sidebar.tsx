@@ -36,6 +36,7 @@ const adminNavigationItems = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
   { label: "Users", path: "/admin/users", icon: Users },
   { label: "Help Feedback", path: "/admin/help-feedback", icon: BookOpen },
+  { label: "New Look Feedback", path: "/admin/interface-feedback", icon: BookOpen },
   { label: "Notifications", path: "/admin/notifications", icon: Bell },
   { label: "Settings", path: "/admin/settings", icon: Settings },
 ]

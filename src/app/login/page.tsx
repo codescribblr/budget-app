@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/dashboard';
+  const redirectTo = searchParams.get('redirectTo') || (typeof document !== 'undefined' && document.cookie.split('; ').includes('budget-interface=new') ? '/new' : '/dashboard');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
