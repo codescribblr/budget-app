@@ -2,7 +2,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Switch } from "@/components/ui/switch";
 import { useFeatures } from "@/contexts/FeatureContext";
 import {
   Dialog,
@@ -41,7 +40,6 @@ function PaydayContent() {
   const { isFeatureEnabled, hasPremium } = useFeatures();
   const suggestionsEnabled = hasPremium && isFeatureEnabled("smart_allocation");
   const [limit, setLimit] = useState("");
-  const [arrived, setArrived] = useState(false);
   const [draft, setDraft] = useState<Record<number, string>>({});
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -58,12 +56,13 @@ function PaydayContent() {
   const total =
     allocations.reduce((sum, a) => sum + cents(a.amount || 0), 0) / 100;
   const cap = parseMoney(limit);
+  const available = Math.max(0, data?.summary.current_savings ?? 0);
+  const exceedsAvailable = cap !== null && cents(cap) > cents(available);
   const invalid = allocations.some((a) => a.amount === null || a.amount < 0);
   const valid = Boolean(
     data &&
     cap !== null &&
     cap > 0 &&
-    arrived &&
     !invalid &&
     total > 0 &&
     cents(total) <= cents(cap) &&
@@ -105,7 +104,6 @@ function PaydayContent() {
       setReceipt({ amount: total, tracked: result.fundingTracked });
       setDraft({});
       setPreview(false);
-      setArrived(false);
       setLimit("");
       if (result.fundingTracked) toast.success("Paycheck allocation saved.");
       else
@@ -119,7 +117,6 @@ function PaydayContent() {
       );
       // Never automatically retry a financial write with an unknown outcome.
       setDraft({});
-      setArrived(false);
     } finally {
       try {
         await refresh();
@@ -156,13 +153,14 @@ function PaydayContent() {
       )}
       <div className="nl-two-column">
         <section className="nl-panel nl-form">
-          <h2>1. Set aside this paycheck’s amount</h2>
+          <h2>1. Choose how much to allocate</h2>
           <label>
-            Amount to work with
+            Amount to allocate
             <input
               inputMode="decimal"
               placeholder="0.00"
               value={limit}
+              aria-describedby="payday-amount-help"
               disabled={!canEdit || saving}
               onChange={(e) => {
                 setLimit(e.target.value);
@@ -170,24 +168,26 @@ function PaydayContent() {
               }}
             />
           </label>
-          <small>
-            You can allocate up to{" "}
-            {money(Math.max(0, data.summary.current_savings))} based on recorded
-            available-to-save money. Any amount left over stays available to
-            save.
-          </small>
-          <label className="nl-switch-label">
-            <Switch
-              className="nl-switch"
-              checked={arrived}
-              disabled={!canEdit || saving}
-              onCheckedChange={setArrived}
-            />
-            <span>
-              This money has arrived and is included in my recorded account
-              balances.
-            </span>
-          </label>
+          <div id="payday-amount-help" aria-live="polite">
+            {exceedsAvailable ? (
+              <p className="nl-notice">
+                You have {money(available)} available to allocate.{" "}
+                <Link
+                  className="underline underline-offset-2"
+                  href="/new/accounts"
+                >
+                  Update your account balances
+                </Link>{" "}
+                if your paycheck has arrived.
+              </p>
+            ) : (
+              <small>
+                You can allocate up to {money(available)} from your recorded
+                available-to-save money. Any amount left over stays available to
+                save.
+              </small>
+            )}
+          </div>
         </section>
         <section className="nl-panel">
           <p className="nl-eyebrow">Your funding picture</p>

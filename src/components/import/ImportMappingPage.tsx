@@ -30,12 +30,13 @@ import type { CSVAnalysisResult, ColumnAnalysis } from '@/lib/column-analyzer';
 import type { ColumnMapping } from '@/lib/mapping-templates';
 import { CheckCircle2, AlertCircle, XCircle, ArrowLeft, Info } from 'lucide-react';
 import { saveTemplate } from '@/lib/mapping-templates';
-import { parseCSVWithMapping, processTransactions, detectStatusColumnIndex, shouldExcludeTransactionByStatus } from '@/lib/csv-parser-helpers';
+import { parseCSVWithMapping, detectStatusColumnIndex, shouldExcludeTransactionByStatus } from '@/lib/csv-parser-helpers';
 import type { ParsedTransaction } from '@/lib/import-types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
 import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
+import { prepareQueuedImport } from '@/lib/import/queued-import-processing';
 
 type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'status' | 'ignore';
 
@@ -611,26 +612,6 @@ export default function MapColumnsPage() {
           setProcessingProgress(10);
           setProcessingStage(`Found ${queuedImports.length} transaction${queuedImports.length !== 1 ? 's' : ''}. Converting format...`);
 
-          // Convert queued imports to ParsedTransaction format
-          const initialTransactions: ParsedTransaction[] = queuedImports.map((qi: any) => ({
-            id: `queued-${qi.id}`,
-            date: qi.transaction_date,
-            description: qi.description,
-            amount: qi.amount,
-            transaction_type: qi.transaction_type,
-            merchant: qi.merchant,
-            suggestedCategory: qi.suggested_category_id || undefined,
-            account_id: qi.target_account_id || undefined,
-            credit_card_id: qi.target_credit_card_id || undefined,
-            is_historical: qi.is_historical || false,
-            tag_ids: qi.tag_ids || [],
-            splits: [],
-            status: 'pending' as const,
-            isDuplicate: false,
-            originalData: qi.original_data,
-            hash: qi.hash || '',
-          }));
-
           // Process transactions: check duplicates and auto-categorize
           setProcessingProgress(20);
           setProcessingStage('Processing transactions...');
@@ -639,26 +620,8 @@ export default function MapColumnsPage() {
             setProcessingStage(stage);
           };
 
-          const processedTransactions = await processTransactions(
-            initialTransactions,
-            initialTransactions[0]?.account_id || undefined,
-            initialTransactions[0]?.credit_card_id || undefined,
-            true, // Skip AI categorization initially
-            updateProgress
-          );
-
-          // Update queued imports in database with categorization results
-          setProcessingProgress(95);
-          setProcessingStage('Updating categorization results...');
-          const updateResponse = await fetch('/api/automatic-imports/queue/update-categorization', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ transactions: processedTransactions }),
-          });
-
-          if (!updateResponse.ok) {
-            console.warn('Failed to update queued imports with categorization results');
-          }
+          const prepared = await prepareQueuedImport(remapBatchId, ({ progress, stage }) => updateProgress(progress, stage));
+          const processedTransactions = prepared.transactions;
 
           // Store processed transactions and batch info in sessionStorage
           sessionStorage.setItem('queuedBatchId', remapBatchId);
@@ -1581,25 +1544,6 @@ export default function MapColumnsPage() {
                     setProcessingProgress(10);
                     setProcessingStage(`Found ${queuedImports.length} transaction${queuedImports.length !== 1 ? 's' : ''}. Converting format...`);
 
-                    // Convert queued imports to ParsedTransaction format
-                    const initialTransactions: ParsedTransaction[] = queuedImports.map((qi: any) => ({
-                      id: `queued-${qi.id}`,
-                      date: qi.transaction_date,
-                      description: qi.description,
-                      amount: qi.amount,
-                      transaction_type: qi.transaction_type,
-                      merchant: qi.merchant,
-                      suggestedCategory: qi.suggested_category_id || undefined,
-                      account_id: qi.target_account_id || undefined,
-                      credit_card_id: qi.target_credit_card_id || undefined,
-                      is_historical: qi.is_historical || false,
-                      splits: [],
-                      status: 'pending' as const,
-                      isDuplicate: false,
-                      originalData: qi.original_data,
-                      hash: qi.hash || '',
-                    }));
-
                     // Process transactions: check duplicates and auto-categorize
                     setProcessingProgress(20);
                     setProcessingStage('Processing transactions...');
@@ -1608,26 +1552,8 @@ export default function MapColumnsPage() {
                       setProcessingStage(stage);
                     };
 
-                    const processedTransactions = await processTransactions(
-                      initialTransactions,
-                      initialTransactions[0]?.account_id || undefined,
-                      initialTransactions[0]?.credit_card_id || undefined,
-                      true, // Skip AI categorization initially
-                      updateProgress
-                    );
-
-                    // Update queued imports in database with categorization results
-                    setProcessingProgress(95);
-                    setProcessingStage('Updating categorization results...');
-                    const updateResponse = await fetch('/api/automatic-imports/queue/update-categorization', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ transactions: processedTransactions }),
-                    });
-
-                    if (!updateResponse.ok) {
-                      console.warn('Failed to update queued imports with categorization results');
-                    }
+                    const prepared = await prepareQueuedImport(remapBatchId, ({ progress, stage }) => updateProgress(progress, stage));
+                    const processedTransactions = prepared.transactions;
 
                     // Store processed transactions and batch info in sessionStorage
                     sessionStorage.setItem('queuedBatchId', remapBatchId);

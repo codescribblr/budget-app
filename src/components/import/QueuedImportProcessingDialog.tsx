@@ -1,32 +1,44 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Progress } from '@/components/ui/progress';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { OptionToggle } from '@/components/ui/option-toggle';
-import { Loader2 } from 'lucide-react';
-import { processTransactions } from '@/lib/csv-parser-helpers';
-import type { ParsedTransaction } from '@/lib/import-types';
-import type { Account, CreditCard } from '@/lib/types';
-import type { ProcessingTask } from '@/lib/processing-tasks';
-import { toast } from 'sonner';
+} from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { OptionToggle } from "@/components/ui/option-toggle";
+import { Check, Circle, Loader2 } from "lucide-react";
+import type {
+  ProcessingTasksStatus,
+  ProcessingTask,
+} from "@/lib/processing-tasks";
+import {
+  prepareQueuedImport,
+  type PreparedImport,
+  type ProcessingProgress,
+} from "@/lib/import/queued-import-processing";
 
 interface QueuedImportProcessingDialogProps {
   open: boolean;
   progress: number;
   stage: string;
-  batchId?: string; // Optional: if provided, will check status and allow account selection
-  onComplete?: () => void; // Called when user clicks "Continue to Review"
-  onCancel?: () => void; // Called when user cancels
+  batchId?: string;
+  onComplete?: () => void;
+  onCancel?: () => void;
 }
+const taskLabels: [ProcessingTask, string][] = [
+  ["pdf_to_csv", "Convert PDF"],
+  ["csv_mapping", "Match file columns"],
+  ["duplicate_detection", "Check for duplicates"],
+  ["categorization", "Apply category rules"],
+  ["import_defaults_assignment", "Review import settings"],
+];
 
 export default function QueuedImportProcessingDialog({
   open,
@@ -36,472 +48,325 @@ export default function QueuedImportProcessingDialog({
   onComplete,
   onCancel,
 }: QueuedImportProcessingDialogProps) {
-  const [status, setStatus] = useState<{
-    processingTasks: any;
-    incompleteTasks: ProcessingTask[];
-    needsProcessing: boolean;
-    defaultAccountId: number | null;
-    defaultCreditCardId: number | null;
-    isHistorical: boolean;
-  } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [linkedAccountName, setLinkedAccountName] = useState<string | null>(null);
-  const [isHistorical, setIsHistorical] = useState(false);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
-  const [processingComplete, setProcessingComplete] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [currentProgress, setCurrentProgress] = useState(progress);
-  const [currentStage, setCurrentStage] = useState(stage);
-  const [processingResults, setProcessingResults] = useState<{
-    totalTransactions: number;
-    databaseDuplicates: number;
-    withinFileDuplicates: number;
-    categorizedCount: number;
-    fileName: string;
-    mappingName: string | null;
-  } | null>(null);
+  const modern = usePathname().startsWith("/new/");
+  const [phase, setPhase] = useState<"processing" | "ready" | "error">(
+    "processing",
+  );
+  const [batch, setBatch] = useState<PreparedImport | null>(null);
+  const [current, setCurrent] = useState<ProcessingProgress>({
+    progress: 0,
+    stage: "Loading saved progress…",
+  });
+  const [tasks, setTasks] = useState<ProcessingTasksStatus>({});
+  const [linkedName, setLinkedName] = useState("No account (unassigned)");
+  const [historical, setHistorical] = useState(false);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
-    setCurrentProgress(progress);
-    setCurrentStage(stage);
-  }, [progress, stage]);
-
-  useEffect(() => {
-    if (open && batchId) {
-      fetchStatus();
-      fetchAccounts();
-      fetchCreditCards();
-    } else if (!batchId) {
-      // Simple mode - just show progress
-      setProcessingComplete(false);
-    }
-  }, [open, batchId]);
-
-  // Resolve linked account/card name when we have status and account lists
-  useEffect(() => {
-    if (!status) return;
-    if (status.defaultCreditCardId && creditCards.length > 0) {
-      const card = creditCards.find((c: CreditCard) => c.id === status.defaultCreditCardId);
-      setLinkedAccountName(card?.name ?? `Credit Card #${status.defaultCreditCardId}`);
-    } else if (status.defaultAccountId && accounts.length > 0) {
-      const acc = accounts.find((a: Account) => a.id === status.defaultAccountId);
-      setLinkedAccountName(acc?.name ?? `Account #${status.defaultAccountId}`);
-    } else if (status.defaultCreditCardId) {
-      setLinkedAccountName(`Credit Card #${status.defaultCreditCardId}`);
-    } else if (status.defaultAccountId) {
-      setLinkedAccountName(`Account #${status.defaultAccountId}`);
-    } else {
-      setLinkedAccountName(null);
-    }
-  }, [status, accounts, creditCards]);
-
-  const fetchStatus = async (autoStartProcessing: boolean = true) => {
-    if (!batchId) return;
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/import/queue/${encodeURIComponent(batchId)}/processing-status`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch processing status');
-      }
-      const data = await response.json();
-      setStatus(data);
-      setIsHistorical(data.isHistorical || false);
-      setLoading(false);
-
-      // If processing is needed and we're allowed to auto-start, start it automatically
-      // Don't auto-start if we're already processing or if this is just a status refresh
-      if (autoStartProcessing && data.needsProcessing && !isProcessing) {
-        startProcessing();
-      } else if (!data.needsProcessing) {
-        setProcessingComplete(true);
-      }
-    } catch (error: any) {
-      console.error('Error fetching status:', error);
-      toast.error('Failed to load processing status');
-      setLoading(false);
-    }
-  };
-
-  const fetchAccounts = async () => {
-    try {
-      const response = await fetch('/api/accounts');
-      if (response.ok) {
-        const data = await response.json();
-        setAccounts(data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching accounts:', error);
-    }
-  };
-
-  const fetchCreditCards = async () => {
-    try {
-      const response = await fetch('/api/credit-cards');
-      if (response.ok) {
-        const data = await response.json();
-        setCreditCards(data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching credit cards:', error);
-    }
-  };
-
-
-  const startProcessing = async () => {
-    if (!batchId) return;
-    try {
-      setIsProcessing(true);
-      setCurrentProgress(0);
-      setCurrentStage('Loading transactions...');
-
-      // Fetch current processing task status (may differ from cached state)
-      let processingTasks = status?.processingTasks;
-      try {
-        const statusResponse = await fetch(`/api/import/queue/${encodeURIComponent(batchId)}/processing-status`);
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json();
-          processingTasks = statusData.processingTasks;
-        }
-      } catch {
-        // Fall back to cached status
-      }
-
-      // Fetch queued imports
-      const response = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch batch transactions');
-      }
-
-      const data = await response.json();
-      const queuedImports = data.imports || [];
-
-      if (queuedImports.length === 0) {
-        throw new Error('No transactions found for this batch');
-      }
-
-      const firstImport = queuedImports[0];
-      const csvFileName = firstImport.csv_file_name || 'Unknown';
-
-      setCurrentStage(`Found ${queuedImports.length} transaction${queuedImports.length !== 1 ? 's' : ''}...`);
-
-      // Convert to ParsedTransaction format
-      const initialTransactions: ParsedTransaction[] = queuedImports.map((qi: any) => {
-        let isDuplicate = false;
-        let duplicateType: 'database' | 'within-file' | null = null;
-        try {
-          const originalData = typeof qi.original_data === 'string'
-            ? JSON.parse(qi.original_data)
-            : qi.original_data;
-          if (originalData?.isDuplicate) {
-            isDuplicate = true;
-            duplicateType = originalData.duplicateType ?? 'database';
+    if (!open || !batchId) return;
+    let active = true;
+    setPhase("processing");
+    setBatch(null);
+    setTasks({});
+    setError("");
+    setSubmitting(false);
+    submittingRef.current = false;
+    setCurrent({ progress: 0, stage: "Loading saved progress…" });
+    setLinkedName("No account (unassigned)");
+    void prepareQueuedImport(batchId, (update) => {
+      if (!active) return;
+      setCurrent(update);
+      if (update.tasks) setTasks(update.tasks);
+    })
+      .then(async (result) => {
+        if (!active) return;
+        setBatch(result);
+        setHistorical(result.status.isHistorical);
+        setPhase("ready");
+        const cardId = result.status.defaultCreditCardId;
+        const accountId = result.status.defaultAccountId;
+        if (cardId || accountId) {
+          const fallback = cardId ? "Linked credit card" : "Linked account";
+          setLinkedName(fallback);
+          try {
+            const response = await fetch(
+              cardId ? "/api/credit-cards" : "/api/accounts",
+            );
+            const list = response.ok ? await response.json() : [];
+            if (active)
+              setLinkedName(
+                list.find(
+                  (item: { id: number }) => item.id === (cardId || accountId),
+                )?.name || fallback,
+              );
+          } catch {
+            /* The account name is optional; its existing ID is preserved. */
           }
-        } catch {
-          // ignore parse errors
         }
-
-        return {
-          id: `queued-${qi.id}`,
-          date: qi.transaction_date,
-          description: qi.description,
-          amount: qi.amount,
-          transaction_type: qi.transaction_type,
-          merchant: qi.merchant,
-          suggestedCategory: qi.suggested_category_id || undefined,
-          account_id: qi.target_account_id || undefined,
-          credit_card_id: qi.target_credit_card_id || undefined,
-          is_historical: qi.is_historical || false,
-          splits: [],
-          status: 'pending' as const,
-          isDuplicate,
-          duplicateType,
-          originalData: qi.original_data,
-          hash: qi.hash || '',
-        };
+      })
+      .catch((err) => {
+        if (!active) return;
+        setError(
+          err instanceof Error ? err.message : "Could not prepare this import.",
+        );
+        setPhase("error");
       });
-
-      // Process transactions
-      const updateProgress = (prog: number, stg: string) => {
-        setCurrentProgress(prog);
-        setCurrentStage(stg);
-      };
-
-      const processedTransactions = await processTransactions(
-        initialTransactions,
-        firstImport.target_account_id ?? undefined,
-        firstImport.target_credit_card_id ?? undefined,
-        true, // Skip AI categorization - user can trigger it manually on review page
-        updateProgress,
-        undefined, // baseUrl
-        batchId,
-        { processingTasks }
-      );
-
-      // Calculate processing results from processed transactions
-      const databaseDuplicates = processedTransactions.filter(t => t.duplicateType === 'database').length;
-      const withinFileDuplicates = processedTransactions.filter(t => t.duplicateType === 'within-file').length;
-      const categorizedCount = processedTransactions.filter(t => t.suggestedCategory !== null && t.suggestedCategory !== undefined).length;
-      
-      // Set processing results
-      setProcessingResults({
-        totalTransactions: processedTransactions.length,
-        databaseDuplicates,
-        withinFileDuplicates,
-        categorizedCount,
-        fileName: csvFileName,
-        mappingName: firstImport.csv_mapping_name || null,
-      });
-
-      // Update queued imports with categorization results
-      setCurrentStage('Updating categorization results...');
-      const updateResponse = await fetch('/api/automatic-imports/queue/update-categorization', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactions: processedTransactions }),
-      });
-
-      if (!updateResponse.ok) {
-        console.warn('Failed to update queued imports with categorization results');
-      }
-
-      setCurrentProgress(100);
-      setCurrentStage('Processing complete!');
-      setProcessingComplete(true);
-      setIsProcessing(false);
-
-      // Refresh status to show updated tasks (but don't trigger processing again)
-      await fetchStatus(false); // Pass false to prevent auto-starting processing
-    } catch (error: any) {
-      console.error('Error processing batch:', error);
-      toast.error(error.message || 'Failed to process batch');
-      setIsProcessing(false);
-    }
-  };
+    return () => {
+      active = false;
+    };
+  }, [open, batchId, attempt]);
 
   const handleContinue = async () => {
-    if (!processingComplete || !batchId) return;
-
-    setIsSubmitting(true);
+    if (phase !== "ready" || !batchId || submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setError("");
     try {
-      // Update batch with historical flag only (target account was set at queue time)
-      const updateResponse = await fetch(`/api/automatic-imports/queue/update-batch`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          batchId,
-          isHistorical: isHistorical,
-        }),
-      });
-
-      if (!updateResponse.ok) {
-        throw new Error('Failed to update batch settings');
+      const response = await fetch(
+        "/api/automatic-imports/queue/update-batch",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ batchId, isHistorical: historical }),
+        },
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(
+          data.error || "Could not save import settings. Please try again.",
+        );
       }
-
-      // Task completion is handled by the update-batch API route
-      // Call completion handler
       onComplete?.();
-    } catch (error: any) {
-      console.error('Error updating batch:', error);
-      toast.error(error.message || 'Failed to update batch settings');
-      setIsSubmitting(false);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not save import settings.",
+      );
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   };
+  const busy = !batchId || phase === "processing" || submitting;
+  const shownProgress = batchId ? current.progress : progress;
+  const shownStage = batchId ? current.stage : stage;
+  const duplicates =
+    batch?.transactions.filter((t) => t.isDuplicate).length || 0;
+  const categorized =
+    batch?.transactions.filter(
+      (t) => t.suggestedCategory !== undefined && !t.isDuplicate,
+    ).length || 0;
+  const pendingStep = taskLabels.find(([task]) => tasks[task] === false)?.[0];
+  const primary = modern ? "nl-primary" : "";
+  const secondary = modern ? "nl-secondary" : "";
 
-
-  // Simple mode: just show progress (backward compatible)
-  if (!batchId) {
-    return (
-      <Dialog open={open} onOpenChange={() => {}}>
-        <DialogContent 
-          className="sm:max-w-[500px]"
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-        >
-          <DialogHeader>
-            <DialogTitle>Processing Transactions</DialogTitle>
-            <DialogDescription>
-              Categorizing transactions and checking for duplicates...
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-8">
-            <div className="flex flex-col items-center justify-center space-y-4">
-              <Loader2 className="h-16 w-16 text-blue-500 animate-spin" />
-              <div className="text-center space-y-2 w-full">
-                <p className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                  {currentStage || 'Processing transactions...'}
-                </p>
-                <div className="w-full max-w-sm mx-auto space-y-2 pt-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">Progress</span>
-                    <span className="text-gray-900 dark:text-gray-100">{Math.round(currentProgress)}%</span>
-                  </div>
-                  <Progress value={currentProgress} className="h-2" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  // Enhanced mode: show task status and account selection
   return (
-    <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent 
-        className="sm:max-w-[600px]"
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !busy) onCancel?.();
+      }}
+    >
+      <DialogContent
+        className={
+          modern
+            ? "new-look nl-import-processing sm:max-w-[600px]"
+            : "sm:max-w-[600px]"
+        }
+        showCloseButton={!busy && !!onCancel}
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => {
-          if (!isProcessing && !isSubmitting && onCancel) {
-            onCancel();
-          } else {
-            e.preventDefault();
-          }
+          if (busy || !onCancel) e.preventDefault();
         }}
       >
         <DialogHeader>
-          <DialogTitle>Processing Import Batch</DialogTitle>
+          {modern && <p className="nl-eyebrow">Import & review</p>}
+          <DialogTitle>
+            {phase === "ready" && batchId
+              ? "Ready to review"
+              : "Prepare your import"}
+          </DialogTitle>
           <DialogDescription>
-            {isProcessing 
-              ? 'Processing transactions and checking for duplicates...'
-              : processingComplete
-              ? 'Processing complete! Set default account and continue to review.'
-              : loading
-              ? 'Checking processing status...'
-              : 'Categorizing transactions and checking for duplicates...'}
+            {phase === "ready" && batchId
+              ? "Check the import settings, then review your transactions before importing."
+              : "Check duplicates and apply category rules. Completed steps are saved so you can resume if interrupted."}
           </DialogDescription>
         </DialogHeader>
-
-        <div className="space-y-6 py-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : isProcessing ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-center">
-                <Loader2 className="h-16 w-16 text-blue-500 animate-spin" />
-              </div>
-              <div className="space-y-2">
-                <p className="text-center font-medium">{currentStage}</p>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Progress</span>
-                    <span className="font-medium">{Math.round(currentProgress)}%</span>
-                  </div>
-                  <Progress value={currentProgress} className="h-2" />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Processing Results */}
-              {processingComplete && processingResults && (
-                <div className="space-y-3 border-t pt-4">
-                  <Label className="text-sm font-semibold">Processing Results</Label>
-                  <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                    {/* Filename on its own line at the top */}
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">File:</span>
-                      <span className="ml-2 font-medium">{processingResults.fileName}</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                      {/* Row 1: Mapping | Total Transactions */}
-                      {processingResults.mappingName && (
-                        <div>
-                          <span className="text-muted-foreground">Mapping:</span>
-                          <span className="ml-2 font-medium">{processingResults.mappingName}</span>
-                        </div>
-                      )}
-                      <div>
-                        <span className="text-muted-foreground">Total Transactions:</span>
-                        <span className="ml-2 font-medium">{processingResults.totalTransactions}</span>
-                      </div>
-                      {/* Row 2: Categorized | Duplicates */}
-                      <div>
-                        <span className="text-muted-foreground">Categorized:</span>
-                        <span className="ml-2 font-medium">{processingResults.categorizedCount} / {processingResults.totalTransactions}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Duplicates:</span>
-                        <span className="ml-2 font-medium">
-                          {processingResults.databaseDuplicates === 0 && processingResults.withinFileDuplicates === 0 ? (
-                            <span className="text-green-600 dark:text-green-400">None</span>
-                          ) : (
-                            <>
-                              {processingResults.databaseDuplicates > 0 && (
-                                <span className="text-amber-600 dark:text-amber-400">
-                                  {processingResults.databaseDuplicates}
-                                </span>
-                              )}
-                              {processingResults.databaseDuplicates > 0 && processingResults.withinFileDuplicates > 0 && (
-                                <span className="mx-1">•</span>
-                              )}
-                              {processingResults.withinFileDuplicates > 0 && (
-                                <span className="text-amber-600 dark:text-amber-400">
-                                  {processingResults.withinFileDuplicates} within file{processingResults.withinFileDuplicates !== 1 ? 's' : ''}
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+        <div className={modern ? "nl-import-body" : "space-y-5 py-4"}>
+          {batch && (
+            <div className={modern ? "nl-import-file" : "text-sm break-words"}>
+              <strong>{batch.fileName}</strong>
+              {batch.mappingName && (
+                <p className="text-muted-foreground">{batch.mappingName}</p>
               )}
-
-              {/* Linked Account (read-only) and Historical flag */}
-              {processingComplete && (
-                <div className="space-y-4 border-t pt-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Linked to</Label>
-                    <p className="text-sm text-muted-foreground">
-                      {linkedAccountName ?? 'No account (unassigned)'}
+            </div>
+          )}
+          {(!batchId || phase === "processing") && (
+            <div className="space-y-3" role="status">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />
+                <span>{shownStage || "Preparing transactions…"}</span>
+              </div>
+              <Progress
+                value={shownProgress}
+                aria-label="Import preparation progress"
+                className="h-2"
+              />
+            </div>
+          )}
+          {batchId &&
+            taskLabels.some(([task]) => tasks[task] !== undefined) && (
+              <ol
+                className={modern ? "nl-import-steps" : "space-y-3"}
+                aria-label="Import preparation steps"
+              >
+                {taskLabels
+                  .filter(([task]) => tasks[task] !== undefined)
+                  .map(([task, label]) => (
+                    <li key={task} className="flex items-center gap-3 text-sm">
+                      {tasks[task] ? (
+                        <Check
+                          className="h-4 w-4 text-primary shrink-0"
+                          aria-hidden="true"
+                        />
+                      ) : phase === "processing" && task === pendingStep ? (
+                        <Loader2
+                          className="h-4 w-4 animate-spin text-primary shrink-0"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <Circle
+                          className="h-4 w-4 text-muted-foreground shrink-0"
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span className="flex-1">{label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {tasks[task]
+                          ? "Done"
+                          : task === "import_defaults_assignment" &&
+                              phase === "ready"
+                            ? "Below"
+                            : "Pending"}
+                      </span>
+                    </li>
+                  ))}
+              </ol>
+            )}
+          {phase === "ready" && batch && (
+            <>
+              <dl
+                className={
+                  modern
+                    ? "nl-import-totals"
+                    : "grid grid-cols-3 gap-3 rounded-lg bg-muted p-4"
+                }
+              >
+                <div>
+                  <dt>Transactions</dt>
+                  <dd>{batch.transactions.length}</dd>
+                </div>
+                <div>
+                  <dt>Categorized</dt>
+                  <dd>{categorized}</dd>
+                </div>
+                <div>
+                  <dt>Duplicates</dt>
+                  <dd>{duplicates}</dd>
+                </div>
+              </dl>
+              <div
+                className={
+                  modern ? "nl-import-settings" : "space-y-4 border-t pt-4"
+                }
+              >
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Linked account
+                  </p>
+                  <strong>{linkedName}</strong>
+                </div>
+                <div className="flex items-start gap-3">
+                  <OptionToggle
+                    id="import-historical"
+                    checked={historical}
+                    disabled={submitting}
+                    onCheckedChange={setHistorical}
+                    aria-describedby="import-historical-help"
+                  />
+                  <div>
+                    <Label
+                      htmlFor="import-historical"
+                      className="cursor-pointer"
+                    >
+                      Historical transactions
+                    </Label>
+                    <p
+                      id="import-historical-help"
+                      className="text-xs text-muted-foreground mt-1"
+                    >
+                      Include in reports without changing current envelope
+                      balances.
                     </p>
                   </div>
-
-                  <div className="flex items-center space-x-2">
-                    <OptionToggle
-                      id="historical"
-                      checked={isHistorical}
-                      onCheckedChange={(checked) => setIsHistorical(checked === true)}
-                    />
-                    <Label htmlFor="historical" className="text-sm font-normal cursor-pointer">
-                      Mark transactions as historical (won't affect current budget)
-                    </Label>
-                  </div>
                 </div>
-              )}
+              </div>
             </>
           )}
-        </div>
-
-        <div className="flex justify-end gap-2 pt-4 border-t">
-          {onCancel && !isProcessing && !isSubmitting && (
-            <Button variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
-          )}
-          {processingComplete && (
-            <Button onClick={handleContinue} disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                'Continue to Review'
+          {error && (
+            <div
+              role="alert"
+              className={modern ? "nl-notice" : "rounded-lg border p-4 text-sm"}
+            >
+              <p>{error}</p>
+              {phase === "error" && (
+                <p className="mt-2 text-muted-foreground">
+                  Your saved steps are kept. Retry to continue from the last
+                  completed step.
+                </p>
               )}
-            </Button>
+            </div>
           )}
         </div>
+        {batchId && (
+          <div
+            className={
+              modern
+                ? "nl-import-footer"
+                : "flex justify-end gap-2 pt-4 border-t"
+            }
+          >
+            {onCancel && !busy && (
+              <Button
+                variant="outline"
+                className={secondary}
+                onClick={onCancel}
+              >
+                Back to imports
+              </Button>
+            )}
+            {phase === "error" && (
+              <Button
+                className={primary}
+                onClick={() => setAttempt((value) => value + 1)}
+              >
+                Retry processing
+              </Button>
+            )}
+            {phase === "ready" && (
+              <Button
+                className={primary}
+                onClick={handleContinue}
+                disabled={submitting}
+              >
+                {submitting ? "Saving settings…" : "Continue to review →"}
+              </Button>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
 }
-
-

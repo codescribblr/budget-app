@@ -99,6 +99,8 @@ export async function POST(request: Request) {
     const hasCsvData = !!csvData;
     const isPdf = fileName.toLowerCase().endsWith('.pdf');
     const processingTasks = initializeProcessingTasks('manual', hasCsvData, isPdf);
+    // PDF conversion has already produced these parsed rows before they reach the queue.
+    if (isPdf) processingTasks.pdf_to_csv = true;
 
     // Queue transactions
     // Note: isHistorical is applied per-transaction if provided in transaction.is_historical

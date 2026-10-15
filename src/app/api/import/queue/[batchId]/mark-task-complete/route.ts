@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { checkWriteAccess } from '@/lib/api-helpers';
-import { markTaskComplete, type ProcessingTasksStatus } from '@/lib/processing-tasks';
+import type { ProcessingTasksStatus } from '@/lib/processing-tasks';
+import { persistCompletedTasks } from '@/lib/processing-tasks-server';
 
 /**
  * POST /api/import/queue/[batchId]/mark-task-complete
@@ -29,51 +30,14 @@ export async function POST(
       task: keyof ProcessingTasksStatus;
     };
 
-    if (!task) {
+    if (!['pdf_to_csv', 'csv_mapping', 'duplicate_detection', 'categorization', 'ai_categorization', 'import_defaults_assignment'].includes(task)) {
       return NextResponse.json(
         { error: 'task is required' },
         { status: 400 }
       );
     }
 
-    // Get current processing tasks from first transaction
-    const { data: firstImport, error: fetchError } = await supabase
-      .from('queued_imports')
-      .select('processing_tasks')
-      .eq('account_id', accountId)
-      .eq('source_batch_id', batchId)
-      .order('id', { ascending: true })
-      .limit(1)
-      .single();
-
-    let updatedTasks: ProcessingTasksStatus;
-
-    if (fetchError || !firstImport || !firstImport.processing_tasks) {
-      // If no processing_tasks exists, initialize it
-      updatedTasks = {
-        [task]: true,
-      } as ProcessingTasksStatus;
-    } else {
-      // Update existing tasks
-      const currentTasks = (firstImport.processing_tasks as ProcessingTasksStatus) || {};
-      updatedTasks = markTaskComplete(currentTasks, task);
-    }
-
-    // Update processing_tasks on first transaction
-    const { error: updateError } = await supabase
-      .from('queued_imports')
-      .update({ processing_tasks: updatedTasks })
-      .eq('account_id', accountId)
-      .eq('source_batch_id', batchId)
-      .order('id', { ascending: true })
-      .limit(1);
-
-    if (updateError) {
-      return NextResponse.json(
-        { error: 'Failed to update processing tasks', details: updateError.message },
-        { status: 500 }
-      );
-    }
+    await persistCompletedTasks(supabase, accountId, batchId, [task]);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

@@ -690,27 +690,9 @@ export default function FileUpload({
                     throw new Error('No transactions found in the file');
                   }
                   
-                  updateProgress(40, `Found ${aiResult.transactions.length} transaction${aiResult.transactions.length !== 1 ? 's' : ''}. Checking for duplicates...`);
-                  const { processTransactions } = await import('@/lib/csv-parser-helpers');
-                  // AI categorization is now done on-demand in TransactionPreview
+                  // Queue extracted rows once; the resumable dialog performs duplicate checks and categorization.
                   const targetAccId = pendingTargetForAIFallback.accountId;
                   const targetCardId = pendingTargetForAIFallback.creditCardId;
-
-                  const processedTransactions = await processTransactions(
-                    aiResult.transactions,
-                    targetAccId ?? undefined,
-                    targetCardId ?? undefined,
-                    true, // Always skip AI categorization - user can trigger it manually in preview
-                    updateProgress
-                  );
-
-                  // Apply default account/card and historical flag to transactions before saving
-                  const transactionsWithDefaults = processedTransactions.map(txn => ({
-                    ...txn,
-                    account_id: (txn.account_id !== undefined && txn.account_id !== null) ? txn.account_id : (targetAccId || null),
-                    credit_card_id: (txn.credit_card_id !== undefined && txn.credit_card_id !== null) ? txn.credit_card_id : (targetCardId || null),
-                    is_historical: isHistorical,
-                  }));
 
                   // Save raw transactions to queue (without processing - dialog will handle that)
                   updateProgress(90, 'Saving to import queue...');

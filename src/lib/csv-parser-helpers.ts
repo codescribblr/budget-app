@@ -475,6 +475,8 @@ function parseAmount(amountStr: string): number {
 
 export interface ProcessTransactionsOptions {
   processingTasks?: ProcessingTasksStatus;
+  /** Persist a step's results before recording its completion. */
+  onStepComplete?: (task: 'duplicate_detection' | 'categorization', transactions: ParsedTransaction[]) => Promise<void>;
   /** Re-run specific tasks even if already marked complete (e.g. user-triggered duplicate re-check) */
   forceTasks?: ProcessingTask[];
 }
@@ -628,8 +630,15 @@ export async function processTransactions(
       }),
     });
 
+    if (!response.ok) throw new Error('Could not check duplicates. Please retry processing.');
     const { duplicates } = await response.json();
     databaseDuplicateSet = new Set(duplicates);
+    await options?.onStepComplete?.('duplicate_detection', transactions.map((transaction, index) => ({
+      ...transaction,
+      isDuplicate: databaseDuplicateSet.has(transaction.hash) || withinFileDuplicates.has(index),
+      duplicateType: databaseDuplicateSet.has(transaction.hash)
+        ? 'database' : withinFileDuplicates.has(index) ? 'within-file' : null,
+    })));
   } else {
     if (progressCallback) progressCallback(50, 'Using existing duplicate detection results...');
     ({ databaseDuplicateSet, withinFileDuplicates } = loadStoredDuplicateSets(transactions));
@@ -676,6 +685,7 @@ export async function processTransactions(
     if (progressCallback) progressCallback(60, 'Loading categories...');
     const categoriesUrl = baseUrl ? `${baseUrl}/api/categories` : '/api/categories';
     const categoriesResponse = await fetch(categoriesUrl);
+    if (!categoriesResponse.ok) throw new Error('Could not load categories. Please retry processing.');
     categories = await categoriesResponse.json();
 
     if (progressCallback) progressCallback(65, 'Applying categorization rules...');
@@ -689,6 +699,7 @@ export async function processTransactions(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ merchants: uniqueMerchants, batchId }),
     });
+    if (!categorizationResponse.ok) throw new Error('Could not categorize transactions. Please retry processing.');
     const { suggestions: uniqueSuggestions } = await categorizationResponse.json();
 
     uniqueMerchants.forEach((merchant, uniqueIndex) => {
@@ -748,6 +759,9 @@ export async function processTransactions(
         : [],
     };
   });
+
+  // A batch containing only duplicates still finishes this step, without calling categorization.
+  if (runCategorization) await options?.onStepComplete?.('categorization', processedTransactions);
 
   if (
     batchId &&

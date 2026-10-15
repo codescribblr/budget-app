@@ -65,12 +65,8 @@ export async function PUT(request: Request) {
 
     // Mark import_defaults_assignment as complete since we're updating the batch with defaults
     // This task is complete once the user has reviewed and submitted the defaults
-    try {
-      const { markTaskCompleteForBatchServer } = await import('@/lib/processing-tasks-server');
-      await markTaskCompleteForBatchServer(batchId, 'import_defaults_assignment');
-    } catch (taskError) {
-      // Non-critical - continue without failing the request
-    }
+    const { persistCompletedTasks } = await import('@/lib/processing-tasks-server');
+    await persistCompletedTasks(supabase, accountId, batchId, ['import_defaults_assignment']);
 
     return NextResponse.json({ 
       success: true,

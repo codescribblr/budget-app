@@ -1,7 +1,7 @@
 'use client';
 import { useImportPaths } from './use-import-paths';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import QueuedImportProcessingDialog from '@/components/import/QueuedImportProces
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { ArrowLeft, Wallet, CreditCard, Clock, Trash2, RefreshCw, Search, Tag, MoreVertical } from 'lucide-react';
 import type { ParsedTransaction } from '@/lib/import-types';
-import { getIncompleteTasks } from '@/lib/processing-tasks';
+import { getIncompleteTasks, type ProcessingTask } from '@/lib/processing-tasks';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,109 +63,22 @@ export default function BatchReviewPage() {
   const [isRerunningCategorization, setIsRerunningCategorization] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
 
+  const [pendingTasks, setPendingTasks] = useState<ProcessingTask[]>([]);
+  const loadId = useRef(0);
+
   useEffect(() => {
-    if (!permissionsLoading && batchId) {
-      // Store batchId in sessionStorage so TransactionPreview can use it
-      sessionStorage.setItem('queuedBatchId', batchId);
-
-      // Small delay to ensure sessionStorage is available after navigation
-      // This handles cases where Next.js RSC requests might cause timing issues
-      const timer = setTimeout(() => {
-        loadProcessedTransactions();
-      }, 100);
-
-      return () => {
-        clearTimeout(timer);
-        // Don't clean up sessionStorage here - let it persist until after load
-        // The cleanup happens after successful load, not on unmount
-      };
-    }
-  }, [permissionsLoading, batchId]);
-
-  // Cleanup sessionStorage after component mounts and data is loaded
-  useEffect(() => {
-    if (transactions.length > 0 && !loading) {
-      // Data loaded successfully, clean up sessionStorage after a delay
-      // This ensures the data is fully loaded before cleanup
-      const timer = setTimeout(() => {
-        sessionStorage.removeItem('queuedProcessedTransactions');
-        sessionStorage.removeItem('queuedBatchInfo');
-      }, 2000); // Longer delay to ensure everything is stable
-
-      return () => clearTimeout(timer);
-    }
-    return () => {}; // Always return a cleanup function
-  }, [transactions.length, loading]);
-
-  // Define checkProcessingStatus before the useEffect that uses it
-  // Use useCallback to memoize the function and prevent unnecessary re-renders
-  const checkProcessingStatus = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/import/queue/${encodeURIComponent(batchId)}/processing-status`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.needsProcessing) {
-          setShowProcessingDialog(true);
-        }
-      }
-    } catch (error) {
-      console.error('Error checking processing status:', error);
-    }
-  }, [batchId]);
-
-  // Check processing status on mount (only if we don't have transactions yet)
-  // This is a fallback - the main loading happens in loadProcessedTransactions
-  // IMPORTANT: This hook must be called before any conditional returns
-  useEffect(() => {
-    if (!permissionsLoading && batchId && !loading && transactions.length === 0 && !showProcessingDialog) {
-      // Only check if we haven't already started loading
-      const timer = setTimeout(() => {
-        checkProcessingStatus();
-      }, 500); // Delay to avoid race conditions
-      return () => clearTimeout(timer);
-    }
-    // Always return a cleanup function (no-op if condition wasn't met)
-    return () => {};
-  }, [permissionsLoading, batchId, loading, transactions.length, showProcessingDialog, checkProcessingStatus]);
-
-  const loadProcessedTransactions = async () => {
-    // Retry logic to handle RSC timing issues
-    const attemptLoad = async (attempt: number = 0) => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Try to load from sessionStorage (set by queue list page for automatic imports)
-        const storedTransactions = sessionStorage.getItem('queuedProcessedTransactions');
-        const storedBatchInfo = sessionStorage.getItem('queuedBatchInfo');
-
-        if (storedTransactions) {
-          await loadFromStorage(storedTransactions, storedBatchInfo);
-          return;
-        }
-
-        // If not in sessionStorage, retry a few times (handles RSC timing)
-        if (attempt < 3) {
-          setTimeout(() => {
-            attemptLoad(attempt + 1);
-          }, 200 * (attempt + 1)); // 200ms, 400ms, 600ms
-          return;
-        }
-
-        // Still not found after retries - fetch from database (for manual uploads or direct navigation)
-        console.log('Not found in sessionStorage, fetching from database...');
-        await loadFromDatabase();
-      } catch (err: any) {
-        console.error('Error loading processed transactions:', err);
-        setError(err.message || 'Failed to load batch transactions');
-        setLoading(false);
-      }
-    };
-
-    attemptLoad();
-  };
+    if (permissionsLoading || !isEditor || !batchId) return;
+    sessionStorage.setItem('queuedBatchId', batchId);
+    // The persisted queue is authoritative. Old handoff caches could belong to another batch.
+    sessionStorage.removeItem('queuedProcessedTransactions');
+    sessionStorage.removeItem('queuedBatchInfo');
+    setShowProcessingDialog(false);
+    void loadFromDatabase();
+    return () => { loadId.current++; };
+  }, [permissionsLoading, isEditor, batchId]);
 
   const loadFromDatabase = async () => {
+    const requestId = ++loadId.current;
     try {
       setLoading(true);
       setError(null);
@@ -179,6 +92,7 @@ export default function BatchReviewPage() {
       }
 
       const data = await response.json();
+      if (requestId !== loadId.current) return;
       const queuedImports = data.imports || [];
 
       if (queuedImports.length === 0) {
@@ -220,6 +134,7 @@ export default function BatchReviewPage() {
           : Promise.resolve(null),
       ]);
 
+      if (requestId !== loadId.current) return;
       const setupInfo = setupResult?.setup ?? null;
       const categoryById = new Map<number, { id: number; name: string }>(
         categories.map((c: { id: number; name: string }) => [c.id, c])
@@ -290,13 +205,10 @@ export default function BatchReviewPage() {
       // Check if processing is needed
       const tasks = (firstImport?.processing_tasks as any) || null;
       const incompleteTasks = tasks ? getIncompleteTasks(tasks) : [];
-      const needsProcessing = incompleteTasks.length > 0;
+      setPendingTasks(incompleteTasks);
 
       const processedTransactions = initialTransactions;
 
-      if (needsProcessing && !showProcessingDialog) {
-        setShowProcessingDialog(true);
-      }
 
       let batchInfo = {
         setup_name: setupInfo?.integration_name || 'Unknown',
@@ -351,121 +263,9 @@ export default function BatchReviewPage() {
 
       setLoading(false);
     } catch (err: any) {
+      if (requestId !== loadId.current) return;
       console.error('Error loading from database:', err);
       setError(err.message || 'Failed to load batch transactions');
-      setLoading(false);
-    }
-  };
-
-  const loadFromStorage = async (storedTransactions: string, storedBatchInfo: string | null) => {
-    try {
-      // Load processed transactions from sessionStorage
-      const processedTransactions = JSON.parse(storedTransactions);
-
-      // Load batch info if available, otherwise use defaults
-      let batchInfo = {
-        setup_name: 'Unknown',
-        source_type: 'unknown',
-        target_account_name: null as string | null,
-        is_credit_card: false,
-        is_historical: false as boolean | 'mixed',
-      };
-
-      if (storedBatchInfo) {
-        try {
-          batchInfo = JSON.parse(storedBatchInfo);
-        } catch (err) {
-          console.warn('Failed to parse batch info:', err);
-          // Use defaults
-        }
-      }
-
-      // Fetch CSV fields from database to ensure we have filename, mapping name, etc.
-      // This is especially important after remap when data might have changed
-      try {
-        const csvResponse = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}&limit=1`);
-        if (csvResponse.ok) {
-          const csvData = await csvResponse.json();
-          const firstImport = csvData.imports?.[0];
-
-          if (firstImport) {
-            // Set CSV-related fields
-            const csvDataExists = !!firstImport.csv_data || !!firstImport.csv_analysis;
-            setHasCsvData(csvDataExists);
-            setMappingTemplateId(firstImport.csv_mapping_template_id || null);
-            setImportFileName(firstImport.csv_file_name || null);
-
-            // Get mapping name
-            let mappingNameValue = firstImport.csv_mapping_name || null;
-
-            // If no mapping name stored but we have CSV analysis, generate one
-            if (!mappingNameValue && firstImport.csv_analysis) {
-              try {
-                const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
-                const analysis = firstImport.csv_analysis;
-                const fileName = firstImport.csv_file_name || 'unknown.csv';
-                mappingNameValue = generateAutomaticMappingName(analysis, fileName);
-              } catch (err) {
-                console.warn('Failed to generate mapping name:', err);
-              }
-            }
-
-            // Fallback to "Automatic Mapping" if still no name
-            if (!mappingNameValue) {
-              mappingNameValue = firstImport.csv_mapping_template_id ? 'Template Mapping' : 'Automatic Mapping';
-            }
-
-            setMappingName(mappingNameValue);
-
-            // Fetch template name if template ID exists
-            if (firstImport.csv_mapping_template_id) {
-              try {
-                const templateResponse = await fetch(`/api/import/templates/${firstImport.csv_mapping_template_id}`);
-                if (templateResponse.ok) {
-                  const template = await templateResponse.json();
-                  setMappingTemplateName(template.template_name || null);
-                }
-              } catch (err) {
-                console.warn('Failed to fetch template name:', err);
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to fetch CSV fields from database:', err);
-        // Continue without CSV fields - they'll be missing but page will still work
-      }
-
-      // Sort transactions by date descending (newest first)
-      const sortedTransactions = [...processedTransactions].sort((a, b) => {
-        // Compare dates (YYYY-MM-DD format sorts correctly as strings)
-        const dateComparison = b.date.localeCompare(a.date);
-        // If same date, maintain original order (by ID if available)
-        if (dateComparison === 0) {
-          // Try to extract numeric ID from string ID (format: "queued-123")
-          const idA = typeof a.id === 'string' && a.id.startsWith('queued-')
-            ? parseInt(a.id.replace('queued-', '')) || 0
-            : 0;
-          const idB = typeof b.id === 'string' && b.id.startsWith('queued-')
-            ? parseInt(b.id.replace('queued-', '')) || 0
-            : 0;
-          return idB - idA; // Descending by ID as tiebreaker
-        }
-        return dateComparison;
-      });
-
-      setTransactions(sortedTransactions);
-      setBatchInfo(batchInfo);
-
-      // Calculate duplicate counts from processed transactions
-      const databaseDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'database').length;
-      const withinFileDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'within-file').length;
-      setDuplicateCounts({ database: databaseDups, withinFile: withinFileDups });
-
-      setLoading(false);
-    } catch (err: any) {
-      console.error('Error parsing stored data:', err);
-      setError('Failed to parse stored transactions. Please try reviewing the batch again.');
       setLoading(false);
     }
   };
@@ -534,7 +334,7 @@ export default function BatchReviewPage() {
     }
   };
 
-  if (permissionsLoading || loading) {
+  if (permissionsLoading || (isEditor && loading)) {
     return <LoadingSpinner />;
   }
 
@@ -597,10 +397,8 @@ export default function BatchReviewPage() {
 
   const handleProcessingComplete = () => {
     setShowProcessingDialog(false);
-    // Reload transactions after processing with a small delay to ensure database updates are committed
-    setTimeout(() => {
-      loadProcessedTransactions();
-    }, 300);
+    // Continue only fires after results and the final settings checkpoint are saved.
+    void loadFromDatabase();
   };
 
   const handleRerunDuplicateCheck = async () => {
@@ -911,7 +709,7 @@ export default function BatchReviewPage() {
           <Button
             variant="outline"
             onClick={handleRerunDuplicateCheck}
-            disabled={isRerunningDuplicates || transactions.length === 0}
+            disabled={pendingTasks.length > 0 || isRerunningDuplicates || isRerunningCategorization || transactions.length === 0}
           >
             <Search className="h-4 w-4 mr-2" />
             {isRerunningDuplicates ? 'Checking...' : 'Re-check Duplicates'}
@@ -920,7 +718,7 @@ export default function BatchReviewPage() {
           <Button
             variant="outline"
             onClick={handleRerunCategorization}
-            disabled={isRerunningCategorization || transactions.length === 0}
+            disabled={pendingTasks.length > 0 || isRerunningCategorization || isRerunningDuplicates || transactions.length === 0}
           >
             <Tag className="h-4 w-4 mr-2" />
             {isRerunningCategorization ? 'Categorizing...' : 'Re-run Categorization'}
@@ -979,14 +777,14 @@ export default function BatchReviewPage() {
             )}
             <DropdownMenuItem
               onClick={handleRerunDuplicateCheck}
-              disabled={isRerunningDuplicates || transactions.length === 0}
+              disabled={pendingTasks.length > 0 || isRerunningDuplicates || isRerunningCategorization || transactions.length === 0}
             >
               <Search className="h-4 w-4 mr-2" />
               {isRerunningDuplicates ? 'Checking...' : 'Re-check Duplicates'}
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={handleRerunCategorization}
-              disabled={isRerunningCategorization || transactions.length === 0}
+              disabled={pendingTasks.length > 0 || isRerunningCategorization || isRerunningDuplicates || transactions.length === 0}
             >
               <Tag className="h-4 w-4 mr-2" />
               {isRerunningCategorization ? 'Categorizing...' : 'Re-run Categorization'}
@@ -995,7 +793,16 @@ export default function BatchReviewPage() {
         </DropdownMenu>
       </div>
 
-      {transactions.length > 0 && (
+      {pendingTasks.length > 0 && (
+        <div className="rounded-lg border bg-muted/50 p-5 space-y-3" role="status">
+          <h2 className="font-semibold">Finish preparing this import</h2>
+          <p className="text-sm text-muted-foreground">Your completed steps are saved. Continue the remaining steps before reviewing transactions.</p>
+          <Button onClick={() => setShowProcessingDialog(true)}>
+            {pendingTasks.every(task => task === 'import_defaults_assignment') ? 'Review import settings' : 'Resume processing'}
+          </Button>
+        </div>
+      )}
+      {transactions.length > 0 && pendingTasks.length === 0 && (
         <TransactionPreview
           transactions={transactions}
           onImportComplete={handleImportComplete}

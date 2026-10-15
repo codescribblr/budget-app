@@ -3,6 +3,8 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import type { ParsedTransaction } from '@/lib/import-types';
+import { persistCompletedTasks } from '@/lib/processing-tasks-server';
+import type { ProcessingTask } from '@/lib/processing-tasks';
 
 /**
  * POST /api/automatic-imports/queue/update-categorization
@@ -20,7 +22,15 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { transactions } = body as { transactions: ParsedTransaction[] };
+    const { transactions, batchId, completedTasks } = body as {
+      transactions: ParsedTransaction[];
+      batchId?: string;
+      completedTasks?: ProcessingTask[];
+    };
+    if (completedTasks !== undefined && (!batchId || !Array.isArray(completedTasks) ||
+      completedTasks.some(task => task !== 'duplicate_detection' && task !== 'categorization'))) {
+      return NextResponse.json({ error: 'Invalid processing checkpoint' }, { status: 400 });
+    }
 
     if (!Array.isArray(transactions) || transactions.length === 0) {
       return NextResponse.json(
@@ -73,14 +83,17 @@ export async function POST(request: Request) {
         original_data: updatedOriginalData,
       };
     }).filter((update): update is NonNullable<typeof update> => update !== null);
+    if (updates.length !== transactions.length) {
+      return NextResponse.json({ error: 'Invalid queued transaction ID' }, { status: 400 });
+    }
 
     // Batch update queued imports in parallel chunks
     const CHUNK_SIZE = 25;
     for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
       const chunk = updates.slice(i, i + CHUNK_SIZE);
-      await Promise.all(
+      const results = await Promise.allSettled(
         chunk.map(async (update) => {
-          const { error } = await supabase
+          let query = supabase
             .from('queued_imports')
             .update({
               suggested_category_id: update.suggested_category_id,
@@ -90,12 +103,19 @@ export async function POST(request: Request) {
             })
             .eq('id', update.id)
             .eq('account_id', accountId);
-
-          if (error) {
-            console.warn(`Failed to update queued import ${update.id}:`, error.message);
-          }
+          if (batchId) query = query.eq('source_batch_id', batchId);
+          const { data, error } = await query.select('id');
+          if (error || !data?.length) throw new Error('Could not save all transaction results. Please retry processing.');
         })
       );
+      if (results.some(result => result.status === 'rejected')) {
+        throw new Error('Could not save all transaction results. Please retry processing.');
+      }
+    }
+
+    // Only mark the step complete once every result was saved successfully.
+    if (batchId && completedTasks?.length) {
+      await persistCompletedTasks(supabase, accountId, batchId, completedTasks);
     }
 
     return NextResponse.json({
