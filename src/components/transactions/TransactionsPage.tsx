@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useDebounceValue, useDebounceCallback } from '@/hooks/use-debounce';
-import { Search, X, Upload, Filter, CalendarIcon, Copy, ArrowUpDown, ArrowUp, ArrowDown, Tag as TagIcon } from 'lucide-react';
+import { Search, X, Upload, Filter, Copy, ArrowUpDown, ArrowUp, ArrowDown, Tag as TagIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -19,8 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
+import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import {
   Pagination,
   PaginationContent,
@@ -69,7 +68,7 @@ function fuzzyMatch(text: string, search: string): boolean {
 
 export default function TransactionsPage() {
   const router = useRouter();
-  const { importsBase, transactionsPath } = useImportPaths();
+  const { importPath, transactionsPath, transactionsHref } = useImportPaths();
   const searchParams = useSearchParams();
   const merchantFilter = searchParams.get('merchant');
   
@@ -625,11 +624,11 @@ export default function TransactionsPage() {
   }
 
   const handleClearMerchantFilter = () => {
-    router.push(transactionsPath);
+    router.push(transactionsHref);
   };
 
   const handleClearFilters = () => {
-    router.push(transactionsPath);
+    router.push(transactionsHref);
     setStartDateObj(undefined);
     setEndDateObj(undefined);
   };
@@ -870,7 +869,7 @@ export default function TransactionsPage() {
               </Button>
             )}
             <Button variant="outline" asChild className="w-full sm:w-auto">
-              <Link href={importsBase}>
+              <Link href={importPath()}>
                 <Upload className="mr-2 h-4 w-4" />
                 Import Transactions
               </Link>
@@ -1120,47 +1119,7 @@ export default function TransactionsPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Date Range Filter */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    Date
-                    {(startDateParam || endDateParam) && <Badge variant="secondary" className="ml-2">1</Badge>}
-                  </Button>
-                </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <div className="p-4 space-y-4">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Start Date</label>
-                    <Calendar
-                      mode="single"
-                      selected={startDateObj}
-                      onSelect={(date) => handleDateRangeChange(date, endDateObj)}
-                      initialFocus
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">End Date</label>
-                    <Calendar
-                      mode="single"
-                      selected={endDateObj}
-                      onSelect={(date) => handleDateRangeChange(startDateObj, date)}
-                    />
-                  </div>
-                  {(startDateObj || endDateObj) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => handleDateRangeChange(undefined, undefined)}
-                    >
-                      Clear Dates
-                    </Button>
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
+              <DateRangeFilter start={startDateObj} end={endDateObj} onChange={handleDateRangeChange} />
             </div>
           </div>
 
@@ -1181,7 +1140,7 @@ export default function TransactionsPage() {
                     Add transaction
                   </Button>
                   <Button variant="outline" asChild>
-                    <Link href={importsBase}>Import from CSV</Link>
+                    <Link href={importPath()}>Import from CSV</Link>
                   </Button>
                 </div>
               </CardContent>

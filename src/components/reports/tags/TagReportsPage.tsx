@@ -2,10 +2,9 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DatePicker } from '@/components/ui/date-picker';
+import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import TagSpendingReport from './TagSpendingReport';
 import TagTransactionList from './TagTransactionList';
@@ -92,68 +91,21 @@ export default function TagReportsPage() {
         <p className="text-muted-foreground mt-1">Analyze spending and trends by tags</p>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">Start Date</label>
-              <DatePicker
-                date={startDate}
-                onDateChange={setStartDate}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-2 block">End Date</label>
-              <DatePicker
-                date={endDate}
-                onDateChange={setEndDate}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-2 block">Tag</label>
-              <Select
-                value={selectedTagId?.toString() || 'all'}
-                onValueChange={(value) => setSelectedTagId(value === 'all' ? null : parseInt(value))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All tags" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Tags</SelectItem>
-                  {tags.map((tag) => (
-                    <SelectItem key={tag.id} value={tag.id.toString()}>
-                      {tag.color && (
-                        <div
-                          className="w-3 h-3 rounded-full inline-block mr-2"
-                          style={{ backgroundColor: tag.color }}
-                        />
-                      )}
-                      {tag.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setStartDate(undefined);
-                  setEndDate(undefined);
-                  setSelectedTagId(null);
-                }}
-                className="w-full"
-              >
-                Clear Filters
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="compact-filters" aria-label="Tag report filters">
+        <div className="compact-filter-row">
+          <DateRangeFilter start={startDate} end={endDate} onChange={(start, end) => { setStartDate(start); setEndDate(end); }} />
+          <Select value={selectedTagId?.toString() || 'all'} onValueChange={(value) => setSelectedTagId(value === 'all' ? null : parseInt(value))}>
+            <SelectTrigger aria-label="Tag filter" className="compact-filter-select"><SelectValue placeholder="All tags" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Tags</SelectItem>
+              {tags.map((tag) => <SelectItem key={tag.id} value={tag.id.toString()}>
+                {tag.color && <div className="w-3 h-3 rounded-full inline-block mr-2" style={{ backgroundColor: tag.color }} />}{tag.name}
+              </SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" onClick={() => { setStartDate(undefined); setEndDate(undefined); setSelectedTagId(null); }}>Clear filters</Button>
+        </div>
+      </div>
 
       {/* Tag Spending Report */}
       <TagSpendingReport

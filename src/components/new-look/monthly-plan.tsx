@@ -1,4 +1,5 @@
 "use client";
+import { useTaskCheckin } from "./checkin-flow";
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -25,6 +26,7 @@ export function GuidedPlan() {
   );
 }
 function PlanContent() {
+  const checkin = useTaskCheckin("plan");
   const { data, canEdit, refresh, refreshing } = useBudget();
   const { hasPremium, isFeatureEnabled } = useFeatures();
   const canEditAdvanced = hasPremium && isFeatureEnabled("category_types");
@@ -108,11 +110,14 @@ function PlanContent() {
     <>
       <TaskReturn task="plan" cadence="monthly" />
       <PageHeading
-        eyebrow="Monthly · plan what matters"
+        eyebrow={checkin ? "Monthly · plan what matters" : "Your monthly plan"}
         title="A plan you can keep up with"
         description="Set your regular funding targets using what you’ve learned from real spending. Targets guide future allocations; editing them doesn’t move any money."
       >
-        <Link className="nl-secondary" href="/new/reports?checkin=monthly">
+        <Link
+          className="nl-secondary"
+          href={checkin ? "/new/reports?checkin=monthly" : "/new/reports"}
+        >
           Review spending →
         </Link>
       </PageHeading>
@@ -263,13 +268,15 @@ function PlanContent() {
             >
               Discard
             </button>
-            <button
-              className="nl-secondary"
-              disabled={invalid || !canEdit || saving || refreshing}
-              onClick={() => void save()}
-            >
-              Save & stay
-            </button>
+            {checkin && (
+              <button
+                className="nl-secondary"
+                disabled={invalid || !canEdit || saving || refreshing}
+                onClick={() => void save()}
+              >
+                Save & stay
+              </button>
+            )}
           </>
         )}
       </CheckinFooter>

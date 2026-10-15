@@ -42,7 +42,7 @@ interface ImportQueueListProps {
 }
 
 export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
-  const { importsBase } = useImportPaths();
+  const { importPath } = useImportPaths();
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [batches, setBatches] = useState<QueuedImportBatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +80,7 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
     try {
       if (sourceType === 'manual') {
         sessionStorage.setItem('queuedBatchId', batchId);
-        window.location.href = `${importsBase}/${batchId}`;
+        window.location.href = importPath(`/${batchId}`);
         return;
       }
 
@@ -107,7 +107,7 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
             const setup = await setupResponse.json();
             if (setup.setup?.source_type === 'manual') {
               sessionStorage.setItem('queuedBatchId', batchId);
-              window.location.href = `${importsBase}/${batchId}`;
+              window.location.href = importPath(`/${batchId}`);
               return;
             }
           }
@@ -158,7 +158,7 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
     const batchId = processingBatchId;
     setProcessingBatchId(null);
     if (batchId) {
-      window.location.href = `${importsBase}/${batchId}`;
+      window.location.href = importPath(`/${batchId}`);
     }
   };
 

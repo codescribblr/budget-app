@@ -1,4 +1,5 @@
 "use client";
+import { useTaskCheckin } from "./checkin-flow";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useFeatures } from "@/contexts/FeatureContext";
@@ -13,6 +14,7 @@ interface BufferStatus {
   monthlyBudget: number;
 }
 export function GuidedGoals() {
+  const checkin = useTaskCheckin("goals");
   const {
     loading: featuresLoading,
     isFeatureEnabled,
@@ -58,7 +60,7 @@ export function GuidedGoals() {
     <>
       <TaskReturn task="goals" cadence="monthly" />
       <PageHeading
-        eyebrow="Monthly · look further ahead"
+        eyebrow={checkin ? "Monthly · look further ahead" : "Goals & buffer"}
         title="Progress beyond this month"
         description="Review the goals and buffer you’ve chosen to use. Keep the money working toward the priorities that still matter to you."
       />

@@ -1,8 +1,11 @@
 'use client';
-import { usePathname } from 'next/navigation';
+import { useMemo } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { importPaths } from '@/lib/import-paths';
 
 /** Both interfaces share import components and records; only their navigation differs. */
 export function useImportPaths() {
   const modern = usePathname().startsWith('/new/');
-  return { importsBase: modern ? '/new/imports' : '/imports', transactionsPath: modern ? '/new/transactions' : '/transactions' };
+  const checkin = useSearchParams().get('checkin');
+  return useMemo(() => importPaths(modern, checkin), [modern, checkin]);
 }

@@ -1,0 +1,151 @@
+.date-range-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 440px;
+}
+.date-range-filter .date-range-preset {
+  flex: 0 0 152px;
+  width: 152px;
+  height: 40px;
+}
+.date-range-filter .date-range-trigger {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  justify-content: flex-start;
+  font-weight: 400;
+  padding: 0 12px;
+  gap: 8px;
+}
+.date-range-trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.date-range-trigger > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.date-range-trigger > svg:last-child {
+  margin-left: auto;
+  width: 14px;
+  color: var(--muted-foreground);
+}
+.date-range-editor {
+  width: min(440px, calc(100vw - 24px));
+  padding: 16px;
+}
+.date-range-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.date-range-fields label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.date-range-fields button {
+  padding: 0 10px;
+  height: 40px;
+  gap: 4px;
+  font-size: 13px;
+}
+.date-range-fields button > svg {
+  margin-right: 2px;
+  flex: none;
+}
+.date-range-editor-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+}
+.compact-filters {
+  container-type: inline-size;
+}
+.compact-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.compact-filter-row > .date-range-filter {
+  flex: 1 1 360px;
+}
+.compact-filter-category {
+  display: flex;
+  align-items: center;
+  flex: 1 1 160px;
+  min-width: 0;
+  max-width: 220px;
+}
+.compact-filter-row .compact-filter-select {
+  flex: 1 1 160px;
+  min-width: 0;
+  max-width: 220px;
+  height: 40px;
+}
+.compact-filter-select > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compact-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-height: 40px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.compact-filter-row > button {
+  flex-shrink: 0;
+}
+@container (max-width: 700px) {
+  .compact-filter-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .compact-filter-row > .date-range-filter {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: none;
+  }
+  .compact-filter-row .compact-filter-select {
+    max-width: none;
+    width: 100%;
+  }
+  .compact-filter-category {
+    max-width: none;
+  }
+}
+@media (max-width: 500px) {
+  .date-range-filter .date-range-preset {
+    flex-basis: 128px;
+    width: 128px;
+    font-size: 12px;
+    padding: 0 10px;
+  }
+  .date-range-filter .date-range-trigger {
+    font-size: 12px;
+    padding: 0 9px;
+    gap: 6px;
+  }
+  .date-range-editor {
+    padding: 12px;
+  }
+  .date-range-fields {
+    gap: 8px;
+  }
+  .date-range-fields button {
+    font-size: 12px;
+    padding: 0 8px;
+  }
+}

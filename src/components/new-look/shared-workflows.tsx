@@ -1,29 +1,36 @@
 "use client";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useTaskCheckin } from "./checkin-flow";
+import { useImportPaths } from "@/components/import/use-import-paths";
 import ImportTransactionsPage from "@/components/import/ImportTransactionsPage";
 import TransactionsPage from "@/components/transactions/TransactionsPage";
 import ReportsPage from "@/components/reports/ReportsPage";
 import { PageHeading, TaskReturn, CheckinFooter } from "./common";
 
 export function GuidedImports() {
+  const checkin = useTaskCheckin("imports");
+  const { transactionsHref } = useImportPaths();
   return (
     <>
       <TaskReturn task="imports" cadence="weekly" />
       <PageHeading
-        eyebrow="Weekly · catch up on spending"
-        title="Bring the week into focus"
+        eyebrow={checkin ? "Weekly · catch up on spending" : "Import & review"}
+        title={
+          checkin
+            ? "Bring the week into focus"
+            : "Bring your spending into focus"
+        }
         description="Upload a CSV from each bank and card, then review the queued transactions. Keep the original merchant and description; check the categories before approving."
       >
-        <Link className="nl-secondary" href="/new/transactions">
+        <Link className="nl-secondary" href={transactionsHref}>
           View transactions →
         </Link>
       </PageHeading>
       <ImportTransactionsPage />
       <p className="nl-footnote">
-        The review checkmark records your own review, not automatic coverage of
-        every bank. Confirm that you’ve included each account you use. Automatic
-        import settings remain in{" "}
+        {checkin &&
+          "Before continuing, confirm that you’ve included each account you use. "}
+        Automatic import settings remain in{" "}
         <Link href="/settings/automatic-imports">classic ↗</Link>.
       </p>
       <CheckinFooter
@@ -36,27 +43,31 @@ export function GuidedImports() {
   );
 }
 export function GuidedTransactions() {
+  const { importPath } = useImportPaths();
   return (
     <>
       <div className="nl-task-return">
-        <Link href="/new/imports">← Import & review CSVs</Link>
-        <Link href="/new">Back to check-in →</Link>
+        <Link href={importPath()}>← Import & review CSVs</Link>
+        <Link href="/new">Budget overview →</Link>
       </div>
       <TransactionsPage />
     </>
   );
 }
 export function GuidedReports() {
-  const monthly = useSearchParams().get("checkin") === "monthly";
+  const checkin = useTaskCheckin("reports");
+  const monthly = checkin === "monthly";
   return (
     <>
       <TaskReturn task="reports" cadence="weekly" />
-      <p className="nl-notice">
-        {monthly
-          ? "Reflect on the previous month and notice what you’d like to plan differently. Adjust the dates if you’re reviewing another period."
-          : "Review spending since your last check-in. Adjust the dates to match the week you’re reviewing."}{" "}
-        Reports include recorded transactions.
-      </p>
+      {checkin && (
+        <p className="nl-notice">
+          {monthly
+            ? "Reflect on the previous month and notice what you’d like to plan differently. Adjust the dates if you’re reviewing another period."
+            : "Review spending since your last check-in. Adjust the dates to match the week you’re reviewing."}{" "}
+          Reports include recorded transactions.
+        </p>
+      )}
       <ReportsPage />
       <CheckinFooter
         task="reports"

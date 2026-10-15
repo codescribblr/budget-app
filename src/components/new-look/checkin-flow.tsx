@@ -8,6 +8,7 @@ import { useFeatures } from "@/contexts/FeatureContext";
 import {
   checkinSteps,
   nextCheckinStep,
+  taskCheckin,
   type CheckinTask,
 } from "@/lib/checkins";
 import type { Cadence } from "@/lib/new-look";
@@ -26,19 +27,18 @@ export function useCheckinSteps(cadence: Cadence) {
     retry: refreshFeatures,
   };
 }
+export function useTaskCheckin(task: CheckinTask) {
+  return taskCheckin(task, useSearchParams().get("checkin"));
+}
 function useCheckinFlow(task: CheckinTask, defaultCadence: Cadence) {
-  const requested = useSearchParams().get("checkin");
-  let cadence: Cadence =
-    requested === "daily" || requested === "weekly" || requested === "monthly"
-      ? requested
-      : defaultCadence;
-  if (!checkinSteps(cadence, true).some((step) => step.key === task))
-    cadence = defaultCadence;
+  const requested = useTaskCheckin(task);
+  const cadence = requested ?? defaultCadence;
   const { steps, loading, error, retry } = useCheckinSteps(cadence);
   const progress = useCheckins(cadence);
   const index = steps.findIndex((step) => step.key === task);
   return {
     ...progress,
+    active: requested !== null,
     cadence,
     steps,
     index,
@@ -56,10 +56,11 @@ export function CheckinHeader({
   task: CheckinTask;
   cadence: Cadence;
 }) {
-  const { cadence, steps, index, items, error, retry } = useCheckinFlow(
+  const { cadence, steps, index, items, error, retry, active } = useCheckinFlow(
     task,
     defaultCadence,
   );
+  if (!active) return null;
   if (error) return <CheckinLoadError retry={retry} />;
   if (index < 0) return null;
   return (
@@ -138,15 +139,19 @@ export function CheckinFooter({
     () => () => {
       visit.current++;
     },
-    [task, flow.cadence, data?.userId, data?.identity.activeAccountId],
+    [
+      task,
+      flow.cadence,
+      flow.active,
+      data?.userId,
+      data?.identity.activeAccountId,
+    ],
   );
-  if (flow.index < 0) return null;
+  if (flow.active ? flow.index < 0 : !beforeComplete) return null;
   const unavailable =
     disabled ||
     continuing ||
-    flow.loading ||
-    !!flow.error ||
-    !flow.ready ||
+    (flow.active && (flow.loading || !!flow.error || !flow.ready)) ||
     !data ||
     !!error ||
     refreshing;
@@ -157,6 +162,7 @@ export function CheckinFooter({
     setContinuing(true);
     try {
       if (beforeComplete && !(await beforeComplete())) return;
+      if (!flow.active) return;
       // A user may leave while a save is in flight. Let the save finish without
       // marking a different visit reviewed or navigating them away again.
       if (startedVisit !== visit.current) return;
@@ -169,7 +175,9 @@ export function CheckinFooter({
       );
     } catch {
       toast.error(
-        "This step could not be completed. Your progress has not advanced. Please try again.",
+        flow.active
+          ? "This step could not be completed. Your progress has not advanced. Please try again."
+          : "Changes could not be saved. Please try again.",
       );
     } finally {
       locked.current = false;
@@ -178,13 +186,13 @@ export function CheckinFooter({
   }
   return (
     <section
-      className="nl-checkin-footer"
-      aria-label="Complete this check-in step"
+      className={flow.active ? "nl-checkin-footer" : "nl-savebar"}
+      aria-label={flow.active ? "Complete this check-in step" : "Save changes"}
     >
       <div>
         <strong>{title}</strong>
         <p aria-live="polite">{description}</p>
-        {saveLabel && (
+        {flow.active && saveLabel && (
           <p className="nl-checkin-next">
             {flow.next
               ? `Up next: ${flow.next.label}`
@@ -203,12 +211,15 @@ export function CheckinFooter({
             ? saveLabel
               ? "Saving…"
               : "Continuing…"
-            : saveLabel
-              ? `${saveLabel} & ${flow.next ? "continue" : "finish"}`
-              : flow.next
-                ? `Continue to ${flow.next.label.toLowerCase()}`
-                : `Finish ${flow.cadence} check-in`}
+            : !flow.active
+              ? saveLabel
+              : saveLabel
+                ? `${saveLabel} & ${flow.next ? "continue" : "finish"}`
+                : flow.next
+                  ? `Continue to ${flow.next.label.toLowerCase()}`
+                  : `Finish ${flow.cadence} check-in`}
           {!continuing &&
+            flow.active &&
             (flow.next ? <ArrowRight size={17} /> : <Check size={17} />)}
         </button>
       </div>

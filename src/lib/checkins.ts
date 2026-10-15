@@ -14,6 +14,22 @@ export interface CheckinStep {
   detail: string;
   href: string;
 }
+
+/** A task is guided only when a valid check-in was explicitly requested. */
+export function taskCheckin(
+  task: CheckinTask,
+  requested: string | null,
+): Cadence | null {
+  if (
+    requested !== "daily" &&
+    requested !== "weekly" &&
+    requested !== "monthly"
+  )
+    return null;
+  return checkinSteps(requested, true).some((step) => step.key === task)
+    ? requested
+    : null;
+}
 export function checkinSteps(
   cadence: Cadence,
   planning: boolean,

@@ -22,6 +22,8 @@ interface DatePickerProps {
   maxDate?: Date
   className?: string
   id?: string
+  displayFormat?: string
+  ariaLabel?: string
 }
 
 export function DatePicker({
@@ -33,6 +35,8 @@ export function DatePicker({
   maxDate,
   className,
   id,
+  displayFormat = "PPP",
+  ariaLabel,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
   const [month, setMonth] = React.useState<Date>(() => {
@@ -79,6 +83,7 @@ export function DatePicker({
       <PopoverTrigger asChild>
         <Button
           id={id}
+          aria-label={ariaLabel}
           variant={"outline"}
           className={cn(
             "w-full justify-start text-left font-normal",
@@ -88,7 +93,7 @@ export function DatePicker({
           disabled={disabled}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
-          {date ? format(date, "PPP") : <span>{placeholder}</span>}
+          {date ? format(date, displayFormat) : <span>{placeholder}</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">

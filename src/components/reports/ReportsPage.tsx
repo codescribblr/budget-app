@@ -2,14 +2,10 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { DatePicker } from '@/components/ui/date-picker';
+import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import SpendingByCategory from './SpendingByCategory';
 import SpendingPieChart from './SpendingPieChart';
@@ -65,17 +61,15 @@ export default function ReportsPage() {
 
     if (startDateParam || endDateParam || dateRangeParam) {
       // Load from URL
-      if (startDateParam) setStartDate(startDateParam);
-      if (endDateParam) setEndDate(endDateParam);
-      if (dateRangeParam) setDateRange(dateRangeParam);
+      setStartDate(startDateParam || '');
+      setEndDate(endDateParam || '');
+      setDateRange(dateRangeParam || 'custom');
     } else {
       // No URL params, use default (current-month)
       setDateRange(checkin === 'weekly' ? 'week' : checkin === 'monthly' ? 'last-month' : 'current-month');
     }
 
-    if (categoryParam) {
-      setSelectedCategoryId(parseInt(categoryParam));
-    }
+    setSelectedCategoryId(categoryParam ? parseInt(categoryParam) : null);
 
     setIsInitialized(true);
   }, [searchParams]); // Re-run when searchParams change
@@ -273,16 +267,14 @@ export default function ReportsPage() {
     fetchMerchantStats();
   }, [filteredTransactionIds]);
 
-  const selectedCategory = selectedCategoryId
-    ? categories.find(c => c.id === selectedCategoryId)
-    : null;
-
   const handleCategoryClick = (categoryId: number) => {
     setSelectedCategoryId(categoryId);
+    updateURL(startDate, endDate, dateRange, categoryId);
   };
 
   const clearCategoryFilter = () => {
     setSelectedCategoryId(null);
+    updateURL(startDate, endDate, dateRange, null);
   };
 
   return (
@@ -292,114 +284,39 @@ export default function ReportsPage() {
         <p className="text-muted-foreground mt-1">Analyze your spending patterns and trends</p>
       </div>
 
-      {/* Active Category Filter Indicator */}
-      {selectedCategoryId && (
-        <div className="flex items-center gap-2 p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <Badge variant="secondary" className="text-sm">
-            Filtered by: {categories.find(c => c.id === selectedCategoryId)?.name}
-          </Badge>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setSelectedCategoryId(null);
-              updateURL(startDate, endDate, dateRange, null);
+      <div className="compact-filters" aria-label="Report filters">
+        <div className="compact-filter-row">
+          <DateRangeFilter
+            start={parseLocalDate(startDate)}
+            end={parseLocalDate(endDate)}
+            preset={{ value: dateRange, onChange: setDateRange }}
+            onChange={(start, end) => {
+              const from = formatLocalDate(start), to = formatLocalDate(end);
+              const range = start || end ? 'custom' : 'all';
+              setStartDate(from);
+              setEndDate(to);
+              setDateRange(range);
+              updateURL(from, to, range, selectedCategoryId);
             }}
-            className="h-7 px-2"
-          >
-            <X className="h-4 w-4 mr-1" />
-            Clear Filter
-          </Button>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 md:gap-3">
-        <Select value={dateRange} onValueChange={setDateRange}>
-          <SelectTrigger id="date-range" className="w-[140px] md:w-[160px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="current-month">Current Month</SelectItem>
-            <SelectItem value="last-month">Last Month</SelectItem>
-            <SelectItem value="week">Last 7 Days</SelectItem>
-            <SelectItem value="quarter">Last Quarter</SelectItem>
-            <SelectItem value="current-year">Current Year</SelectItem>
-            <SelectItem value="year">Last Year</SelectItem>
-            <SelectItem value="all">All Time</SelectItem>
-            <SelectItem value="custom">Custom Range</SelectItem>
-          </SelectContent>
-        </Select>
-        <DatePicker
-          id="start-date"
-          date={parseLocalDate(startDate)}
-          onDateChange={(date) => {
-            const newStartDate = formatLocalDate(date);
-            setStartDate(newStartDate);
-            setDateRange('custom');
-            updateURL(newStartDate, endDate, 'custom', selectedCategoryId);
-          }}
-          placeholder="Start date"
-        />
-        <DatePicker
-          id="end-date"
-          date={parseLocalDate(endDate)}
-          onDateChange={(date) => {
-            const newEndDate = formatLocalDate(date);
-            setEndDate(newEndDate);
-            setDateRange('custom');
-            updateURL(startDate, newEndDate, 'custom', selectedCategoryId);
-          }}
-          placeholder="End date"
-        />
-        <Select
-          value={selectedCategoryId?.toString() || 'all'}
-          onValueChange={(value) => {
-            const newCategoryId = value === 'all' ? null : parseInt(value);
-            setSelectedCategoryId(newCategoryId);
-            // Update URL
-            if (newCategoryId) {
-              router.push(`${reportsPath}?category=${newCategoryId}${checkin ? `&checkin=${checkin}` : ''}`);
-            } else {
-              router.push(checkin ? `${reportsPath}?checkin=${checkin}` : reportsPath);
-            }
-          }}
-        >
-          <SelectTrigger id="category-filter" className="w-[160px] md:w-[180px]">
-            <SelectValue placeholder="All Categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            {categories.filter(c => !c.is_system).map(category => (
-              <SelectItem key={category.id} value={category.id.toString()}>
-                {category.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {selectedCategory && (
-          <Button
-            variant="outline"
-            onClick={clearCategoryFilter}
-            size="sm"
-            className="h-9"
-          >
-            <X className="mr-2 h-4 w-4" />
-            Clear: {selectedCategory.name}
-          </Button>
-        )}
-        <div className="flex items-center space-x-2 ml-auto">
-          <Checkbox
-            id="include-system"
-            checked={includeSystemCategories}
-            onCheckedChange={(checked) => setIncludeSystemCategories(checked === true)}
           />
-          <label
-            htmlFor="include-system"
-            className="text-xs md:text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-          >
-            Include system categories
-          </label>
+          <div className="compact-filter-category">
+            <Select value={selectedCategoryId?.toString() || 'all'} onValueChange={(value) => {
+              const categoryId = value === 'all' ? null : parseInt(value);
+              setSelectedCategoryId(categoryId);
+              updateURL(startDate, endDate, dateRange, categoryId);
+            }}>
+              <SelectTrigger id="category-filter" aria-label="Category filter" className="compact-filter-select"><SelectValue placeholder="All Categories" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.filter(c => !c.is_system).map(category => <SelectItem key={category.id} value={category.id.toString()}>{category.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {selectedCategoryId !== null && <Button variant="ghost" size="icon" className="h-10 w-8 shrink-0" aria-label="Clear category filter" title="Clear category filter" onClick={clearCategoryFilter}><X className="h-4 w-4" /></Button>}
+          </div>
+          <div className="compact-filter-toggle">
+            <Checkbox id="include-system" checked={includeSystemCategories} onCheckedChange={(checked) => setIncludeSystemCategories(checked === true)} />
+            <label htmlFor="include-system">Include system categories</label>
+          </div>
         </div>
       </div>
 

@@ -192,7 +192,7 @@ function detectTransactionTypeColumn(
 
 export default function MapColumnsPage() {
   const router = useRouter();
-  const { importsBase } = useImportPaths();
+  const { importPath } = useImportPaths();
   const searchParams = useSearchParams();
   const isRemap = searchParams.get('remap') === 'true';
   const batchIdFromUrl = searchParams.get('batchId'); // Get batchId from URL for remap
@@ -224,7 +224,7 @@ export default function MapColumnsPage() {
   useEffect(() => {
     // Check permissions - redirect if read-only user
     if (!permissionsLoading && !isEditor) {
-      router.push(importsBase);
+      router.push(importPath());
       return;
     }
   }, [isEditor, permissionsLoading, router]);
@@ -233,7 +233,7 @@ export default function MapColumnsPage() {
     // Load CSV data from sessionStorage or remap API
     const loadData = async () => {
       if (!permissionsLoading && !isEditor) {
-        router.push(importsBase);
+        router.push(importPath());
         return;
       }
 
@@ -293,7 +293,7 @@ export default function MapColumnsPage() {
           const targetCreditCardIdStr = sessionStorage.getItem('csvTargetCreditCardId') || '';
 
           if (!csvAnalysisStr || !csvDataStr) {
-            router.push(importsBase);
+            router.push(importPath());
             return;
           }
 
@@ -448,7 +448,7 @@ export default function MapColumnsPage() {
       } catch (err) {
         console.error('Error loading CSV data:', err);
         toast.error(err instanceof Error ? err.message : 'Failed to load CSV data');
-        router.push(importsBase);
+        router.push(importPath());
       }
     };
 
@@ -490,7 +490,7 @@ export default function MapColumnsPage() {
     sessionStorage.removeItem('csvAnalysis');
     sessionStorage.removeItem('csvData');
     sessionStorage.removeItem('csvFileName');
-    router.push(importsBase);
+    router.push(importPath());
   };
 
   const handleConfirm = async () => {
@@ -714,7 +714,7 @@ export default function MapColumnsPage() {
           // Navigate to batch review page after a short delay
           setTimeout(() => {
             setIsProcessingRemap(false);
-            window.location.href = `${importsBase}/${remapBatchId}`;
+            window.location.href = importPath(`/${remapBatchId}`);
           }, 500);
         } catch (processError: any) {
           console.error('Error processing remapped transactions:', processError);
@@ -782,7 +782,7 @@ export default function MapColumnsPage() {
       sessionStorage.removeItem('remapBatchId');
 
       toast.success(`Queued ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''} for review`);
-      router.push(importsBase);
+      router.push(importPath());
     } catch (err) {
       console.error('Error processing file with mapping:', err);
       setError(err instanceof Error ? err.message : 'Failed to process file');
@@ -1683,7 +1683,7 @@ export default function MapColumnsPage() {
                     // Navigate to batch review page after a short delay
                     setTimeout(() => {
                       setIsProcessingRemap(false);
-                      window.location.href = `${importsBase}/${remapBatchId}`;
+                      window.location.href = importPath(`/${remapBatchId}`);
                     }, 500);
                   } catch (processError: any) {
                     console.error('Error processing remapped transactions:', processError);

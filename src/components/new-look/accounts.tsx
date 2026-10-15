@@ -1,4 +1,5 @@
 "use client";
+import { useTaskCheckin } from "./checkin-flow";
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ export function GuidedAccounts() {
   );
 }
 function AccountsContent() {
+  const checkin = useTaskCheckin("accounts");
   const { data, canEdit, refresh, refreshing } = useBudget();
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -122,7 +124,11 @@ function AccountsContent() {
     <>
       <TaskReturn task="accounts" cadence="daily" />
       <PageHeading
-        eyebrow="Daily · refresh the picture"
+        eyebrow={
+          checkin
+            ? "Daily · refresh the picture"
+            : "Accounts · keep balances current"
+        }
         title="One balance pass. All your accounts."
         description="Check your bank balances, then copy the available credit shown for each card. We’ll calculate what’s owed. Import transactions separately to update spending in your envelopes."
       >
@@ -375,13 +381,15 @@ function AccountsContent() {
             >
               Discard
             </button>
-            <button
-              className="nl-secondary"
-              disabled={saving || refreshing || invalid || !canEdit}
-              onClick={() => void save()}
-            >
-              Save & stay
-            </button>
+            {checkin && (
+              <button
+                className="nl-secondary"
+                disabled={saving || refreshing || invalid || !canEdit}
+                onClick={() => void save()}
+              >
+                Save & stay
+              </button>
+            )}
           </>
         )}
       </CheckinFooter>

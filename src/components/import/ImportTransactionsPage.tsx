@@ -13,7 +13,7 @@ import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 export default function ImportTransactionsPage() {
   const router = useRouter();
-  const { transactionsPath } = useImportPaths();
+  const { transactionsHref } = useImportPaths();
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [fileName, setFileName] = useState<string>('');
@@ -60,7 +60,7 @@ export default function ImportTransactionsPage() {
     sessionStorage.removeItem('csvFileName');
     sessionStorage.removeItem('csvFingerprint');
     sessionStorage.removeItem('importIsHistorical');
-    router.push(transactionsPath);
+    router.push(transactionsHref);
   };
 
   const handleBatchQueued = () => {

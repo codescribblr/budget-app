@@ -1,4 +1,5 @@
 "use client";
+import { useTaskCheckin } from "./checkin-flow";
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -34,6 +35,7 @@ export function GuidedEnvelopes() {
   );
 }
 function EnvelopesContent() {
+  const checkin = useTaskCheckin("budget");
   const { data } = useBudget();
   const params = useSearchParams();
   const [selected, setSelected] = useState<number | null>(
@@ -73,9 +75,11 @@ function EnvelopesContent() {
       <TaskReturn task="budget" cadence="daily" />
       <PageHeading
         eyebrow={
-          params.get("checkin") === "weekly"
+          checkin === "weekly"
             ? "Weekly · rebalance for the week ahead"
-            : "Daily · check before spending"
+            : checkin
+              ? "Daily · check before spending"
+              : "Envelopes · your spending money"
         }
         title="Every envelope, in perspective"
         description="Scan balances, cover overages, and decide where your money is most useful. Review the whole picture before moving anything."

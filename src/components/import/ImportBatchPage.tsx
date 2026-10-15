@@ -34,7 +34,7 @@ import { toast } from 'sonner';
 export default function BatchReviewPage() {
   const params = useParams();
   const router = useRouter();
-  const { importsBase } = useImportPaths();
+  const { importPath } = useImportPaths();
   const batchId = params.batchId as string;
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [loading, setLoading] = useState(true);
@@ -474,7 +474,7 @@ export default function BatchReviewPage() {
     // Navigate back to queue list after import completes
     // TransactionPreview will handle the import using the approve-batch endpoint
     // (it detects queued imports by the 'queued-' prefix in transaction IDs and batchId from sessionStorage)
-    router.push(importsBase);
+    router.push(importPath());
   };
 
   const handleDeleteBatch = async () => {
@@ -520,7 +520,7 @@ export default function BatchReviewPage() {
       // Otherwise, reload the page to show remaining transactions
       if (deletedCount > 0) {
         if (deletedCount >= transactions.length) {
-          router.push(importsBase);
+          router.push(importPath());
         } else {
           // Reload the page to refresh the transaction list
           window.location.reload();
@@ -555,7 +555,7 @@ export default function BatchReviewPage() {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push(importsBase)}>
+          <Button variant="ghost" size="icon" onClick={() => router.push(importPath())}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-3xl font-bold">Review Import Batch</h1>
@@ -566,7 +566,7 @@ export default function BatchReviewPage() {
             <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => router.push(importsBase)}>Back to imports</Button>
+            <Button onClick={() => router.push(importPath())}>Back to imports</Button>
           </CardContent>
         </Card>
       </div>
@@ -577,7 +577,7 @@ export default function BatchReviewPage() {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push(importsBase)}>
+          <Button variant="ghost" size="icon" onClick={() => router.push(importPath())}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-3xl font-bold">Review Import Batch</h1>
@@ -588,7 +588,7 @@ export default function BatchReviewPage() {
             <CardDescription>No transactions found in this batch.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => router.push(importsBase)}>Back to imports</Button>
+            <Button onClick={() => router.push(importPath())}>Back to imports</Button>
           </CardContent>
         </Card>
       </div>
@@ -808,11 +808,11 @@ export default function BatchReviewPage() {
         stage=""
         batchId={batchId}
         onComplete={handleProcessingComplete}
-        onCancel={() => router.push(importsBase)}
+        onCancel={() => router.push(importPath())}
       />
 
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push(importsBase)}>
+        <Button variant="ghost" size="icon" onClick={() => router.push(importPath())}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
@@ -896,7 +896,7 @@ export default function BatchReviewPage() {
               onClick={async () => {
                 try {
                   // Include batchId in URL so page can be reloaded/bookmarked
-                  router.push(`${importsBase}/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
+                  router.push(importPath(`/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`));
                 } catch (err) {
                   console.error('Error initiating remap:', err);
                   toast.error('Failed to start re-mapping');
@@ -966,7 +966,7 @@ export default function BatchReviewPage() {
               <DropdownMenuItem
                 onClick={async () => {
                   try {
-                    router.push(`${importsBase}/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
+                    router.push(importPath(`/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`));
                   } catch (err) {
                     console.error('Error initiating remap:', err);
                     toast.error('Failed to start re-mapping');
