@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Check, CalendarDays } from "lucide-react";
 import { useCheckinSteps, CheckinLoadError } from "./checkin-flow";
 import { money, ordinaryEnvelopes, type Cadence } from "@/lib/new-look";
+import { envelopeReviewHref } from "@/lib/envelope-navigation";
 import { useBudget, useCheckins, DataBoundary } from "./budget-context";
 import { PageHeading, AvailableCalculation } from "./common";
 
@@ -158,7 +159,8 @@ function HomeContent() {
           </div>
           <div className="nl-list">
             {(negative.length ? negative : envelopes).slice(0, 4).map((c) => (
-              <Link key={c.id} href={`/new/budget?envelope=${c.id}`}>
+              <div key={c.id} className="nl-home-envelope">
+              <Link href={envelopeReviewHref(c.id, "activity")}>
                 <div>
                   <h3>{c.name}</h3>
                   <p>
@@ -171,6 +173,16 @@ function HomeContent() {
                   {money(c.current_balance)} →
                 </strong>
               </Link>
+              {c.current_balance < 0 && (
+                <Link
+                  className="nl-activity-link nl-cover-overage"
+                  aria-label={`Cover overage in ${c.name}`}
+                  href={envelopeReviewHref(c.id, "transfer")}
+                >
+                  Cover overage →
+                </Link>
+              )}
+              </div>
             ))}
             {envelopes.length === 0 && (
               <div className="nl-panel">

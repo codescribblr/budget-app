@@ -2,8 +2,11 @@
 import { useTaskCheckin } from "./checkin-flow";
 import { useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import * as Tabs from "@radix-ui/react-tabs";
+import { EnvelopeActivity } from "./envelope-activity";
+import { envelopeReviewHref, envelopeReviewTarget, type EnvelopeTab } from "@/lib/envelope-navigation";
 import {
   Dialog,
   DialogContent,
@@ -37,10 +40,9 @@ export function GuidedEnvelopes() {
 function EnvelopesContent() {
   const checkin = useTaskCheckin("budget");
   const { data } = useBudget();
+  const router = useRouter();
   const params = useSearchParams();
-  const [selected, setSelected] = useState<number | null>(
-    Number(params.get("envelope")) || null,
-  );
+  const { categoryId: selected, tab } = envelopeReviewTarget(params);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   if (!data) return null;
@@ -144,12 +146,13 @@ function EnvelopesContent() {
             {shown.map((c) => (
               <tr key={c.id} data-attention={c.current_balance < 0}>
                 <td>
-                  <button
+                  <Link
                     className="nl-row-button"
-                    onClick={() => setSelected(c.id)}
+                    href={envelopeReviewHref(c.id, "activity", params.toString())}
+                    scroll={false}
                   >
                     {c.name}
-                  </button>
+                  </Link>
                   <span className="nl-subtext">
                     {c.is_goal
                       ? "Goal envelope"
@@ -189,13 +192,24 @@ function EnvelopesContent() {
                   <strong>{money(c.current_balance)}</strong>
                 </td>
                 <td>
-                  <button
+                  <div className="nl-envelope-actions">
+                  <Link
                     className="nl-secondary"
                     aria-label={`Review ${c.name}`}
-                    onClick={() => setSelected(c.id)}
+                    href={envelopeReviewHref(c.id, "activity", params.toString())}
+                    scroll={false}
                   >
                     Review →
-                  </button>
+                  </Link>
+                  <Link
+                    className="nl-activity-link"
+                    aria-label={`Move money for ${c.name}`}
+                    href={envelopeReviewHref(c.id, "transfer", params.toString())}
+                    scroll={false}
+                  >
+                    Move money
+                  </Link>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -230,9 +244,17 @@ function EnvelopesContent() {
       />
       {category && (
         <EnvelopeEditor
-          key={category.id}
+          key={`${data.identity.activeAccountId}:${category.id}`}
           category={category}
-          onClose={() => setSelected(null)}
+          mode={tab}
+          onTabChange={nextTab => router.replace(
+            envelopeReviewHref(category.id, nextTab, params.toString()),
+            { scroll: false },
+          )}
+          onClose={() => router.replace(
+            envelopeReviewHref(null, "activity", params.toString()),
+            { scroll: false },
+          )}
         />
       )}
     </>
@@ -241,13 +263,16 @@ function EnvelopesContent() {
 
 function EnvelopeEditor({
   category,
+  mode,
+  onTabChange,
   onClose,
 }: {
   category: Category;
+  mode: EnvelopeTab;
+  onTabChange: (tab: EnvelopeTab) => void;
   onClose: () => void;
 }) {
   const { data, canEdit, refresh } = useBudget();
-  const [mode, setMode] = useState<"transfer" | "adjust">("transfer");
   const [direction, setDirection] = useState<"in" | "out">("in");
   const [other, setOther] = useState("");
   const [amount, setAmount] = useState(
@@ -277,7 +302,7 @@ function EnvelopeEditor({
       cents(transferAmount) <= cents(source.current_balance),
   );
   const valid =
-    mode === "transfer"
+    mode === "activity" ? false : mode === "transfer"
       ? validTransfer
       : newBalance !== null && newBalance !== category.current_balance;
   const after =
@@ -341,30 +366,29 @@ function EnvelopeEditor({
         if (!open && !saving) onClose();
       }}
     >
-      <DialogContent className="new-look sm:max-w-lg">
+      <DialogContent className="new-look nl-envelope-dialog sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{category.name}</DialogTitle>
           <DialogDescription>
-            Available now: {money(category.current_balance)}. Choose how you
-            want to adjust it.
+            Available now: {money(category.current_balance)}. Review what changed,
+            then decide whether to move money.
           </DialogDescription>
         </DialogHeader>
-        <div className="nl-tabs">
-          <button
-            className={mode === "transfer" ? "active" : ""}
-            disabled={saving}
-            onClick={() => setMode("transfer")}
-          >
-            Move between envelopes
-          </button>
-          <button
-            className={mode === "adjust" ? "active" : ""}
-            disabled={saving}
-            onClick={() => setMode("adjust")}
-          >
-            Set balance
-          </button>
-        </div>
+        <Tabs.Root className="nl-envelope-review" value={mode} onValueChange={value => onTabChange(value as EnvelopeTab)}>
+          <Tabs.List className="nl-tabs nl-envelope-tabs" aria-label="Review envelope">
+            <Tabs.Trigger value="activity" disabled={saving}>Activity</Tabs.Trigger>
+            <Tabs.Trigger value="transfer" disabled={saving}>Move money</Tabs.Trigger>
+            <Tabs.Trigger value="adjust" disabled={saving}>Set balance</Tabs.Trigger>
+          </Tabs.List>
+          <Tabs.Content className="nl-envelope-activity" value="activity" forceMount hidden={mode !== "activity"}>
+            <EnvelopeActivity
+              categoryId={category.id}
+              currentBalance={category.current_balance}
+              funded={data.funding.categories.find(f => f.categoryId === category.id)?.fundedAmount || 0}
+              spent={data.spending[category.id] || 0}
+            />
+          </Tabs.Content>
+          {mode !== "activity" && <Tabs.Content value={mode}>
         <form
           className="nl-form"
           onSubmit={(e) => {
@@ -495,6 +519,8 @@ function EnvelopeEditor({
             </button>
           </div>
         </form>
+          </Tabs.Content>}
+        </Tabs.Root>
       </DialogContent>
     </Dialog>
   );
