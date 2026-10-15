@@ -13,6 +13,7 @@ import TransactionsByMerchant from './TransactionsByMerchant';
 import CategoryTransactionList from './CategoryTransactionList';
 import { X } from 'lucide-react';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
+import { merchantReportTransactionIds } from '@/lib/report-filters';
 
 interface MerchantGroupStat {
   group_id: number;
@@ -253,8 +254,8 @@ export default function ReportsPage({ onReviewReadyChange }: { onReviewReadyChan
 
   // Memoize transaction IDs to prevent unnecessary API calls
   const filteredTransactionIds = useMemo(() => {
-    return filteredTransactions.map(t => t.id);
-  }, [filteredTransactions]);
+    return merchantReportTransactionIds(filteredTransactions, categories, includeSystemCategories);
+  }, [filteredTransactions, categories, includeSystemCategories]);
 
   // Fetch merchant stats for all filtered transactions (single API call)
   useEffect(() => {

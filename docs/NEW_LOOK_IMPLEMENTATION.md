@@ -44,6 +44,7 @@ Before release: typecheck/build; focused money and workflow tests; browser check
 npx tsc --noEmit
 npx vitest run src/lib/__tests__/checkins.test.ts src/lib/__tests__/new-look.test.ts src/lib/__tests__/duplicate-matching.test.ts src/lib/__tests__/transaction-status-filter.test.ts
 npx vitest run src/lib/__tests__/interface-feedback-route.test.ts src/lib/notifications/__tests__/interface-feedback.test.ts src/lib/notifications/__tests__/interface-feedback-delivery.test.ts
+npx vitest run src/lib/__tests__/report-filters.test.ts
 npx tsx --test src/lib/notifications/__tests__/email-message-formatter.test.ts
 npx tsx --test src/lib/__tests__/category-transaction-edits.test.ts src/lib/__tests__/transaction-list-filters.test.ts src/lib/allocations/__tests__/batch-revert.test.ts
 npm run build
@@ -62,6 +63,7 @@ Stop the dev server before building; both Next commands use `.next`. Restart por
 - Standalone sidebar/direct navigation and in-place saves without check-in progress; explicit guided import return links; date presets, custom/open-ended ranges, clearing, category/date URL preservation, desktop/mobile layout, and dark-mode calendars.
 - Feedback alert recipient scoping, email and bell delivery, channel preferences/failures, duplicate-submission suppression, safe email rendering, and admin-only direct links. Local browser checks use a mocked inbox to verify the new bell and feedback preview without notifying existing admins.
 - Final release review: report HTTP/malformed-response failures and successful retry; check-in completion blocked during report failure; planning-settings retry; empty-envelope and no-card setup actions; standalone task routes; mobile overflow and dark mode; sign-in return links retain feedback IDs, filters, and check-in context while rejecting external redirect destinations. Monthly summaries link to standalone envelopes rather than unexpectedly starting a daily routine.
+- Live release verification found that the existing grouped merchant totals ignored the system-category toggle. Report aggregation now receives the same filtered transaction IDs as the merchant list, excluding system and mixed-system transactions unless explicitly included. This fixes transfers appearing in ordinary merchant spending in both interfaces.
 
 ### Production rollout stages
 
