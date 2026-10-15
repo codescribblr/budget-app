@@ -8,14 +8,19 @@ import {
   TriangleAlertIcon,
 } from "lucide-react"
 import { useTheme } from "next-themes"
+import { usePathname } from "next/navigation"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
+  const pathname = usePathname()
+  const guided = pathname === "/new" || pathname?.startsWith("/new/")
 
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
+      position={guided ? "top-right" : "bottom-right"}
+      closeButton={guided}
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,

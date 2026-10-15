@@ -1,4 +1,5 @@
 'use client';
+import { useImportPaths } from './use-import-paths';
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -37,6 +38,7 @@ export default function FileUpload({
   onBatchQueued,
 }: FileUploadProps) {
   const router = useRouter();
+  const { importPath } = useImportPaths();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -260,7 +262,7 @@ export default function FileUpload({
             sessionStorage.setItem('csvFileName', file.name);
             sessionStorage.setItem('csvTargetAccountId', String(targetAccountId ?? ''));
             sessionStorage.setItem('csvTargetCreditCardId', String(targetCreditCardId ?? ''));
-            router.push('/imports/map-columns');
+            router.push(importPath(`/map-columns`));
             setIsProcessing(false);
             return;
           }
@@ -343,7 +345,7 @@ export default function FileUpload({
               sessionStorage.setItem('csvFileName', file.name);
               sessionStorage.setItem('csvTargetAccountId', String(targetAccountId ?? ''));
               sessionStorage.setItem('csvTargetCreditCardId', String(targetCreditCardId ?? ''));
-              router.push('/imports/map-columns');
+              router.push(importPath(`/map-columns`));
               setIsProcessing(false);
               return;
             }
@@ -509,7 +511,7 @@ export default function FileUpload({
     onBatchQueued?.();
     // Navigate to review page with a small delay to ensure database updates are committed
     setTimeout(() => {
-      router.push(`/imports/${queuedBatchId}?t=${Date.now()}`);
+      router.push(importPath(`/${queuedBatchId}?t=${Date.now()}`));
     }, 300);
   };
 

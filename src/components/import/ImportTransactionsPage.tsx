@@ -1,4 +1,5 @@
 'use client';
+import { useImportPaths } from './use-import-paths';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -12,6 +13,7 @@ import { useAccountPermissions } from '@/hooks/use-account-permissions';
 
 export default function ImportTransactionsPage() {
   const router = useRouter();
+  const { transactionsHref } = useImportPaths();
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [fileName, setFileName] = useState<string>('');
@@ -58,7 +60,7 @@ export default function ImportTransactionsPage() {
     sessionStorage.removeItem('csvFileName');
     sessionStorage.removeItem('csvFingerprint');
     sessionStorage.removeItem('importIsHistorical');
-    router.push('/transactions');
+    router.push(transactionsHref);
   };
 
   const handleBatchQueued = () => {

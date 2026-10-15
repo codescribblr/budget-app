@@ -1,11 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
+import { safeReturnPath } from '@/lib/new-look'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/dashboard'
+  const next = safeReturnPath(searchParams.get('next'), request.cookies.get('budget-interface')?.value === 'new' ? '/new' : '/dashboard')
   const plan = searchParams.get('plan') // 'premium' or null
 
   if (code) {

@@ -10,12 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { APP_NAME, APP_DOMAIN } from '@/lib/branding';
+import { safeReturnPath } from '@/lib/new-look';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/dashboard';
+  const redirectTo = safeReturnPath(searchParams.get('redirectTo'), typeof document !== 'undefined' && document.cookie.split('; ').includes('budget-interface=new') ? '/new' : '/dashboard');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

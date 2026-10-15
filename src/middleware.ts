@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { INTERFACE_COOKIE } from '@/lib/new-look'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -41,7 +42,8 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
-      url.searchParams.set('redirectTo', request.nextUrl.pathname)
+      url.search = ''
+      url.searchParams.set('redirectTo', request.nextUrl.pathname + request.nextUrl.search)
       return NextResponse.redirect(url)
     }
     
@@ -59,7 +61,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected routes - require authentication
-  const protectedPaths = ['/dashboard', '/categories', '/accounts', '/credit-cards', '/transactions', '/reports', '/import', '/imports', '/goals', '/loans', '/settings', '/help', '/income', '/income-buffer', '/money-movement', '/category-rules', '/non-cash-assets', '/pending-checks']
+  const protectedPaths = ['/new', '/dashboard', '/categories', '/accounts', '/credit-cards', '/transactions', '/reports', '/import', '/imports', '/goals', '/loans', '/settings', '/help', '/income', '/income-buffer', '/money-movement', '/category-rules', '/non-cash-assets', '/pending-checks']
   const isProtectedPath = protectedPaths.some(path =>
     request.nextUrl.pathname === path || request.nextUrl.pathname.startsWith(path + '/')
   )
@@ -75,21 +77,22 @@ export async function middleware(request: NextRequest) {
   if ((isProtectedPath || isInvitationsChoose) && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    url.searchParams.set('redirectTo', request.nextUrl.pathname)
+    url.search = ''
+    url.searchParams.set('redirectTo', request.nextUrl.pathname + request.nextUrl.search)
     return NextResponse.redirect(url)
   }
 
   // Redirect to dashboard if accessing login/signup while authenticated
   if (isPublicPath && user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    url.pathname = request.cookies.get(INTERFACE_COOKIE)?.value === 'new' ? '/new' : '/dashboard'
     return NextResponse.redirect(url)
   }
 
   // Redirect authenticated users from home page to dashboard
   if (request.nextUrl.pathname === '/' && user) {
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    url.pathname = request.cookies.get(INTERFACE_COOKIE)?.value === 'new' ? '/new' : '/dashboard'
     return NextResponse.redirect(url)
   }
 

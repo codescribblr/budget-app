@@ -38,7 +38,7 @@ export function renderEmailTemplate(
   // Replace variables in format {{ .VariableName }}
   for (const [key, value] of Object.entries(variables)) {
     const regex = new RegExp(`\\{\\{\\s*\\.${key}\\s*\\}\\}`, 'g');
-    template = template.replace(regex, value);
+    template = template.replace(regex, () => value);
   }
 
   return template;

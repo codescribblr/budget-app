@@ -34,7 +34,7 @@ import {
 import { Slider } from '@/components/ui/slider';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
-import { DatePicker } from '@/components/ui/date-picker';
+import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
 import type { Category, TransactionWithSplits } from '@/lib/types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
@@ -111,9 +111,9 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
     const dateRangeParam = searchParams.get('dateRange');
 
     if (startDateParam || endDateParam || dateRangeParam) {
-      if (startDateParam) setStartDate(startDateParam);
-      if (endDateParam) setEndDate(endDateParam);
-      if (dateRangeParam) setDateRange(dateRangeParam);
+      setStartDate(startDateParam || '');
+      setEndDate(endDateParam || '');
+      setDateRange(dateRangeParam || 'custom');
     } else {
       setDateRange('current-month');
     }
@@ -486,49 +486,19 @@ export default function CategoryDetailPage({ categoryId }: { categoryId: string 
         </div>
 
         {showAdvancedReports && (
-          <div className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3">
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger id="date-range" className="w-full sm:w-[160px] md:w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="current-month">Current Month</SelectItem>
-                <SelectItem value="last-month">Last Month</SelectItem>
-                <SelectItem value="week">Last 7 Days</SelectItem>
-                <SelectItem value="quarter">Last Quarter</SelectItem>
-                <SelectItem value="current-year">Current Year</SelectItem>
-                <SelectItem value="year">Last Year</SelectItem>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="custom">Custom Range</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="w-[calc(50%-0.25rem)] sm:w-auto md:w-auto">
-              <DatePicker
-                id="start-date"
-                date={parseLocalDate(startDate)}
-                onDateChange={(date) => {
-                  const newStartDate = formatLocalDate(date);
-                  setStartDate(newStartDate);
-                  setDateRange('custom');
-                  updateURL(newStartDate, endDate, 'custom');
-                }}
-                placeholder="Start date"
-              />
-            </div>
-            <div className="w-[calc(50%-0.25rem)] sm:w-auto md:w-auto">
-              <DatePicker
-                id="end-date"
-                date={parseLocalDate(endDate)}
-                onDateChange={(date) => {
-                  const newEndDate = formatLocalDate(date);
-                  setEndDate(newEndDate);
-                  setDateRange('custom');
-                  updateURL(startDate, newEndDate, 'custom');
-                }}
-                placeholder="End date"
-              />
-            </div>
-          </div>
+          <DateRangeFilter
+            start={parseLocalDate(startDate)}
+            end={parseLocalDate(endDate)}
+            preset={{ value: dateRange, onChange: setDateRange }}
+            onChange={(start, end) => {
+              const from = formatLocalDate(start), to = formatLocalDate(end);
+              const range = start || end ? 'custom' : 'all';
+              setStartDate(from);
+              setEndDate(to);
+              setDateRange(range);
+              updateURL(from, to, range);
+            }}
+          />
         )}
       </div>
 

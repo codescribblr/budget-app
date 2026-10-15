@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator"
 import { AdminSidebar } from "@/components/layout/admin-sidebar"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext"
+import { NotificationCenter } from "@/components/notifications/NotificationCenter"
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -16,6 +17,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
             <div className="flex flex-1 items-center gap-3 justify-end">
+              <NotificationCenter />
               <ThemeToggle />
             </div>
           </header>
