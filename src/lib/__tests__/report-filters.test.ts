@@ -8,7 +8,7 @@ describe("merchant report system-category filter", () => {
     { id: 11, splits: [{ id: 2, transaction_id: 11, category_id: 2, amount: 1000 }] },
     { id: 12, splits: [{ id: 3, transaction_id: 12, category_id: 1, amount: 25 }, { id: 4, transaction_id: 12, category_id: 2, amount: 975 }] },
     { id: 13, splits: [] },
-  ];
+  ].map(t => ({ ...t, splits: t.splits.map(s => ({ ...s, created_at: "", category_name: "Test category" })) }));
   it("excludes system and mixed-system transactions before grouped totals are requested", () => {
     expect(merchantReportTransactionIds(transactions, categories, false)).toEqual([10, 13]);
   });
