@@ -25,6 +25,7 @@ import { SubscriptionBanner } from "@/components/subscription/SubscriptionBanner
 import { AccountSwitcher } from "@/components/layout/account-switcher";
 import { UserMenu } from "@/components/layout/user-menu";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import { InterfaceSwitch } from "./interface-switch";
 import { BudgetProvider } from "./budget-context";
 import { FeedbackDialog } from "./feedback-dialog";
@@ -195,6 +196,7 @@ export function NewLookLayout({ children }: { children: React.ReactNode }) {
                 <div className="nl-top-actions">
                   <span className="nl-beta">New look · Beta</span>
                   <InterfaceSwitch target="classic" />
+                  <NotificationCenter />
                   <ThemeToggle />
                 </div>
               </header>

@@ -25,12 +25,15 @@ The new interface lives at `/new`. Classic remains at its existing URLs. Both us
 - Suggestions are editable. Payday uses money already reflected in recorded balances, never assumed future income. Ordinary envelopes use the current monthly plan minus recorded funding; target-balance envelopes use the remaining balance gap without subtracting prior funding twice. Suggestions leave goals manual until their completion state is part of this screen.
 - Financial mutations refresh authoritative server totals. Failed or partial saves are visible; no simulated Undo or success state.
 - Viewers retain read-only access. Existing API authorization remains authoritative.
+- New feedback is saved before site admins are alerted through the existing system-notification service. Alerts include a short excerpt, type, source page, submitting user, and budget account, with a direct admin-only link to the full submission. Email follows each admin's System Notifications preference; bell notifications remain available if email is disabled or fails. Notification bells are available in the new interface and admin header. Retrying the same feedback ID does not send another alert. Delivery errors use the existing server/delivery logs and never undo saved feedback.
 
 ## Local development and release
 
 Branch: `codex/guided-budget-interface`, based on `origin/main` (this repository has no `master`). Use the isolated attached checkout. `.env.local` points to the existing testing Supabase project; secrets are never committed. Run `npm run dev -- --port 3010`.
 
 Migration `121_interface_feedback.sql` has been applied to the test project. It adds only interface feedback metadata and RLS, not financial tables. Apply separately during a reviewed production rollout. Do not reset or seed over existing households. Local acceptance used a dedicated synthetic household and separate owner/viewer accounts, not existing users' budgets.
+
+Feedback alerts reuse `system_notification` (migration 081); they require no additional migration. Recipients are users with `user_profiles.is_admin = true`. Email uses the existing `SMTP_EMAIL_PASSWORD` (Resend API key), `SMTP_FROM_EMAIL`, and `NEXT_PUBLIC_APP_URL` configuration. The local test environment currently has no email credentials; delivery tests replace the email transport and do not send mail to existing users. Alerts run in Next's `after()` lifecycle, with delivery bounded by the host's request-duration limits; failures are logged, not automatically retried.
 
 Before release: typecheck/build; focused money and workflow tests; browser checks for both switching directions, light/dark/mobile, permissions, persistence, and shared data. Verify partial-failure recovery. A beta rollout is not a replacement for classic.
 
@@ -39,6 +42,8 @@ Before release: typecheck/build; focused money and workflow tests; browser check
 ```sh
 npx tsc --noEmit
 npx vitest run src/lib/__tests__/checkins.test.ts src/lib/__tests__/new-look.test.ts src/lib/__tests__/duplicate-matching.test.ts src/lib/__tests__/transaction-status-filter.test.ts
+npx vitest run src/lib/__tests__/interface-feedback-route.test.ts src/lib/notifications/__tests__/interface-feedback.test.ts src/lib/notifications/__tests__/interface-feedback-delivery.test.ts
+npx tsx --test src/lib/notifications/__tests__/email-message-formatter.test.ts
 npx tsx --test src/lib/__tests__/category-transaction-edits.test.ts src/lib/__tests__/transaction-list-filters.test.ts src/lib/allocations/__tests__/batch-revert.test.ts
 npm run build
 ```
@@ -54,6 +59,7 @@ Stop the dev server before building; both Next commands use `.next`. Restart por
 - Simulated partial account-save failures and uncertain allocation responses; verify clear recovery without automatic retries.
 - Guided daily/weekly/monthly completion, feature-gated monthly steps, read-only review, skipped-step recovery, restart, cross-tab progress, and storage-denied session fallback. Verify that failed saves/refreshes and leaving during an in-flight save cannot advance the review. In the new interface, dismissible notifications appear at the top so they do not cover the next-step action.
 - Standalone sidebar/direct navigation and in-place saves without check-in progress; explicit guided import return links; date presets, custom/open-ended ranges, clearing, category/date URL preservation, desktop/mobile layout, and dark-mode calendars.
+- Feedback alert recipient scoping, email and bell delivery, channel preferences/failures, duplicate-submission suppression, safe email rendering, and admin-only direct links. Local browser checks use a mocked inbox to verify the new bell and feedback preview without notifying existing admins.
 
 ### Production rollout stages
 

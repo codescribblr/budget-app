@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/supabase-queries";
 import { getActiveAccountId } from "@/lib/account-context";
+import { notifyAdminsOfInterfaceFeedback } from "@/lib/notifications/interface-feedback";
+
+export const maxDuration = 60;
 
 const schema = z.object({
   id: z.uuid(),
@@ -28,16 +31,14 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     const input = parsed.data;
-    const { error } = await supabase
-      .from("interface_feedback")
-      .insert({
-        id: input.id,
-        user_id: user.id,
-        account_id: accountId,
-        page_path: input.page,
-        kind: input.kind,
-        comment: input.comment,
-      });
+    const { error } = await supabase.from("interface_feedback").insert({
+      id: input.id,
+      user_id: user.id,
+      account_id: accountId,
+      page_path: input.page,
+      kind: input.kind,
+      comment: input.comment,
+    });
     if (error?.code === "23505") {
       const { data } = await supabase
         .from("interface_feedback")
@@ -57,6 +58,20 @@ export async function POST(request: Request) {
         { status: 503 },
       );
     }
+    // Keep submission fast and successful even if an alert channel fails.
+    // `after` keeps this work alive after the response on supported hosts.
+    after(async () => {
+      try {
+        await notifyAdminsOfInterfaceFeedback({
+          ...input,
+          userId: user.id,
+          submitterEmail: user.email,
+          accountId,
+        });
+      } catch (error) {
+        console.error("Interface feedback alerts failed:", input.id, error);
+      }
+    });
     return NextResponse.json({ saved: true }, { status: 201 });
   } catch (error) {
     const unauthorized =
