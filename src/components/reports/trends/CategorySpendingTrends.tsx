@@ -6,7 +6,7 @@ import { formatCurrency } from '@/lib/utils';
 import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Checkbox } from '@/components/ui/checkbox';
+import { OptionToggle } from '@/components/ui/option-toggle';
 import { Label } from '@/components/ui/label';
 
 interface CategorySpendingTrendsProps {
@@ -115,7 +115,7 @@ export default function CategorySpendingTrends({ transactions, categories }: Cat
         <div className="mb-4 flex flex-wrap gap-4">
           {topCategories.map((category, index) => (
             <div key={category.id} className="flex items-center space-x-2">
-              <Checkbox
+              <OptionToggle
                 id={`cat-${category.id}`}
                 checked={selectedCategories.includes(category.id)}
                 onCheckedChange={() => toggleCategory(category.id)}

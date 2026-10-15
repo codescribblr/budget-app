@@ -212,8 +212,10 @@ function HomeContent() {
             </Link>
           </section>
           <section className="nl-panel">
-            <CalendarDays className="nl-accent" size={21} />
-            <h2>Your monthly plan</h2>
+            <h2 className="nl-icon-heading">
+              <CalendarDays className="nl-accent" size={21} aria-hidden="true" />
+              <span>Your monthly plan</span>
+            </h2>
             <dl className="nl-metrics">
               <div>
                 <dt>Planned monthly funding</dt>

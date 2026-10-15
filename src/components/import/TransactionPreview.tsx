@@ -5,6 +5,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { OptionToggle } from '@/components/ui/option-toggle';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -923,7 +924,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
             {(databaseDuplicateCount > 0 || withinFileDuplicateCount > 0) && (
               <div className="flex items-center gap-2">
-                <Checkbox
+                <OptionToggle
                   id="show-duplicates"
                   checked={showDuplicates}
                   onCheckedChange={(v) => setShowDuplicates(!!v)}
@@ -934,7 +935,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
               </div>
             )}
             <div className="flex items-center gap-2">
-              <Checkbox
+              <OptionToggle
                 id="show-archived-categories"
                 checked={showArchivedCategories}
                 onCheckedChange={(v) => setShowArchivedCategories(!!v)}
@@ -1288,7 +1289,8 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
 
                   {/* Historical Cell */}
                   <TableCell className="text-center min-w-[100px]">
-                    <Checkbox
+                    <OptionToggle
+                      aria-label={`Mark ${transaction.description || transaction.merchant || "transaction"} as historical`}
                       checked={transaction.is_historical ?? false}
                       onCheckedChange={async (checked) => {
                         const newValue = checked === true;

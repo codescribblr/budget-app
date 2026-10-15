@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { OptionToggle } from '@/components/ui/option-toggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { formatCurrency } from '@/lib/utils';
@@ -475,7 +475,7 @@ export default function EditTransactionDialog({
               <div className="space-y-1">
                 <Label>Category Splits</Label>
                 <div className="flex items-center gap-2">
-                  <Checkbox
+                  <OptionToggle
                     id="show-archived-categories"
                     checked={showArchivedCategories}
                     onCheckedChange={(v) => setShowArchivedCategories(!!v)}

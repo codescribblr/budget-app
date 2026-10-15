@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
+import { OptionToggle } from '@/components/ui/option-toggle';
 import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import SpendingByCategory from './SpendingByCategory';
@@ -348,7 +348,7 @@ export default function ReportsPage({ onReviewReadyChange }: { onReviewReadyChan
             {selectedCategoryId !== null && <Button variant="ghost" size="icon" className="h-10 w-8 shrink-0" aria-label="Clear category filter" title="Clear category filter" onClick={clearCategoryFilter}><X className="h-4 w-4" /></Button>}
           </div>
           <div className="compact-filter-toggle">
-            <Checkbox id="include-system" checked={includeSystemCategories} onCheckedChange={(checked) => setIncludeSystemCategories(checked === true)} />
+            <OptionToggle id="include-system" checked={includeSystemCategories} onCheckedChange={(checked) => setIncludeSystemCategories(checked === true)} />
             <label htmlFor="include-system">Include system categories</label>
           </div>
         </div>

@@ -125,7 +125,12 @@ function PlanContent() {
       <div className="nl-stat-grid">
         <section className="nl-panel">
           <p>
-            Monthly net income <Link href="/income">· Edit ↗</Link>
+            Monthly net income{" "}
+            <Link
+              href={checkin ? "/new/income?checkin=monthly" : "/new/income"}
+            >
+              · Edit income →
+            </Link>
           </p>
           <strong>{money(data.summary.monthly_net_income)}</strong>
         </section>

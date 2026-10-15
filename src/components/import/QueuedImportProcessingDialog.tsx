@@ -11,7 +11,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { OptionToggle } from '@/components/ui/option-toggle';
 import { Loader2 } from 'lucide-react';
 import { processTransactions } from '@/lib/csv-parser-helpers';
 import type { ParsedTransaction } from '@/lib/import-types';
@@ -465,7 +465,7 @@ export default function QueuedImportProcessingDialog({
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Checkbox
+                    <OptionToggle
                       id="historical"
                       checked={isHistorical}
                       onCheckedChange={(checked) => setIsHistorical(checked === true)}

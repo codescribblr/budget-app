@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 import { useFeatures } from "@/contexts/FeatureContext";
 import {
   Dialog,
@@ -60,13 +61,13 @@ function PaydayContent() {
   const invalid = allocations.some((a) => a.amount === null || a.amount < 0);
   const valid = Boolean(
     data &&
-      cap !== null &&
-      cap > 0 &&
-      arrived &&
-      !invalid &&
-      total > 0 &&
-      cents(total) <= cents(cap) &&
-      cents(total) <= cents(data.summary.current_savings),
+    cap !== null &&
+    cap > 0 &&
+    arrived &&
+    !invalid &&
+    total > 0 &&
+    cents(total) <= cents(cap) &&
+    cents(total) <= cents(data.summary.current_savings),
   );
   useUnsavedChanges(
     Object.values(draft).some(
@@ -175,12 +176,12 @@ function PaydayContent() {
             available-to-save money. Any amount left over stays available to
             save.
           </small>
-          <label className="nl-check-label">
-            <input
-              type="checkbox"
+          <label className="nl-switch-label">
+            <Switch
+              className="nl-switch"
               checked={arrived}
               disabled={!canEdit || saving}
-              onChange={(e) => setArrived(e.target.checked)}
+              onCheckedChange={setArrived}
             />
             <span>
               This money has arrived and is included in my recorded account

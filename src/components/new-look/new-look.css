@@ -190,6 +190,283 @@
 .nl-panel > h2 {
   margin-bottom: 10px;
 }
+.nl-icon-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.nl-icon-heading > svg {
+  flex-shrink: 0;
+}
+.nl-income-back {
+  display: inline-block;
+  color: var(--muted-foreground);
+  margin-bottom: 18px;
+}
+.nl-income-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  background: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 30px;
+}
+.nl-income-overview > div {
+  padding: 27px;
+}
+.nl-income-overview p:not(.nl-eyebrow) {
+  color: var(--muted-foreground);
+  margin-top: 8px;
+}
+.nl-income-hero-number {
+  font-size: 38px;
+  line-height: 1.2;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+}
+.nl-income-plan-fit {
+  background: var(--card);
+  border-radius: 0 10px 10px 0;
+}
+.nl-income-plan-fit > strong {
+  font-size: 21px;
+}
+.nl-income-plan-fit a,
+.nl-income-layout aside a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary);
+  margin-top: 14px;
+}
+.nl-income-sources {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.nl-income-source {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 22px;
+}
+.nl-income-source + .nl-income-source {
+  border-top: 1px solid var(--border);
+}
+.nl-income-source-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nl-income-source-name h3 {
+  font-weight: 650;
+  font-size: 16px;
+}
+.nl-income-source-name p,
+.nl-income-source-name small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-top: 5px;
+  display: block;
+}
+.nl-income-source-total {
+  text-align: right;
+  flex: none;
+}
+.nl-income-source-total strong {
+  display: block;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.nl-income-source-total span {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.nl-income-source-actions {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+.nl-income-remove {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.nl-income-excluded {
+  margin-top: 30px;
+}
+.nl-income-excluded > p {
+  color: var(--muted-foreground);
+  margin: -6px 0 14px;
+}
+.nl-income-excluded .nl-income-source-total {
+  color: var(--muted-foreground);
+}
+.nl-income-empty {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+.nl-income-empty h3 {
+  font-size: 17px;
+  font-weight: 650;
+}
+.nl-income-empty > p {
+  margin: 0 !important;
+}
+.nl-income-breakdown .nl-income-net {
+  border-top: 2px solid var(--border);
+  font-weight: 650;
+}
+.nl-income-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+  padding: 24px 0 0;
+  gap: 20px;
+}
+.nl-income-dialog > [data-slot="dialog-header"] {
+  padding: 0 24px;
+}
+.nl-income-editor {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.nl-income-fields {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0 24px 24px;
+}
+.nl-income-field-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+}
+.nl-income-fields label,
+.nl-income-fields input,
+.nl-income-fields select {
+  min-width: 0;
+}
+.nl-income-check-help {
+  display: block;
+  margin-top: 3px;
+}
+.nl-income-details {
+  border-top: 1px solid var(--border);
+  padding-top: 15px;
+}
+.nl-income-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.nl-income-details summary span {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+.nl-income-details > p {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin: 12px 0;
+}
+.nl-deduction-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(0, 0.8fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+.nl-deduction-row > button {
+  height: 40px;
+  padding: 8px;
+}
+.nl-income-editor-footer {
+  padding: 18px 24px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--card);
+  flex: none;
+}
+.nl-income-preview > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 6px;
+}
+.nl-income-preview strong {
+  font-size: 22px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.nl-income-preview small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  display: block;
+}
+@media (max-width: 1150px) {
+  .nl-income-source {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .nl-income-source-name {
+    flex-basis: 100%;
+  }
+  .nl-income-source-total {
+    text-align: left;
+    flex: 1;
+  }
+  .nl-income-source-actions {
+    display: flex;
+  }
+}
+@media (max-width: 700px) {
+  .nl-income-overview {
+    grid-template-columns: 1fr;
+  }
+  .nl-income-overview > div {
+    padding: 22px;
+  }
+  .nl-income-plan-fit {
+    border-radius: 0 0 10px 10px;
+    border-top: 1px solid var(--border);
+  }
+  .nl-income-hero-number {
+    font-size: 34px;
+  }
+  .nl-income-dialog {
+    max-height: calc(100dvh - 1rem);
+    padding-top: 20px;
+  }
+  .nl-income-dialog > [data-slot="dialog-header"] {
+    padding: 0 20px;
+    text-align: left;
+  }
+  .nl-income-fields {
+    padding: 0 20px 20px;
+  }
+  .nl-income-field-grid {
+    column-gap: 12px;
+  }
+  .nl-deduction-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+  .nl-deduction-row > label:first-child {
+    grid-column: 1 / -1;
+  }
+  .nl-income-editor-footer {
+    padding: 15px 20px 20px;
+  }
+  .nl-income-preview > div {
+    align-items: flex-start;
+  }
+  .nl-income-preview > div > span {
+    font-size: 12px;
+  }
+}
 .nl-panel > a:last-child {
   margin-top: 16px;
 }
@@ -812,14 +1089,41 @@
   font-size: 12px;
   color: var(--muted-foreground);
 }
-.nl-form .nl-check-label {
+.nl-form .nl-switch-label {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
+  cursor: pointer;
 }
-.nl-check-label input {
-  margin-top: 3px;
+.nl-switch[data-slot="switch"] {
+  width: 42px;
+  height: 24px;
+  padding: 3px;
+  border: 1px solid var(--input);
+  border-radius: 999px;
+  background: var(--input);
   flex: none;
+  cursor: pointer;
+}
+.nl-switch[data-state="checked"] {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.nl-switch > [data-slot="switch-thumb"] {
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  translate: 0;
+}
+.nl-switch[data-state="checked"] > [data-slot="switch-thumb"] {
+  background: var(--primary-foreground);
+  translate: 18px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nl-switch,
+  .nl-switch > [data-slot="switch-thumb"] {
+    transition: none;
+  }
 }
 .nl-form-actions {
   display: flex;

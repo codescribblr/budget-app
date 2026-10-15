@@ -17,6 +17,7 @@ import {
   CircleHelp,
   ArrowUpRight,
   Mail,
+  Banknote,
 } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
@@ -39,6 +40,7 @@ const navigation = [
   { href: "/new/transactions", label: "Transactions", icon: ReceiptText },
   { href: "/new/reports", label: "Reports", icon: ChartNoAxesCombined },
   { href: "/new/plan", label: "Monthly plan", icon: CalendarDays },
+  { href: "/new/income", label: "Income", icon: Banknote },
   { href: "/new/payday", label: "Allocate paycheck", icon: Wallet },
 ];
 export function NewLookLayout({ children }: { children: React.ReactNode }) {

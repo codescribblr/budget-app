@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Checkbox } from '@/components/ui/checkbox';
+import { OptionToggle } from '@/components/ui/option-toggle';
 import type { ParsedTransaction } from '@/lib/import-types';
 import type { Category, Account, CreditCard } from '@/lib/types';
 import { parseLocalDate, formatLocalDate, getTodayLocal } from '@/lib/date-utils';
@@ -324,7 +324,7 @@ export default function BulkEditDialog({
 
           {/* Historical */}
           <div className="flex items-center space-x-2">
-            <Checkbox
+            <OptionToggle
               id="bulk-historical"
               checked={isHistorical === true}
               onCheckedChange={(checked) => {

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
+import { OptionToggle } from '@/components/ui/option-toggle';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/utils';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
@@ -490,7 +490,7 @@ export default function MergeTransactionDialog({
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <Checkbox
+                  <OptionToggle
                     id="historical"
                     checked={isHistorical}
                     onCheckedChange={(checked) => setIsHistorical(checked as boolean)}

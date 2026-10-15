@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+import { OptionToggle } from '@/components/ui/option-toggle';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import {
@@ -1283,7 +1283,7 @@ export default function MapColumnsPage() {
           {!isRemap && (
             <>
               <div className="flex items-center space-x-2 p-4 bg-muted/50 rounded-lg">
-                <Checkbox
+                <OptionToggle
                   id="save-template"
                   checked={shouldSaveTemplate}
                   onCheckedChange={(checked) => setShouldSaveTemplate(checked === true)}
@@ -1310,7 +1310,7 @@ export default function MapColumnsPage() {
           {isRemap && (
             <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
               <div className="flex items-center space-x-2">
-                <Checkbox
+                <OptionToggle
                   id="remap-save-template"
                   checked={templateSaveMode !== 'none'}
                   onCheckedChange={(checked) => setTemplateSaveMode(checked ? 'new' : 'none')}
@@ -1361,7 +1361,7 @@ export default function MapColumnsPage() {
                       </div>
                       {currentTemplateId && (
                         <div className="flex items-center space-x-2">
-                          <Checkbox
+                          <OptionToggle
                             id="delete-old-template"
                             checked={deleteOldTemplate}
                             onCheckedChange={(checked) => setDeleteOldTemplate(checked === true)}
@@ -1472,7 +1472,7 @@ export default function MapColumnsPage() {
                 </div>
                 {currentTemplateId && (
                   <div className="flex items-center space-x-2">
-                    <Checkbox
+                    <OptionToggle
                       id="dialog-delete-old-template"
                       checked={deleteOldTemplate}
                       onCheckedChange={(checked) => setDeleteOldTemplate(checked === true)}

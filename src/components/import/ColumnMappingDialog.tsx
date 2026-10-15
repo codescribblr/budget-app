@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+import { OptionToggle } from '@/components/ui/option-toggle';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import {
@@ -241,7 +241,7 @@ export default function ColumnMappingDialog({
           </div>
 
           <div className="flex items-center space-x-2 p-4 bg-muted/50 rounded-lg">
-            <Checkbox
+            <OptionToggle
               id="save-template"
               checked={saveTemplate}
               onCheckedChange={(checked) => setSaveTemplate(checked === true)}

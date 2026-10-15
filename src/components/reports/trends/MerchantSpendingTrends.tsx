@@ -6,7 +6,7 @@ import { formatCurrency } from '@/lib/utils';
 import { chartCurrencyYAxisDefaults } from '@/lib/chart-formatters';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Checkbox } from '@/components/ui/checkbox';
+import { OptionToggle } from '@/components/ui/option-toggle';
 import { Label } from '@/components/ui/label';
 
 interface MerchantSpendingTrendsProps {
@@ -145,7 +145,7 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
         <div className="mb-4 flex flex-wrap gap-4">
           {topMerchants.map((merchantName, index) => (
             <div key={merchantName} className="flex items-center space-x-2">
-              <Checkbox
+              <OptionToggle
                 id={`merchant-${index}`}
                 checked={selectedMerchants.includes(merchantName)}
                 onCheckedChange={() => toggleMerchant(merchantName)}

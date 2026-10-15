@@ -17,6 +17,7 @@ const routes = [
   ["/new/reports", "/reports"],
   ["/new/payday", "/money-movement"],
   ["/new/plan", "/categories"],
+  ["/new/income", "/income"],
   ["/new/goals", "/goals"],
   ["/new", "/dashboard"],
 ] as const;
