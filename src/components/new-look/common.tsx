@@ -1,9 +1,7 @@
 "use client";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Check } from "lucide-react";
-import { type Cadence, money } from "@/lib/new-look";
-import { useBudget, useCheckins } from "./budget-context";
+import { money } from "@/lib/new-look";
+import { useBudget } from "./budget-context";
+export { CheckinHeader as TaskReturn, CheckinFooter } from "./checkin-flow";
 
 export function PageHeading({
   eyebrow,
@@ -24,37 +22,6 @@ export function PageHeading({
         <p>{description}</p>
       </div>
       {children}
-    </div>
-  );
-}
-export function TaskReturn({
-  task,
-  cadence: defaultCadence,
-}: {
-  task: string;
-  cadence: Cadence;
-}) {
-  const params = useSearchParams();
-  const requested = params.get("checkin");
-  const cadence: Cadence =
-    requested === "daily" || requested === "weekly" || requested === "monthly"
-      ? requested
-      : defaultCadence;
-  const { items, mark } = useCheckins(cadence);
-  const done = Boolean(items[task]);
-  return (
-    <div className="nl-task-return">
-      <Link href={`/new?checkin=${cadence}`}>
-        <ArrowLeft size={15} />
-        Back to {cadence} check-in
-      </Link>
-      <button
-        className={done ? "nl-completed" : "nl-secondary"}
-        onClick={() => mark(task, !done)}
-      >
-        {done && <Check size={15} />}{" "}
-        {done ? "Reviewed · Undo checkmark" : "Mark reviewed"}
-      </button>
     </div>
   );
 }

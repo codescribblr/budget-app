@@ -19,7 +19,12 @@ import {
   cents,
 } from "@/lib/new-look";
 import { budgetRequest, useBudget, DataBoundary } from "./budget-context";
-import { PageHeading, TaskReturn, ReadOnlyNotice } from "./common";
+import {
+  PageHeading,
+  TaskReturn,
+  ReadOnlyNotice,
+  CheckinFooter,
+} from "./common";
 
 export function GuidedEnvelopes() {
   return (
@@ -67,7 +72,11 @@ function EnvelopesContent() {
     <>
       <TaskReturn task="budget" cadence="daily" />
       <PageHeading
-        eyebrow="Daily · check before spending"
+        eyebrow={
+          params.get("checkin") === "weekly"
+            ? "Weekly · rebalance for the week ahead"
+            : "Daily · check before spending"
+        }
         title="Every envelope, in perspective"
         description="Scan balances, cover overages, and decide where your money is most useful. Review the whole picture before moving anything."
       >
@@ -208,6 +217,13 @@ function EnvelopesContent() {
         measures allocations; spent this month uses recorded transactions and
         refunds. These numbers answer different questions.
       </p>
+      <CheckinFooter
+        task="budget"
+        cadence="daily"
+        title="Envelopes reviewed?"
+        description="Cover any overages you choose to, and check for money that could be more useful elsewhere. You can finish without moving money."
+        disabled={!!category}
+      />
       {category && (
         <EnvelopeEditor
           key={category.id}

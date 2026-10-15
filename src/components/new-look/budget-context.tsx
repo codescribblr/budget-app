@@ -21,7 +21,7 @@ import {
   type Cadence,
   type Funding,
 } from "@/lib/new-look";
-import { toast } from "sonner";
+import { useCheckinProgress } from "./checkin-progress";
 
 export async function budgetRequest<T>(
   url: string,
@@ -187,36 +187,7 @@ export function useCheckins(cadence: Cadence) {
   const key = data
     ? `budget-checkin:v1:${data.userId}:${data.identity.activeAccountId}:${cadence}:${period}`
     : null;
-  const [state, setState] = useState<{
-    key: string | null;
-    items: Record<string, string>;
-  }>({ key: null, items: {} });
-  useEffect(() => {
-    try {
-      setState({
-        key,
-        items: key ? JSON.parse(localStorage.getItem(key) || "{}") : {},
-      });
-    } catch {
-      setState({ key, items: {} });
-    }
-  }, [key]);
-  const items = state.key === key ? state.items : {};
-  function mark(task: string, done = true) {
-    if (!key) return;
-    const updated = { ...items };
-    if (done) updated[task] = new Date().toISOString();
-    else delete updated[task];
-    setState({ key, items: updated });
-    try {
-      localStorage.setItem(key, JSON.stringify(updated));
-    } catch {
-      toast.warning(
-        "Review progress could not be saved in this browser. Your budget is unaffected.",
-      );
-    }
-  }
-  return { items, mark };
+  return useCheckinProgress(key);
 }
 
 export function useUnsavedChanges(dirty: boolean) {

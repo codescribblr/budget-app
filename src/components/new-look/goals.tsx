@@ -5,7 +5,7 @@ import { useFeatures } from "@/contexts/FeatureContext";
 import type { GoalWithDetails } from "@/lib/types";
 import { money } from "@/lib/new-look";
 import { budgetRequest } from "./budget-context";
-import { PageHeading, TaskReturn } from "./common";
+import { PageHeading, TaskReturn, CheckinFooter } from "./common";
 
 interface BufferStatus {
   balance: number;
@@ -169,6 +169,13 @@ export function GuidedGoals() {
         This first version provides an overview. Creating goals, changing linked
         accounts, and buffer funding still use the existing classic tools.
       </p>
+      <CheckinFooter
+        task="goals"
+        cadence="monthly"
+        title="Still heading toward what matters?"
+        description="Review your longer-term priorities and any changes you want to make. Finish when you’re ready."
+        disabled={loading || featuresLoading || !!error}
+      />
     </>
   );
 }

@@ -462,6 +462,179 @@
   align-items: center;
   gap: 7px;
 }
+.nl-checkin-header {
+  padding-bottom: 22px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+.nl-checkin-heading,
+.nl-checkin-heading a,
+.nl-checkin-steps a {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.nl-checkin-heading {
+  justify-content: space-between;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.nl-checkin-heading strong {
+  color: var(--foreground);
+}
+.nl-checkin-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+}
+.nl-checkin-steps a {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.nl-checkin-steps a[aria-current="step"] {
+  color: var(--foreground);
+  font-weight: 650;
+}
+.nl-checkin-steps a[aria-current="step"] .nl-step {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+.nl-checkin-steps .nl-step {
+  width: 25px;
+  height: 25px;
+  font-size: 12px;
+}
+.nl-checkin-footer {
+  position: sticky;
+  bottom: 16px;
+  z-index: 10;
+  margin-top: 28px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--primary);
+  border-radius: 10px;
+  padding: 19px 22px;
+  background: var(--card);
+  box-shadow: 0 5px 24px #0002;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 28px;
+  flex-wrap: wrap;
+}
+.nl-checkin-footer > div:first-child {
+  flex: 1;
+  min-width: min(260px, 100%);
+}
+.nl-checkin-footer p {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin: 4px 0 0;
+  max-width: 580px;
+}
+.nl-checkin-footer .nl-checkin-next {
+  color: var(--foreground);
+}
+.nl-checkin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.nl-checkin-actions .nl-primary {
+  min-height: 44px;
+}
+.nl-balance-section {
+  margin: 24px 0;
+}
+.nl-balance-help {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  margin: -6px 0 16px;
+  max-width: 720px;
+}
+.nl-balance-help strong {
+  color: var(--foreground);
+}
+.nl-checkin-summary {
+  max-width: 740px;
+  margin: 15px auto 0;
+}
+.nl-finish-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--secondary);
+  color: var(--primary);
+  margin-bottom: 24px;
+}
+.nl-checkin-summary h1 {
+  font-size: 34px;
+  letter-spacing: -1px;
+  font-weight: 650;
+}
+.nl-summary-intro {
+  color: var(--muted-foreground);
+  font-size: 15px;
+  margin: 10px 0 28px;
+  max-width: 620px;
+}
+.nl-completion-list {
+  list-style: none;
+  margin: 12px 0 22px;
+  padding: 0;
+}
+.nl-completion-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.nl-completion-list li > span:nth-child(2) {
+  flex: 1;
+}
+.nl-completion-list a {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.nl-completion-balance {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.nl-completion-balance small {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.nl-completion-balance strong {
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+.nl-checkin-summary .nl-summary-attention {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-top: 20px;
+}
+.nl-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: 24px 0;
+}
+.nl-summary-rhythm {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  margin: 28px 0;
+}
 .nl-completed {
   color: var(--primary);
   background: var(--secondary);
@@ -713,6 +886,51 @@
   }
 }
 @media (max-width: 700px) {
+  .nl-checkin-heading {
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .nl-checkin-heading > span {
+    max-width: 160px;
+  }
+  .nl-checkin-heading a {
+    font-size: 11px;
+  }
+  .nl-checkin-steps {
+    gap: 16px;
+  }
+  .nl-checkin-steps a {
+    font-size: 12px;
+  }
+  .nl-checkin-footer {
+    bottom: 8px;
+    padding: 14px;
+    gap: 12px;
+  }
+  .nl-checkin-footer > div {
+    width: 100%;
+  }
+  .nl-checkin-actions .nl-primary {
+    width: 100%;
+    order: -1;
+  }
+  .nl-checkin-footer p {
+    font-size: 11px;
+  }
+  .nl-balance-section .nl-section-title {
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+  .nl-checkin-summary h1 {
+    font-size: 28px;
+  }
+  .nl-completion-list li {
+    gap: 9px;
+    font-size: 12px;
+  }
+  .nl-completion-balance strong {
+    font-size: 21px;
+  }
   .nl-sidebar {
     transform: translateX(-100%);
     width: 270px;

@@ -12,9 +12,11 @@ The new interface lives at `/new`. Classic remains at its existing URLs. Both us
 
 ## Interaction contract
 
-- Daily, weekly, and monthly check-ins guide attention. Completing a review never requires moving money or achieving a perfect budget.
+- Daily, weekly, and monthly check-ins guide attention. A numbered progress header and persistent completion action lead through each routine: balances → envelopes; imports → spending → envelopes; reflection → monthly plan → enabled goals/buffer. Completing a review never requires moving money or achieving a perfect budget.
+- The primary action saves pending balance/plan edits and continues only after every save and the authoritative refresh succeed. Save & stay is available separately. Invalid input, partial failures, and refresh errors keep the current step open. Jumping into a later step circles back to unfinished earlier steps instead of claiming completion.
+- Every routine ends at `/new/check-in/complete` with a review summary, recorded available to save, remaining negative envelopes, and a clear Done action. Revisit individual tasks or choose Review again to restart just the review progress. Opening the completion URL with unfinished steps offers Continue instead of claiming success. Monthly completion waits for planning feature availability.
 - Check-in progress is private to this browser, user, and household; it is not financial or import history. It resets by calendar day, Monday-start week, or month. It does not claim that every bank was imported.
-- Account balances are entered manually. Card entry is the current amount owed, translated to the existing available-credit API so existing audit behavior is retained.
+- Account balances are entered manually. Cards use **available credit**, copied directly from the provider and sent unchanged to the existing API. Owed is calculated as saved credit limit minus available credit. The limit is read-only here and managed in classic. Bank balances and cards have separate labeled sections. Credits above the limit are shown as a positive card credit; dashboard totals retain the existing zero floor on amounts owed. Pending charges/holds are reflected only to the extent the provider includes them in available credit.
 - A transfer preserves total envelope funds. Direct balance adjustments change available to save but do not count as monthly funding. Payday allocations increase monthly funding.
 - Potential surplus applies only to ordinary monthly expense envelopes. Accumulation, target, goal, and buffer balances must not be presented as spare money just because they are high.
 - Suggestions are editable. Payday uses money already reflected in recorded balances, never assumed future income. Ordinary envelopes use the current monthly plan minus recorded funding; target-balance envelopes use the remaining balance gap without subtracting prior funding twice. Suggestions leave goals manual until their completion state is part of this screen.
@@ -33,7 +35,7 @@ Before release: typecheck/build; focused money and workflow tests; browser check
 
 ```sh
 npx tsc --noEmit
-npx vitest run src/lib/__tests__/new-look.test.ts src/lib/__tests__/duplicate-matching.test.ts src/lib/__tests__/transaction-status-filter.test.ts
+npx vitest run src/lib/__tests__/checkins.test.ts src/lib/__tests__/new-look.test.ts src/lib/__tests__/duplicate-matching.test.ts src/lib/__tests__/transaction-status-filter.test.ts
 npx tsx --test src/lib/__tests__/category-transaction-edits.test.ts src/lib/__tests__/transaction-list-filters.test.ts src/lib/allocations/__tests__/batch-revert.test.ts
 npm run build
 ```
@@ -47,6 +49,7 @@ Stop the dev server before building; both Next commands use `.next`. Restart por
 - CSV upload → queued batch → categorization → approval → persisted transaction descriptions, without leaving the new shell.
 - Feedback persistence; viewer controls disabled; financial API and admin feedback access rejected for viewers; unauthenticated `/new` redirected to login.
 - Simulated partial account-save failures and uncertain allocation responses; verify clear recovery without automatic retries.
+- Guided daily/weekly/monthly completion, feature-gated monthly steps, read-only review, skipped-step recovery, restart, cross-tab progress, and storage-denied session fallback. Verify that failed saves/refreshes and leaving during an in-flight save cannot advance the review. In the new interface, dismissible notifications appear at the top so they do not cover the next-step action.
 
 ### Production rollout stages
 

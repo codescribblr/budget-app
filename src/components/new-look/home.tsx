@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Check, CalendarDays } from "lucide-react";
-import { useFeatures } from "@/contexts/FeatureContext";
+import { useCheckinSteps, CheckinLoadError } from "./checkin-flow";
 import { money, ordinaryEnvelopes, type Cadence } from "@/lib/new-look";
 import { useBudget, useCheckins, DataBoundary } from "./budget-context";
 import { PageHeading, AvailableCalculation } from "./common";
@@ -16,88 +16,25 @@ export function GuidedHome() {
 }
 function HomeContent() {
   const { data } = useBudget();
-  const { isFeatureEnabled, hasPremium } = useFeatures();
   const router = useRouter();
   const query = useSearchParams();
   const value = query.get("checkin");
   const cadence: Cadence =
     value === "weekly" || value === "monthly" ? value : "daily";
-  const { items } = useCheckins(cadence);
+  const { items, ready } = useCheckins(cadence);
+  const { steps, loading, error, retry } = useCheckinSteps(cadence);
   if (!data) return null;
   const envelopes = ordinaryEnvelopes(data.categories);
   const negative = envelopes.filter((c) => c.current_balance < 0);
-  const planning =
-    hasPremium &&
-    (isFeatureEnabled("goals") || isFeatureEnabled("income_buffer"));
-  const tasks =
-    cadence === "daily"
-      ? [
-          {
-            key: "accounts",
-            title: "Keep recorded balances current",
-            detail: `${data.accounts.length + data.cards.length} accounts and cards to check. Update them together in one balance pass.`,
-            href: "/new/accounts",
-          },
-          {
-            key: "budget",
-            title: "Check the envelopes you’ll use",
-            detail: negative.length
-              ? `${negative.length} negative ${negative.length === 1 ? "balance" : "balances"} to consider. Scan the rest before deciding what you can spend.`
-              : "Scan your envelopes before spending. Move money only if it helps your plan.",
-            href: "/new/budget",
-          },
-        ]
-      : cadence === "weekly"
-        ? [
-            {
-              key: "imports",
-              title: "Catch up on where your money went",
-              detail:
-                "Import CSVs from your banks and cards. Review descriptions, categories, and duplicates before adding transactions.",
-              href: "/new/imports",
-            },
-            {
-              key: "reports",
-              title: "Look at your spending",
-              detail:
-                "Choose the past week in Reports. Notice what changed and where spending is ahead of plan.",
-              href: "/new/reports",
-            },
-            {
-              key: "budget",
-              title: "Bring your envelopes back into balance",
-              detail:
-                "Cover overages and reconsider money that could serve another purpose.",
-              href: "/new/budget",
-            },
-          ]
-        : [
-            {
-              key: "reports",
-              title: "Reflect on the month",
-              detail:
-                "Choose the previous month in Reports. Use what actually happened to shape the next plan.",
-              href: "/new/reports",
-            },
-            {
-              key: "plan",
-              title: "Make a realistic monthly plan",
-              detail:
-                "Review your income and funding targets. Make room for irregular expenses.",
-              href: "/new/plan",
-            },
-            ...(planning
-              ? [
-                  {
-                    key: "goals",
-                    title: "Check your longer-term progress",
-                    detail:
-                      "Review enabled goals and your income buffer. Adjust only where your priorities have changed.",
-                    href: "/new/goals",
-                  },
-                ]
-              : []),
-          ];
+  const tasks = steps.map((step) => ({
+    ...step,
+    detail:
+      cadence === "daily" && step.key === "accounts"
+        ? `${data.accounts.length + data.cards.length} accounts and cards to check. Update bank balances and available credit, then review your envelopes.`
+        : cadence === "daily" && step.key === "budget" && negative.length
+          ? `${negative.length} negative ${negative.length === 1 ? "balance" : "balances"} to consider. Scan the rest before deciding what you can spend.`
+          : step.detail,
+  }));
   const done = tasks.filter((t) => items[t.key]).length;
   const next = tasks.find((t) => !items[t.key]);
   const month = new Date().toLocaleDateString("en-US", { month: "long" });
@@ -150,7 +87,11 @@ function HomeContent() {
             {next?.detail ||
               "You’ve reviewed what matters for this check-in. You can revisit any step whenever you need to."}
           </p>
-          {next ? (
+          {error ? (
+            <CheckinLoadError retry={retry} />
+          ) : !ready || loading ? (
+            <p role="status">Loading your check-in…</p>
+          ) : next ? (
             <Link
               className="nl-primary"
               href={`${next.href}?checkin=${cadence}`}
@@ -159,8 +100,11 @@ function HomeContent() {
               <ArrowRight size={16} />
             </Link>
           ) : (
-            <Link className="nl-secondary" href="/new/budget">
-              Browse envelopes
+            <Link
+              className="nl-secondary"
+              href={`/new/check-in/complete?checkin=${cadence}`}
+            >
+              View check-in summary
               <ArrowRight size={16} />
             </Link>
           )}
@@ -200,8 +144,9 @@ function HomeContent() {
             ))}
           </div>
           <p className="nl-footnote">
-            Reviewed means you looked, not that everything is perfect.
-            Checkmarks are saved for this user and household in this browser.
+            Each step leads to the next. Finish after you’ve reviewed; you don’t
+            need to change anything. Checkmarks are saved for this user and
+            household in this browser.
           </p>
           <div className="nl-section-title">
             <h2>

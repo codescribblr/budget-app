@@ -1,9 +1,10 @@
 "use client";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import ImportTransactionsPage from "@/components/import/ImportTransactionsPage";
 import TransactionsPage from "@/components/transactions/TransactionsPage";
 import ReportsPage from "@/components/reports/ReportsPage";
-import { PageHeading, TaskReturn } from "./common";
+import { PageHeading, TaskReturn, CheckinFooter } from "./common";
 
 export function GuidedImports() {
   return (
@@ -25,6 +26,12 @@ export function GuidedImports() {
         import settings remain in{" "}
         <Link href="/settings/automatic-imports">classic ↗</Link>.
       </p>
+      <CheckinFooter
+        task="imports"
+        cadence="weekly"
+        title="Ready to look at your spending?"
+        description="Check that you’ve imported and reviewed the accounts you use. Continuing records your review; it does not approve queued transactions."
+      />
     </>
   );
 }
@@ -40,15 +47,23 @@ export function GuidedTransactions() {
   );
 }
 export function GuidedReports() {
+  const monthly = useSearchParams().get("checkin") === "monthly";
   return (
     <>
       <TaskReturn task="reports" cadence="weekly" />
       <p className="nl-notice">
-        For your weekly check-in, select the dates since your last review. For
-        your monthly check-in, choose the month you’re reflecting on. Reports
-        include recorded transactions.
+        {monthly
+          ? "Reflect on the previous month and notice what you’d like to plan differently. Adjust the dates if you’re reviewing another period."
+          : "Review spending since your last check-in. Adjust the dates to match the week you’re reviewing."}{" "}
+        Reports include recorded transactions.
       </p>
       <ReportsPage />
+      <CheckinFooter
+        task="reports"
+        cadence="weekly"
+        title="What would you like to adjust?"
+        description="Notice where spending differed from your expectations. Take those observations into the next step."
+      />
     </>
   );
 }

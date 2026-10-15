@@ -10,7 +10,12 @@ import {
   DataBoundary,
   useUnsavedChanges,
 } from "./budget-context";
-import { PageHeading, TaskReturn, ReadOnlyNotice } from "./common";
+import {
+  PageHeading,
+  TaskReturn,
+  ReadOnlyNotice,
+  CheckinFooter,
+} from "./common";
 
 export function GuidedPlan() {
   return (
@@ -56,7 +61,7 @@ function PlanContent() {
   useUnsavedChanges(changed.length > 0);
   if (!data) return null;
   async function save() {
-    if (saving || invalid || !canEdit || !changed.length) return;
+    if (saving || invalid || !canEdit || !changed.length) return false;
     setSaving(true);
     setErrors({});
     const failures: Record<number, string> = {};
@@ -83,8 +88,10 @@ function PlanContent() {
       }
     }
     setErrors(failures);
+    let refreshed = false;
     try {
       await refresh();
+      refreshed = true;
     } catch {
       toast.error("Refresh failed. Reload before editing again.");
     }
@@ -95,6 +102,7 @@ function PlanContent() {
     if (Object.keys(failures).length)
       toast.error("Some targets were not saved. Review the marked rows.");
     setSaving(false);
+    return refreshed && Object.keys(failures).length === 0;
   }
   return (
     <>
@@ -222,17 +230,29 @@ function PlanContent() {
         intentionally. Goal contributions and category types are managed in
         classic for now. <Link href="/categories">Manage categories ↗</Link>
       </p>
-      {changed.length > 0 && (
-        <div className="nl-savebar">
-          <div>
-            <strong>{changed.length} funding targets changed</strong>
-            <p>
-              {invalid
-                ? "Enter valid nonnegative amounts with up to two decimals."
-                : `Planned monthly funding: ${money(total)}. Existing envelope balances stay the same.`}
-            </p>
-          </div>
-          <div>
+      <CheckinFooter
+        task="plan"
+        cadence="monthly"
+        title={
+          changed.length
+            ? `${changed.length} funding targets changed`
+            : "Does the plan fit the month ahead?"
+        }
+        description={
+          invalid
+            ? "Enter valid nonnegative amounts with up to two decimals."
+            : changed.length
+              ? `Planned monthly funding: ${money(total)}. Existing envelope balances stay the same.`
+              : "Review your income and targets. Continue when the plan reflects your priorities."
+        }
+        beforeComplete={changed.length ? save : undefined}
+        saveLabel={changed.length ? "Save plan" : undefined}
+        disabled={
+          saving || refreshing || invalid || (changed.length > 0 && !canEdit)
+        }
+      >
+        {changed.length > 0 && (
+          <>
             <button
               className="nl-secondary"
               disabled={saving}
@@ -244,15 +264,15 @@ function PlanContent() {
               Discard
             </button>
             <button
-              className="nl-primary"
+              className="nl-secondary"
               disabled={invalid || !canEdit || saving || refreshing}
-              onClick={save}
+              onClick={() => void save()}
             >
-              {saving ? "Saving…" : "Save plan"}
+              Save & stay
             </button>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </CheckinFooter>
     </>
   );
 }
