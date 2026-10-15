@@ -6,6 +6,7 @@ import {
   potentialSurplus,
   suggestAllocation,
   remainingFunding,
+  safeReturnPath,
 } from "../new-look";
 import type { Category } from "../types";
 
@@ -22,6 +23,17 @@ const category = (id: number, overrides: Partial<Category> = {}): Category => ({
   ...overrides,
 });
 describe("interface navigation", () => {
+  it("preserves local sign-in destinations including filters and feedback links", () => {
+    for (const path of ["/new/accounts?checkin=daily", "/admin/interface-feedback?feedback=example-id", "/new/reports?startDate=2026-10-01&dateRange=custom", "/new#daily"]) {
+      expect(safeReturnPath(path)).toBe(path);
+    }
+  });
+  it("rejects external or ambiguous sign-in destinations and honors the interface fallback", () => {
+    for (const path of [null, "", "https://example.com", "//example.com", "/\\example.com", "/\n/example.com", "javascript:alert(1)", " /new"]) {
+      expect(safeReturnPath(path, "/new")).toBe("/new");
+    }
+    expect(safeReturnPath(null)).toBe("/dashboard");
+  });
   it("maps corresponding tasks in both directions and keeps import review routes", () => {
     expect(interfaceRoute("/accounts", "new")).toBe("/new/accounts");
     expect(interfaceRoute("/credit-cards", "new")).toBe("/new/accounts");

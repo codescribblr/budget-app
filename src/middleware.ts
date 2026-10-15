@@ -42,7 +42,8 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
-      url.searchParams.set('redirectTo', request.nextUrl.pathname)
+      url.search = ''
+      url.searchParams.set('redirectTo', request.nextUrl.pathname + request.nextUrl.search)
       return NextResponse.redirect(url)
     }
     
@@ -76,7 +77,8 @@ export async function middleware(request: NextRequest) {
   if ((isProtectedPath || isInvitationsChoose) && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    url.searchParams.set('redirectTo', request.nextUrl.pathname)
+    url.search = ''
+    url.searchParams.set('redirectTo', request.nextUrl.pathname + request.nextUrl.search)
     return NextResponse.redirect(url)
   }
 

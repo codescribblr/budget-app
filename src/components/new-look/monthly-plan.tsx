@@ -144,6 +144,13 @@ function PlanContent() {
           </strong>
         </section>
       </div>
+      {!envelopes.length && (
+        <div className="nl-panel">
+          <h2>Start with your envelopes</h2>
+          <p>Create categories for the things you want to fund, then set their monthly targets here.</p>
+          <Link className="nl-secondary" href="/categories">Create envelopes in classic ↗</Link>
+        </div>
+      )}
       <div className="nl-table-wrap">
         <table className="nl-table">
           <thead>

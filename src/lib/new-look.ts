@@ -2,6 +2,13 @@ import type { Category } from "@/lib/types";
 
 export type Cadence = "daily" | "weekly" | "monthly";
 export const INTERFACE_COOKIE = "budget-interface";
+/** Keep sign-in return links on this site, including their filters/context. */
+export function safeReturnPath(value: string | null, fallback = "/dashboard") {
+  return value && value.startsWith("/") && !value.startsWith("//") &&
+    !/[\\\u0000-\u0020]/.test(value)
+    ? value
+    : fallback;
+}
 const routes = [
   ["/new/accounts", "/accounts"],
   ["/new/budget", "/categories"],

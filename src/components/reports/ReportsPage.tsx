@@ -25,7 +25,7 @@ interface MerchantGroupStat {
   icon_name?: string | null;
 }
 
-export default function ReportsPage() {
+export default function ReportsPage({ onReviewReadyChange }: { onReviewReadyChange?: (ready: boolean) => void }) {
   const router = useRouter();
   const pathname = usePathname();
   const reportsPath = pathname.startsWith('/new/') ? '/new/reports' : '/reports';
@@ -35,6 +35,10 @@ export default function ReportsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [transactionError, setTransactionError] = useState('');
+  const [categoryError, setCategoryError] = useState('');
+  const [merchantError, setMerchantError] = useState('');
+  const [retryAttempt, setRetryAttempt] = useState(0);
 
   // Merchant stats state
   const [merchantStats, setMerchantStats] = useState<MerchantGroupStat[]>([]);
@@ -76,12 +80,12 @@ export default function ReportsPage() {
 
   // Fetch transactions with date filters to avoid hitting Supabase limit
   useEffect(() => {
+    if (!isInitialized) return;
+    const controller = new AbortController();
     const fetchTransactions = async () => {
-      // Don't fetch until dates are initialized
-      if (!isInitialized) return;
-
       try {
         setLoadingTransactions(true);
+        setTransactionError('');
         
         // Build transactions URL with date filters if dates are set
         const transactionsUrl = new URL('/api/transactions', window.location.origin);
@@ -92,36 +96,52 @@ export default function ReportsPage() {
           transactionsUrl.searchParams.set('endDate', endDate);
         }
         
-        const response = await fetch(transactionsUrl.toString());
+        const response = await fetch(transactionsUrl.toString(), { signal: controller.signal });
+        if (!response.ok) throw new Error('Transaction request failed');
         const data = await response.json();
-        setTransactions(data);
+        if (!Array.isArray(data)) throw new Error('Invalid transaction response');
+        if (!controller.signal.aborted) setTransactions(data);
       } catch (error) {
-        console.error('Error fetching transactions:', error);
+        if (!controller.signal.aborted) {
+          console.error('Error fetching transactions:', error);
+          setTransactions([]);
+          setTransactionError('We couldn’t load your transactions. Retry to see spending for this period.');
+        }
       } finally {
-        setLoadingTransactions(false);
+        if (!controller.signal.aborted) setLoadingTransactions(false);
       }
     };
 
     fetchTransactions();
-  }, [startDate, endDate, isInitialized]);
+    return () => controller.abort();
+  }, [startDate, endDate, isInitialized, retryAttempt]);
 
   // Fetch categories
   useEffect(() => {
+    const controller = new AbortController();
     const fetchCategories = async () => {
       try {
         setLoadingCategories(true);
-        const response = await fetch('/api/categories?includeArchived=all');
+        setCategoryError('');
+        const response = await fetch('/api/categories?includeArchived=all', { signal: controller.signal });
+        if (!response.ok) throw new Error('Category request failed');
         const data = await response.json();
-        setCategories(data);
+        if (!Array.isArray(data)) throw new Error('Invalid category response');
+        if (!controller.signal.aborted) setCategories(data);
       } catch (error) {
-        console.error('Error fetching categories:', error);
+        if (!controller.signal.aborted) {
+          console.error('Error fetching categories:', error);
+          setCategories([]);
+          setCategoryError('We couldn’t load your envelopes. Retry to see spending by category.');
+        }
       } finally {
-        setLoadingCategories(false);
+        if (!controller.signal.aborted) setLoadingCategories(false);
       }
     };
 
     fetchCategories();
-  }, []);
+    return () => controller.abort();
+  }, [retryAttempt]);
 
   // Update URL when filters change
   const updateURL = useCallback((start: string, end: string, range: string, categoryId: number | null) => {
@@ -238,7 +258,9 @@ export default function ReportsPage() {
 
   // Fetch merchant stats for all filtered transactions (single API call)
   useEffect(() => {
+    const controller = new AbortController();
     const fetchMerchantStats = async () => {
+      setMerchantError('');
       if (filteredTransactionIds.length === 0) {
         setMerchantStats([]);
         setLoadingMerchantStats(false);
@@ -251,21 +273,32 @@ export default function ReportsPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ transactionIds: filteredTransactionIds }),
+          signal: controller.signal,
         });
 
-        if (response.ok) {
-          const stats = await response.json();
-          setMerchantStats(stats);
-        }
+        if (!response.ok) throw new Error('Merchant request failed');
+        const stats = await response.json();
+        if (!Array.isArray(stats)) throw new Error('Invalid merchant response');
+        if (!controller.signal.aborted) setMerchantStats(stats);
       } catch (error) {
-        console.error('Error fetching merchant stats:', error);
+        if (!controller.signal.aborted) {
+          console.error('Error fetching merchant stats:', error);
+          setMerchantStats([]);
+          setMerchantError('We couldn’t load your merchant totals. Retry to finish loading this report.');
+        }
       } finally {
-        setLoadingMerchantStats(false);
+        if (!controller.signal.aborted) setLoadingMerchantStats(false);
       }
     };
 
     fetchMerchantStats();
-  }, [filteredTransactionIds]);
+    return () => controller.abort();
+  }, [filteredTransactionIds, retryAttempt]);
+
+  const reportError = transactionError || categoryError || merchantError;
+  useEffect(() => {
+    onReviewReadyChange?.(isInitialized && !loadingTransactions && !loadingCategories && !loadingMerchantStats && !reportError);
+  }, [onReviewReadyChange, isInitialized, loadingTransactions, loadingCategories, loadingMerchantStats, reportError]);
 
   const handleCategoryClick = (categoryId: number) => {
     setSelectedCategoryId(categoryId);
@@ -320,6 +353,13 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {reportError ? (
+        <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 space-y-3">
+          <h2 className="font-semibold">Reports could not be loaded</h2>
+          <p className="text-sm text-muted-foreground">{reportError}</p>
+          <Button variant="outline" onClick={() => setRetryAttempt(attempt => attempt + 1)}>Retry reports</Button>
+        </div>
+      ) : <>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SpendingByCategory
           transactions={filteredTransactions}
@@ -366,6 +406,7 @@ export default function ReportsPage() {
           />
         </div>
       )}
+      </>}
     </div>
   );
 }

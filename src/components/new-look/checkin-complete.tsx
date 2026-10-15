@@ -95,7 +95,7 @@ function CompletionContent() {
               : "envelopes still have negative balances"}
             . Reviewing doesn’t require resolving everything today.{" "}
             <Link
-              href={`/new/budget?checkin=${cadence === "monthly" ? "daily" : cadence}`}
+              href={cadence === "monthly" ? "/new/budget" : `/new/budget?checkin=${cadence}`}
             >
               Revisit envelopes →
             </Link>

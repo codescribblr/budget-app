@@ -19,6 +19,8 @@ export function GuidedGoals() {
     loading: featuresLoading,
     isFeatureEnabled,
     hasPremium,
+    error: featureError,
+    refreshFeatures,
   } = useFeatures();
   const goalsEnabled = hasPremium && isFeatureEnabled("goals");
   const bufferEnabled = hasPremium && isFeatureEnabled("income_buffer");
@@ -64,7 +66,12 @@ export function GuidedGoals() {
         title="Progress beyond this month"
         description="Review the goals and buffer you’ve chosen to use. Keep the money working toward the priorities that still matter to you."
       />
-      {loading ? (
+      {featureError ? (
+        <div className="nl-panel" role="alert">
+          <p>We couldn’t load your planning settings. Try again to see which goals and buffer tools are available.</p>
+          <button className="nl-secondary" onClick={() => void refreshFeatures()}>Try again</button>
+        </div>
+      ) : loading || featuresLoading ? (
         <p role="status">Loading your planning tools…</p>
       ) : error ? (
         <div className="nl-panel" role="alert">
@@ -176,7 +183,7 @@ export function GuidedGoals() {
         cadence="monthly"
         title="Still heading toward what matters?"
         description="Review your longer-term priorities and any changes you want to make. Finish when you’re ready."
-        disabled={loading || featuresLoading || !!error}
+        disabled={loading || featuresLoading || !!error || !!featureError}
       />
     </>
   );

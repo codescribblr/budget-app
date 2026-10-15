@@ -132,9 +132,12 @@ function AccountsContent() {
         title="One balance pass. All your accounts."
         description="Check your bank balances, then copy the available credit shown for each card. We’ll calculate what’s owed. Import transactions separately to update spending in your envelopes."
       >
-        <Link className="nl-secondary" href="/accounts">
-          Manage accounts in classic ↗
-        </Link>
+        <div className="nl-checkin-actions">
+          <Link className="nl-secondary" href="/accounts">
+            Manage accounts in classic ↗
+          </Link>
+          {!data.cards.length && <Link className="nl-secondary" href="/credit-cards">Add a credit card in classic ↗</Link>}
+        </div>
       </PageHeading>
       <ReadOnlyNotice />
       <div className="nl-stat-grid">
