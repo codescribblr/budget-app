@@ -9,6 +9,7 @@ import {
   normalizeComparableDescription,
   parseDateAmountDescriptionKey,
 } from '@/lib/duplicate-matching';
+import { hashesLinkedToSavedCharges } from '@/lib/import/import-hash-resolution';
 import { chunkValues, fetchAllPages } from '@/lib/supabase/fetch-all-pages';
 
 interface TransactionData {
@@ -79,42 +80,15 @@ export async function POST(request: Request) {
     const dateAmountIndex = buildDateAmountIndex(existingTransactions);
 
     if (hashes && Array.isArray(hashes) && hashes.length > 0) {
-      const hashToTransaction = new Map<string, TransactionData>();
-      transactions.forEach((txn) => {
-        hashToTransaction.set(txn.hash, txn);
-      });
-
       const importedHashes = await fetchImportedHashes(supabase, user.id, accountId, hashes);
 
-      if (importedHashes && importedHashes.length > 0) {
-        const uniqueHashes = new Set(importedHashes.map((h) => h.hash));
-
-        for (const hash of uniqueHashes) {
-          const txn = hashToTransaction.get(hash);
-          if (!txn) continue;
-
-          const normalizedDate = normalizeDateForComparison(txn.date);
-          const normalizedAmount = normalizeAmountKey(txn.amount);
-          const candidates = dateAmountIndex.get(`${normalizedDate}|${normalizedAmount}`) || [];
-
-          const matching = candidates.some((existingTxn) =>
-            descriptionsMatchForDuplicate(
-              {
-                description: existingTxn.description,
-                merchantName: existingTxn.merchantName,
-                originalImportTexts: existingTxn.originalImportTexts,
-              },
-              {
-                description: txn.description,
-                merchant: txn.merchant,
-                originalData: txn.originalData,
-              }
-            )
-          );
-
-          if (matching) {
-            duplicateHashes.add(hash);
-          }
+      if (importedHashes.length > 0) {
+        const linkedImportedIds = await fetchLinkedImportedIds(
+          supabase,
+          importedHashes.map((record) => record.id)
+        );
+        for (const hash of hashesLinkedToSavedCharges(importedHashes, linkedImportedIds)) {
+          duplicateHashes.add(hash);
         }
       }
     }
@@ -242,7 +216,7 @@ async function fetchImportedHashes(
   accountId: number,
   hashes: string[]
 ) {
-  const rows: Array<{ hash: string; account_id: number | null }> = [];
+  const rows: Array<{ id: number; hash: string; account_id: number | null }> = [];
 
   for (const hashChunk of chunkValues(hashes, 500)) {
     const page = await fetchAllPages(async (from, to) => {
@@ -262,6 +236,30 @@ async function fetchImportedHashes(
   }
 
   return rows;
+}
+
+async function fetchLinkedImportedIds(
+  supabase: Awaited<ReturnType<typeof getAuthenticatedUser>>['supabase'],
+  importedIds: number[]
+): Promise<Set<number>> {
+  const linked = new Set<number>();
+
+  for (const idChunk of chunkValues(importedIds, 500)) {
+    const page = await fetchAllPages(async (from, to) => {
+      const { data, error } = await supabase
+        .from('imported_transaction_links')
+        .select('id, imported_transaction_id')
+        .in('imported_transaction_id', idChunk)
+        .order('id', { ascending: true })
+        .range(from, to);
+
+      if (error) throw error;
+      return data || [];
+    });
+    page.forEach((link) => linked.add(link.imported_transaction_id));
+  }
+
+  return linked;
 }
 
 function buildDateAmountIndex(
