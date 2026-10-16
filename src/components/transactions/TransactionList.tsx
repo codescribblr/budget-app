@@ -424,7 +424,7 @@ export default function TransactionList({
                 <div className="text-xs text-muted-foreground">{formatDate(transaction.date)}</div>
               </div>
               <div className="flex items-center gap-2">
-                <div className={`font-semibold text-sm ${transaction.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                <div className={`font-semibold text-sm ${transaction.transaction_type === 'income' ? 'text-green-600 theme-text-accent' : 'text-red-600 theme-text-danger'}`}>
                   {formatCurrency(transaction.total_amount)}
                 </div>
                 <DropdownMenu>
@@ -468,7 +468,7 @@ export default function TransactionList({
                   <Badge
                     key={tag.id}
                     variant="outline"
-                    className="text-xs cursor-pointer hover:bg-gray-100"
+                    className="text-xs cursor-pointer hover:bg-muted"
                     onClick={() => window.location.href = `/transactions?tags=${tag.id}`}
                   >
                     {tag.color && (
@@ -668,7 +668,7 @@ export default function TransactionList({
                         <Badge
                           key={tag.id}
                           variant="secondary"
-                          className="text-xs cursor-pointer hover:bg-gray-200"
+                          className="text-xs cursor-pointer hover:bg-muted"
                           onClick={(e) => {
                             e.stopPropagation();
                             // Navigate to filtered transactions
@@ -807,8 +807,8 @@ export default function TransactionList({
                 </TableCell>
                 <TableCell className={`text-right font-semibold text-sm whitespace-nowrap ${
                   transaction.transaction_type === 'income' 
-                    ? 'text-green-600' 
-                    : 'text-red-600'
+                    ? 'text-green-600 theme-text-accent'
+                    : 'text-red-600 theme-text-danger'
                 }`}>
                   {formatCurrency(transaction.total_amount)}
                 </TableCell>

@@ -147,21 +147,21 @@ export default function ColumnMappingDialog({
   const getConfidenceBadge = (column: ColumnAnalysis) => {
     if (column.confidence >= 0.85) {
       return (
-        <Badge variant="default" className="bg-green-500">
+        <Badge variant="default" className="bg-green-500 theme-fill-accent">
           <CheckCircle2 className="size-3 mr-1" />
           {Math.round(column.confidence * 100)}%
         </Badge>
       );
     } else if (column.confidence >= 0.5) {
       return (
-        <Badge variant="outline" className="border-yellow-500 text-yellow-700 dark:text-yellow-400">
+        <Badge variant="outline" className="border-yellow-500 theme-border-warning text-yellow-700 theme-text-warning dark:text-yellow-400">
           <AlertCircle className="size-3 mr-1" />
           {Math.round(column.confidence * 100)}%
         </Badge>
       );
     } else {
       return (
-        <Badge variant="outline" className="border-gray-400 text-gray-600 dark:text-gray-400">
+        <Badge variant="outline" className="border-gray-400 theme-border-muted text-gray-600 theme-text-muted dark:text-gray-400">
           <XCircle className="size-3 mr-1" />
           {Math.round(column.confidence * 100)}%
         </Badge>
@@ -266,13 +266,13 @@ export default function ColumnMappingDialog({
           <div className="text-sm text-muted-foreground space-y-1">
             <p className="font-medium">Required fields:</p>
             <ul className="list-disc list-inside space-y-1 ml-2">
-              <li className={findColumnForField('date') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+              <li className={findColumnForField('date') !== null ? 'text-green-600 theme-text-accent dark:text-green-400' : 'text-red-600 theme-text-danger dark:text-red-400'}>
                 Date {findColumnForField('date') !== null && '✓'}
               </li>
-              <li className={findColumnForField('amount') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+              <li className={findColumnForField('amount') !== null ? 'text-green-600 theme-text-accent dark:text-green-400' : 'text-red-600 theme-text-danger dark:text-red-400'}>
                 Amount {findColumnForField('amount') !== null && '✓'}
               </li>
-              <li className={findColumnForField('description') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+              <li className={findColumnForField('description') !== null ? 'text-green-600 theme-text-accent dark:text-green-400' : 'text-red-600 theme-text-danger dark:text-red-400'}>
                 Description {findColumnForField('description') !== null && '✓'}
               </li>
             </ul>

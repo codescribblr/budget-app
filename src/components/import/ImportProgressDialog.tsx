@@ -56,13 +56,13 @@ export default function ImportProgressDialog({
           <div className="flex flex-col items-center justify-center space-y-4">
             {/* Status Icon */}
             {isProcessing && (
-              <Loader2 data-dialog-color="accent" className="h-16 w-16 text-blue-500 animate-spin" />
+              <Loader2 data-dialog-color="accent" className="h-16 w-16 text-blue-500 theme-text-accent animate-spin" />
             )}
             {isSuccess && (
-              <CheckCircle2 data-dialog-color="accent" className="h-16 w-16 text-green-500" />
+              <CheckCircle2 data-dialog-color="accent" className="h-16 w-16 text-green-500 theme-text-accent" />
             )}
             {isError && (
-              <XCircle data-dialog-color="negative" className="h-16 w-16 text-red-500" />
+              <XCircle data-dialog-color="negative" className="h-16 w-16 text-red-500 theme-text-danger" />
             )}
 
             {/* Status Message */}
@@ -80,7 +80,7 @@ export default function ImportProgressDialog({
 
               {isSuccess && importedCount !== undefined && importedCount > 0 && (
                 <>
-                  <p data-dialog-color="accent" className="text-lg font-medium text-green-900 dark:text-green-100">
+                  <p data-dialog-color="accent" className="text-lg font-medium text-green-900 theme-text-accent dark:text-green-100">
                     Successfully imported {importedCount} transaction{importedCount !== 1 ? 's' : ''}
                   </p>
                   {isHistorical && (
@@ -96,7 +96,7 @@ export default function ImportProgressDialog({
 
               {isError && (
                 <>
-                  <p data-dialog-color="negative" className="text-lg font-medium text-red-900 dark:text-red-100">
+                  <p data-dialog-color="negative" className="text-lg font-medium text-red-900 theme-text-danger dark:text-red-100">
                     Failed to import transactions
                   </p>
                   <p data-dialog-color="muted" className="text-sm text-gray-600 dark:text-gray-400">

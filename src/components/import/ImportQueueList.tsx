@@ -259,13 +259,13 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
                         </div>
                       )}
                       {batch.is_historical === true && (
-                        <Badge variant="outline" className="text-xs text-amber-600 dark:text-amber-400">
+                        <Badge variant="outline" className="text-xs text-amber-600 theme-text-warning dark:text-amber-400">
                           <Clock className="h-3 w-3 mr-1" />
                           Historical
                         </Badge>
                       )}
                       {batch.is_historical === 'mixed' && (
-                        <Badge variant="outline" className="text-xs text-amber-600 dark:text-amber-400">
+                        <Badge variant="outline" className="text-xs text-amber-600 theme-text-warning dark:text-amber-400">
                           <Clock className="h-3 w-3 mr-1" />
                           Mixed (Historical)
                         </Badge>

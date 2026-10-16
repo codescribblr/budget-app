@@ -182,7 +182,7 @@ export default function SpendingByCategory({ transactions, categories, onCategor
             </Tooltip>
           </TooltipProvider>
           {' | '}Budget: {formatCurrency(totalBudget)} |
-          <span className={totalSpent > totalBudget ? 'text-red-600' : 'text-green-600'}>
+          <span className={totalSpent > totalBudget ? 'text-red-600 theme-text-danger' : 'text-green-600 theme-text-accent'}>
             {' '}{totalSpent > totalBudget ? 'Over' : 'Under'} by {formatCurrency(Math.abs(totalBudget - totalSpent))}
           </span>
         </CardDescription>
@@ -217,7 +217,7 @@ export default function SpendingByCategory({ transactions, categories, onCategor
                     <TableCell className="text-right text-muted-foreground">
                       {formatCurrency(category.budget)}
                     </TableCell>
-                    <TableCell className={`text-right font-medium ${isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                    <TableCell className={`text-right font-medium ${isOverBudget ? 'text-red-600 theme-text-danger' : 'text-green-600 theme-text-accent'}`}>
                       {isOverBudget ? '-' : '+'}{formatCurrency(Math.abs(category.variance))}
                     </TableCell>
                   </TableRow>

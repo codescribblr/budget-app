@@ -761,21 +761,21 @@ export default function MapColumnsPage() {
   const getConfidenceBadge = (column: ColumnAnalysis) => {
     if (column.confidence >= 0.85) {
       return (
-        <Badge variant="default" className="bg-green-500">
+        <Badge variant="default" className="bg-green-500 theme-fill-accent">
           <CheckCircle2 className="size-3 mr-1" />
           {Math.round(column.confidence * 100)}%
         </Badge>
       );
     } else if (column.confidence >= 0.5) {
       return (
-        <Badge variant="outline" className="border-yellow-500 text-yellow-700 dark:text-yellow-400">
+        <Badge variant="outline" className="border-yellow-500 theme-border-warning text-yellow-700 theme-text-warning dark:text-yellow-400">
           <AlertCircle className="size-3 mr-1" />
           {Math.round(column.confidence * 100)}%
         </Badge>
       );
     } else {
       return (
-        <Badge variant="outline" className="border-gray-400 text-gray-600 dark:text-gray-400">
+        <Badge variant="outline" className="border-gray-400 theme-border-muted text-gray-600 theme-text-muted dark:text-gray-400">
           <XCircle className="size-3 mr-1" />
           {Math.round(column.confidence * 100)}%
         </Badge>
@@ -981,9 +981,9 @@ export default function MapColumnsPage() {
           </CardDescription>
           {/* Show helpful message for API imports */}
           {(fileName.includes('Teller') || fileName.includes('Account Transactions')) && (
-            <div className="mt-4 flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
-              <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-blue-800 dark:text-blue-200">
+            <div className="mt-4 flex items-start gap-2 p-3 bg-blue-50 theme-surface-accent dark:bg-blue-950 border border-blue-200 theme-border-accent dark:border-blue-800 rounded-md">
+              <Info className="h-5 w-5 text-blue-600 theme-text-accent dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-blue-800 theme-text-accent dark:text-blue-200">
                 <p className="font-medium mb-1">This is an automatic import from your bank account.</p>
                 <p>The most important setting is the <strong>Amount Sign Convention</strong> below. If transactions are showing as the wrong type (income vs expense), adjust this setting.</p>
               </div>
@@ -1103,8 +1103,8 @@ export default function MapColumnsPage() {
               )}
 
               {amountSignConvention === 'separate_debit_credit' && (
-                <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-md">
-                  <p className="text-sm text-blue-900 dark:text-blue-100">
+                <div className="p-3 bg-blue-50 theme-surface-accent dark:bg-blue-950 rounded-md">
+                  <p className="text-sm text-blue-900 theme-text-accent dark:text-blue-100">
                     <strong>Note:</strong> Both Debit and Credit columns must be mapped above.
                     Debit amounts will be treated as expenses, Credit amounts as income.
                   </p>
@@ -1177,14 +1177,14 @@ export default function MapColumnsPage() {
                       <TableBody>
                         {previews.map((preview, index) => (
                           <TableRow key={index}>
-                            <TableCell className={`whitespace-nowrap text-xs ${preview.date === 'Not mapped' ? 'text-red-600 dark:text-red-400' : ''}`}>
+                            <TableCell className={`whitespace-nowrap text-xs ${preview.date === 'Not mapped' ? 'text-red-600 theme-text-danger dark:text-red-400' : ''}`}>
                               {preview.date === 'Not mapped' ? (
                                 <span className="italic text-muted-foreground">Not mapped</span>
                               ) : (
                                 preview.date
                               )}
                             </TableCell>
-                            <TableCell className={`font-medium text-sm max-w-[250px] truncate ${preview.description === 'Not mapped' ? 'text-red-600 dark:text-red-400' : ''}`}>
+                            <TableCell className={`font-medium text-sm max-w-[250px] truncate ${preview.description === 'Not mapped' ? 'text-red-600 theme-text-danger dark:text-red-400' : ''}`}>
                               {preview.description === 'Not mapped' ? (
                                 <span className="italic text-muted-foreground">Not mapped</span>
                               ) : (
@@ -1193,9 +1193,9 @@ export default function MapColumnsPage() {
                             </TableCell>
                             <TableCell className={`text-right font-semibold text-sm whitespace-nowrap ${
                               preview.transactionType === 'income'
-                                ? 'text-green-600 dark:text-green-400'
-                                : 'text-red-600 dark:text-red-400'
-                            } ${preview.amount === 'No amount' ? 'text-red-600 dark:text-red-400' : ''}`}>
+                                ? 'text-green-600 theme-text-accent dark:text-green-400'
+                                : 'text-red-600 theme-text-danger dark:text-red-400'
+                            } ${preview.amount === 'No amount' ? 'text-red-600 theme-text-danger dark:text-red-400' : ''}`}>
                               {preview.amount === 'No amount' ? (
                                 <span className="italic text-muted-foreground">Not mapped</span>
                               ) : preview.amount.includes('(') ? (
@@ -1233,7 +1233,7 @@ export default function MapColumnsPage() {
                     </Table>
                   </div>
                   {hasInvalid && (
-                    <div className="mt-4 p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-800 dark:text-amber-200">
+                    <div className="mt-4 p-2 bg-amber-50 theme-surface-warning dark:bg-amber-950 border border-amber-200 theme-border-warning dark:border-amber-800 rounded text-xs text-amber-800 theme-text-warning dark:text-amber-200">
                       ⚠️ Some required fields are not mapped. Please map Date, Description, and Amount columns.
                     </div>
                   )}
@@ -1271,7 +1271,7 @@ export default function MapColumnsPage() {
           )}
 
           {isRemap && (
-            <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
+            <div className="space-y-4 p-4 bg-blue-50 theme-surface-accent dark:bg-blue-950 rounded-lg">
               <div className="flex items-center space-x-2">
                 <OptionToggle
                   id="remap-save-template"
@@ -1304,7 +1304,7 @@ export default function MapColumnsPage() {
                   </div>
 
                   {templateSaveMode === 'overwrite' && currentTemplateId && (
-                    <div className="p-2 bg-yellow-50 dark:bg-yellow-950 rounded">
+                    <div className="p-2 bg-yellow-50 theme-surface-warning dark:bg-yellow-950 rounded">
                       <p className="text-sm">
                         Will overwrite: <strong>{currentTemplateName || 'Current Template'}</strong>
                       </p>
@@ -1344,33 +1344,33 @@ export default function MapColumnsPage() {
           <div className="text-sm text-muted-foreground space-y-1">
             <p className="font-medium">Required fields:</p>
             <ul className="list-disc list-inside space-y-1 ml-2">
-              <li className={findColumnForField('date') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+              <li className={findColumnForField('date') !== null ? 'text-green-600 theme-text-accent dark:text-green-400' : 'text-red-600 theme-text-danger dark:text-red-400'}>
                 Date {findColumnForField('date') !== null && '✓'}
               </li>
               {(amountSignConvention !== 'separate_debit_credit' && (
-                <li className={findColumnForField('amount') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                <li className={findColumnForField('amount') !== null ? 'text-green-600 theme-text-accent dark:text-green-400' : 'text-red-600 theme-text-danger dark:text-red-400'}>
                   Amount {findColumnForField('amount') !== null && '✓'}
                 </li>
               ))}
               {amountSignConvention === 'separate_debit_credit' && (
                 <>
-                  <li className={findColumnForField('debit') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                  <li className={findColumnForField('debit') !== null ? 'text-green-600 theme-text-accent dark:text-green-400' : 'text-red-600 theme-text-danger dark:text-red-400'}>
                     Debit Column {findColumnForField('debit') !== null && '✓'}
                   </li>
-                  <li className={findColumnForField('credit') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                  <li className={findColumnForField('credit') !== null ? 'text-green-600 theme-text-accent dark:text-green-400' : 'text-red-600 theme-text-danger dark:text-red-400'}>
                     Credit Column {findColumnForField('credit') !== null && '✓'}
                   </li>
                 </>
               )}
-              <li className={findColumnForField('description') !== null ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+              <li className={findColumnForField('description') !== null ? 'text-green-600 theme-text-accent dark:text-green-400' : 'text-red-600 theme-text-danger dark:text-red-400'}>
                 Description {findColumnForField('description') !== null && '✓'}
               </li>
             </ul>
           </div>
 
           {error && (
-            <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
-              <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+            <div className="p-4 bg-red-50 theme-surface-danger dark:bg-red-950 border border-red-200 theme-border-danger dark:border-red-800 rounded-md">
+              <p className="text-sm text-red-800 theme-text-danger dark:text-red-200">{error}</p>
             </div>
           )}
 
@@ -1415,7 +1415,7 @@ export default function MapColumnsPage() {
             </div>
 
             {templateSaveMode === 'overwrite' && currentTemplateId && (
-              <div className="p-2 bg-yellow-50 dark:bg-yellow-950 rounded">
+              <div className="p-2 bg-yellow-50 theme-surface-warning dark:bg-yellow-950 rounded">
                 <p className="text-sm">
                   Will overwrite: <strong>{currentTemplateName || 'Current Template'}</strong>
                 </p>

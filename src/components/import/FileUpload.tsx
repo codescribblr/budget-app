@@ -593,6 +593,9 @@ export default function FileUpload({
       </Dialog>
 
       <div
+        data-slot="import-dropzone"
+        data-dragging={isDragging && !disabled}
+        data-disabled={disabled}
         className={`border-2 border-dashed rounded-lg text-center transition-all ${
           compact ? 'p-4' : 'p-8'
         } ${
@@ -656,18 +659,18 @@ export default function FileUpload({
       )}
 
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
-          <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+        <div className="p-4 bg-red-50 theme-surface-danger dark:bg-red-950 border border-red-200 theme-border-danger dark:border-red-800 rounded-md">
+          <p className="text-sm text-red-800 theme-text-danger dark:text-red-200">{error}</p>
         </div>
       )}
 
       {showAIFallback && pendingFile && (
-        <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md space-y-3">
+        <div className="p-4 bg-yellow-50 theme-surface-warning dark:bg-yellow-950 border border-yellow-200 theme-border-warning dark:border-yellow-800 rounded-md space-y-3">
           <div>
-            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+            <p className="text-sm font-medium text-yellow-800 theme-text-warning dark:text-yellow-200">
               PDF parsing failed
             </p>
-            <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+            <p className="text-sm text-yellow-700 theme-text-warning dark:text-yellow-300 mt-1">
               {fallbackError}
             </p>
           </div>

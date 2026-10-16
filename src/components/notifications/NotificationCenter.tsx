@@ -14,6 +14,7 @@ import { Bell, ExternalLink, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { getNotificationPreview } from '@/lib/notification-utils';
+import { usePortalTheme } from '@/hooks/use-portal-theme';
 
 interface Notification {
   id: number;
@@ -34,6 +35,7 @@ function preventDropdownClose(event: React.PointerEvent | React.MouseEvent) {
 }
 
 export function NotificationCenter() {
+  const guided = Boolean(usePortalTheme());
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -186,7 +188,7 @@ export function NotificationCenter() {
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
             <Badge
-              variant="destructive"
+              variant={guided ? 'default' : 'destructive'}
               className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
             >
               {unreadCount > 9 ? '9+' : unreadCount}
@@ -243,7 +245,7 @@ export function NotificationCenter() {
                     </div>
                     <div className="flex items-center gap-1">
                       {!notification.is_read && (
-                        <div className="h-2 w-2 rounded-full bg-blue-500" />
+                        <div className={`h-2 w-2 rounded-full ${guided ? 'bg-primary' : 'bg-blue-500'}`} />
                       )}
                       <Button
                         variant="ghost"

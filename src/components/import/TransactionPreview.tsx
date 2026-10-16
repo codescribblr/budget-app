@@ -890,8 +890,8 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
     <div className="space-y-4 max-w-full overflow-hidden">
       {/* Historical Import Indicator */}
       {isHistorical && (
-        <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
-          <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-200">
+        <div className="p-3 bg-blue-50 theme-surface-accent dark:bg-blue-950 border border-blue-200 theme-border-accent dark:border-blue-800 rounded-md">
+          <div className="flex items-center gap-2 text-sm text-blue-800 theme-text-accent dark:text-blue-200">
             <span className="font-medium">📜 Historical Import:</span>
             <span>Default for all transactions (can be changed per transaction below)</span>
           </div>
@@ -909,12 +909,12 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
             </div>
             {databaseDuplicateCount > 0 && (
               <div>
-                <span className="font-medium text-yellow-700 dark:text-yellow-400">Duplicates:</span> {databaseDuplicateCount}
+                <span className="font-medium text-yellow-700 theme-text-warning dark:text-yellow-400">Duplicates:</span> {databaseDuplicateCount}
               </div>
             )}
             {withinFileDuplicateCount > 0 && (
               <div>
-                <span className="font-medium text-orange-700 dark:text-orange-400">Potential Duplicates:</span> {withinFileDuplicateCount}
+                <span className="font-medium text-orange-700 theme-text-warning dark:text-orange-400">Potential Duplicates:</span> {withinFileDuplicateCount}
               </div>
             )}
             <div>
@@ -963,7 +963,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
                     onClick={handleAICategorize}
                     disabled={isAICategorizing || !stats || stats.categorization.used >= stats.categorization.limit}
                     variant="default"
-                    className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"
+                    className="gap-2 bg-purple-600 theme-action-accent hover:bg-purple-700 text-white"
                   >
                     {isAICategorizing ? (
                       <>
@@ -983,7 +983,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
                   <Button
                     onClick={() => router.push('/settings/subscription')}
                     variant="default"
-                    className="gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
+                    className="gap-2 theme-action-accent bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
                   >
                     <Crown className="h-4 w-4" />
                     Upgrade for AI Categorization
@@ -1102,13 +1102,13 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
               // Green background for ready to import
               // Red background for manually excluded (but not duplicates or uncategorized)
               const rowClassName = isDuplicate
-                ? 'bg-red-50 dark:bg-red-950/20 border-border'
+                ? 'bg-red-50 theme-surface-danger dark:bg-red-950/20 border-border'
                 : isUncategorized
                 ? 'border-border'
                 : isReadyToImport
-                ? 'bg-green-50 dark:bg-green-900/30 border-border'
+                ? 'bg-green-50 theme-surface-accent dark:bg-green-900/30 border-border'
                 : isManuallyExcluded
-                ? 'bg-red-50 dark:bg-red-950/20 border-border'
+                ? 'bg-red-50 theme-surface-danger dark:bg-red-950/20 border-border'
                 : 'border-border';
 
               const isSelected = selectedTransactions.has(transaction.id);
@@ -1165,7 +1165,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
                   <TableCell
                     onClick={() => setEditingField({ transactionId: transaction.id, field: 'amount' })}
                     className={`text-right font-semibold cursor-pointer hover:bg-muted/50 min-w-[100px] ${
-                      transaction.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'
+                      transaction.transaction_type === 'income' ? 'text-green-600 theme-text-accent' : 'text-red-600 theme-text-danger'
                     }`}
                   >
                     {isEditingAmount ? (
@@ -1219,7 +1219,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
                               <span>{transaction.splits[0].categoryName}</span>
                               {transaction.splits[0].isAICategorized && (
                                 <span className="inline-flex items-center" title="AI categorized">
-                                  <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+                                  <Sparkles className="h-3.5 w-3.5 text-purple-500 theme-text-accent" />
                                 </span>
                               )}
                             </>
@@ -1316,28 +1316,28 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
                     {/* Duplicates take precedence over uncategorized status */}
                     {isDuplicate ? (
                       transaction.duplicateType === 'database' ? (
-                        <span className="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded whitespace-nowrap">
+                        <span className="text-xs px-2 py-1 bg-yellow-100 theme-surface-warning dark:bg-yellow-900 text-yellow-800 theme-text-warning dark:text-yellow-200 rounded whitespace-nowrap">
                           Duplicate
                         </span>
                       ) : transaction.duplicateType === 'within-file' ? (
-                        <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded whitespace-nowrap">
+                        <span className="text-xs px-2 py-1 bg-orange-100 theme-surface-warning dark:bg-orange-900 text-orange-800 theme-text-warning dark:text-orange-200 rounded whitespace-nowrap">
                           Potential Duplicate
                         </span>
                       ) : (
-                        <span className="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded whitespace-nowrap">
+                        <span className="text-xs px-2 py-1 bg-yellow-100 theme-surface-warning dark:bg-yellow-900 text-yellow-800 theme-text-warning dark:text-yellow-200 rounded whitespace-nowrap">
                           Duplicate
                         </span>
                       )
                     ) : transaction.status === 'excluded' && transaction.splits.length === 0 ? (
-                      <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded whitespace-nowrap">
+                      <span className="text-xs px-2 py-1 bg-orange-100 theme-surface-warning dark:bg-orange-900 text-orange-800 theme-text-warning dark:text-orange-200 rounded whitespace-nowrap">
                         Uncategorized
                       </span>
                     ) : transaction.status === 'excluded' ? (
-                      <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded whitespace-nowrap">
+                      <span className="text-xs px-2 py-1 bg-gray-100 theme-surface-muted dark:bg-gray-800 text-gray-800 theme-text-muted dark:text-gray-200 rounded whitespace-nowrap">
                         Excluded
                       </span>
                     ) : (
-                      <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded whitespace-nowrap">
+                      <span className="text-xs px-2 py-1 bg-green-100 theme-surface-accent dark:bg-green-900 text-green-800 theme-text-accent dark:text-green-200 rounded whitespace-nowrap">
                         Ready
                       </span>
                     )}

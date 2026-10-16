@@ -320,7 +320,7 @@ export default function TransactionEditDialog({
               </div>
               <div className="flex justify-between text-sm mt-1">
                 <span>Remaining:</span>
-                <span className={`font-semibold ${Math.abs(getRemaining()) > 0.01 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                <span className={`font-semibold ${Math.abs(getRemaining()) > 0.01 ? 'text-red-600 theme-text-danger dark:text-red-400' : 'text-green-600 theme-text-accent dark:text-green-400'}`}>
                   {formatCurrency(getRemaining())}
                 </span>
               </div>

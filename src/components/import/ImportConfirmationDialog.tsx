@@ -46,11 +46,11 @@ export default function ImportConfirmationDialog({
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <div data-dialog-panel="accent" className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
-              <span className="font-medium text-green-900 dark:text-green-100">
+            <div data-dialog-panel="accent" className="flex justify-between items-center p-3 bg-green-50 theme-surface-accent dark:bg-green-950 rounded-lg border border-green-200 theme-border-accent dark:border-green-800">
+              <span className="font-medium text-green-900 theme-text-accent dark:text-green-100">
                 Transactions to Import
               </span>
-              <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+              <span className="text-2xl font-bold text-green-600 theme-text-accent dark:text-green-400">
                 {categorizedCount}
               </span>
             </div>
@@ -97,8 +97,8 @@ export default function ImportConfirmationDialog({
           </div>
 
           {uncategorizedCount > 0 && (
-            <div data-dialog-panel="warning" className="p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg border border-yellow-200 dark:border-yellow-800">
-              <p className="text-sm text-yellow-900 dark:text-yellow-100">
+            <div data-dialog-panel="warning" className="p-3 bg-yellow-50 theme-surface-warning dark:bg-yellow-950 rounded-lg border border-yellow-200 theme-border-warning dark:border-yellow-800">
+              <p className="text-sm text-yellow-900 theme-text-warning dark:text-yellow-100">
                 <strong>Note:</strong> {uncategorizedCount} uncategorized transaction{uncategorizedCount !== 1 ? 's' : ''} will be excluded.
                 You can categorize them later and import them in a future batch.
               </p>

@@ -654,7 +654,7 @@ export default function BatchReviewPage() {
 
                 {/* Duplicates */}
                 {(duplicateCounts.database > 0 || duplicateCounts.withinFile > 0) && (
-                  <Badge variant="outline" className="text-xs text-amber-600 dark:text-amber-400">
+                  <Badge variant="outline" className="text-xs text-amber-600 theme-text-warning dark:text-amber-400">
                     <span className="mr-1">Duplicates:</span>
                     <span className="font-medium">
                       {duplicateCounts.database > 0 && `${duplicateCounts.database} existing`}
@@ -664,19 +664,19 @@ export default function BatchReviewPage() {
                   </Badge>
                 )}
                 {duplicateCounts.database === 0 && duplicateCounts.withinFile === 0 && (
-                  <Badge variant="outline" className="text-xs text-green-600 dark:text-green-400">
+                  <Badge variant="outline" className="text-xs text-green-600 theme-text-accent dark:text-green-400">
                     <span className="mr-1">Duplicates:</span>
                     <span className="font-medium">None</span>
                   </Badge>
                 )}
                 {batchInfo.is_historical === true && (
-                  <Badge variant="outline" className="text-xs text-amber-600 dark:text-amber-400">
+                  <Badge variant="outline" className="text-xs text-amber-600 theme-text-warning dark:text-amber-400">
                     <Clock className="h-3 w-3 mr-1" />
                     Historical
                   </Badge>
                 )}
                 {batchInfo.is_historical === 'mixed' && (
-                  <Badge variant="outline" className="text-xs text-amber-600 dark:text-amber-400">
+                  <Badge variant="outline" className="text-xs text-amber-600 theme-text-warning dark:text-amber-400">
                     <Clock className="h-3 w-3 mr-1" />
                     Mixed (Historical)
                   </Badge>

@@ -243,21 +243,21 @@ export default function MergeTransactionDialog({
         
         <div className="space-y-4 pt-4">
           {/* Why duplicates section */}
-          <div data-dialog-panel="accent" className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div data-dialog-panel="accent" className="p-3 bg-blue-50 theme-surface-accent dark:bg-blue-950 rounded-lg border border-blue-200 theme-border-accent dark:border-blue-800">
             <div className="text-sm space-y-1">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <CheckCircle2 className="h-4 w-4 text-blue-600 theme-text-accent dark:text-blue-400" />
                 <span className="font-medium">Same amount: {formatCurrency(duplicateGroup.amount)}</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <CheckCircle2 className="h-4 w-4 text-blue-600 theme-text-accent dark:text-blue-400" />
                 <span>Same date: {formatDate(transactions[0].date)}</span>
               </div>
               {transactions.some(t => t.splits.some(s => 
                 !transactions[0].splits.some(s2 => s2.category_id === s.category_id)
               )) && (
                 <div className="flex items-center gap-2">
-                  <XCircle data-dialog-color="warning" className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <XCircle data-dialog-color="warning" className="h-4 w-4 text-amber-600 theme-text-warning dark:text-amber-400" />
                   <span>Different categories (will be combined)</span>
                 </div>
               )}
@@ -311,7 +311,7 @@ export default function MergeTransactionDialog({
             <div className="mt-2 pt-2 border-t">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Split Total:</span>
-                <span className={`font-medium ${amountMatches ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <span className={`font-medium ${amountMatches ? 'text-green-600 theme-text-accent dark:text-green-400' : 'text-red-600 theme-text-danger dark:text-red-400'}`}>
                   {formatCurrency(totalSplitAmount)}
                   {amountMatches ? (
                     <CheckCircle2 className="inline-block h-4 w-4 ml-1" />
@@ -321,7 +321,7 @@ export default function MergeTransactionDialog({
                 </span>
               </div>
               {!amountMatches && (
-                <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                <p className="text-xs text-red-600 theme-text-danger dark:text-red-400 mt-1">
                   Must equal {formatCurrency(expectedTotal)}
                 </p>
               )}

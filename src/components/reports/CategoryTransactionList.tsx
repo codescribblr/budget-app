@@ -621,7 +621,7 @@ export default function CategoryTransactionList({
                       <div className="text-xs text-muted-foreground">{formatDate(transaction.date)}</div>
                     </div>
                     <div className="flex items-center gap-1">
-                      <div className={`font-semibold text-sm whitespace-nowrap ${isExpense ? 'text-red-600' : 'text-green-600'}`}>
+                      <div className={`font-semibold text-sm whitespace-nowrap ${isExpense ? 'text-red-600 theme-text-danger' : 'text-green-600 theme-text-accent'}`}>
                         {isExpense ? '-' : '+'}{formatCurrency(categoryAmount)}
                       </div>
                       {editable && renderActions(transaction)}
@@ -760,7 +760,7 @@ export default function CategoryTransactionList({
                           )}
                         </TableCell>
                       )}
-                      <TableCell className={`text-right font-semibold text-sm ${isExpense ? 'text-red-600' : 'text-green-600'}`}>
+                      <TableCell className={`text-right font-semibold text-sm ${isExpense ? 'text-red-600 theme-text-danger' : 'text-green-600 theme-text-accent'}`}>
                         {isExpense ? '-' : '+'}{formatCurrency(categoryAmount)}
                       </TableCell>
                       {editable && (

@@ -98,7 +98,7 @@ export function UserMenu() {
           <>
             <DropdownMenuItem
               onClick={() => router.push('/settings/subscription')}
-              className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0 focus:bg-gradient-to-r focus:from-yellow-500 focus:to-orange-600"
+              className="theme-action-accent bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0 focus:bg-gradient-to-r focus:from-yellow-500 focus:to-orange-600"
             >
               <Crown className="mr-2 h-4 w-4 text-white" />
               <span className="font-medium">Upgrade to Premium</span>
