@@ -400,6 +400,26 @@ export async function handleSuggestMerchantGroupings(): Promise<JobResult> {
 }
 
 /**
+ * Handler for cleanup_empty_merchant_groups job
+ * Set-based delete of empty unlinked per-user merchant groups (weekly).
+ */
+export async function handleCleanupEmptyMerchantGroups(): Promise<JobResult> {
+  try {
+    const { cleanupEmptyMerchantGroups } = await import(
+      '@/lib/db/cleanup-empty-merchant-groups'
+    );
+    const result = await cleanupEmptyMerchantGroups();
+    return {
+      success: true,
+      message: `Deleted ${result.deleted} empty merchant group(s)`,
+    };
+  } catch (error: any) {
+    console.error('Error in cleanup_empty_merchant_groups job:', error);
+    return { success: false, error: error.message || 'Job failed' };
+  }
+}
+
+/**
  * Handler for cleanup_api_key_logs job
  * Deletes usage logs older than 90 days and stale idempotency records
  */
@@ -482,6 +502,8 @@ export function getJobHandler(jobType: string): (() => Promise<JobResult>) | nul
       return handleCheckTrialPeriods;
     case 'suggest_merchant_groupings':
       return handleSuggestMerchantGroupings;
+    case 'cleanup_empty_merchant_groups':
+      return handleCleanupEmptyMerchantGroups;
     case 'cleanup_api_key_logs':
       return handleCleanupApiKeyLogs;
     case 'rentcast_sync':
