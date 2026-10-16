@@ -29,6 +29,16 @@ describe('normalizeGlobalMerchantPattern', () => {
     expect(normalizeGlobalMerchantPattern('Aldi Greenville Sc')).toBe('aldi');
   });
 
+  it('strips register/terminal letter+digit codes before city/state', () => {
+    expect(normalizeGlobalMerchantPattern('SPILL THE BEANS R1 GREENVILLE SC')).toBe(
+      'spill the beans'
+    );
+    expect(normalizeGlobalMerchantPattern('SPILL THE BEANS R2 GREENVILLE SC')).toBe(
+      'spill the beans'
+    );
+    expect(normalizeGlobalMerchantPattern('COFFEE SHOP T1 AUSTIN TX')).toBe('coffee shop');
+  });
+
   it('strips phones, street fragments, and trailing state', () => {
     expect(
       normalizeGlobalMerchantPattern('TST* TROPICAL GRILLE WADE 864-334-5163 SC')

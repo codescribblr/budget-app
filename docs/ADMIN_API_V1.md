@@ -454,12 +454,55 @@ Content-Type: application/json
 }
 ```
 
+### Backfill unlinked transactions
+
+Pages transactions with `merchant_group_id IS NULL` and no override. Registers descriptions as global patterns, links to the user's group for a matching global merchant (exact then normalized), otherwise creates a clean fallback group. Also runs weekly via `backfill_unlinked_merchants`. Stay under Vercel’s 300s by paging (`limit` + `cursor`).
+
+```http
+POST /api/admin/v1/merchants/backfill-unlinked
+Content-Type: application/json
+
+{ "user_id": "optional-uuid", "limit": 200, "cursor": 0 }
+```
+
+```json
+{
+  "data": {
+    "scanned": 200,
+    "linked_global": 120,
+    "fallback_created": 70,
+    "still_unlinked": 10,
+    "next_cursor": 98765,
+    "user_id": null
+  },
+  "meta": { }
+}
+```
+
+### Unlinked stats
+
+```http
+GET /api/admin/v1/merchants/unlinked-stats?user_id=optional-uuid
+```
+
+```json
+{
+  "data": {
+    "rows": [
+      { "user_id": "…", "budget_account_id": 1, "unlinked_count": 42 }
+    ],
+    "total_unlinked": 42
+  },
+  "meta": { }
+}
+```
+
 ## Normalization
 
 Shared helper: `src/lib/merchant-pattern-normalize.ts`  
-SQL twin: `normalize_merchant_pattern()` (migrations `122_…`, `123_…`, `124_…`).
+SQL twin: `normalize_merchant_pattern()` (migrations `122_…`–`125_…`).
 
-Also used by `normalizeMerchantName` / `extractDisplayName` so fallback per-user group names stay clean (`Aldi`, not `Aldi Batavia Il`).
+Also used by `normalizeMerchantName` / `extractDisplayName` / `resolveMerchantDisplayName` so fallback names stay clean (`Aldi`, not `Aldi Batavia Il`; `Spill The Beans`, not raw `SPILL THE BEANS R1 GREENVILLE SC`).
 
 Example:
 
@@ -473,6 +516,7 @@ Example:
 | `TST* TROPICAL GRILLE WADE 864-334-5163 SC` | `tropical grille` |
 | `Amazon MKTPL*AB12CD34` | `amazon` |
 | `STORE TRAVELERS RESSC` | `store` |
+| `SPILL THE BEANS R1 GREENVILLE SC` | `spill the beans` |
 
 New transaction descriptions that normalize to an already-mapped pattern inherit that global merchant (import lookup registers the raw pattern; sync re-links matching per-user groups).
 
@@ -492,6 +536,8 @@ Run migrations:
 
 - `migrations/122_add_admin_api_keys_and_merchant_agent.sql`
 - `migrations/123_improve_merchant_normalize_and_cleanup.sql`
+- `migrations/124_fix_cleanup_rpc_and_normalize_gaps.sql`
+- `migrations/125_backfill_unlinked_and_register_codes.sql`
 
 Optional env (no new required secrets for the API itself — keys live in the DB):
 

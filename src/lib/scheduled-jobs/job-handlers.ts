@@ -400,6 +400,48 @@ export async function handleSuggestMerchantGroupings(): Promise<JobResult> {
 }
 
 /**
+ * Handler for backfill_unlinked_merchants job
+ * Pages through transactions with no merchant group and links them (weekly).
+ */
+export async function handleBackfillUnlinkedMerchants(): Promise<JobResult> {
+  try {
+    const { backfillUnlinkedMerchantTransactions } = await import(
+      '@/lib/db/backfill-unlinked-merchants'
+    );
+
+    // Multiple pages per cron tick, stay well under Vercel 300s
+    const MAX_PAGES = 10;
+    const PAGE_SIZE = 200;
+    let cursor: number | null = 0;
+    let scanned = 0;
+    let linkedGlobal = 0;
+    let fallbackCreated = 0;
+    let stillUnlinked = 0;
+
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const result = await backfillUnlinkedMerchantTransactions({
+        limit: PAGE_SIZE,
+        cursor,
+      });
+      scanned += result.scanned;
+      linkedGlobal += result.linked_global;
+      fallbackCreated += result.fallback_created;
+      stillUnlinked += result.still_unlinked;
+      if (!result.next_cursor || result.scanned === 0) break;
+      cursor = result.next_cursor;
+    }
+
+    return {
+      success: true,
+      message: `Backfill scanned ${scanned}: linked_global=${linkedGlobal}, fallback_created=${fallbackCreated}, still_unlinked=${stillUnlinked}`,
+    };
+  } catch (error: any) {
+    console.error('Error in backfill_unlinked_merchants job:', error);
+    return { success: false, error: error.message || 'Job failed' };
+  }
+}
+
+/**
  * Handler for cleanup_empty_merchant_groups job
  * Set-based delete of empty unlinked per-user merchant groups (weekly).
  */
@@ -502,6 +544,8 @@ export function getJobHandler(jobType: string): (() => Promise<JobResult>) | nul
       return handleCheckTrialPeriods;
     case 'suggest_merchant_groupings':
       return handleSuggestMerchantGroupings;
+    case 'backfill_unlinked_merchants':
+      return handleBackfillUnlinkedMerchants;
     case 'cleanup_empty_merchant_groups':
       return handleCleanupEmptyMerchantGroups;
     case 'cleanup_api_key_logs':

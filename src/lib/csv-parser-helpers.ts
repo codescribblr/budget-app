@@ -650,8 +650,9 @@ export async function processTransactions(
     withinFileDuplicates
   );
 
-  // Step 3: Link merchants only for non-duplicate transactions (needed before categorization)
-  if (runCategorization && nonDuplicateIndices.length > 0) {
+  // Step 3: Link merchants for non-duplicate transactions (independent of categorization).
+  // Must run even when categorization is skipped/already complete so imports still get groups.
+  if (nonDuplicateIndices.length > 0) {
     if (progressCallback) progressCallback(55, 'Linking merchants to global merchants...');
     const { uniqueValues: uniqueDescriptions } = getUniqueValuesWithIndexMap(
       nonDuplicateIndices,

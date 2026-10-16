@@ -1028,4 +1028,143 @@ export async function getOrCreateMerchantGroup(
   return { group: newGroup, isNew: true, confidence: 1.0 };
 }
 
+const IMPORT_GROUP_CONCURRENCY = 5;
+const IMPORT_GROUP_RETRIES = 3;
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+
+  async function worker() {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * Resolve merchant_group_id for each description during import.
+ * Groups by normalized form, creates groups with bounded concurrency + retries,
+ * and never returns null (throws if a group cannot be created).
+ */
+export async function resolveMerchantGroupIdsForImport(
+  descriptions: string[]
+): Promise<number[]> {
+  if (descriptions.length === 0) return [];
+
+  const { normalizeGlobalMerchantPattern } = await import(
+    '@/lib/merchant-pattern-normalize'
+  );
+  const { normalizeMerchantName } = await import('@/lib/merchant-grouping');
+
+  type Bucket = { indices: number[]; rawDescriptions: string[] };
+  const buckets = new Map<string, Bucket>();
+
+  descriptions.forEach((description, index) => {
+    const raw = description || '';
+    const norm =
+      normalizeGlobalMerchantPattern(raw) ||
+      raw.toLowerCase().trim() ||
+      `__empty_${index}`;
+    const existing = buckets.get(norm);
+    if (existing) {
+      existing.indices.push(index);
+      if (!existing.rawDescriptions.includes(raw)) {
+        existing.rawDescriptions.push(raw);
+      }
+    } else {
+      buckets.set(norm, { indices: [index], rawDescriptions: [raw] });
+    }
+  });
+
+  const groupIdByNorm = new Map<string, number>();
+  const bucketEntries = Array.from(buckets.entries());
+
+  await mapWithConcurrency(bucketEntries, IMPORT_GROUP_CONCURRENCY, async ([norm, bucket]) => {
+    const representative =
+      bucket.rawDescriptions.find((d) => d.trim().length > 0) ||
+      bucket.rawDescriptions[0] ||
+      norm;
+
+    let lastError: unknown;
+    for (let attempt = 0; attempt < IMPORT_GROUP_RETRIES; attempt++) {
+      try {
+        const result = await getOrCreateMerchantGroup(representative, true);
+        const groupId = result.group?.id;
+        if (!groupId) {
+          throw new Error(`No merchant group returned for "${representative}"`);
+        }
+
+        // Ensure sibling raw descriptors map to the same group
+        for (const raw of bucket.rawDescriptions) {
+          if (!raw || raw === representative) continue;
+          const existingMapping = await getMerchantMappingByPattern(raw);
+          if (!existingMapping) {
+            await createMerchantMapping(
+              raw,
+              normalizeMerchantName(raw) || norm.toUpperCase(),
+              groupId,
+              true,
+              1.0
+            );
+          } else if (
+            existingMapping.merchant_group_id == null ||
+            existingMapping.merchant_group_id !== groupId
+          ) {
+            // Prefer linking automatic/null mappings onto the shared import group
+            if (existingMapping.is_automatic || existingMapping.merchant_group_id == null) {
+              await updateMerchantMapping(existingMapping.id, {
+                merchant_group_id: groupId,
+              });
+            }
+          }
+          if (result.group?.global_merchant_id) {
+            await ensureGlobalPatternMapped(raw, result.group.global_merchant_id);
+          }
+        }
+
+        groupIdByNorm.set(norm, groupId);
+        return;
+      } catch (error) {
+        lastError = error;
+        console.error(
+          `Merchant group resolve attempt ${attempt + 1}/${IMPORT_GROUP_RETRIES} failed for "${representative}":`,
+          error
+        );
+        await sleep(40 * (attempt + 1));
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`Failed to resolve merchant group for "${representative}"`);
+  });
+
+  return descriptions.map((description, index) => {
+    const raw = description || '';
+    const norm =
+      normalizeGlobalMerchantPattern(raw) ||
+      raw.toLowerCase().trim() ||
+      `__empty_${index}`;
+    const groupId = groupIdByNorm.get(norm);
+    if (groupId == null) {
+      throw new Error(`Missing resolved merchant group for description index ${index}`);
+    }
+    return groupId;
+  });
+}
+
 

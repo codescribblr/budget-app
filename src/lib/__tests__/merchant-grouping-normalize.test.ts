@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { extractDisplayName, normalizeMerchantName } from '../merchant-grouping';
+import {
+  extractDisplayName,
+  normalizeMerchantName,
+  resolveMerchantDisplayName,
+} from '../merchant-grouping';
 
 describe('normalizeMerchantName / extractDisplayName', () => {
   it('collapses location and store-number variants to clean brands', () => {
@@ -11,5 +15,16 @@ describe('normalizeMerchantName / extractDisplayName', () => {
     expect(extractDisplayName('Aldi Greenville Sc')).toBe('Aldi');
     expect(extractDisplayName('TARGET T-1182')).toBe('Target');
     expect(extractDisplayName('BURGER KING #17020 Q07 TAYLORS SC')).toBe('Burger King');
+    expect(extractDisplayName('SPILL THE BEANS R1 GREENVILLE SC')).toBe('Spill The Beans');
+  });
+
+  it('resolveMerchantDisplayName prefers candidates then cleaned fallback', () => {
+    expect(resolveMerchantDisplayName('SPILL THE BEANS R1 GREENVILLE SC', 'Spill The Beans')).toBe(
+      'Spill The Beans'
+    );
+    expect(resolveMerchantDisplayName('SPILL THE BEANS R1 GREENVILLE SC', null, '')).toBe(
+      'Spill The Beans'
+    );
+    expect(resolveMerchantDisplayName('SPILL THE BEANS R1 GREENVILLE SC')).toBe('Spill The Beans');
   });
 });
