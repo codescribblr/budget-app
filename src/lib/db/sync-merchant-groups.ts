@@ -1,17 +1,18 @@
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { cleanupEmptyMerchantGroups } from '@/lib/db/cleanup-empty-merchant-groups';
 
 export type SyncTransactionsForPatternsResult = {
   transactionsUpdated: number;
   groupsCreated: number;
   groupsRelinked: number;
-  groupsCleaned: number;
 };
 
 /**
  * Sync transactions with global merchant patterns
  * When patterns are grouped under a global merchant, update all matching transactions.
  * Uses the service-role client so admin/API-key flows can update every affected user.
+ *
+ * Note: empty merchant-group cleanup is intentionally NOT run here — it is a
+ * set-based weekly/admin job (see cleanup_empty_merchant_groups RPC).
  */
 export async function syncTransactionsForPatterns(
   patternIds: number[],
@@ -22,7 +23,6 @@ export async function syncTransactionsForPatterns(
     transactionsUpdated: 0,
     groupsCreated: 0,
     groupsRelinked: 0,
-    groupsCleaned: 0,
   };
 
   // Get the global merchant details
@@ -138,20 +138,10 @@ export async function syncTransactionsForPatterns(
     normalizedPatternSet
   );
 
-  // Clean up empty location-split orphans left behind after merges
-  let groupsCleaned = 0;
-  try {
-    const cleanup = await cleanupEmptyMerchantGroups({ limit: 2000 });
-    groupsCleaned = cleanup.deleted;
-  } catch (cleanupErr) {
-    console.error('Error cleaning empty merchant groups after sync:', cleanupErr);
-  }
-
   return {
     transactionsUpdated,
     groupsCreated,
     groupsRelinked,
-    groupsCleaned,
   };
 }
 

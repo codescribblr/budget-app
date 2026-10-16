@@ -24,7 +24,9 @@ export async function listUngroupedPatterns(options: {
       { count: 'exact' }
     )
     .is('global_merchant_id', null)
+    // Stable tiebreaker so offset pages do not reshuffle / repeat rows
     .order('usage_count', { ascending: false })
+    .order('id', { ascending: true })
     .range(options.offset, options.offset + options.limit - 1);
 
   if (options.minUsage != null && options.minUsage > 0) {

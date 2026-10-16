@@ -435,23 +435,20 @@ Same optional override fields as single approve (`global_merchant_id`, `display_
 
 ### Cleanup empty merchant groups
 
-Deletes unlinked (`global_merchant_id IS NULL`) per-user groups with no transactions, mappings, category rules, or recurring refs. Never deletes groups linked to a global merchant.
+Set-based SQL delete of unlinked (`global_merchant_id IS NULL`) per-user groups with no transactions, mappings, category rules, or recurring refs. Never deletes groups linked to a global merchant. Also runs weekly via the `cleanup_empty_merchant_groups` scheduled job. **Not** invoked from pattern sync (that path was causing 504s).
 
 ```http
 POST /api/admin/v1/merchants/cleanup-empty-groups
 Content-Type: application/json
 
-{ "limit": 5000 }
+{ "user_id": "optional-uuid-to-scope" }
 ```
 
 ```json
 {
   "data": {
-    "scanned": 120,
     "deleted": 45,
-    "skipped_linked_global": 0,
-    "skipped_referenced": 75,
-    "deleted_ids": [101, 102]
+    "user_id": null
   },
   "meta": { }
 }
@@ -460,7 +457,7 @@ Content-Type: application/json
 ## Normalization
 
 Shared helper: `src/lib/merchant-pattern-normalize.ts`  
-SQL twin: `normalize_merchant_pattern()` (migrations `122_…`, `123_…`).
+SQL twin: `normalize_merchant_pattern()` (migrations `122_…`, `123_…`, `124_…`).
 
 Also used by `normalizeMerchantName` / `extractDisplayName` so fallback per-user group names stay clean (`Aldi`, not `Aldi Batavia Il`).
 
@@ -473,6 +470,9 @@ Example:
 | `ALDI INC BATAVIA IL` | `aldi` |
 | `TARGET T-1182` | `target` |
 | `BURGER KING #17020 Q07 TAYLORS SC` | `burger king` |
+| `TST* TROPICAL GRILLE WADE 864-334-5163 SC` | `tropical grille` |
+| `Amazon MKTPL*AB12CD34` | `amazon` |
+| `STORE TRAVELERS RESSC` | `store` |
 
 New transaction descriptions that normalize to an already-mapped pattern inherit that global merchant (import lookup registers the raw pattern; sync re-links matching per-user groups).
 
