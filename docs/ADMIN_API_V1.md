@@ -433,10 +433,36 @@ Same optional override fields as single approve (`global_merchant_id`, `display_
 }
 ```
 
+### Cleanup empty merchant groups
+
+Deletes unlinked (`global_merchant_id IS NULL`) per-user groups with no transactions, mappings, category rules, or recurring refs. Never deletes groups linked to a global merchant.
+
+```http
+POST /api/admin/v1/merchants/cleanup-empty-groups
+Content-Type: application/json
+
+{ "limit": 5000 }
+```
+
+```json
+{
+  "data": {
+    "scanned": 120,
+    "deleted": 45,
+    "skipped_linked_global": 0,
+    "skipped_referenced": 75,
+    "deleted_ids": [101, 102]
+  },
+  "meta": { }
+}
+```
+
 ## Normalization
 
 Shared helper: `src/lib/merchant-pattern-normalize.ts`  
-SQL twin: `normalize_merchant_pattern()` in migration `122_…`.
+SQL twin: `normalize_merchant_pattern()` (migrations `122_…`, `123_…`).
+
+Also used by `normalizeMerchantName` / `extractDisplayName` so fallback per-user group names stay clean (`Aldi`, not `Aldi Batavia Il`).
 
 Example:
 
@@ -444,8 +470,11 @@ Example:
 |-----|------------|
 | `SP BRIDGE CITY CO 01/14 PURCHASE GREENVILLE SC` | `bridge city co` |
 | `SQ *BRIDGE CITY COFFEE` | `bridge city coffee` |
+| `ALDI INC BATAVIA IL` | `aldi` |
+| `TARGET T-1182` | `target` |
+| `BURGER KING #17020 Q07 TAYLORS SC` | `burger king` |
 
-New transaction descriptions that normalize to an already-mapped pattern inherit that global merchant (trigger + import lookup).
+New transaction descriptions that normalize to an already-mapped pattern inherit that global merchant (import lookup registers the raw pattern; sync re-links matching per-user groups).
 
 ## Disabling the weekly Gemini job
 
@@ -459,9 +488,10 @@ GEMINI_MERCHANT_SUGGESTIONS_ENABLED=false
 
 ## Migrations & env
 
-Run migration:
+Run migrations:
 
 - `migrations/122_add_admin_api_keys_and_merchant_agent.sql`
+- `migrations/123_improve_merchant_normalize_and_cleanup.sql`
 
 Optional env (no new required secrets for the API itself — keys live in the DB):
 

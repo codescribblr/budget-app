@@ -1,44 +1,19 @@
 /**
  * Merchant Grouping Utilities
- * 
+ *
  * This module provides functions for normalizing merchant names,
  * calculating similarity scores, and grouping merchants intelligently.
  */
 
+import { normalizeGlobalMerchantPattern } from '@/lib/merchant-pattern-normalize';
+
 /**
- * Normalize a merchant description by removing noise and standardizing format
+ * Normalize a merchant description by removing noise and standardizing format.
+ * Uses the shared global normalizer (dates, store numbers, city/state, INC, etc.)
+ * and returns UPPERCASE for compatibility with existing merchant_mappings rows.
  */
 export function normalizeMerchantName(description: string): string {
-  let normalized = description.toUpperCase().trim();
-
-  // Remove common date patterns (YYMMDD, MMDDYY, etc.)
-  normalized = normalized.replace(/\b\d{6}\b/g, '');
-  
-  // Remove common transaction ID patterns (long sequences of digits)
-  normalized = normalized.replace(/\b\d{8,}\b/g, '');
-  
-  // Remove common noise words and patterns
-  const noiseWords = [
-    'ACH', 'PMT', 'PAYMENT', 'TXN', 'TRANSACTION',
-    'DEBIT', 'CREDIT', 'PURCHASE', 'POS',
-    'ONLINE', 'WEB', 'MOBILE', 'APP',
-    'INC', 'LLC', 'LTD', 'CORP', 'CO',
-  ];
-
-  noiseWords.forEach(word => {
-    // Escape special regex characters in the word
-    const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`\\b${escapedWord}\\b`, 'g');
-    normalized = normalized.replace(regex, '');
-  });
-
-  // Remove special characters except spaces
-  normalized = normalized.replace(/[^A-Z0-9\s]/g, ' ');
-  
-  // Normalize whitespace (multiple spaces to single space)
-  normalized = normalized.replace(/\s+/g, ' ').trim();
-  
-  return normalized;
+  return normalizeGlobalMerchantPattern(description).toUpperCase();
 }
 
 /**
@@ -106,26 +81,26 @@ export function jaroWinklerSimilarity(s1: string, s2: string): number {
  * This tries to find the most meaningful part of the description
  */
 export function extractDisplayName(description: string): string {
-  // Start with normalized version
-  let displayName = normalizeMerchantName(description);
-  
+  // Shared normalizer drops city/state, store numbers, INC, etc. → clean brand name
+  let displayName = normalizeGlobalMerchantPattern(description);
+
   // If empty after normalization, use original
   if (!displayName) {
     displayName = description.trim();
   }
-  
+
   // Convert to title case for better readability
   displayName = displayName
     .toLowerCase()
     .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
-  
+
   // Limit length
   if (displayName.length > 50) {
     displayName = displayName.substring(0, 50).trim() + '...';
   }
-  
+
   return displayName;
 }
 
