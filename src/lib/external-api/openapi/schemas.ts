@@ -243,6 +243,11 @@ export const OPENAPI_COMPONENT_SCHEMAS: Record<string, Record<string, unknown>> 
       amount: { type: 'number', description: 'Alias used on create; stored as total_amount' },
       transaction_type: { type: 'string', enum: ['income', 'expense'] },
       merchant: { type: 'string', nullable: true },
+      merchant_name: {
+        type: 'string',
+        description:
+          'Resolved display name (override → global → group → cleaned description fallback)',
+      },
       merchant_group_id: { type: 'integer', nullable: true },
       merchant_override_id: { type: 'integer', nullable: true },
       account_id: { type: 'integer', nullable: true },

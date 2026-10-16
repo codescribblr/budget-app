@@ -5,6 +5,7 @@ import { aiRateLimiter } from '@/lib/ai/rate-limiter';
 import { geminiService } from '@/lib/ai/gemini-service';
 import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
 import { createClient } from '@/lib/supabase/server';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 /**
  * POST /api/ai/insights
@@ -405,7 +406,17 @@ export async function POST(request: NextRequest) {
         : t.credit_card_id 
           ? (t.credit_cards as any)?.name || 'Unknown Credit Card'
           : 'Unknown';
-      const merchantName = (t.merchant_groups as any)?.display_name || t.description || 'Unknown';
+      const groups = t.merchant_groups as any;
+      const gm = groups?.global_merchants
+        ? Array.isArray(groups.global_merchants)
+          ? groups.global_merchants[0]
+          : groups.global_merchants
+        : null;
+      const merchantName = resolveMerchantDisplayName(
+        t.description,
+        gm?.status === 'active' ? gm?.display_name : null,
+        groups?.display_name
+      );
       const splits = splitsByTransaction.get(t.id) || [];
       const userSplits = userSplitsOnly(splits);
       const category = userSplits.length > 0 ? userSplits[0].category_name : 'Uncategorized';

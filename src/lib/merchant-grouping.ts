@@ -84,9 +84,22 @@ export function extractDisplayName(description: string): string {
   // Shared normalizer drops city/state, store numbers, INC, etc. → clean brand name
   let displayName = normalizeGlobalMerchantPattern(description);
 
-  // If empty after normalization, use original
+  // If empty after full normalize, apply a light structural cleanup (don't show raw bank text)
   if (!displayName) {
-    displayName = description.trim();
+    displayName = description
+      .toUpperCase()
+      .replace(/\bAUTHORIZED\s+ON\b.*$/g, ' ')
+      .replace(/\bSIG\s*ON\s*FILE\b/g, ' ')
+      .replace(/\bSIGONFILE\b/g, ' ')
+      .replace(/\bREF(?:ERENCE)?\s*#?\s*[A-Z0-9-]+\b/g, ' ')
+      .replace(/\b(TO|FROM|INDN)\s+[A-Z][A-Z .'-]{1,60}$/g, ' ')
+      .replace(/[^A-Z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+    if (!displayName) {
+      displayName = description.trim();
+    }
   }
 
   // Convert to title case for better readability

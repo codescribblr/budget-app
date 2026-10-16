@@ -36,6 +36,7 @@ import {
 } from '@/lib/transaction-categories';
 import { toast } from 'sonner';
 import { Edit, MoreVertical, Trash2 } from 'lucide-react';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 interface CategoryTransactionListProps {
   transactions: TransactionWithSplits[];
@@ -628,12 +629,18 @@ export default function CategoryTransactionList({
                     </div>
                   </div>
 
-                  {transaction.merchant_name && (
-                    <div className="text-xs">
-                      <span className="text-muted-foreground">Merchant: </span>
-                      <span>{transaction.merchant_name}</span>
-                    </div>
-                  )}
+                  {(() => {
+                    const merchantLabel = resolveMerchantDisplayName(
+                      transaction.description,
+                      transaction.merchant_name
+                    );
+                    return merchantLabel ? (
+                      <div className="text-xs">
+                        <span className="text-muted-foreground">Merchant: </span>
+                        <span>{merchantLabel}</span>
+                      </div>
+                    ) : null;
+                  })()}
 
                   <div
                     className={editable ? 'cursor-pointer' : undefined}
@@ -713,13 +720,19 @@ export default function CategoryTransactionList({
                         {transaction.description}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
-                        {transaction.merchant_name ? (
-                          <Badge variant="outline" className="text-xs max-w-[120px] truncate" title={transaction.merchant_name}>
-                            {transaction.merchant_name}
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                        {(() => {
+                          const merchantLabel = resolveMerchantDisplayName(
+                            transaction.description,
+                            transaction.merchant_name
+                          );
+                          return merchantLabel ? (
+                            <Badge variant="outline" className="text-xs max-w-[120px] truncate" title={merchantLabel}>
+                              {merchantLabel}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell
                         className={editable ? 'cursor-pointer hover:bg-muted/50' : undefined}

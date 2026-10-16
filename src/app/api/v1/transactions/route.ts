@@ -11,6 +11,10 @@ import {
   categoryBalanceChange,
 } from '@/lib/external-api/create-transaction';
 import { logBalanceChange } from '@/lib/audit/category-balance-audit';
+import {
+  TRANSACTION_MERCHANT_SELECT,
+  withResolvedMerchantName,
+} from '@/lib/external-api/merchant-name';
 
 export const GET = withExternalApi('transactions', async (request, context) => {
   const supabase = getExternalDb();
@@ -21,7 +25,7 @@ export const GET = withExternalApi('transactions', async (request, context) => {
 
   let query = supabase
     .from('transactions')
-    .select('*, transaction_splits(*)', { count: 'exact' })
+    .select(TRANSACTION_MERCHANT_SELECT, { count: 'exact' })
     .eq('budget_account_id', context.budgetAccountId);
 
   if (startDate) query = query.gte('date', startDate);
@@ -41,8 +45,10 @@ export const GET = withExternalApi('transactions', async (request, context) => {
 
   if (error) throw error;
 
+  const rows = (data ?? []).map((row) => withResolvedMerchantName(row as Record<string, unknown>));
+
   return NextResponse.json({
-    ...externalApiData(data ?? [], context),
+    ...externalApiData(rows, context),
     meta: {
       account_id: context.budgetAccountId,
       api_key_id: context.apiKeyId,

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import type { TagRule } from '@/lib/types';
 import { getActiveAccountId } from '@/lib/account-context';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 /**
  * Get all tag rules for the current account
@@ -188,7 +189,10 @@ export async function applyTagRulesToTransaction(transactionId: number): Promise
         break;
 
       case 'merchant':
-        const merchantName = (transaction.merchant_groups as any)?.display_name?.toLowerCase() || '';
+        const merchantName = resolveMerchantDisplayName(
+          transaction.description,
+          (transaction.merchant_groups as any)?.display_name
+        ).toLowerCase();
         matches = merchantName.includes(rule.rule_value.toLowerCase());
         break;
 

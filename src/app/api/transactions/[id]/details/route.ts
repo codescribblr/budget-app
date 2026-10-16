@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 export async function GET(
   request: Request,
@@ -32,10 +33,17 @@ export async function GET(
           display_name,
           global_merchant_id,
           global_merchants (
+            display_name,
             logo_url,
             icon_name,
             status
           )
+        ),
+        merchant_override:global_merchants!merchant_override_id (
+          display_name,
+          logo_url,
+          icon_name,
+          status
         ),
         accounts (
           name,
@@ -100,14 +108,24 @@ export async function GET(
 
     // Extract global merchant info
     const merchantGroups = (transaction as any).merchant_groups;
-    const globalMerchant = merchantGroups?.global_merchants
+    const overrideMerchant = (transaction as any).merchant_override;
+    const linkedGlobal = merchantGroups?.global_merchants
       ? (Array.isArray(merchantGroups.global_merchants)
           ? merchantGroups.global_merchants[0]
           : merchantGroups.global_merchants)
       : null;
-    const globalMerchantInfo = globalMerchant && globalMerchant.status === 'active'
-      ? { logo_url: globalMerchant.logo_url || null, icon_name: globalMerchant.icon_name || null }
-      : null;
+    const globalMerchant =
+      overrideMerchant && overrideMerchant.status === 'active'
+        ? overrideMerchant
+        : linkedGlobal && linkedGlobal.status === 'active'
+          ? linkedGlobal
+          : null;
+    const merchantName = resolveMerchantDisplayName(
+      transaction.description,
+      overrideMerchant?.display_name,
+      globalMerchant?.display_name,
+      merchantGroups?.display_name
+    );
 
     // Format the response
     const response = {
@@ -118,9 +136,9 @@ export async function GET(
         total_amount: transaction.total_amount,
         transaction_type: transaction.transaction_type || 'expense',
         merchant_group_id: transaction.merchant_group_id,
-        merchant_name: merchantGroups?.display_name || null,
-        merchant_logo_url: globalMerchantInfo?.logo_url || null,
-        merchant_icon_name: globalMerchantInfo?.icon_name || null,
+        merchant_name: merchantName,
+        merchant_logo_url: globalMerchant?.logo_url || null,
+        merchant_icon_name: globalMerchant?.icon_name || null,
         account_id: transaction.account_id,
         account_name: (transaction as any).accounts?.name || null,
         account_type: (transaction as any).accounts?.account_type || null,

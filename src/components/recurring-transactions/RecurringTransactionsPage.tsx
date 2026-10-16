@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
 
 interface FilterSegmentProps {
@@ -832,7 +833,12 @@ export default function RecurringTransactionsPage() {
                             : (txn.description || '—')}
                         </div>
                       </TableCell>
-                      <TableCell>{(txn.merchant_groups as any)?.display_name || '—'}</TableCell>
+                      <TableCell>
+                        {resolveMerchantDisplayName(
+                          txn.description || '',
+                          (txn.merchant_groups as any)?.display_name
+                        ) || '—'}
+                      </TableCell>
                       <TableCell className="text-right">
                         <span className={txn.transaction_type === 'expense' ? 'text-red-600' : 'text-green-600'}>
                           {txn.transaction_type === 'expense' ? '-' : '+'}
