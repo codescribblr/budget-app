@@ -1,3 +1,5 @@
+import { descriptionsMatchForDuplicate } from '@/lib/duplicate-matching';
+
 export type ExistingImportedRecord = {
   id: number;
   hash: string;
@@ -6,6 +8,13 @@ export type ExistingImportedRecord = {
 
 export type ExistingImportLink = {
   imported_transaction_id: number;
+};
+
+export type LinkedTransactionForImport = {
+  date: string;
+  description: string;
+  total_amount: number;
+  merchantName?: string | null;
 };
 
 export type ImportHashResolution = {
@@ -43,6 +52,34 @@ export function resolveImportedHashes(
   }
 
   return { fullyImportedHashes, orphanedHashes, hashToImportedId };
+}
+
+/**
+ * A previous import of this exact row only blocks a new import when the linked
+ * transaction is still that charge. Merging it into a nearby purchase leaves
+ * the hash attached to a different date or merchant.
+ */
+export function linkedTransactionMatchesImport(
+  linked: LinkedTransactionForImport,
+  incoming: { date: string; description: string; amount: number; merchant?: string | null }
+): boolean {
+  const linkedDate = linked.date.slice(0, 10);
+  const incomingDate = incoming.date.trim().slice(0, 10);
+  if (linkedDate !== incomingDate) return false;
+
+  const expectedAmount = Math.abs(Number(incoming.amount) || 0);
+  if (Math.abs(Number(linked.total_amount) - expectedAmount) >= 0.01) return false;
+
+  return descriptionsMatchForDuplicate(
+    {
+      description: linked.description,
+      merchantName: linked.merchantName,
+    },
+    {
+      description: incoming.description,
+      merchant: incoming.merchant,
+    }
+  );
 }
 
 export type RetryTransactionCandidate = {
