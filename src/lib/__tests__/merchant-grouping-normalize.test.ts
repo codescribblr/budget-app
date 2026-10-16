@@ -30,5 +30,7 @@ describe('normalizeMerchantName / extractDisplayName', () => {
       'Online Transfer'
     );
     expect(resolveMerchantDisplayName('SHELL OIL SIGONFILE')).toBe('Shell Oil');
+    expect(resolveMerchantDisplayName('WALMART.COM BENTONVILLE AR')).toBe('Walmart');
+    expect(resolveMerchantDisplayName("PAPA JOHN'S #0545 864-627-7272 SC")).toBe('Papa Johns');
   });
 });

@@ -4,7 +4,7 @@
  * bank strings collapse to the same key (e.g. Aldi, Target, Bridge City Coffee).
  *
  * Keep in sync with SQL normalize_merchant_pattern() in
- * migrations/126_normalize_sigonfile_and_transfer_tails.sql
+ * migrations/127_pattern_sync_and_brand_tld_normalize.sql
  */
 
 const US_STATE_CODES = new Set([
@@ -24,6 +24,8 @@ const NOISE_WORDS = new Set([
   'ONLINE', 'WEB', 'MOBILE', 'APP', 'ACH', 'CHECKCARD', 'RECURRING', 'AUTOPAY',
   'WITHDRAWAL', 'DEPOSIT', 'TRANSFER', 'INC', 'LLC', 'LTD', 'CORP',
   'PPD', 'CCD', 'TEL', 'SIGONFILE', 'ONFILE', 'AUTHORIZED', 'AUTHORIZATION',
+  // Leftover TLD tokens if ".COM" was spaced somehow
+  'COM', 'NET', 'ORG',
 ]);
 // Note: bare "CO" is not a noise word — it often means Coffee / company in merchant names.
 
@@ -53,6 +55,7 @@ const PROTECTED_BRAND_TAILS = new Set([
   'STUDIO', 'GYM', 'FITNESS', 'HOTEL', 'INN', 'SUITES', 'PHARMACY', 'SUPERMARKET',
   'WHOLESALE', 'OUTLET', 'THEATER', 'THEATRE', 'CINEMA', 'DINER', 'BISTRO',
   'BREWERY', 'TAPROOM', 'ROASTERS', 'ROASTER',
+  'JOHNS', // Papa Johns — don't eat as city before state
 ]);
 
 /**
@@ -135,12 +138,18 @@ export function normalizeGlobalMerchantPattern(description: string): string {
   result = result.replace(/\bAIRBNB\s+[GM]-[A-Z0-9]+\b/g, 'AIRBNB');
   result = result.replace(/\bST-[A-Z0-9]+\b/g, ' ');
 
+  // Brand TLD suffixes: WALMART.COM → WALMART (before non-alnum strip)
+  result = result.replace(/\.(COM|NET|ORG|IO|CO|US)\b/g, ' ');
+
+  // Apostrophes: PAPA JOHN'S → PAPA JOHNS (join, don't space-split)
+  result = result.replace(/[''`´]/g, '');
+
   // Dates: ISO first, then MM/DD, then 6-digit tokens
   result = result.replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ');
   result = result.replace(/(?<!\d)\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?(?!\d)/g, ' ');
   result = result.replace(/\b\d{6}\b/g, ' ');
 
-  // Store / terminal / register codes: T-1182, F4798, Q07, R1, T1, #17020, SK1668, 110-T001, 0101 0011
+  // Store / terminal / register codes: T-1182, F4798, Q07, R1, T1, #0545, #17020, SK1668, 110-T001, 0101 0011
   result = result.replace(/\b\d{2,4}-[A-Z]\d{2,}\b/g, ' ');
   result = result.replace(/\b[A-Z]{1,3}\d{3,}\b/g, ' ');
   result = result.replace(/\b[A-Z]-\d{2,}\b/g, ' ');
@@ -148,11 +157,11 @@ export function normalizeGlobalMerchantPattern(description: string): string {
   // Letter + single digit register/terminal (R1, R2, T1) — before city/state strip
   result = result.replace(/\b[A-Z]\d\b/g, ' ');
   result = result.replace(/#\d+\b/g, ' ');
-  result = result.replace(/\b#?\d{5,}\b/g, ' ');
+  result = result.replace(/\b#?\d{4,}\b/g, ' '); // include 4-digit store #s like 0545
   result = result.replace(/\b\d{4}\s+\d{4}\b/g, ' ');
   result = result.replace(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, ' ');
 
-  // Strip non-alphanumeric except spaces
+  // Strip remaining non-alphanumeric except spaces
   result = result.replace(/[^A-Z0-9\s]/g, ' ');
   result = result.replace(/\s+/g, ' ').trim();
 
