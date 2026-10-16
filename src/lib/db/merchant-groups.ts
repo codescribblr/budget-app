@@ -640,8 +640,9 @@ async function getGlobalMerchantForDescription(
 ): Promise<{ id: number; display_name: string; logo_url: string | null; icon_name: string | null } | null> {
   const supabase = await createClient();
 
-  // Normalize the description (same logic as global merchant patterns)
-  const normalized = description.toLowerCase().trim().replace(/\s+/g, ' ');
+  const { normalizeGlobalMerchantPattern } = await import('@/lib/merchant-pattern-normalize');
+  // Stronger shared normalizer (dates, processor prefixes, city/state, etc.)
+  const normalized = normalizeGlobalMerchantPattern(description);
 
   // Check for exact pattern match first
   const { data: patternMatch, error: patternError } = await supabase
@@ -659,22 +660,22 @@ async function getGlobalMerchantForDescription(
   let merchantId: number | null = null;
   if (patternMatch?.global_merchant_id) {
     merchantId = patternMatch.global_merchant_id;
-  } else {
-    // Check normalized pattern match
-    const { data: normalizedMatch, error: normalizedError } = await supabase
+  } else if (normalized) {
+    // Match any mapped pattern that shares the same normalized form
+    const { data: normalizedMatches, error: normalizedError } = await supabase
       .from('global_merchant_patterns')
       .select('global_merchant_id')
       .eq('normalized_pattern', normalized)
       .not('global_merchant_id', 'is', null)
-      .maybeSingle();
+      .limit(1);
 
     if (normalizedError && normalizedError.code !== 'PGRST116') {
       console.error('Error checking normalized global merchant pattern:', normalizedError);
       return null;
     }
 
-    if (normalizedMatch?.global_merchant_id) {
-      merchantId = normalizedMatch.global_merchant_id;
+    if (normalizedMatches?.[0]?.global_merchant_id) {
+      merchantId = normalizedMatches[0].global_merchant_id;
     }
   }
 

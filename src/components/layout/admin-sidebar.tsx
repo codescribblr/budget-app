@@ -13,6 +13,7 @@ import {
   Users,
   BookOpen,
   Sparkles,
+  KeyRound,
 } from "lucide-react"
 
 import {
@@ -38,6 +39,7 @@ const adminNavigationItems = [
   { label: "Help Feedback", path: "/admin/help-feedback", icon: BookOpen },
   { label: "New Look Feedback", path: "/admin/interface-feedback", icon: BookOpen },
   { label: "Notifications", path: "/admin/notifications", icon: Bell },
+  { label: "API Keys", path: "/admin/api-keys", icon: KeyRound },
   { label: "Settings", path: "/admin/settings", icon: Settings },
 ]
 

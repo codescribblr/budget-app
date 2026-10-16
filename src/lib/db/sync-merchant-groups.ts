@@ -1,15 +1,15 @@
-import { createClient } from '@/lib/supabase/server';
-import { getActiveAccountId } from '@/lib/account-context';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 /**
  * Sync transactions with global merchant patterns
- * When patterns are grouped under a global merchant, update all matching transactions
+ * When patterns are grouped under a global merchant, update all matching transactions.
+ * Uses the service-role client so admin/API-key flows can update every affected user.
  */
 export async function syncTransactionsForPatterns(
   patternIds: number[],
   globalMerchantId: number
 ): Promise<{ transactionsUpdated: number; groupsCreated: number }> {
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   
   // Get the global merchant details
   const { data: globalMerchant, error: merchantError } = await supabase
@@ -51,11 +51,15 @@ export async function syncTransactionsForPatterns(
     return { transactionsUpdated: 0, groupsCreated: 0 };
   }
 
+  const { normalizeGlobalMerchantPattern } = await import(
+    '@/lib/merchant-pattern-normalize'
+  );
+
   // Filter transactions that match patterns (exact or normalized)
-  const matchingTransactions = (allTransactions || []).filter(tx => {
+  const matchingTransactions = (allTransactions || []).filter((tx) => {
     if (patternSet.has(tx.description)) return true;
-    const normalized = tx.description.toLowerCase().trim().replace(/\s+/g, ' ');
-    return normalizedPatternSet.has(normalized);
+    const normalized = normalizeGlobalMerchantPattern(tx.description);
+    return Boolean(normalized) && normalizedPatternSet.has(normalized);
   });
 
   // Group transactions by user and account
