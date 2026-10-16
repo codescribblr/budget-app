@@ -4,6 +4,11 @@ import { normalizeGlobalMerchantPattern } from '@/lib/merchant-pattern-normalize
 import { rejectionKey } from '@/lib/ai/merchant-suggestions';
 import { AdminApiError } from './errors';
 import type { AdminApiContext } from './types';
+import {
+  classifyPatternsForApprove,
+  type ApproveSuggestionResult,
+  type BulkApproveItemResult,
+} from './approve-suggestion';
 
 export async function listUngroupedPatterns(options: {
   limit: number;
@@ -478,6 +483,334 @@ export async function listPendingSuggestions(options: {
   });
 
   return { suggestions: list, total: count ?? 0, limit: options.limit, offset: options.offset };
+}
+
+/**
+ * Approve a pending suggestion via admin v1.
+ * Idempotent when already approved or patterns already mapped to the target.
+ * Patterns mapped to a different merchant are skipped (not remapped) and reported.
+ */
+export async function approveSuggestion(
+  context: AdminApiContext,
+  suggestionId: number,
+  input: {
+    global_merchant_id?: number;
+    display_name?: string;
+    confidence?: number;
+    reasoning?: string;
+  } = {}
+): Promise<ApproveSuggestionResult> {
+  if (!Number.isFinite(suggestionId) || suggestionId <= 0) {
+    throw new AdminApiError(400, 'validation_error', 'Invalid suggestion id');
+  }
+
+  const confidence =
+    typeof input.confidence === 'number' && !Number.isNaN(input.confidence)
+      ? input.confidence
+      : null;
+  const reasoning = input.reasoning?.trim() || null;
+
+  const supabase = createServiceRoleClient();
+  const { data: suggestion, error: fetchErr } = await supabase
+    .from('global_merchant_suggestions')
+    .select('id, suggested_global_merchant_id, suggested_display_name, status, metadata')
+    .eq('id', suggestionId)
+    .maybeSingle();
+
+  if (fetchErr) throw fetchErr;
+  if (!suggestion) {
+    throw new AdminApiError(404, 'not_found', 'Suggestion not found');
+  }
+
+  if (suggestion.status === 'rejected') {
+    throw new AdminApiError(400, 'validation_error', 'Suggestion was rejected');
+  }
+
+  const { data: junctionRows } = await supabase
+    .from('global_merchant_suggestion_patterns')
+    .select('pattern_id')
+    .eq('suggestion_id', suggestionId);
+  const allPatternIds = (junctionRows || []).map((r) => r.pattern_id as number);
+
+  // Idempotent: already approved — audit + return without remapping
+  if (suggestion.status === 'approved') {
+    let merchantId: number;
+    try {
+      merchantId = await resolveApproveTargetMerchant(context, {
+        overrideMerchantId: input.global_merchant_id,
+        overrideDisplayName: input.display_name,
+        suggestedMerchantId: suggestion.suggested_global_merchant_id,
+        suggestedDisplayName: suggestion.suggested_display_name,
+      });
+    } catch {
+      merchantId = await inferMerchantFromPatterns(allPatternIds);
+    }
+    const action = await recordAgentAction(context, {
+      action: 'approve_suggestion',
+      globalMerchantId: merchantId,
+      patternIds: allPatternIds,
+      confidence,
+      reasoning,
+      suggestionId,
+      metadata: {
+        already_approved: true,
+        idempotent: true,
+      },
+    });
+    return {
+      suggestion_id: suggestionId,
+      status: 'approved',
+      already_approved: true,
+      merchant_id: merchantId,
+      patterns_grouped: 0,
+      patterns_already_mapped: allPatternIds.length,
+      skipped_conflicts: [],
+      transactions_updated: 0,
+      groups_created: 0,
+      audit_id: action?.id ?? null,
+    };
+  }
+
+  const merchantId = await resolveApproveTargetMerchant(context, {
+    overrideMerchantId: input.global_merchant_id,
+    overrideDisplayName: input.display_name,
+    suggestedMerchantId: suggestion.suggested_global_merchant_id,
+    suggestedDisplayName: suggestion.suggested_display_name,
+  });
+
+  if (allPatternIds.length === 0) {
+    throw new AdminApiError(400, 'validation_error', 'No patterns on suggestion');
+  }
+
+  const { data: patternRows, error: patternsError } = await supabase
+    .from('global_merchant_patterns')
+    .select('id, global_merchant_id')
+    .in('id', allPatternIds);
+
+  if (patternsError) throw patternsError;
+
+  const { toMap, alreadyMapped, skippedConflicts } = classifyPatternsForApprove(
+    (patternRows || []).map((p) => ({
+      id: p.id as number,
+      global_merchant_id: (p.global_merchant_id as number | null) ?? null,
+    })),
+    merchantId
+  );
+
+  let syncResult = { transactionsUpdated: 0, groupsCreated: 0 };
+  if (toMap.length > 0) {
+    const { error: updateError } = await supabase
+      .from('global_merchant_patterns')
+      .update({ global_merchant_id: merchantId })
+      .in('id', toMap);
+
+    if (updateError) throw updateError;
+
+    try {
+      syncResult = await syncTransactionsForPatterns(toMap, merchantId);
+    } catch (syncErr) {
+      console.error('[admin-api] sync after approve:', syncErr);
+    }
+  }
+
+  const existingMeta =
+    suggestion.metadata && typeof suggestion.metadata === 'object'
+      ? (suggestion.metadata as Record<string, unknown>)
+      : {};
+
+  await supabase
+    .from('global_merchant_suggestions')
+    .update({
+      status: 'approved',
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: context.userId,
+      suggested_global_merchant_id: merchantId,
+      metadata: {
+        ...existingMeta,
+        approved_via: 'admin_v1',
+        confidence: confidence ?? existingMeta.confidence ?? null,
+        reasoning: reasoning ?? existingMeta.reasoning ?? null,
+        api_key_id: context.apiKeyId,
+        api_key_name: context.apiKeyName,
+        auth_mode: context.mode,
+        patterns_grouped: toMap.length,
+        patterns_already_mapped: alreadyMapped.length,
+        skipped_conflicts: skippedConflicts,
+      },
+    })
+    .eq('id', suggestionId);
+
+  const action = await recordAgentAction(context, {
+    action: 'approve_suggestion',
+    globalMerchantId: merchantId,
+    patternIds: [...toMap, ...alreadyMapped],
+    confidence,
+    reasoning,
+    suggestionId,
+    metadata: {
+      patterns_grouped: toMap.length,
+      patterns_already_mapped: alreadyMapped.length,
+      skipped_conflicts: skippedConflicts,
+      transactions_updated: syncResult.transactionsUpdated,
+      groups_created: syncResult.groupsCreated,
+    },
+  });
+
+  return {
+    suggestion_id: suggestionId,
+    status: 'approved',
+    already_approved: false,
+    merchant_id: merchantId,
+    patterns_grouped: toMap.length,
+    patterns_already_mapped: alreadyMapped.length,
+    skipped_conflicts: skippedConflicts,
+    transactions_updated: syncResult.transactionsUpdated,
+    groups_created: syncResult.groupsCreated,
+    audit_id: action?.id ?? null,
+  };
+}
+
+export async function approveSuggestionsBulk(
+  context: AdminApiContext,
+  ids: number[],
+  input: {
+    global_merchant_id?: number;
+    display_name?: string;
+    confidence?: number;
+    reasoning?: string;
+  } = {}
+): Promise<{ results: BulkApproveItemResult[] }> {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new AdminApiError(400, 'validation_error', 'ids must be a non-empty array');
+  }
+  if (ids.length > 100) {
+    throw new AdminApiError(400, 'validation_error', 'ids limited to 100 per request');
+  }
+
+  const results: BulkApproveItemResult[] = [];
+  for (const id of ids) {
+    try {
+      const result = await approveSuggestion(context, id, input);
+      results.push({ id, ok: true, ...result });
+    } catch (error) {
+      if (error instanceof AdminApiError) {
+        results.push({
+          id,
+          ok: false,
+          error: { code: error.code, message: error.message },
+        });
+      } else {
+        console.error('[admin-api] bulk approve item failed:', error);
+        results.push({
+          id,
+          ok: false,
+          error: { code: 'internal_error', message: 'Failed to approve suggestion' },
+        });
+      }
+    }
+  }
+  return { results };
+}
+
+async function resolveApproveTargetMerchant(
+  context: AdminApiContext,
+  opts: {
+    overrideMerchantId?: number;
+    overrideDisplayName?: string;
+    suggestedMerchantId: number | null;
+    suggestedDisplayName: string | null;
+  }
+): Promise<number> {
+  const supabase = createServiceRoleClient();
+
+  if (typeof opts.overrideMerchantId === 'number') {
+    const { data: m } = await supabase
+      .from('global_merchants')
+      .select('id')
+      .eq('id', opts.overrideMerchantId)
+      .maybeSingle();
+    if (!m) {
+      throw new AdminApiError(404, 'not_found', 'Merchant not found');
+    }
+    return m.id;
+  }
+
+  const overrideName = opts.overrideDisplayName?.trim();
+  if (overrideName) {
+    return findOrCreateMerchantByName(context, overrideName);
+  }
+
+  if (opts.suggestedMerchantId != null) {
+    const { data: m } = await supabase
+      .from('global_merchants')
+      .select('id')
+      .eq('id', opts.suggestedMerchantId)
+      .maybeSingle();
+    if (!m) {
+      throw new AdminApiError(404, 'not_found', 'Suggested merchant not found');
+    }
+    return m.id;
+  }
+
+  const suggestedName = (opts.suggestedDisplayName || '').trim();
+  if (!suggestedName) {
+    throw new AdminApiError(
+      400,
+      'validation_error',
+      'Suggestion has no merchant; pass global_merchant_id or display_name'
+    );
+  }
+  return findOrCreateMerchantByName(context, suggestedName);
+}
+
+async function inferMerchantFromPatterns(patternIds: number[]): Promise<number> {
+  if (patternIds.length === 0) {
+    throw new AdminApiError(400, 'validation_error', 'Cannot infer merchant for approved suggestion');
+  }
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from('global_merchant_patterns')
+    .select('global_merchant_id')
+    .in('id', patternIds)
+    .not('global_merchant_id', 'is', null)
+    .limit(1);
+  const id = data?.[0]?.global_merchant_id;
+  if (id == null) {
+    throw new AdminApiError(400, 'validation_error', 'Cannot infer merchant for approved suggestion');
+  }
+  return id as number;
+}
+
+/** Find by exact display_name or create active merchant (safe for approve overrides). */
+async function findOrCreateMerchantByName(
+  context: AdminApiContext,
+  displayName: string
+): Promise<number> {
+  const supabase = createServiceRoleClient();
+  const { data: existing } = await supabase
+    .from('global_merchants')
+    .select('id')
+    .eq('display_name', displayName)
+    .maybeSingle();
+  if (existing) return existing.id;
+
+  try {
+    const created = await createGlobalMerchant(context, {
+      display_name: displayName,
+      status: 'active',
+    });
+    return created.id;
+  } catch (error) {
+    if (error instanceof AdminApiError && error.code === 'conflict') {
+      const { data: again } = await supabase
+        .from('global_merchants')
+        .select('id')
+        .eq('display_name', displayName)
+        .maybeSingle();
+      if (again) return again.id;
+    }
+    throw error;
+  }
 }
 
 async function recordAgentAction(
