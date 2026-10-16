@@ -709,6 +709,65 @@ async function getGlobalMerchantForDescription(
 }
 
 /**
+ * Ensure the raw bank description exists as a global_merchant_pattern
+ * linked to the given global merchant (so future imports auto-match).
+ */
+export async function ensureGlobalPatternMapped(
+  description: string,
+  globalMerchantId: number
+): Promise<void> {
+  if (!description?.trim() || !globalMerchantId) return;
+
+  const supabase = await createClient();
+  const { normalizeGlobalMerchantPattern } = await import(
+    '@/lib/merchant-pattern-normalize'
+  );
+  const normalized = normalizeGlobalMerchantPattern(description);
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('global_merchant_patterns')
+    .select('id, global_merchant_id')
+    .eq('pattern', description)
+    .maybeSingle();
+
+  if (fetchError && fetchError.code !== 'PGRST116') {
+    console.error('Error looking up global merchant pattern:', fetchError);
+    return;
+  }
+
+  if (existing) {
+    const updates: Record<string, unknown> = {
+      last_seen_at: new Date().toISOString(),
+    };
+    if (normalized) {
+      updates.normalized_pattern = normalized;
+    }
+    if (existing.global_merchant_id == null) {
+      updates.global_merchant_id = globalMerchantId;
+    }
+    const { error: updateError } = await supabase
+      .from('global_merchant_patterns')
+      .update(updates)
+      .eq('id', existing.id);
+    if (updateError) {
+      console.error('Error updating global merchant pattern:', updateError);
+    }
+    return;
+  }
+
+  const { error: insertError } = await supabase.from('global_merchant_patterns').insert({
+    pattern: description,
+    normalized_pattern: normalized || description.toLowerCase().trim(),
+    global_merchant_id: globalMerchantId,
+    usage_count: 1,
+  });
+
+  if (insertError && insertError.code !== '23505') {
+    console.error('Error inserting global merchant pattern:', insertError);
+  }
+}
+
+/**
  * Get merchant group for a transaction description
  * Returns the group if found, null otherwise
  */
@@ -767,57 +826,106 @@ export async function getOrCreateMerchantGroup(
     return { group: null, isNew: false, confidence: 0 };
   }
 
-  // Check global merchants before creating new user groups
+  // Check global merchants (exact + normalized pattern) before creating new user groups
   const globalMerchant = await getGlobalMerchantForDescription(description);
   if (globalMerchant) {
     const accountId = await getActiveAccountId();
     if (!accountId) throw new Error('No active account');
 
-    // Check if user already has a merchant group with this name (to avoid duplicates)
-    const { data: existingUserGroup, error: groupCheckError } = await supabase
+    // Register this raw descriptor on the global pattern table so future imports match
+    await ensureGlobalPatternMapped(description, globalMerchant.id);
+
+    // Prefer an existing group already linked to this global merchant
+    const { data: existingByGlobal, error: byGlobalError } = await supabase
       .from('merchant_groups')
       .select('*')
       .eq('user_id', user.id)
       .eq('account_id', accountId)
-      .eq('display_name', globalMerchant.display_name)
+      .eq('global_merchant_id', globalMerchant.id)
       .maybeSingle();
 
-    if (groupCheckError && groupCheckError.code !== 'PGRST116') {
-      throw groupCheckError;
+    if (byGlobalError && byGlobalError.code !== 'PGRST116') {
+      throw byGlobalError;
     }
 
     let userGroup: MerchantGroup;
     let isNewGroup = false;
 
-    if (existingUserGroup) {
-      // User already has a group with this name, use it
-      userGroup = existingUserGroup as MerchantGroup;
+    if (existingByGlobal) {
+      userGroup = existingByGlobal as MerchantGroup;
+      // Keep display name aligned with the global merchant when still the default
+      if (userGroup.display_name !== globalMerchant.display_name) {
+        // Leave customized names alone; only upgrade unlinked-style location names
+        const { normalizeGlobalMerchantPattern } = await import(
+          '@/lib/merchant-pattern-normalize'
+        );
+        const groupNorm = normalizeGlobalMerchantPattern(userGroup.display_name);
+        const globalNorm = normalizeGlobalMerchantPattern(globalMerchant.display_name);
+        if (groupNorm && globalNorm && groupNorm === globalNorm) {
+          await supabase
+            .from('merchant_groups')
+            .update({ display_name: globalMerchant.display_name })
+            .eq('id', userGroup.id);
+          userGroup = { ...userGroup, display_name: globalMerchant.display_name };
+        }
+      }
     } else {
-      // Create a new user-level merchant group with the global merchant's display name
-      // Link it to the global merchant so logos/icons can be displayed
-      const { data: newGroup, error: createError } = await supabase
+      // Also reuse a same-name group (or location variant that normalizes to the same brand)
+      const { data: candidateGroups } = await supabase
         .from('merchant_groups')
-        .insert({
-          user_id: user.id,
-          account_id: accountId,
-          display_name: globalMerchant.display_name,
-          global_merchant_id: globalMerchant.id,
-        })
-        .select()
-        .single();
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('account_id', accountId)
+        .is('global_merchant_id', null);
 
-      if (createError) throw createError;
-      userGroup = newGroup as MerchantGroup;
-      isNewGroup = true;
+      const { normalizeGlobalMerchantPattern } = await import(
+        '@/lib/merchant-pattern-normalize'
+      );
+      const globalNorm = normalizeGlobalMerchantPattern(globalMerchant.display_name);
+      const matchByNorm = (candidateGroups || []).find((g) => {
+        if (g.display_name === globalMerchant.display_name) return true;
+        const n = normalizeGlobalMerchantPattern(g.display_name);
+        return Boolean(n && globalNorm && n === globalNorm);
+      });
+
+      if (matchByNorm) {
+        const { error: linkError } = await supabase
+          .from('merchant_groups')
+          .update({
+            global_merchant_id: globalMerchant.id,
+            display_name: globalMerchant.display_name,
+          })
+          .eq('id', matchByNorm.id);
+        if (linkError) throw linkError;
+        userGroup = {
+          ...(matchByNorm as MerchantGroup),
+          global_merchant_id: globalMerchant.id,
+          display_name: globalMerchant.display_name,
+        };
+      } else {
+        const { data: newGroup, error: createError } = await supabase
+          .from('merchant_groups')
+          .insert({
+            user_id: user.id,
+            account_id: accountId,
+            display_name: globalMerchant.display_name,
+            global_merchant_id: globalMerchant.id,
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        userGroup = newGroup as MerchantGroup;
+        isNewGroup = true;
+      }
     }
 
     // Check if mapping already exists (race condition check)
     const existingMapping = await getMerchantMappingByPattern(description);
     if (!existingMapping) {
-      // Create mapping linking this pattern to the user's merchant group
       const { normalizeMerchantName } = await import('@/lib/merchant-grouping');
       const normalized = normalizeMerchantName(description);
-      
+
       await createMerchantMapping(
         description,
         normalized,
