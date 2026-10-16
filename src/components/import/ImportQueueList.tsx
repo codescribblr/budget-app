@@ -276,6 +276,7 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
                     <Button
                       variant="outline"
                       size="icon"
+                      aria-label={`Delete import batch ${batch.file_name || batch.setup_name || ''}`.trim()}
                       onClick={() => {
                         setBatchToDelete(batch);
                         setDeleteDialogOpen(true);
@@ -348,9 +349,9 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              variant="destructive"
               onClick={handleDeleteBatch}
               disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
             >
               {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>

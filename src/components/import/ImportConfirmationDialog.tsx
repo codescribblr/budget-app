@@ -46,7 +46,7 @@ export default function ImportConfirmationDialog({
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
+            <div data-dialog-panel="accent" className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
               <span className="font-medium text-green-900 dark:text-green-100">
                 Transactions to Import
               </span>
@@ -57,7 +57,7 @@ export default function ImportConfirmationDialog({
 
             {totalExcluded > 0 && (
               <div className="space-y-2">
-                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                <div data-dialog-panel="muted" className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
                   <span className="font-medium text-gray-900 dark:text-gray-100">
                     Transactions to Exclude
                   </span>
@@ -66,7 +66,7 @@ export default function ImportConfirmationDialog({
                   </span>
                 </div>
 
-                <div className="ml-4 space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                <div data-dialog-color="muted" className="ml-4 space-y-1 text-sm text-gray-600 dark:text-gray-400">
                   {uncategorizedCount > 0 && (
                     <div className="flex justify-between">
                       <span>• Uncategorized:</span>
@@ -97,7 +97,7 @@ export default function ImportConfirmationDialog({
           </div>
 
           {uncategorizedCount > 0 && (
-            <div className="p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg border border-yellow-200 dark:border-yellow-800">
+            <div data-dialog-panel="warning" className="p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg border border-yellow-200 dark:border-yellow-800">
               <p className="text-sm text-yellow-900 dark:text-yellow-100">
                 <strong>Note:</strong> {uncategorizedCount} uncategorized transaction{uncategorizedCount !== 1 ? 's' : ''} will be excluded.
                 You can categorize them later and import them in a future batch.

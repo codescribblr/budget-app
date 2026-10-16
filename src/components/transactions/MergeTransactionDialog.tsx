@@ -243,7 +243,7 @@ export default function MergeTransactionDialog({
         
         <div className="space-y-4 pt-4">
           {/* Why duplicates section */}
-          <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div data-dialog-panel="accent" className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
             <div className="text-sm space-y-1">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -257,7 +257,7 @@ export default function MergeTransactionDialog({
                 !transactions[0].splits.some(s2 => s2.category_id === s.category_id)
               )) && (
                 <div className="flex items-center gap-2">
-                  <XCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <XCircle data-dialog-color="warning" className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                   <span>Different categories (will be combined)</span>
                 </div>
               )}

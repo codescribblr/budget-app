@@ -560,7 +560,7 @@ export default function CategoryTransactionList({
             setTransactionToDelete(transaction);
             setDeleteDialogOpen(true);
           }}
-          className="text-red-600"
+          variant="destructive"
         >
           <Trash2 className="mr-2 h-4 w-4" />
           Delete
@@ -842,8 +842,8 @@ export default function CategoryTransactionList({
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction
+                variant="destructive"
                 onClick={confirmDeleteTransaction}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 Delete transaction
               </AlertDialogAction>

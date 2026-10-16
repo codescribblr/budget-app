@@ -438,7 +438,7 @@ export default function TransactionList({
                       <Edit className="mr-2 h-4 w-4" />
                       Edit
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleDelete(transaction)} className="text-red-600">
+                    <DropdownMenuItem onClick={() => handleDelete(transaction)} variant="destructive">
                       <Trash2 className="mr-2 h-4 w-4" />
                       Delete
                     </DropdownMenuItem>
@@ -824,7 +824,7 @@ export default function TransactionList({
                         <Edit className="mr-2 h-4 w-4" />
                         Edit
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDelete(transaction)} className="text-red-600">
+                      <DropdownMenuItem onClick={() => handleDelete(transaction)} variant="destructive">
                         <Trash2 className="mr-2 h-4 w-4" />
                         Delete
                       </DropdownMenuItem>
@@ -931,8 +931,8 @@ export default function TransactionList({
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
+              variant="destructive"
               onClick={confirmDeleteTransaction}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete Transaction
             </AlertDialogAction>

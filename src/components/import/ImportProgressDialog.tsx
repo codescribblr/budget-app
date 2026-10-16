@@ -56,23 +56,23 @@ export default function ImportProgressDialog({
           <div className="flex flex-col items-center justify-center space-y-4">
             {/* Status Icon */}
             {isProcessing && (
-              <Loader2 className="h-16 w-16 text-blue-500 animate-spin" />
+              <Loader2 data-dialog-color="accent" className="h-16 w-16 text-blue-500 animate-spin" />
             )}
             {isSuccess && (
-              <CheckCircle2 className="h-16 w-16 text-green-500" />
+              <CheckCircle2 data-dialog-color="accent" className="h-16 w-16 text-green-500" />
             )}
             {isError && (
-              <XCircle className="h-16 w-16 text-red-500" />
+              <XCircle data-dialog-color="negative" className="h-16 w-16 text-red-500" />
             )}
 
             {/* Status Message */}
             <div className="text-center space-y-2">
               {isProcessing && (
                 <>
-                  <p className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  <p data-dialog-color="foreground" className="text-lg font-medium text-gray-900 dark:text-gray-100">
                     Processing transactions...
                   </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p data-dialog-color="muted" className="text-sm text-gray-600 dark:text-gray-400">
                     {message}
                   </p>
                 </>
@@ -80,15 +80,15 @@ export default function ImportProgressDialog({
 
               {isSuccess && importedCount !== undefined && importedCount > 0 && (
                 <>
-                  <p className="text-lg font-medium text-green-900 dark:text-green-100">
+                  <p data-dialog-color="accent" className="text-lg font-medium text-green-900 dark:text-green-100">
                     Successfully imported {importedCount} transaction{importedCount !== 1 ? 's' : ''}
                   </p>
                   {isHistorical && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <p data-dialog-color="muted" className="text-sm text-gray-600 dark:text-gray-400">
                       These historical transactions will not affect your current envelope balances.
                     </p>
                   )}
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p data-dialog-color="muted" className="text-sm text-gray-600 dark:text-gray-400">
                     {message}
                   </p>
                 </>
@@ -96,10 +96,10 @@ export default function ImportProgressDialog({
 
               {isError && (
                 <>
-                  <p className="text-lg font-medium text-red-900 dark:text-red-100">
+                  <p data-dialog-color="negative" className="text-lg font-medium text-red-900 dark:text-red-100">
                     Failed to import transactions
                   </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p data-dialog-color="muted" className="text-sm text-gray-600 dark:text-gray-400">
                     {message}
                   </p>
                 </>
@@ -110,16 +110,16 @@ export default function ImportProgressDialog({
             {isProcessing && (
               <div className="w-full max-w-sm space-y-2 pt-4">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Step 1:</span>
-                  <span className="text-gray-900 dark:text-gray-100">Importing transactions</span>
+                  <span data-dialog-color="muted" className="text-gray-600 dark:text-gray-400">Step 1:</span>
+                  <span data-dialog-color="foreground" className="text-gray-900 dark:text-gray-100">Importing transactions</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Step 2:</span>
-                  <span className="text-gray-900 dark:text-gray-100">Learning categories</span>
+                  <span data-dialog-color="muted" className="text-gray-600 dark:text-gray-400">Step 2:</span>
+                  <span data-dialog-color="foreground" className="text-gray-900 dark:text-gray-100">Learning categories</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Step 3:</span>
-                  <span className="text-gray-900 dark:text-gray-100">Updating balances</span>
+                  <span data-dialog-color="muted" className="text-gray-600 dark:text-gray-400">Step 3:</span>
+                  <span data-dialog-color="foreground" className="text-gray-900 dark:text-gray-100">Updating balances</span>
                 </div>
               </div>
             )}
