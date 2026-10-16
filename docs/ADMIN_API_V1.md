@@ -252,6 +252,87 @@ Content-Type: application/json
 GET /api/admin/v1/merchants/suggestions?limit=50&offset=0&batch_id=agent_2026-10-16
 ```
 
+### Approve a suggestion
+
+Idempotent: if the suggestion is already approved, or its patterns are already on the target merchant, the call succeeds without remapping. Patterns already mapped to a **different** merchant are **skipped** (not remapped) and listed in `skipped_conflicts`.
+
+```http
+POST /api/admin/v1/merchants/suggestions/100/approve
+Content-Type: application/json
+
+{
+  "global_merchant_id": 42,
+  "confidence": 0.94,
+  "reasoning": "Confirmed Bridge City Coffee"
+}
+```
+
+Optional body fields: `global_merchant_id`, `display_name` (find-or-create), `confidence`, `reasoning`. If omitted, uses the suggestion’s existing merchant id or display name.
+
+```json
+{
+  "data": {
+    "suggestion_id": 100,
+    "status": "approved",
+    "already_approved": false,
+    "merchant_id": 42,
+    "patterns_grouped": 2,
+    "patterns_already_mapped": 1,
+    "skipped_conflicts": [
+      { "pattern_id": 790, "current_global_merchant_id": 7 }
+    ],
+    "transactions_updated": 12,
+    "groups_created": 0,
+    "audit_id": 15
+  },
+  "meta": { }
+}
+```
+
+### Bulk-approve suggestions
+
+```http
+POST /api/admin/v1/merchants/suggestions/approve
+Content-Type: application/json
+
+{
+  "ids": [100, 101, 102],
+  "confidence": 0.9,
+  "reasoning": "Batch approve high-confidence agent queue"
+}
+```
+
+Same optional override fields as single approve (`global_merchant_id`, `display_name`, `confidence`, `reasoning`) apply to every id. Returns per-id results (one failure does not abort the rest):
+
+```json
+{
+  "data": {
+    "results": [
+      {
+        "id": 100,
+        "ok": true,
+        "suggestion_id": 100,
+        "status": "approved",
+        "already_approved": false,
+        "merchant_id": 42,
+        "patterns_grouped": 2,
+        "patterns_already_mapped": 0,
+        "skipped_conflicts": [],
+        "transactions_updated": 5,
+        "groups_created": 0,
+        "audit_id": 16
+      },
+      {
+        "id": 101,
+        "ok": false,
+        "error": { "code": "not_found", "message": "Suggestion not found" }
+      }
+    ]
+  },
+  "meta": { }
+}
+```
+
 ## Normalization
 
 Shared helper: `src/lib/merchant-pattern-normalize.ts`  
