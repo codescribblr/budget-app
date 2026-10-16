@@ -105,6 +105,23 @@ export function extractDisplayName(description: string): string {
 }
 
 /**
+ * Prefer a known merchant display name; when blank, use extractDisplayName
+ * so UIs never fall back to raw bank text like "SPILL THE BEANS R1 GREENVILLE SC".
+ */
+export function resolveMerchantDisplayName(
+  description: string,
+  ...candidates: Array<string | null | undefined>
+): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  const cleaned = extractDisplayName(description || '');
+  return cleaned || (description || '').trim();
+}
+
+/**
  * Find the best matching merchant group for a given description
  */
 export interface MatchResult {

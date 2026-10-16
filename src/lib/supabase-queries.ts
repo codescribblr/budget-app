@@ -32,6 +32,7 @@ import { cache } from 'react';
 import { logBalanceChange, logBalanceChanges } from './audit/category-balance-audit';
 import { splitRowsDiffer, splitsAffectEnvelopesDifferently } from './category-transaction-edits';
 import { getCreditCardBalanceOwed } from './credit-card-balance';
+import { resolveMerchantDisplayName } from './merchant-grouping';
 
 // =====================================================
 // HELPER: Get authenticated user
@@ -1633,7 +1634,12 @@ export async function getAllTransactions(): Promise<TransactionWithSplits[]> {
     const merchantGroup = transaction.merchant_groups;
     const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
     // Prefer global merchant name over user's merchant group name
-    const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || merchantGroup?.display_name || null;
+    const merchantName = resolveMerchantDisplayName(
+      transaction.description,
+      overrideMerchant?.display_name,
+      globalMerchant?.display_name,
+      merchantGroup?.display_name
+    );
     
     return {
       id: transaction.id,
@@ -1748,7 +1754,12 @@ export async function searchTransactions(
     const merchantGroup = transaction.merchant_groups;
     const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
     // Prefer global merchant name over user's merchant group name
-    const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || merchantGroup?.display_name || null;
+    const merchantName = resolveMerchantDisplayName(
+      transaction.description,
+      overrideMerchant?.display_name,
+      globalMerchant?.display_name,
+      merchantGroup?.display_name
+    );
     
     return {
       id: transaction.id,
@@ -2094,7 +2105,12 @@ export async function getTransactionsPaginated(
     const merchantGroup = transaction.merchant_groups;
     const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
     // Prefer global merchant name over user's merchant group name
-    const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || merchantGroup?.display_name || null;
+    const merchantName = resolveMerchantDisplayName(
+      transaction.description,
+      overrideMerchant?.display_name,
+      globalMerchant?.display_name,
+      merchantGroup?.display_name
+    );
     
     return {
       id: transaction.id,
@@ -2212,7 +2228,12 @@ export async function getTransactionById(id: number): Promise<TransactionWithSpl
   const merchantGroup = transaction.merchant_groups;
   const globalMerchant = overrideMerchant || getGlobalMerchantInfo(merchantGroup);
   // Prefer global merchant name over user's merchant group name
-  const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || merchantGroup?.display_name || null;
+  const merchantName = resolveMerchantDisplayName(
+    transaction.description,
+    overrideMerchant?.display_name,
+    globalMerchant?.display_name,
+    merchantGroup?.display_name
+  );
 
   return {
     id: transaction.id,
@@ -3029,19 +3050,11 @@ export async function importTransactions(
     existingReuseSplits?.forEach((row) => reusedIdsWithSplits.add(row.transaction_id));
   }
 
-  // ===== STEP 2: Batch get/create merchant groups =====
-  const { getOrCreateMerchantGroup } = await import('@/lib/db/merchant-groups');
-  const merchantGroupPromises = validTransactions.map(async (txn) => {
-    try {
-      const result = await getOrCreateMerchantGroup(txn.description, true);
-      return result.group?.id || null;
-    } catch (error) {
-      console.error('Error auto-assigning merchant group:', error);
-      return null;
-    }
-  });
-
-  const merchantGroupIds = await Promise.all(merchantGroupPromises);
+  // ===== STEP 2: Batch get/create merchant groups (bounded, retried, never null) =====
+  const { resolveMerchantGroupIdsForImport } = await import('@/lib/db/merchant-groups');
+  const merchantGroupIds = await resolveMerchantGroupIdsForImport(
+    validTransactions.map((txn) => txn.description || '')
+  );
 
   // ===== STEP 3: Batch insert transactions =====
   // Note: CSV parser already normalizes amounts to positive and sets transaction_type correctly
@@ -3101,6 +3114,57 @@ export async function importTransactions(
     return insertedIds[insertCursor++];
   });
   const createdTransactions = createdTransactionIds.map((id) => ({ id }));
+
+  // Relink any rows that landed without a group (defense in depth) and hash-reused rows
+  const relinkUpdates: Array<{ id: number; merchant_group_id: number }> = [];
+  createdTransactionIds.forEach((id, index) => {
+    const groupId = merchantGroupIds[index];
+    if (groupId != null) {
+      relinkUpdates.push({ id, merchant_group_id: groupId });
+    }
+  });
+
+  // Hash-reused rows may already have a group; only force-link when still null.
+  // Newly inserted rows should already have merchant_group_id; patch any that don't.
+  if (relinkUpdates.length > 0) {
+    const relinkIds = relinkUpdates.map((u) => u.id);
+    const { data: currentGroups, error: currentGroupsError } = await supabase
+      .from('transactions')
+      .select('id, merchant_group_id')
+      .in('id', relinkIds);
+
+    if (currentGroupsError) throw currentGroupsError;
+
+    const needsLink = new Map<number, number>();
+    const currentById = new Map(
+      (currentGroups || []).map((row) => [row.id as number, row.merchant_group_id as number | null])
+    );
+    for (const update of relinkUpdates) {
+      const current = currentById.get(update.id);
+      if (current == null) {
+        needsLink.set(update.id, update.merchant_group_id);
+      }
+    }
+
+    // Group by target merchant_group_id for fewer updates
+    const byGroup = new Map<number, number[]>();
+    for (const [id, groupId] of needsLink) {
+      const list = byGroup.get(groupId) || [];
+      list.push(id);
+      byGroup.set(groupId, list);
+    }
+    for (const [groupId, ids] of byGroup) {
+      const { error: relinkError } = await supabase
+        .from('transactions')
+        .update({ merchant_group_id: groupId })
+        .in('id', ids)
+        .is('merchant_group_id', null);
+      if (relinkError) {
+        console.error('Error relinking transactions to merchant groups:', relinkError);
+        throw relinkError;
+      }
+    }
+  }
 
   // ===== STEP 4: Batch insert transaction splits =====
   const splitsData: any[] = [];

@@ -4,7 +4,7 @@
  * bank strings collapse to the same key (e.g. Aldi, Target, Bridge City Coffee).
  *
  * Keep in sync with SQL normalize_merchant_pattern() in
- * migrations/124_fix_cleanup_rpc_and_normalize_gaps.sql
+ * migrations/125_backfill_unlinked_and_register_codes.sql
  */
 
 const US_STATE_CODES = new Set([
@@ -122,11 +122,13 @@ export function normalizeGlobalMerchantPattern(description: string): string {
   result = result.replace(/(?<!\d)\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?(?!\d)/g, ' ');
   result = result.replace(/\b\d{6}\b/g, ' ');
 
-  // Store / terminal codes: T-1182, F4798, Q07, #17020, SK1668, 110-T001, 0101 0011
+  // Store / terminal / register codes: T-1182, F4798, Q07, R1, T1, #17020, SK1668, 110-T001, 0101 0011
   result = result.replace(/\b\d{2,4}-[A-Z]\d{2,}\b/g, ' ');
   result = result.replace(/\b[A-Z]{1,3}\d{3,}\b/g, ' ');
   result = result.replace(/\b[A-Z]-\d{2,}\b/g, ' ');
   result = result.replace(/\b[A-Z]\d{2,}\b/g, ' ');
+  // Letter + single digit register/terminal (R1, R2, T1) — before city/state strip
+  result = result.replace(/\b[A-Z]\d\b/g, ' ');
   result = result.replace(/#\d+\b/g, ' ');
   result = result.replace(/\b#?\d{5,}\b/g, ' ');
   result = result.replace(/\b\d{4}\s+\d{4}\b/g, ' ');
