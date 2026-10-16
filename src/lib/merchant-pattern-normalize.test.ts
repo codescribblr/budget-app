@@ -53,6 +53,16 @@ describe('normalizeGlobalMerchantPattern', () => {
     ).toBe('');
   });
 
+  it('strips brand TLDs, apostrophes, store #s, phones, and HQ city/state', () => {
+    expect(normalizeGlobalMerchantPattern('WALMART.COM BENTONVILLE AR')).toBe('walmart');
+    expect(normalizeGlobalMerchantPattern('WALMART.COM')).toBe('walmart');
+    expect(normalizeGlobalMerchantPattern("PAPA JOHN'S #0545 864-627-7272 SC")).toBe(
+      'papa johns'
+    );
+    expect(normalizeGlobalMerchantPattern("PAPA JOHN'S")).toBe('papa johns');
+    expect(normalizeGlobalMerchantPattern('TARGET.COM MINNEAPOLIS MN')).toBe('target');
+  });
+
   it('strips phones, street fragments, and trailing state', () => {
     expect(
       normalizeGlobalMerchantPattern('TST* TROPICAL GRILLE WADE 864-334-5163 SC')
@@ -95,7 +105,7 @@ describe('normalizeGlobalMerchantPattern', () => {
     expect(normalizeGlobalMerchantPattern('Vagaro_SALON NAME')).toBe('salon name');
     expect(normalizeGlobalMerchantPattern('Nayax **SNACK')).toBe('snack');
     expect(normalizeGlobalMerchantPattern('GOOGLE*YOUTUBE')).toBe('youtube');
-    expect(normalizeGlobalMerchantPattern('APPLE*ITUNES.COM')).toBe('itunes com');
+    expect(normalizeGlobalMerchantPattern('APPLE*ITUNES.COM')).toBe('itunes');
     expect(normalizeGlobalMerchantPattern('CM.MERCHANT NAME')).toBe('merchant name');
     expect(normalizeGlobalMerchantPattern('LS MARKET')).toBe('market');
     expect(normalizeGlobalMerchantPattern('PB *BOOKSTORE')).toBe('bookstore');

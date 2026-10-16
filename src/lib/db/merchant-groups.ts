@@ -711,6 +711,8 @@ async function getGlobalMerchantForDescription(
 /**
  * Ensure the raw bank description exists as a global_merchant_pattern
  * linked to the given global merchant (so future imports auto-match).
+ * When a pattern is newly mapped, sync existing transactions onto the
+ * user's group for that global merchant (same path as admin mappings).
  */
 export async function ensureGlobalPatternMapped(
   description: string,
@@ -735,6 +737,9 @@ export async function ensureGlobalPatternMapped(
     return;
   }
 
+  let patternId: number | null = null;
+  let newlyMapped = false;
+
   if (existing) {
     const updates: Record<string, unknown> = {
       last_seen_at: new Date().toISOString(),
@@ -744,6 +749,7 @@ export async function ensureGlobalPatternMapped(
     }
     if (existing.global_merchant_id == null) {
       updates.global_merchant_id = globalMerchantId;
+      newlyMapped = true;
     }
     const { error: updateError } = await supabase
       .from('global_merchant_patterns')
@@ -751,19 +757,64 @@ export async function ensureGlobalPatternMapped(
       .eq('id', existing.id);
     if (updateError) {
       console.error('Error updating global merchant pattern:', updateError);
+      return;
     }
-    return;
+    patternId = existing.id;
+  } else {
+    const { data: inserted, error: insertError } = await supabase
+      .from('global_merchant_patterns')
+      .insert({
+        pattern: description,
+        normalized_pattern: normalized || description.toLowerCase().trim(),
+        global_merchant_id: globalMerchantId,
+        usage_count: 1,
+      })
+      .select('id')
+      .single();
+
+    if (insertError) {
+      if (insertError.code === '23505') {
+        // Race: pattern inserted concurrently — fetch and link if still unmapped
+        const { data: raced } = await supabase
+          .from('global_merchant_patterns')
+          .select('id, global_merchant_id')
+          .eq('pattern', description)
+          .maybeSingle();
+        if (raced) {
+          patternId = raced.id;
+          if (raced.global_merchant_id == null) {
+            await supabase
+              .from('global_merchant_patterns')
+              .update({
+                global_merchant_id: globalMerchantId,
+                normalized_pattern: normalized || description.toLowerCase().trim(),
+              })
+              .eq('id', raced.id);
+            newlyMapped = true;
+          }
+        }
+      } else {
+        console.error('Error inserting global merchant pattern:', insertError);
+      }
+    } else {
+      patternId = inserted?.id ?? null;
+      newlyMapped = true;
+    }
   }
 
-  const { error: insertError } = await supabase.from('global_merchant_patterns').insert({
-    pattern: description,
-    normalized_pattern: normalized || description.toLowerCase().trim(),
-    global_merchant_id: globalMerchantId,
-    usage_count: 1,
-  });
-
-  if (insertError && insertError.code !== '23505') {
-    console.error('Error inserting global merchant pattern:', insertError);
+  // Sync existing txs out of stale fallback groups (bounded; sync has no cleanup)
+  if (newlyMapped && patternId != null) {
+    try {
+      const { syncTransactionsForPatterns } = await import(
+        '@/lib/db/sync-merchant-groups'
+      );
+      await syncTransactionsForPatterns([patternId], globalMerchantId);
+    } catch (syncErr) {
+      console.error(
+        `Error syncing transactions after mapping pattern ${patternId}:`,
+        syncErr
+      );
+    }
   }
 }
 
