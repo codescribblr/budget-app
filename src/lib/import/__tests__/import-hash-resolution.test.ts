@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   assertNoUpdateErrors,
   findRetryTransactionMatch,
+  linkedTransactionMatchesImport,
   resolveImportedHashes,
 } from '../import-hash-resolution';
 
@@ -45,6 +46,38 @@ describe('resolveImportedHashes', () => {
 
     assert.equal(result.hashToImportedId.has('same-csv-row'), false);
     assert.equal(result.orphanedHashes.has('same-csv-row'), false);
+  });
+});
+
+describe('linkedTransactionMatchesImport', () => {
+  it('treats the same date, amount, and description as already imported', () => {
+    assert.equal(
+      linkedTransactionMatchesImport(
+        { date: '2026-10-14', description: 'ST JUDE Internet DNTN', total_amount: 10 },
+        { date: '2026-10-14', description: 'ST JUDE Internet DNTN', amount: 10 }
+      ),
+      true
+    );
+  });
+
+  it('does not treat a merged neighbor on a different day as this charge', () => {
+    assert.equal(
+      linkedTransactionMatchesImport(
+        { date: '2026-08-08', description: 'QT 1104 GREENVILLE SC', total_amount: 0.53 },
+        { date: '2026-08-09', description: 'QT 1104 GREENVILLE SC', amount: 0.53 }
+      ),
+      false
+    );
+  });
+
+  it('does not treat a different merchant with the same amount as this charge', () => {
+    assert.equal(
+      linkedTransactionMatchesImport(
+        { date: '2026-07-21', description: 'QT 1105 GREENVILLE SC', total_amount: 0.53 },
+        { date: '2026-07-20', description: 'QT 1113 GREER SC', amount: 0.53 }
+      ),
+      false
+    );
   });
 });
 

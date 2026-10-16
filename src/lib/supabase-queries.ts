@@ -24,6 +24,7 @@ import { applyEnvelopeGoalProgress, sumCategorizedSpendingByCategory } from './g
 import {
   assertNoUpdateErrors,
   findRetryTransactionMatch,
+  linkedTransactionMatchesImport,
   resolveImportedHashes,
 } from './import/import-hash-resolution';
 import { getActiveAccountId } from './account-context';
@@ -2848,15 +2849,33 @@ export async function importTransactions(
 
     const existingIds = (existingImported || []).map(record => record.id);
 
-    let existingLinks: { imported_transaction_id: number }[] = [];
+    let existingLinks: { imported_transaction_id: number; transaction_id: number }[] = [];
     if (existingIds.length > 0) {
       const { data: linkRows, error: linksLookupError } = await supabase
         .from('imported_transaction_links')
-        .select('imported_transaction_id')
+        .select('imported_transaction_id, transaction_id')
         .in('imported_transaction_id', existingIds);
 
       if (linksLookupError) throw linksLookupError;
       existingLinks = linkRows || [];
+    }
+
+    const linkedTransactionIds = [...new Set(existingLinks.map((link) => link.transaction_id))];
+    const linkedTransactionsById = new Map<number, {
+      date: string;
+      description: string;
+      total_amount: number;
+    }>();
+    if (linkedTransactionIds.length > 0) {
+      const { data: linkedTransactions, error: linkedTransactionsError } = await supabase
+        .from('transactions')
+        .select('id, date, description, total_amount')
+        .in('id', linkedTransactionIds);
+
+      if (linkedTransactionsError) throw linkedTransactionsError;
+      linkedTransactions?.forEach((transaction) => {
+        linkedTransactionsById.set(transaction.id, transaction);
+      });
     }
 
     const resolved = resolveImportedHashes(
@@ -2867,6 +2886,36 @@ export async function importTransactions(
     resolved.hashToImportedId.forEach((id, hash) => hashToImportedId.set(hash, id));
     const fullyImportedHashes = resolved.fullyImportedHashes;
     orphanedHashes = resolved.orphanedHashes;
+
+    const linksByImportedId = new Map<number, number[]>();
+    existingLinks.forEach((link) => {
+      const ids = linksByImportedId.get(link.imported_transaction_id) || [];
+      ids.push(link.transaction_id);
+      linksByImportedId.set(link.imported_transaction_id, ids);
+    });
+
+    for (const hash of [...fullyImportedHashes]) {
+      const importedId = hashToImportedId.get(hash);
+      const txn = validTransactions.find((candidate) => candidate.hash === hash);
+      if (!importedId || !txn) continue;
+
+      const linked = (linksByImportedId.get(importedId) || [])
+        .map((transactionId) => linkedTransactionsById.get(transactionId))
+        .filter((transaction): transaction is NonNullable<typeof transaction> => !!transaction);
+
+      const stillRepresentsThisCharge = linked.some((transaction) =>
+        linkedTransactionMatchesImport(transaction, {
+          date: txn.date,
+          description: txn.description,
+          amount: txn.amount,
+          merchant: txn.merchant,
+        })
+      );
+
+      if (!stillRepresentsThisCharge) {
+        fullyImportedHashes.delete(hash);
+      }
+    }
 
     for (const hash of fullyImportedHashes) {
       const txn = validTransactions.find(t => t.hash === hash);
