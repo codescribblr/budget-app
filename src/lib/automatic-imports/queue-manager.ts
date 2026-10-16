@@ -13,6 +13,7 @@ import {
   descriptionsMatchForDuplicate,
   getMerchantNameFromTransactionRow,
 } from '../duplicate-matching';
+import { fetchAllPages } from '../supabase/fetch-all-pages';
 
 /**
  * Get or create a single shared manual import setup for the current account
@@ -551,56 +552,71 @@ export async function getQueuedImports(options?: {
     'processing_tasks',
   ].join(', ');
 
-  let query = supabase
-    .from('queued_imports')
-    .select(
-      options?.forReview
-        ? reviewFields
-        : '*, csv_data, csv_analysis, csv_file_name, csv_fingerprint, csv_mapping_template_id, csv_mapping_name, processing_tasks'
-    )
-    .eq('account_id', accountId);
+  const selectFields = options?.forReview
+    ? reviewFields
+    : '*, csv_data, csv_analysis, csv_file_name, csv_fingerprint, csv_mapping_template_id, csv_mapping_name, processing_tasks';
 
-  if (options?.status) {
-    query = query.eq('status', options.status);
-  } else if (options?.batchId) {
-    // When fetching for a batch, exclude imported transactions by default
-    // (unless status is explicitly set to 'imported')
-    // This matches the behavior of getQueuedImportBatches which only shows pending/reviewing
-    query = query.in('status', ['pending', 'reviewing', 'approved', 'rejected']);
+  const buildQuery = () => {
+    let query = supabase
+      .from('queued_imports')
+      .select(selectFields)
+      .eq('account_id', accountId);
+
+    if (options?.status) {
+      query = query.eq('status', options.status);
+    } else if (options?.batchId) {
+      // When fetching for a batch, exclude imported transactions by default
+      // (unless status is explicitly set to 'imported')
+      // This matches the behavior of getQueuedImportBatches which only shows pending/reviewing
+      query = query.in('status', ['pending', 'reviewing', 'approved', 'rejected']);
+    }
+
+    if (options?.importSetupId) {
+      query = query.eq('import_setup_id', options.importSetupId);
+    }
+
+    if (options?.batchId) {
+      query = query.eq('source_batch_id', options.batchId);
+    }
+
+    // Batch review needs the CSV row first. Other lists sort by date, with id
+    // as a tiebreaker so pages do not skip rows that share a date.
+    if (options?.batchId) {
+      query = query.order('id', { ascending: true });
+    } else {
+      query = query
+        .order('transaction_date', { ascending: false })
+        .order('id', { ascending: false });
+    }
+
+    return query;
+  };
+
+  if (options?.limit || options?.offset) {
+    let query = buildQuery();
+    if (options?.limit) {
+      query = query.limit(options.limit);
+    }
+    if (options?.offset) {
+      query = query.range(options.offset, options.offset + (options.limit || 100) - 1);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('Error fetching queued imports:', error);
+      throw error;
+    }
+    return data || [];
   }
 
-  if (options?.importSetupId) {
-    query = query.eq('import_setup_id', options.importSetupId);
-  }
-
-  if (options?.batchId) {
-    query = query.eq('source_batch_id', options.batchId);
-  }
-
-  // Apply ordering - order by transaction_date descending by default
-  // But for batch queries, we want the first record (with CSV data) first
-  if (options?.batchId) {
-    query = query.order('id', { ascending: true }); // First record has CSV data
-  } else {
-    query = query.order('transaction_date', { ascending: false });
-  }
-
-  if (options?.limit) {
-    query = query.limit(options.limit);
-  }
-
-  if (options?.offset) {
-    query = query.range(options.offset, options.offset + (options.limit || 100) - 1);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error('Error fetching queued imports:', error);
-    throw error;
-  }
-
-  return data || [];
+  return fetchAllPages(async (from, to) => {
+    const { data, error } = await buildQuery().range(from, to);
+    if (error) {
+      console.error('Error fetching queued imports:', error);
+      throw error;
+    }
+    return data || [];
+  });
 }
 
 /**
@@ -611,27 +627,33 @@ export async function getQueuedImportBatches() {
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
 
-  // Get all queued imports grouped by batch
-  const { data: queuedImports, error } = await supabase
-    .from('queued_imports')
-    .select(`
-      *,
-      automatic_import_setups!inner(
-        id,
-        integration_name,
-        source_type
-      ),
-      target_account:accounts!queued_imports_target_account_id_fkey(name),
-      target_credit_card:credit_cards!queued_imports_target_credit_card_id_fkey(name)
-    `)
-    .eq('account_id', accountId)
-    .in('status', ['pending', 'reviewing'])
-    .order('source_fetched_at', { ascending: false });
+  // Get all queued imports grouped by batch. Page past the 1,000-row cap
+  // so a large open batch is not reported as exactly 1,000 transactions.
+  const queuedImports = await fetchAllPages(async (from, to) => {
+    const { data, error } = await supabase
+      .from('queued_imports')
+      .select(`
+        *,
+        automatic_import_setups!inner(
+          id,
+          integration_name,
+          source_type
+        ),
+        target_account:accounts!queued_imports_target_account_id_fkey(name),
+        target_credit_card:credit_cards!queued_imports_target_credit_card_id_fkey(name)
+      `)
+      .eq('account_id', accountId)
+      .in('status', ['pending', 'reviewing'])
+      .order('source_fetched_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to);
 
-  if (error) {
-    console.error('Error fetching queued import batches:', error);
-    throw error;
-  }
+    if (error) {
+      console.error('Error fetching queued import batches:', error);
+      throw error;
+    }
+    return data || [];
+  });
 
   // Group by batch_id
   const batches = new Map<string, any[]>();

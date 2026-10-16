@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { getOrCreateManualImportSetup, queueTransactions } from '@/lib/automatic-imports/queue-manager';
 import { parseCSVWithMapping } from '@/lib/csv-parser-helpers';
+import { fetchAllPages } from '@/lib/supabase/fetch-all-pages';
 import { resetTasksAfterRemap } from '@/lib/processing-tasks';
 import type { ColumnMapping } from '@/lib/mapping-templates';
 import type { ParsedTransaction } from '@/lib/import-types';
@@ -50,15 +51,19 @@ export async function POST(
 
     // Get all queued imports from batch to check if this is API-based or CSV-based
     // Order by id to get the first transaction (which has CSV data) first
-    const { data: allQueuedImports, error: fetchError } = await supabase
-      .from('queued_imports')
-      .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, import_setup_id, target_account_id, target_credit_card_id, is_historical, processing_tasks, original_data, transaction_date, description, amount')
-      .eq('account_id', accountId)
-      .eq('source_batch_id', batchId)
-      .order('id', { ascending: true })
-      .limit(1000);
+    const allQueuedImports = await fetchAllPages(async (from, to) => {
+      const { data, error } = await supabase
+        .from('queued_imports')
+        .select('csv_data, csv_analysis, csv_file_name, csv_mapping_template_id, csv_fingerprint, csv_mapping_name, import_setup_id, target_account_id, target_credit_card_id, is_historical, processing_tasks, original_data, transaction_date, description, amount')
+        .eq('account_id', accountId)
+        .eq('source_batch_id', batchId)
+        .order('id', { ascending: true })
+        .range(from, to);
+      if (error) throw error;
+      return data || [];
+    });
 
-    if (fetchError || !allQueuedImports || allQueuedImports.length === 0) {
+    if (allQueuedImports.length === 0) {
       return NextResponse.json(
         { error: 'Batch not found' },
         { status: 404 }

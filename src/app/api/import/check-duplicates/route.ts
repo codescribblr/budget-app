@@ -9,6 +9,7 @@ import {
   normalizeComparableDescription,
   parseDateAmountDescriptionKey,
 } from '@/lib/duplicate-matching';
+import { chunkValues, fetchAllPages } from '@/lib/supabase/fetch-all-pages';
 
 interface TransactionData {
   hash: string;
@@ -83,14 +84,7 @@ export async function POST(request: Request) {
         hashToTransaction.set(txn.hash, txn);
       });
 
-      const { data: importedHashes, error: importedError } = await supabase
-        .from('imported_transactions')
-        .select('hash, account_id')
-        .eq('user_id', user.id)
-        .in('hash', hashes)
-        .or(`account_id.eq.${accountId},account_id.is.null`);
-
-      if (importedError) throw importedError;
+      const importedHashes = await fetchImportedHashes(supabase, user.id, accountId, hashes);
 
       if (importedHashes && importedHashes.length > 0) {
         const uniqueHashes = new Set(importedHashes.map((h) => h.hash));
@@ -197,37 +191,42 @@ async function fetchExistingTransactionsInRange(
   const minDate = normalizedDates.reduce((a, b) => (a < b ? a : b));
   const maxDate = normalizedDates.reduce((a, b) => (a > b ? a : b));
 
-  const { data, error } = await supabase
-    .from('transactions')
-    .select(`
-      id,
-      date,
-      description,
-      total_amount,
-      merchant_groups (
-        display_name,
-        global_merchants (
+  const data = await fetchAllPages(async (from, to) => {
+    const { data: page, error } = await supabase
+      .from('transactions')
+      .select(`
+        id,
+        date,
+        description,
+        total_amount,
+        merchant_groups (
+          display_name,
+          global_merchants (
+            display_name
+          )
+        ),
+        merchant_override:global_merchants!merchant_override_id (
           display_name
+        ),
+        imported_transaction_links (
+          imported_transactions (
+            description,
+            merchant,
+            metadata
+          )
         )
-      ),
-      merchant_override:global_merchants!merchant_override_id (
-        display_name
-      ),
-      imported_transaction_links (
-        imported_transactions (
-          description,
-          merchant,
-          metadata
-        )
-      )
-    `)
-    .eq('budget_account_id', accountId)
-    .gte('date', minDate)
-    .lte('date', maxDate);
+      `)
+      .eq('budget_account_id', accountId)
+      .gte('date', minDate)
+      .lte('date', maxDate)
+      .order('id', { ascending: true })
+      .range(from, to);
 
-  if (error) throw error;
+    if (error) throw error;
+    return page || [];
+  });
 
-  return (data || []).map((transaction) => ({
+  return data.map((transaction) => ({
     id: transaction.id,
     date: transaction.date,
     description: transaction.description,
@@ -235,6 +234,34 @@ async function fetchExistingTransactionsInRange(
     merchantName: getMerchantNameFromTransactionRow(transaction),
     originalImportTexts: getOriginalImportTextsFromLinks(transaction.imported_transaction_links),
   }));
+}
+
+async function fetchImportedHashes(
+  supabase: Awaited<ReturnType<typeof getAuthenticatedUser>>['supabase'],
+  userId: string,
+  accountId: number,
+  hashes: string[]
+) {
+  const rows: Array<{ hash: string; account_id: number | null }> = [];
+
+  for (const hashChunk of chunkValues(hashes, 500)) {
+    const page = await fetchAllPages(async (from, to) => {
+      const { data, error } = await supabase
+        .from('imported_transactions')
+        .select('id, hash, account_id')
+        .eq('user_id', userId)
+        .in('hash', hashChunk)
+        .or(`account_id.eq.${accountId},account_id.is.null`)
+        .order('id', { ascending: true })
+        .range(from, to);
+
+      if (error) throw error;
+      return data || [];
+    });
+    rows.push(...page);
+  }
+
+  return rows;
 }
 
 function buildDateAmountIndex(
