@@ -454,6 +454,47 @@ Content-Type: application/json
 }
 ```
 
+### Recompute normalized patterns (post-migration 127)
+
+Batched replacement for the heavy DML removed from migration `127_pattern_sync_and_brand_tld_normalize.sql` (that migration only replaces `normalize_merchant_pattern`). Call phases in order until each returns `done: true`:
+
+1. `recompute_global` — refresh `global_merchant_patterns.normalized_pattern` via the TS normalizer
+2. `recompute_mappings` — refresh `merchant_mappings.normalized_pattern` (`upper(normalize…)`)
+3. `inherit` — map ungrouped patterns onto a merchant sharing the same normalized form; with `sync: true` (default) also runs `syncTransactionsForPatterns` for newly inherited IDs
+
+Then run `backfill-unlinked` for any remaining null `merchant_group_id` rows.
+
+```http
+POST /api/admin/v1/merchants/recompute-patterns
+Content-Type: application/json
+
+{ "phase": "recompute_global", "limit": 500, "cursor": 0 }
+```
+
+```json
+{
+  "data": {
+    "phase": "recompute_global",
+    "scanned": 500,
+    "updated": 42,
+    "inherited": 0,
+    "synced_patterns": 0,
+    "transactions_updated": 0,
+    "groups_created": 0,
+    "next_cursor": 12345,
+    "done": false
+  },
+  "meta": { }
+}
+```
+
+```http
+POST /api/admin/v1/merchants/recompute-patterns
+Content-Type: application/json
+
+{ "phase": "inherit", "limit": 200, "cursor": 0, "sync": true }
+```
+
 ### Backfill unlinked transactions
 
 Pages transactions with `merchant_group_id IS NULL` and no override. Registers descriptions as global patterns, links to the user's group for a matching global merchant (exact then normalized), otherwise creates a clean fallback group. Also runs weekly via `backfill_unlinked_merchants`. Stay under Vercel’s 300s by paging (`limit` + `cursor`).
@@ -464,6 +505,7 @@ Content-Type: application/json
 
 { "user_id": "optional-uuid", "limit": 200, "cursor": 0 }
 ```
+
 
 ```json
 {
@@ -500,7 +542,8 @@ GET /api/admin/v1/merchants/unlinked-stats?user_id=optional-uuid
 ## Normalization
 
 Shared helper: `src/lib/merchant-pattern-normalize.ts`  
-SQL twin: `normalize_merchant_pattern()` (migrations `122_…`–`125_…`).
+SQL twin: `normalize_merchant_pattern()` (migrations `122_…`–`127_…`).
+
 
 Also used by `normalizeMerchantName` / `extractDisplayName` / `resolveMerchantDisplayName` so fallback names stay clean (`Aldi`, not `Aldi Batavia Il`; `Spill The Beans`, not raw `SPILL THE BEANS R1 GREENVILLE SC`).
 

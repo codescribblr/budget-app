@@ -24,12 +24,17 @@ Previously, if a migration encountered an error (e.g., SQL syntax error, constra
 
 **Key improvements:**
 ```bash
-# Execute with error detection
+# Execute with error detection.
+# Disable set -e while capturing: otherwise a non-zero psql exit aborts the
+# script before MIGRATION_OUTPUT can be printed (prod symptom: exit 3, no SQL).
+set +e
 MIGRATION_OUTPUT=$(psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "$MIGRATION_FILE" 2>&1)
 MIGRATION_EXIT_CODE=$?
+set -e
 
-# Check for errors in output
+# Check for errors in output — print the FULL psql transcript on failure
 if [ $MIGRATION_EXIT_CODE -ne 0 ] || echo "$MIGRATION_OUTPUT" | grep -qiE "ERROR|FATAL|syntax error"; then
+  echo "$MIGRATION_OUTPUT"
   # Migration failed - do NOT record it
   exit 1
 fi
@@ -37,6 +42,7 @@ fi
 # Only record if execution succeeded
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO $MIGRATIONS_TABLE ..."
 ```
+
 
 ### 2. Enhanced JavaScript Migration Runner (`scripts/run-migrations.js`)
 
