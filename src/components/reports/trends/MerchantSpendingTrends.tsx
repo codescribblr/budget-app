@@ -8,6 +8,7 @@ import type { TransactionWithSplits, Category } from '@/lib/types';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { OptionToggle } from '@/components/ui/option-toggle';
 import { Label } from '@/components/ui/label';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 interface MerchantSpendingTrendsProps {
   transactions: TransactionWithSplits[];
@@ -25,7 +26,10 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
     const merchantTotals = new Map<string, number>();
 
     transactions.forEach(transaction => {
-      const merchantName = transaction.merchant_name || 'Unknown';
+      const merchantName = resolveMerchantDisplayName(
+        transaction.description,
+        transaction.merchant_name
+      );
 
       // Sum only splits that are NOT in system or buffer categories
       const nonSystemTotal = transaction.splits.reduce((sum, split) => {
@@ -56,7 +60,10 @@ export default function MerchantSpendingTrends({ transactions, categories }: Mer
     const monthlyData = new Map<string, Map<string, number>>();
 
     transactions.forEach(transaction => {
-      const merchantName = transaction.merchant_name || 'Unknown';
+      const merchantName = resolveMerchantDisplayName(
+        transaction.description,
+        transaction.merchant_name
+      );
 
       if (!selectedMerchants.includes(merchantName)) return;
 

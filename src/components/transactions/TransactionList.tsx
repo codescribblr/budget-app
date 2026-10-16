@@ -35,6 +35,7 @@ import { MoreVertical, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'luc
 import { handleApiError } from '@/lib/api-error-handler';
 import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
 import { TruncatedTextWithTooltip } from '@/components/ui/truncated-text-with-tooltip';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 interface TransactionListProps {
   transactions: TransactionWithSplits[];
@@ -447,12 +448,18 @@ export default function TransactionList({
               </div>
             </div>
 
-            {transaction.merchant_name && (
-              <div className="text-xs">
-                <span className="text-muted-foreground">Merchant: </span>
-                <span>{transaction.merchant_name}</span>
-              </div>
-            )}
+            {(() => {
+              const merchantLabel = resolveMerchantDisplayName(
+                transaction.description,
+                transaction.merchant_name
+              );
+              return merchantLabel ? (
+                <div className="text-xs">
+                  <span className="text-muted-foreground">Merchant: </span>
+                  <span>{merchantLabel}</span>
+                </div>
+              ) : null;
+            })()}
 
             <div className="flex flex-wrap gap-1">
               {transaction.splits.map((split) => (
@@ -693,13 +700,19 @@ export default function TransactionList({
                   )}
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
-                  {transaction.merchant_name ? (
-                    <Badge variant="outline" className="text-xs max-w-[120px] block">
-                      <TruncatedTextWithTooltip text={transaction.merchant_name} />
-                    </Badge>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
+                  {(() => {
+                    const merchantLabel = resolveMerchantDisplayName(
+                      transaction.description,
+                      transaction.merchant_name
+                    );
+                    return merchantLabel ? (
+                      <Badge variant="outline" className="text-xs max-w-[120px] block">
+                        <TruncatedTextWithTooltip text={merchantLabel} />
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    );
+                  })()}
                 </TableCell>
                 {/* Category Cell - Inline Editable */}
                 <TableCell 
@@ -870,7 +883,7 @@ export default function TransactionList({
                 categoryName: s.category_name,
                 amount: s.amount,
               })),
-              merchant: t.merchant_name || '',
+              merchant: resolveMerchantDisplayName(t.description, t.merchant_name),
               status: 'pending' as const,
               isDuplicate: false,
               duplicateType: null,

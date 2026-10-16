@@ -4,7 +4,7 @@
  * bank strings collapse to the same key (e.g. Aldi, Target, Bridge City Coffee).
  *
  * Keep in sync with SQL normalize_merchant_pattern() in
- * migrations/125_backfill_unlinked_and_register_codes.sql
+ * migrations/126_normalize_sigonfile_and_transfer_tails.sql
  */
 
 const US_STATE_CODES = new Set([
@@ -23,7 +23,7 @@ const NOISE_WORDS = new Set([
   'PURCHASE', 'POS', 'DEBIT', 'CREDIT', 'PAYMENT', 'PMT', 'TXN', 'TRANSACTION',
   'ONLINE', 'WEB', 'MOBILE', 'APP', 'ACH', 'CHECKCARD', 'RECURRING', 'AUTOPAY',
   'WITHDRAWAL', 'DEPOSIT', 'TRANSFER', 'INC', 'LLC', 'LTD', 'CORP',
-  'PPD', 'CCD', 'TEL',
+  'PPD', 'CCD', 'TEL', 'SIGONFILE', 'ONFILE', 'AUTHORIZED', 'AUTHORIZATION',
 ]);
 // Note: bare "CO" is not a noise word — it often means Coffee / company in merchant names.
 
@@ -101,6 +101,25 @@ export function normalizeGlobalMerchantPattern(description: string): string {
     result = result.replace(prefix, '');
   }
 
+  // SIGONFILE / ON FILE markers
+  result = result.replace(/\bSIG\s*ON\s*FILE\b/g, ' ');
+  result = result.replace(/\bSIGONFILE\b/g, ' ');
+  result = result.replace(/\bON\s*FILE\b/g, ' ');
+
+  // ATM … AUTHORIZED ON <date/rest> — drop authorization tail
+  result = result.replace(/\bAUTHORIZED\s+ON\b.*$/g, ' ');
+  result = result.replace(/\bAUTH(?:ORIZATION)?\s+ON\b.*$/g, ' ');
+
+  // Reference codes
+  result = result.replace(/\bREF(?:ERENCE)?\s*#?\s*[A-Z0-9-]+\b/g, ' ');
+  result = result.replace(/\bCONF(?:IRMATION)?\s*#?\s*[A-Z0-9-]+\b/g, ' ');
+
+  // ACH / transfer: strip account-holder names after TO/FROM/INDN
+  if (/\b(ACH|TRANSFER|XFER|WIRE|PAYMENT|PPD|CCD|WEB)\b/.test(result)) {
+    result = result.replace(/\b(TO|FROM|INDN)\s+[A-Z][A-Z .'-]{1,60}$/g, ' ');
+    result = result.replace(/\bINDN:[^\s]+(?:\s+[A-Z][A-Z .'-]+)?/g, ' ');
+  }
+
   // Phones (dashes / spaces / dots) and common toll-free forms
   result = result.replace(/\b1?[-.\s]?(?:800|888|877|866|855|844|833)[-.\s]?\d{3}[-.\s]?\d{4}\b/g, ' ');
   result = result.replace(/\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g, ' ');
@@ -113,7 +132,6 @@ export function normalizeGlobalMerchantPattern(description: string): string {
   // Order / confirmation / marketplace codes
   result = result.replace(/\bAMAZON(?:\.COM)?(?:\s*MKTPL?)?\*[^\s]*/g, 'AMAZON');
   result = result.replace(/\bAMAZON\.COM\b/g, 'AMAZON');
-  result = result.replace(/\bCONF(?:IRMATION)?\s*#?\s*[A-Z0-9-]+\b/g, ' ');
   result = result.replace(/\bAIRBNB\s+[GM]-[A-Z0-9]+\b/g, 'AIRBNB');
   result = result.replace(/\bST-[A-Z0-9]+\b/g, ' ');
 

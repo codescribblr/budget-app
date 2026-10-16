@@ -1,7 +1,7 @@
 import { createCrudHandlers } from '@/lib/external-api/resource-routes';
 
 export const GET = createCrudHandlers('merchants', 'merchant_groups', 'account_id', {
-  orderBy: 'name',
+  orderBy: 'display_name',
 }).GET;
 
 export const POST = createCrudHandlers('merchants', 'merchant_groups', 'account_id', {

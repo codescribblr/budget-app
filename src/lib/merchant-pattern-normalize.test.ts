@@ -39,6 +39,20 @@ describe('normalizeGlobalMerchantPattern', () => {
     expect(normalizeGlobalMerchantPattern('COFFEE SHOP T1 AUSTIN TX')).toBe('coffee shop');
   });
 
+  it('strips SIGONFILE, reference codes, AUTHORIZED ON, and transfer name tails', () => {
+    expect(normalizeGlobalMerchantPattern('SHELL OIL SIGONFILE')).toBe('shell oil');
+    expect(normalizeGlobalMerchantPattern('STORE REF# 998877')).toBe('store');
+    expect(
+      normalizeGlobalMerchantPattern('ATM 123 MAIN ST AUTHORIZED ON 01/15')
+    ).toBe('atm 123 main st');
+    expect(
+      normalizeGlobalMerchantPattern('ACME PAYROLL ACH TO JOHN DOE')
+    ).toBe('acme payroll');
+    expect(
+      normalizeGlobalMerchantPattern('ONLINE TRANSFER TO JONATHAN WADSWORTH')
+    ).toBe('');
+  });
+
   it('strips phones, street fragments, and trailing state', () => {
     expect(
       normalizeGlobalMerchantPattern('TST* TROPICAL GRILLE WADE 864-334-5163 SC')

@@ -18,6 +18,7 @@ import {
   filterCategoriesForTransactionSelect,
   sortCategoriesForTransactionSelect,
 } from '@/lib/transaction-categories';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 interface MergeTransactionDialogProps {
   isOpen: boolean;
@@ -406,7 +407,7 @@ export default function MergeTransactionDialog({
                         <td className="p-2 font-medium">Merchant</td>
                         {transactions.map((t, idx) => (
                           <td key={idx} className="p-2">
-                            {t.merchant_name || '—'}
+                            {resolveMerchantDisplayName(t.description, t.merchant_name) || '—'}
                           </td>
                         ))}
                       </tr>

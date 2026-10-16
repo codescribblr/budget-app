@@ -8,6 +8,7 @@ import {
   type RecurringPattern,
 } from './detect-from-data';
 import type { DetectionTransaction } from './types';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 export type { RecurringPattern };
 
@@ -47,14 +48,18 @@ function mapTestTransaction(txn: TestTransaction): DetectionTransaction | null {
       is_buffer: Boolean(split.categories?.is_buffer),
     }));
 
+  const description = txn.description || '';
   return {
     id: txn.id,
     date: txn.date,
-    description: txn.description || '',
+    description,
     total_amount: Math.abs(txn.total_amount),
     transaction_type: txn.transaction_type,
     merchant_group_id: txn.merchant_group_id,
-    merchant_name: txn.merchant_groups?.display_name || 'Unknown',
+    merchant_name: resolveMerchantDisplayName(
+      description,
+      txn.merchant_groups?.display_name
+    ),
     account_id: txn.account_id ?? null,
     credit_card_id: txn.credit_card_id ?? null,
     splits,

@@ -16,6 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ChevronRight, ExternalLink } from 'lucide-react';
 import { MerchantLogo } from '@/components/admin/MerchantLogo';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 interface TransactionsByMerchantProps {
   transactions: TransactionWithSplits[];
@@ -84,8 +85,10 @@ export default function TransactionsByMerchant({
   const merchantSpending = new Map<string, { count: number; total: number }>();
 
   filteredTransactions.forEach(transaction => {
-    // Use merchant_name if available, otherwise fall back to description
-    const merchantName = transaction.merchant_name || transaction.description;
+    const merchantName = resolveMerchantDisplayName(
+      transaction.description,
+      transaction.merchant_name
+    );
     const current = merchantSpending.get(merchantName) || { count: 0, total: 0 };
     const amount = transaction.transaction_type === 'expense'
       ? transaction.total_amount

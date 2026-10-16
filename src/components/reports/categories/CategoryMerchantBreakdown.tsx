@@ -7,6 +7,7 @@ import type { TransactionWithSplits, Category } from '@/lib/types';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { OptionToggle } from '@/components/ui/option-toggle';
 import { Label } from '@/components/ui/label';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 interface CategoryMerchantBreakdownProps {
   transactions: TransactionWithSplits[];
@@ -30,7 +31,10 @@ export default function CategoryMerchantBreakdown({ transactions, category, star
       const categorySplit = transaction.splits.find(s => s.category_id === category.id);
       if (!categorySplit) return;
 
-      const merchantName = transaction.merchant_name || 'Unknown';
+      const merchantName = resolveMerchantDisplayName(
+        transaction.description,
+        transaction.merchant_name
+      );
       const amount = transaction.transaction_type === 'expense'
         ? categorySplit.amount
         : -categorySplit.amount;
@@ -82,7 +86,10 @@ export default function CategoryMerchantBreakdown({ transactions, category, star
         const categorySplit = transaction.splits.find(s => s.category_id === category.id);
         if (!categorySplit) return;
 
-        const merchantName = transaction.merchant_name || 'Unknown';
+        const merchantName = resolveMerchantDisplayName(
+        transaction.description,
+        transaction.merchant_name
+      );
         if (!selectedMerchants.includes(merchantName)) return;
 
         const amount = transaction.transaction_type === 'expense'
@@ -130,7 +137,10 @@ export default function CategoryMerchantBreakdown({ transactions, category, star
         const categorySplit = transaction.splits.find(s => s.category_id === category.id);
         if (!categorySplit) return;
 
-        const merchantName = transaction.merchant_name || 'Unknown';
+        const merchantName = resolveMerchantDisplayName(
+        transaction.description,
+        transaction.merchant_name
+      );
         if (!selectedMerchants.includes(merchantName)) return;
 
         const amount = transaction.transaction_type === 'expense'

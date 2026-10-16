@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/utils';
 import { parseLocalDate } from '@/lib/date-utils';
 import { Loader2 } from 'lucide-react';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 import {
   Table,
   TableBody,
@@ -185,12 +186,18 @@ export default function TransactionDetailDialog({
                     {details.transaction.is_historical ? 'Yes' : 'No'}
                   </Badge>
                 </div>
-                {details.transaction.merchant_name && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Merchant</p>
-                    <p className="font-medium">{details.transaction.merchant_name}</p>
-                  </div>
-                )}
+                {(() => {
+                  const merchantLabel = resolveMerchantDisplayName(
+                    details.transaction.description,
+                    details.transaction.merchant_name
+                  );
+                  return merchantLabel ? (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Merchant</p>
+                      <p className="font-medium">{merchantLabel}</p>
+                    </div>
+                  ) : null;
+                })()}
                 {details.transaction.account_name && (
                   <div>
                     <p className="text-sm text-muted-foreground">Account</p>

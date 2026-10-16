@@ -2,19 +2,25 @@ import { NextResponse } from 'next/server';
 import { externalApiIdRoute } from '@/lib/external-api/resource-routes';
 import { externalApiData } from '@/lib/external-api/handler';
 import { ExternalApiNotFoundError, getExternalDb } from '@/lib/external-api/query-helpers';
+import {
+  TRANSACTION_MERCHANT_SELECT,
+  withResolvedMerchantName,
+} from '@/lib/external-api/merchant-name';
 
 export const GET = externalApiIdRoute('transactions', async (_request, context, id) => {
   const supabase = getExternalDb();
   const { data, error } = await supabase
     .from('transactions')
-    .select('*, transaction_splits(*)')
+    .select(TRANSACTION_MERCHANT_SELECT)
     .eq('id', id)
     .eq('budget_account_id', context.budgetAccountId)
     .maybeSingle();
 
   if (error) throw error;
   if (!data) throw new ExternalApiNotFoundError('Transaction not found');
-  return NextResponse.json(externalApiData(data, context));
+  return NextResponse.json(
+    externalApiData(withResolvedMerchantName(data as Record<string, unknown>), context)
+  );
 });
 
 export const PATCH = externalApiIdRoute('transactions', async (request, context, id) => {

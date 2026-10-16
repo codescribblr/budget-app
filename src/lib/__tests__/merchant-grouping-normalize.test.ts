@@ -26,5 +26,9 @@ describe('normalizeMerchantName / extractDisplayName', () => {
       'Spill The Beans'
     );
     expect(resolveMerchantDisplayName('SPILL THE BEANS R1 GREENVILLE SC')).toBe('Spill The Beans');
+    expect(resolveMerchantDisplayName('ONLINE TRANSFER TO JONATHAN WADSWORTH')).toBe(
+      'Online Transfer'
+    );
+    expect(resolveMerchantDisplayName('SHELL OIL SIGONFILE')).toBe('Shell Oil');
   });
 });

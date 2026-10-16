@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAllTransactions, createTransaction, getTransactionsPaginated } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
 import type { CreateTransactionRequest } from '@/lib/types';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 export async function GET(request: NextRequest) {
   try {
@@ -251,8 +252,12 @@ async function getAllTransactionsWithDateFilter(startDate?: string, endDate?: st
   const transactionsWithSplits = allTransactions.map((txn: any) => {
     const overrideMerchant = txn.merchant_override;
     const globalMerchant = overrideMerchant || getGlobalMerchantInfo(txn.merchant_groups);
-    // Prefer global merchant name over user's merchant group name
-    const merchantName = overrideMerchant?.display_name || globalMerchant?.display_name || txn.merchant_groups?.display_name || null;
+    const merchantName = resolveMerchantDisplayName(
+      txn.description,
+      overrideMerchant?.display_name,
+      globalMerchant?.display_name,
+      txn.merchant_groups?.display_name
+    );
     return {
       ...txn,
       splits: splitsByTransaction.get(txn.id) || [],

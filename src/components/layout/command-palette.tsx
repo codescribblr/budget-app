@@ -54,6 +54,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command"
 import type { Category, Account, CreditCard, Loan, TransactionWithSplits, GoalWithDetails, Tag as TagType } from "@/lib/types"
+import { resolveMerchantDisplayName } from "@/lib/merchant-grouping"
 
 // Settings items for search
 const settingsItems = [
@@ -422,7 +423,10 @@ export function CommandPalette() {
               ) : transactions.length > 0 ? (
                 <CommandGroup heading="Recent Transactions">
                   {transactions.map((transaction) => {
-                    const displayName = transaction.merchant_name || transaction.description
+                    const displayName = resolveMerchantDisplayName(
+                      transaction.description,
+                      transaction.merchant_name
+                    )
                     const date = new Date(transaction.date).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',

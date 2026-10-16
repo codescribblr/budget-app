@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { usePortalTheme } from '@/hooks/use-portal-theme';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 interface SpendingPieChartProps {
   transactions: TransactionWithSplits[];
@@ -111,8 +112,10 @@ export default function SpendingPieChart({
         transaction.splits.forEach(split => {
           if (split.category_id === selectedCategoryId) {
             const signedAmount = transaction.transaction_type === 'income' ? -split.amount : split.amount;
-            // Use merchant_name if available, otherwise fall back to description
-            const merchantName = transaction.merchant_name || transaction.description;
+            const merchantName = resolveMerchantDisplayName(
+              transaction.description,
+              transaction.merchant_name
+            );
             const current = merchantSpending.get(merchantName) || 0;
             merchantSpending.set(merchantName, current + signedAmount);
           }

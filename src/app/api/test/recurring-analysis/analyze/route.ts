@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GEMINI_MODELS } from '@/lib/ai/constants';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 /**
  * Parse markdown table format into JSON array
@@ -119,7 +120,10 @@ export async function POST(request: NextRequest) {
 
       merchantSummaries.push({
         merchantGroupId,
-        merchantName: sortedTxs[0].merchant_groups?.display_name || 'Unknown',
+        merchantName: resolveMerchantDisplayName(
+          sortedTxs[0].description,
+          sortedTxs[0].merchant_groups?.display_name
+        ),
         transactionCount: sortedTxs.length,
         firstDate: sortedTxs[0].date,
         lastDate: sortedTxs[sortedTxs.length - 1].date,

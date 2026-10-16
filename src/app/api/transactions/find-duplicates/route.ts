@@ -96,30 +96,20 @@ export async function GET() {
       if (duplicates.length > 1) {
         processedIds.add(txn1.id);
         
-        // Helper function to extract merchant name from transaction
-        const getMerchantName = (txn: any): string | null => {
-          // Prefer merchant override
-          if (txn.merchant_override?.display_name) {
-            return txn.merchant_override.display_name;
-          }
-          
-          // Then check global merchant from merchant group
+        const { resolveMerchantDisplayName } = await import('@/lib/merchant-grouping');
+        const getMerchantName = (txn: any): string => {
           const merchantGroup = txn.merchant_groups;
-          if (merchantGroup?.global_merchants) {
-            const globalMerchant = Array.isArray(merchantGroup.global_merchants)
+          const globalMerchant = merchantGroup?.global_merchants
+            ? Array.isArray(merchantGroup.global_merchants)
               ? merchantGroup.global_merchants[0]
-              : merchantGroup.global_merchants;
-            if (globalMerchant && globalMerchant.status === 'active' && globalMerchant.display_name) {
-              return globalMerchant.display_name;
-            }
-          }
-          
-          // Fall back to merchant group display name
-          if (merchantGroup?.display_name) {
-            return merchantGroup.display_name;
-          }
-          
-          return null;
+              : merchantGroup.global_merchants
+            : null;
+          return resolveMerchantDisplayName(
+            txn.description,
+            txn.merchant_override?.display_name,
+            globalMerchant?.status === 'active' ? globalMerchant?.display_name : null,
+            merchantGroup?.display_name
+          );
         };
         
         duplicateGroups.push({

@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 interface RecurringTransaction {
   id: number;
@@ -507,7 +508,12 @@ export default function RecurringTransactionDetailPage({ id }: { id: string }) {
                           {txn.description || '—'}
                         </div>
                       </TableCell>
-                      <TableCell>{txn.merchant_groups?.display_name || '—'}</TableCell>
+                      <TableCell>
+                        {resolveMerchantDisplayName(
+                          txn.description || '',
+                          (txn.merchant_groups as any)?.display_name
+                        ) || '—'}
+                      </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
                         <span className={txn.transaction_type === 'expense' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
                           {txn.transaction_type === 'expense' ? '-' : '+'}

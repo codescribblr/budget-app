@@ -6,6 +6,7 @@ import {
   type UserFeedbackRecord,
 } from './detect-from-data';
 import type { DetectionTransaction } from './types';
+import { resolveMerchantDisplayName } from '@/lib/merchant-grouping';
 
 export type { RecurringPattern } from './types';
 
@@ -20,14 +21,26 @@ function mapTransaction(row: any): DetectionTransaction | null {
     is_buffer: Boolean(split.categories?.is_buffer),
   }));
 
+  const description = row.description || '';
+  const groups = row.merchant_groups;
+  const gm = groups?.global_merchants
+    ? Array.isArray(groups.global_merchants)
+      ? groups.global_merchants[0]
+      : groups.global_merchants
+    : null;
+
   return {
     id: row.id,
     date: row.date,
-    description: row.description || '',
+    description,
     total_amount: Math.abs(row.total_amount),
     transaction_type: row.transaction_type,
     merchant_group_id: row.merchant_group_id,
-    merchant_name: row.merchant_groups?.display_name || 'Unknown',
+    merchant_name: resolveMerchantDisplayName(
+      description,
+      gm?.status === 'active' ? gm?.display_name : null,
+      groups?.display_name
+    ),
     account_id: row.account_id ?? null,
     credit_card_id: row.credit_card_id ?? null,
     splits,
