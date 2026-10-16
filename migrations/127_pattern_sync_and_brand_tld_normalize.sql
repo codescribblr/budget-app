@@ -1,11 +1,21 @@
 -- Migration: 127_pattern_sync_and_brand_tld_normalize.sql
--- Description: Strip .com/.net and apostrophes in normalize_merchant_pattern;
---              recompute; inherit mappings; one-time relink of transactions whose
---              description maps to a global pattern but whose group is not linked.
+-- Description: Strip .com/.net and apostrophes in normalize_merchant_pattern.
+--              Heavy recompute / inherit / transaction relink intentionally
+--              omitted — run via POST /api/admin/v1/merchants/recompute-patterns
+--              (then backfill-unlinked) so deploy migrations stay under statement
+--              timeouts. Idempotent: CREATE OR REPLACE only.
 -- Date: 2026-10-16
 -- Keep in sync with src/lib/merchant-pattern-normalize.ts
+--
+-- Safety: wrapped in BEGIN/COMMIT so a failure leaves no partial state.
+-- Previous failed prod attempt rolled back; this file was never recorded in
+-- _migrations. App code from PR #10 already uses the TS normalizer twin, so
+-- runtime matching works before this migration and before the batched recompute.
 
 BEGIN;
+
+-- Allow slow DDL on busy DBs; CREATE OR REPLACE is normally fast.
+SET LOCAL statement_timeout = '10min';
 
 CREATE OR REPLACE FUNCTION normalize_merchant_pattern(pattern_text TEXT)
 RETURNS TEXT AS $$
@@ -214,188 +224,5 @@ BEGIN
   RETURN lower(array_to_string(tokens, ' '));
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
-
--- Recompute normalized columns
-UPDATE global_merchant_patterns
-SET
-  normalized_pattern = normalize_merchant_pattern(pattern),
-  updated_at = NOW()
-WHERE pattern IS NOT NULL AND trim(pattern) != '';
-
-UPDATE merchant_mappings
-SET
-  normalized_pattern = upper(normalize_merchant_pattern(pattern)),
-  updated_at = NOW()
-WHERE pattern IS NOT NULL AND trim(pattern) != '';
-
--- Inherit global_merchant_id for ungrouped patterns that now share a normalized form
-UPDATE global_merchant_patterns AS ungrouped
-SET global_merchant_id = mapped.global_merchant_id
-FROM (
-  SELECT DISTINCT ON (normalized_pattern)
-    normalized_pattern,
-    global_merchant_id
-  FROM global_merchant_patterns
-  WHERE global_merchant_id IS NOT NULL
-    AND normalized_pattern IS NOT NULL
-    AND trim(normalized_pattern) != ''
-  ORDER BY normalized_pattern, usage_count DESC, id
-) AS mapped
-WHERE ungrouped.global_merchant_id IS NULL
-  AND ungrouped.normalized_pattern = mapped.normalized_pattern
-  AND ungrouped.normalized_pattern IS NOT NULL
-  AND trim(ungrouped.normalized_pattern) != '';
-
--- =============================================================================
--- One-time: relink transactions whose description maps to a global pattern but
--- whose merchant_group is not linked to that global merchant.
--- =============================================================================
-
--- 1) Link existing same-name user groups to the global merchant when still unlinked
-UPDATE merchant_groups mg
-SET
-  global_merchant_id = gm.id,
-  updated_at = NOW()
-FROM global_merchants gm
-WHERE mg.global_merchant_id IS NULL
-  AND lower(trim(mg.display_name)) = lower(trim(gm.display_name))
-  AND gm.status = 'active';
-
--- 2) Ensure a canonical user group exists for every (user, account, global) that
---    has mismatched transactions (exact pattern match)
-INSERT INTO merchant_groups (user_id, account_id, display_name, global_merchant_id)
-SELECT DISTINCT ON (t.user_id, t.budget_account_id, gm.id)
-  t.user_id,
-  t.budget_account_id,
-  gm.display_name,
-  gm.id
-FROM transactions t
-JOIN global_merchant_patterns gmp
-  ON gmp.pattern = t.description
- AND gmp.global_merchant_id IS NOT NULL
-JOIN global_merchants gm
-  ON gm.id = gmp.global_merchant_id
- AND gm.status = 'active'
-WHERE t.merchant_override_id IS NULL
-  AND t.user_id IS NOT NULL
-  AND t.budget_account_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM merchant_groups mg
-    WHERE mg.user_id = t.user_id
-      AND mg.account_id = t.budget_account_id
-      AND mg.global_merchant_id = gm.id
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM merchant_groups mg
-    WHERE mg.user_id = t.user_id
-      AND mg.account_id = t.budget_account_id
-      AND mg.display_name = gm.display_name
-  )
-ORDER BY t.user_id, t.budget_account_id, gm.id
-ON CONFLICT (user_id, display_name) DO UPDATE
-SET
-  global_merchant_id = COALESCE(merchant_groups.global_merchant_id, EXCLUDED.global_merchant_id),
-  updated_at = NOW();
-
--- 3) Same for normalized_pattern matches (descriptions that normalize to a mapped form)
-INSERT INTO merchant_groups (user_id, account_id, display_name, global_merchant_id)
-SELECT DISTINCT ON (t.user_id, t.budget_account_id, mapped.global_merchant_id)
-  t.user_id,
-  t.budget_account_id,
-  gm.display_name,
-  mapped.global_merchant_id
-FROM transactions t
-JOIN LATERAL (
-  SELECT gmp.global_merchant_id
-  FROM global_merchant_patterns gmp
-  WHERE gmp.global_merchant_id IS NOT NULL
-    AND gmp.normalized_pattern IS NOT NULL
-    AND trim(gmp.normalized_pattern) != ''
-    AND gmp.normalized_pattern = normalize_merchant_pattern(t.description)
-  ORDER BY gmp.usage_count DESC NULLS LAST, gmp.id
-  LIMIT 1
-) mapped ON TRUE
-JOIN global_merchants gm
-  ON gm.id = mapped.global_merchant_id
- AND gm.status = 'active'
-WHERE t.merchant_override_id IS NULL
-  AND t.user_id IS NOT NULL
-  AND t.budget_account_id IS NOT NULL
-  AND t.description IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM merchant_groups mg
-    WHERE mg.user_id = t.user_id
-      AND mg.account_id = t.budget_account_id
-      AND mg.global_merchant_id = mapped.global_merchant_id
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM merchant_groups mg
-    WHERE mg.user_id = t.user_id
-      AND mg.account_id = t.budget_account_id
-      AND mg.display_name = gm.display_name
-  )
-ORDER BY t.user_id, t.budget_account_id, mapped.global_merchant_id
-ON CONFLICT (user_id, display_name) DO UPDATE
-SET
-  global_merchant_id = COALESCE(merchant_groups.global_merchant_id, EXCLUDED.global_merchant_id),
-  updated_at = NOW();
-
--- 4) Relink transactions (exact pattern) onto the canonical global-linked group
-UPDATE transactions t
-SET merchant_group_id = mg.id
-FROM global_merchant_patterns gmp,
-     global_merchants gm,
-     merchant_groups mg
-WHERE gmp.pattern = t.description
-  AND gmp.global_merchant_id IS NOT NULL
-  AND gm.id = gmp.global_merchant_id
-  AND gm.status = 'active'
-  AND mg.user_id = t.user_id
-  AND mg.account_id = t.budget_account_id
-  AND mg.global_merchant_id = gm.id
-  AND t.merchant_override_id IS NULL
-  AND t.user_id IS NOT NULL
-  AND t.budget_account_id IS NOT NULL
-  AND (
-    t.merchant_group_id IS NULL
-    OR NOT EXISTS (
-      SELECT 1 FROM merchant_groups cur
-      WHERE cur.id = t.merchant_group_id
-        AND cur.global_merchant_id = gm.id
-    )
-  );
-
--- 5) Relink by normalized form
-UPDATE transactions t
-SET merchant_group_id = mg.id
-FROM LATERAL (
-  SELECT gmp.global_merchant_id
-  FROM global_merchant_patterns gmp
-  WHERE gmp.global_merchant_id IS NOT NULL
-    AND gmp.normalized_pattern IS NOT NULL
-    AND trim(gmp.normalized_pattern) != ''
-    AND gmp.normalized_pattern = normalize_merchant_pattern(t.description)
-  ORDER BY gmp.usage_count DESC NULLS LAST, gmp.id
-  LIMIT 1
-) mapped,
-     global_merchants gm,
-     merchant_groups mg
-WHERE gm.id = mapped.global_merchant_id
-  AND gm.status = 'active'
-  AND mg.user_id = t.user_id
-  AND mg.account_id = t.budget_account_id
-  AND mg.global_merchant_id = gm.id
-  AND t.merchant_override_id IS NULL
-  AND t.user_id IS NOT NULL
-  AND t.budget_account_id IS NOT NULL
-  AND t.description IS NOT NULL
-  AND (
-    t.merchant_group_id IS NULL
-    OR NOT EXISTS (
-      SELECT 1 FROM merchant_groups cur
-      WHERE cur.id = t.merchant_group_id
-        AND cur.global_merchant_id = gm.id
-    )
-  );
 
 COMMIT;

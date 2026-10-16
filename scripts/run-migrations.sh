@@ -91,17 +91,26 @@ for MIGRATION_FILE in $MIGRATION_FILES; do
   
   echo -e "${YELLOW}📝 Running migration: $MIGRATION_NAME${NC}"
 
-  # Execute the migration with error detection
-  # Use ON_ERROR_STOP=1 to ensure psql exits on any error
-  # Capture both stdout and stderr to check for errors
+  # Execute the migration with error detection.
+  # Use ON_ERROR_STOP=1 so psql exits on any SQL error.
+  # IMPORTANT: temporarily disable `set -e` while capturing output. With `set -e`,
+  # a non-zero exit from $(psql …) aborts the script before we can print
+  # MIGRATION_OUTPUT — which is why prod failures showed exit code 3 and no SQL text.
+  set +e
   MIGRATION_OUTPUT=$(psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "$MIGRATION_FILE" 2>&1)
   MIGRATION_EXIT_CODE=$?
+  set -e
 
   # Check for errors in the output (PostgreSQL errors start with "ERROR:")
   if [ $MIGRATION_EXIT_CODE -ne 0 ] || echo "$MIGRATION_OUTPUT" | grep -qiE "ERROR|FATAL|syntax error"; then
     echo -e "${RED}❌ Migration failed: $MIGRATION_NAME${NC}"
-    echo -e "${RED}   Error output:${NC}"
-    echo "$MIGRATION_OUTPUT" | grep -iE "ERROR|FATAL|syntax error" | head -10
+    echo -e "${RED}   Exit code: $MIGRATION_EXIT_CODE${NC}"
+    echo -e "${RED}   Full psql output:${NC}"
+    if [ -n "$MIGRATION_OUTPUT" ]; then
+      echo "$MIGRATION_OUTPUT"
+    else
+      echo -e "${RED}   (no output captured from psql)${NC}"
+    fi
     echo -e "${RED}   Check the SQL syntax and database connection${NC}"
     echo -e "${RED}   Migration was NOT recorded and will be retried on next run${NC}"
     exit 1
