@@ -284,6 +284,24 @@ export async function handleCheckTrialPeriods(): Promise<JobResult> {
  */
 export async function handleSuggestMerchantGroupings(): Promise<JobResult> {
   try {
+    // Disable weekly Gemini merchant suggestions without removing the job.
+    // Default unchanged (enabled). Set DISABLE_SUGGEST_MERCHANT_GROUPINGS=true
+    // or GEMINI_MERCHANT_SUGGESTIONS_ENABLED=false to skip.
+    const disabledFlag = process.env.DISABLE_SUGGEST_MERCHANT_GROUPINGS;
+    const enabledFlag = process.env.GEMINI_MERCHANT_SUGGESTIONS_ENABLED;
+    const disabled =
+      disabledFlag === 'true' ||
+      disabledFlag === '1' ||
+      enabledFlag === 'false' ||
+      enabledFlag === '0';
+    if (disabled) {
+      return {
+        success: true,
+        message:
+          'suggest_merchant_groupings skipped (DISABLE_SUGGEST_MERCHANT_GROUPINGS or GEMINI_MERCHANT_SUGGESTIONS_ENABLED=false)',
+      };
+    }
+
     const supabase = createServiceRoleClient();
     const { generateMerchantSuggestions, rejectionKey } = await import('@/lib/ai/merchant-suggestions');
 
