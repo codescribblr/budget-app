@@ -23,6 +23,23 @@
   --nl-negative: var(--destructive);
   --nl-warning: #82591d;
   --nl-warning-background: #faf2e3;
+  /* Forest, clay, ochre, slate, and softer earth tones for report series. */
+  --chart-1: #4f7863;
+  --chart-2: #b47a61;
+  --chart-3: #b59b5a;
+  --chart-4: #6e8896;
+  --chart-5: #92788e;
+  --chart-6: #929b65;
+  --chart-7: #946551;
+  --chart-8: #618b87;
+  --chart-9: #c1aa88;
+  --chart-10: #ad8891;
+  --chart-11: #45685f;
+  --chart-12: #526f80;
+  --chart-13: #8c7c48;
+  --chart-14: #a298ad;
+  --chart-15: #a6b5a0;
+  --chart-other: #9a9b90;
 }
 .new-look {
   color: var(--foreground);
@@ -54,7 +71,27 @@
   --nl-negative: var(--destructive);
   --nl-warning: #eac586;
   --nl-warning-background: #342c1e;
+  --chart-1: #8eb69d;
+  --chart-2: #d29b7f;
+  --chart-3: #cdb575;
+  --chart-4: #94afbd;
+  --chart-5: #b69bb1;
+  --chart-6: #b1ba83;
+  --chart-7: #b98a72;
+  --chart-8: #85b0aa;
+  --chart-9: #d1bea0;
+  --chart-10: #cca6af;
+  --chart-11: #6e9a89;
+  --chart-12: #7898ab;
+  --chart-13: #ad9d68;
+  --chart-14: #b7abc6;
+  --chart-15: #c1cbb8;
+  --chart-other: #829087;
 }
+.new-look .nl-report-chart .recharts-pie-label-text { fill: var(--foreground); font-size: 12px; }
+/* Recharts sets the series color inline; legend text needs the normal text contrast. */
+.new-look .nl-report-chart .recharts-legend-item-text { color: var(--foreground) !important; }
+.new-look .nl-chart-tooltip { background: var(--popover); border-color: var(--border); color: var(--popover-foreground); }
 /* Shared classic workflows opt into these semantic colors in the new interface. */
 :is(.new-look, .new-look-theme) [data-slot="import-dropzone"] { border-color: var(--input); }
 :is(.new-look, .new-look-theme) [data-slot="import-dropzone"][data-disabled="false"]:is(:hover, :focus-within),

@@ -6,6 +6,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency } from '@/lib/utils';
 import type { TransactionWithSplits, Category } from '@/lib/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { usePortalTheme } from '@/hooks/use-portal-theme';
 
 interface SpendingPieChartProps {
   transactions: TransactionWithSplits[];
@@ -34,6 +35,8 @@ const COLORS = [
 ];
 
 const OTHER_COLOR = '#9CA3AF'; // Gray color for "Other"
+// Shared CSS tokens adapt the new interface's series to light and dark mode.
+const THEMED_COLORS = Array.from({ length: COLORS.length }, (_, index) => `var(--chart-${index + 1})`);
 
 export default function SpendingPieChart({
   transactions,
@@ -44,6 +47,9 @@ export default function SpendingPieChart({
   merchantStats = [],
   loadingMerchantStats = false
 }: SpendingPieChartProps) {
+  const guided = Boolean(usePortalTheme());
+  const colors = guided ? THEMED_COLORS : COLORS;
+  const otherColor = guided ? 'var(--chart-other)' : OTHER_COLOR;
 
   let chartData: any[] = [];
   let totalSpent = 0;
@@ -83,7 +89,7 @@ export default function SpendingPieChart({
 
       chartData = mainItems.map((item, index) => ({
         ...item,
-        color: COLORS[index % COLORS.length],
+        color: colors[index % colors.length],
         isOther: false,
       }));
 
@@ -92,7 +98,7 @@ export default function SpendingPieChart({
         chartData.push({
           name: 'Other',
           value: otherTotal,
-          color: OTHER_COLOR,
+          color: otherColor,
           isOther: true,
           otherItems: otherItems,
         });
@@ -129,7 +135,7 @@ export default function SpendingPieChart({
 
       chartData = mainItems.map((item, index) => ({
         ...item,
-        color: COLORS[index % COLORS.length],
+        color: colors[index % colors.length],
         isOther: false,
       }));
 
@@ -138,7 +144,7 @@ export default function SpendingPieChart({
         chartData.push({
           name: 'Other',
           value: otherTotal,
-          color: OTHER_COLOR,
+          color: otherColor,
           isOther: true,
           otherItems: otherItems,
         });
@@ -180,7 +186,7 @@ export default function SpendingPieChart({
       name: category.name,
       value: category.spent,
       categoryId: category.id,
-      color: COLORS[index % COLORS.length],
+      color: colors[index % colors.length],
       isOther: false,
     }));
 
@@ -189,7 +195,7 @@ export default function SpendingPieChart({
       chartData.push({
         name: 'Other',
         value: otherTotal,
-        color: OTHER_COLOR,
+        color: otherColor,
         isOther: true,
         otherItems: otherCategories.map(cat => ({
           name: cat.name,
@@ -237,7 +243,7 @@ export default function SpendingPieChart({
       if (data.isOther && data.otherItems) {
         // Show breakdown of "Other" items
         return (
-          <div className="bg-background border rounded-lg p-3 shadow-lg max-w-xs">
+          <div className="nl-chart-tooltip bg-background border rounded-lg p-3 shadow-lg max-w-xs">
             <p className="font-semibold mb-2 text-foreground">Other ({data.otherItems.length} items)</p>
             <p className="text-sm font-semibold mb-2 text-foreground">{formatCurrency(data.value)} ({percentage.toFixed(1)}%)</p>
             <div className="border-t pt-2 mt-2 space-y-1 max-h-48 overflow-y-auto">
@@ -258,7 +264,7 @@ export default function SpendingPieChart({
       }
 
       return (
-        <div className="bg-background border rounded-lg p-3 shadow-lg">
+        <div className="nl-chart-tooltip bg-background border rounded-lg p-3 shadow-lg">
           <p className="font-semibold text-foreground">{data.name}</p>
           <p className="text-sm text-foreground">{formatCurrency(data.value)}</p>
           <p className="text-sm text-muted-foreground">{percentage.toFixed(1)}%</p>
@@ -290,7 +296,7 @@ export default function SpendingPieChart({
   const totalHeight = 300 + legendHeight;
 
   return (
-    <Card className="flex flex-col">
+    <Card className="nl-report-chart flex flex-col">
       <CardHeader>
         <CardTitle>{chartTitle}</CardTitle>
         <CardDescription>
@@ -311,9 +317,10 @@ export default function SpendingPieChart({
                 labelLine={false}
                 label={renderLabel}
                 outerRadius={120}
-                fill="#8884d8"
+                fill={guided ? colors[0] : '#8884d8'}
                 dataKey="value"
-                stroke="none"
+                stroke={guided ? 'var(--card)' : 'none'}
+                strokeWidth={guided ? 2 : undefined}
                 onClick={handlePieClick}
                 style={{ cursor: onCategoryClick && !selectedCategoryId ? 'pointer' : 'default' }}
               >
