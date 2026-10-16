@@ -73,6 +73,369 @@ export async function listGlobalMerchants(options: {
   return { merchants: data ?? [] };
 }
 
+export async function getGlobalMerchant(merchantId: number) {
+  if (!Number.isFinite(merchantId) || merchantId <= 0) {
+    throw new AdminApiError(400, 'validation_error', 'Invalid merchant id');
+  }
+
+  const supabase = createServiceRoleClient();
+  const { data: merchant, error: merchantError } = await supabase
+    .from('global_merchants')
+    .select('*')
+    .eq('id', merchantId)
+    .maybeSingle();
+
+  if (merchantError) throw merchantError;
+  if (!merchant) {
+    throw new AdminApiError(404, 'not_found', 'Merchant not found');
+  }
+
+  const { data: patterns, error: patternsError } = await supabase
+    .from('global_merchant_patterns')
+    .select('id, pattern, normalized_pattern, usage_count, first_seen_at, last_seen_at')
+    .eq('global_merchant_id', merchantId)
+    .order('usage_count', { ascending: false });
+
+  if (patternsError) throw patternsError;
+
+  return {
+    merchant,
+    patterns: patterns ?? [],
+  };
+}
+
+/**
+ * Update a global merchant (mirrors session PATCH fields).
+ * Name collisions return 409 with existing_id.
+ * On rename, best-effort updates linked user merchant_groups.display_name.
+ */
+export async function updateGlobalMerchant(
+  context: AdminApiContext,
+  merchantId: number,
+  input: {
+    display_name?: string;
+    status?: 'active' | 'draft';
+    logo_url?: string | null;
+    icon_name?: string | null;
+  }
+) {
+  if (!Number.isFinite(merchantId) || merchantId <= 0) {
+    throw new AdminApiError(400, 'validation_error', 'Invalid merchant id');
+  }
+
+  const supabase = createServiceRoleClient();
+  const { data: existing, error: fetchError } = await supabase
+    .from('global_merchants')
+    .select('*')
+    .eq('id', merchantId)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  if (!existing) {
+    throw new AdminApiError(404, 'not_found', 'Merchant not found');
+  }
+
+  const logoProvided = input.logo_url !== undefined && Boolean(input.logo_url);
+  const iconProvided = input.icon_name !== undefined && Boolean(input.icon_name);
+  if (logoProvided && iconProvided) {
+    throw new AdminApiError(
+      400,
+      'validation_error',
+      'logo_url and icon_name are mutually exclusive'
+    );
+  }
+
+  const updateData: Record<string, unknown> = {};
+  const oldValues: Record<string, unknown> = {};
+  const newValues: Record<string, unknown> = {};
+
+  if (input.display_name !== undefined) {
+    const name = input.display_name.trim();
+    if (!name) {
+      throw new AdminApiError(400, 'validation_error', 'display_name cannot be empty');
+    }
+    if (name !== existing.display_name) {
+      const { data: collision } = await supabase
+        .from('global_merchants')
+        .select('id, display_name')
+        .eq('display_name', name)
+        .neq('id', merchantId)
+        .maybeSingle();
+      if (collision) {
+        throw new AdminApiError(
+          409,
+          'conflict',
+          `A merchant with this name already exists`,
+          { existing_id: collision.id }
+        );
+      }
+      oldValues.display_name = existing.display_name;
+      newValues.display_name = name;
+      updateData.display_name = name;
+    }
+  }
+
+  if (input.status !== undefined) {
+    const status = input.status === 'active' ? 'active' : 'draft';
+    if (status !== existing.status) {
+      oldValues.status = existing.status;
+      newValues.status = status;
+      updateData.status = status;
+    }
+  }
+
+  if (input.logo_url !== undefined) {
+    const logoUrl = input.logo_url || null;
+    if (logoUrl !== existing.logo_url) {
+      oldValues.logo_url = existing.logo_url;
+      newValues.logo_url = logoUrl;
+      updateData.logo_url = logoUrl;
+    }
+    // logo and icon are mutually exclusive (same as session admin UI)
+    if (logoUrl) {
+      if (existing.icon_name) {
+        oldValues.icon_name = existing.icon_name;
+        newValues.icon_name = null;
+      }
+      updateData.icon_name = null;
+    }
+  }
+
+  if (input.icon_name !== undefined) {
+    const iconName = input.icon_name || null;
+    if (iconName !== existing.icon_name) {
+      oldValues.icon_name = existing.icon_name;
+      newValues.icon_name = iconName;
+      updateData.icon_name = iconName;
+    }
+    if (iconName) {
+      if (existing.logo_url) {
+        oldValues.logo_url = existing.logo_url;
+        newValues.logo_url = null;
+      }
+      updateData.logo_url = null;
+    }
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return { merchant: existing, unchanged: true, audit_id: null as number | null };
+  }
+
+  const { data, error } = await supabase
+    .from('global_merchants')
+    .update(updateData)
+    .eq('id', merchantId)
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      const collidedName =
+        typeof updateData.display_name === 'string'
+          ? updateData.display_name
+          : existing.display_name;
+      const { data: collision } = await supabase
+        .from('global_merchants')
+        .select('id')
+        .eq('display_name', collidedName)
+        .neq('id', merchantId)
+        .maybeSingle();
+      throw new AdminApiError(
+        409,
+        'conflict',
+        'A merchant with this name already exists',
+        { existing_id: collision?.id ?? null }
+      );
+    }
+    throw error;
+  }
+
+  // Keep per-user group display names in sync when renaming (best-effort).
+  // Display often prefers global_merchants.display_name when linked, but some
+  // queries still read merchant_groups.display_name.
+  let groupsUpdated = 0;
+  if (typeof updateData.display_name === 'string') {
+    const { data: groups } = await supabase
+      .from('merchant_groups')
+      .select('id, user_id, account_id, display_name')
+      .eq('global_merchant_id', merchantId);
+
+    for (const group of groups ?? []) {
+      if (group.display_name === updateData.display_name) continue;
+      const { error: groupError } = await supabase
+        .from('merchant_groups')
+        .update({ display_name: updateData.display_name })
+        .eq('id', group.id);
+      if (groupError) {
+        // Unique (user/account/name) collisions are possible; leave group name as-is.
+        console.error(
+          `[admin-api] skip merchant_group ${group.id} rename:`,
+          groupError.message
+        );
+      } else {
+        groupsUpdated++;
+      }
+    }
+  }
+
+  const action = await recordAgentAction(context, {
+    action: 'update_merchant',
+    globalMerchantId: merchantId,
+    patternIds: [],
+    confidence: null,
+    reasoning: null,
+    suggestionId: null,
+    metadata: {
+      old: oldValues,
+      new: newValues,
+      merchant_groups_updated: groupsUpdated,
+    },
+  });
+
+  return { merchant: data, unchanged: false, audit_id: action?.id ?? null };
+}
+
+/**
+ * Merge source merchant into target (into_id). Mirrors session admin merge:
+ * move patterns, re-link user groups, sync transactions, delete source.
+ */
+export async function mergeGlobalMerchant(
+  context: AdminApiContext,
+  sourceMerchantId: number,
+  intoId: number
+) {
+  if (!Number.isFinite(sourceMerchantId) || sourceMerchantId <= 0) {
+    throw new AdminApiError(400, 'validation_error', 'Invalid source merchant id');
+  }
+  if (!Number.isFinite(intoId) || intoId <= 0) {
+    throw new AdminApiError(400, 'validation_error', 'into_id is required');
+  }
+  if (sourceMerchantId === intoId) {
+    throw new AdminApiError(
+      400,
+      'validation_error',
+      'Source and target merchants must be different'
+    );
+  }
+
+  const supabase = createServiceRoleClient();
+
+  const { data: sourceMerchant, error: sourceError } = await supabase
+    .from('global_merchants')
+    .select('id, display_name, status')
+    .eq('id', sourceMerchantId)
+    .maybeSingle();
+  if (sourceError) throw sourceError;
+  if (!sourceMerchant) {
+    throw new AdminApiError(404, 'not_found', 'Source merchant not found');
+  }
+
+  const { data: targetMerchant, error: targetError } = await supabase
+    .from('global_merchants')
+    .select('id, display_name, status')
+    .eq('id', intoId)
+    .maybeSingle();
+  if (targetError) throw targetError;
+  if (!targetMerchant) {
+    throw new AdminApiError(404, 'not_found', 'Target merchant not found');
+  }
+
+  const { data: sourcePatterns, error: patternsError } = await supabase
+    .from('global_merchant_patterns')
+    .select('id, pattern')
+    .eq('global_merchant_id', sourceMerchantId);
+  if (patternsError) throw patternsError;
+
+  const patternIds = (sourcePatterns ?? []).map((p) => p.id as number);
+  if (patternIds.length > 0) {
+    const { error: updatePatternsError } = await supabase
+      .from('global_merchant_patterns')
+      .update({ global_merchant_id: intoId })
+      .in('id', patternIds);
+    if (updatePatternsError) throw updatePatternsError;
+  }
+
+  const { data: userGroups, error: userGroupsError } = await supabase
+    .from('merchant_groups')
+    .select('id, user_id, account_id')
+    .eq('global_merchant_id', sourceMerchantId);
+  if (userGroupsError) throw userGroupsError;
+
+  let userGroupsUpdated = 0;
+  for (const userGroup of userGroups ?? []) {
+    const { data: existingTargetGroup } = await supabase
+      .from('merchant_groups')
+      .select('id')
+      .eq('user_id', userGroup.user_id)
+      .eq('account_id', userGroup.account_id)
+      .eq('global_merchant_id', intoId)
+      .neq('id', userGroup.id)
+      .maybeSingle();
+
+    if (existingTargetGroup) {
+      await supabase
+        .from('transactions')
+        .update({ merchant_group_id: existingTargetGroup.id })
+        .eq('merchant_group_id', userGroup.id);
+      await supabase.from('merchant_groups').delete().eq('id', userGroup.id);
+    } else {
+      const { error: updateGroupError } = await supabase
+        .from('merchant_groups')
+        .update({ global_merchant_id: intoId })
+        .eq('id', userGroup.id);
+      if (updateGroupError) {
+        console.error(`Error updating user group ${userGroup.id}:`, updateGroupError);
+        continue;
+      }
+    }
+    userGroupsUpdated++;
+  }
+
+  let syncResult = { transactionsUpdated: 0, groupsCreated: 0 };
+  if (patternIds.length > 0) {
+    try {
+      syncResult = await syncTransactionsForPatterns(patternIds, intoId);
+    } catch (syncError) {
+      console.error('[admin-api] sync after merge:', syncError);
+    }
+  }
+
+  const { error: deleteError } = await supabase
+    .from('global_merchants')
+    .delete()
+    .eq('id', sourceMerchantId);
+  if (deleteError) throw deleteError;
+
+  const action = await recordAgentAction(context, {
+    action: 'merge_merchant',
+    globalMerchantId: intoId,
+    patternIds,
+    confidence: null,
+    reasoning: null,
+    suggestionId: null,
+    metadata: {
+      source_merchant_id: sourceMerchantId,
+      source_display_name: sourceMerchant.display_name,
+      into_id: intoId,
+      into_display_name: targetMerchant.display_name,
+      patterns_moved: patternIds.length,
+      user_groups_updated: userGroupsUpdated,
+      transactions_updated: syncResult.transactionsUpdated,
+      groups_created: syncResult.groupsCreated,
+    },
+  });
+
+  return {
+    source_merchant: sourceMerchant,
+    target_merchant: targetMerchant,
+    patterns_moved: patternIds.length,
+    user_groups_updated: userGroupsUpdated,
+    transactions_updated: syncResult.transactionsUpdated,
+    groups_created: syncResult.groupsCreated,
+    audit_id: action?.id ?? null,
+  };
+}
+
 export async function createGlobalMerchant(
   context: AdminApiContext,
   input: { display_name: string; status?: 'active' | 'draft' }

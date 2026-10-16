@@ -4,7 +4,8 @@ export class AdminApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
-    message: string
+    message: string,
+    public readonly details?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'AdminApiError';
@@ -14,7 +15,13 @@ export class AdminApiError extends Error {
 export function adminApiErrorResponse(error: unknown): NextResponse {
   if (error instanceof AdminApiError) {
     return NextResponse.json(
-      { error: { code: error.code, message: error.message } },
+      {
+        error: {
+          code: error.code,
+          message: error.message,
+          ...(error.details ?? {}),
+        },
+      },
       { status: error.status }
     );
   }

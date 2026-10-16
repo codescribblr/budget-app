@@ -164,6 +164,106 @@ Content-Type: application/json
 }
 ```
 
+### Get one global merchant
+
+```http
+GET /api/admin/v1/merchants/42
+```
+
+```json
+{
+  "data": {
+    "merchant": {
+      "id": 42,
+      "display_name": "Bridge City Coffee",
+      "status": "active",
+      "logo_url": null,
+      "icon_name": null
+    },
+    "patterns": [
+      {
+        "id": 123,
+        "pattern": "SP BRIDGE CITY CO 01/14 PURCHASE GREENVILLE SC",
+        "normalized_pattern": "bridge city co",
+        "usage_count": 4
+      }
+    ]
+  },
+  "meta": { }
+}
+```
+
+### Update a global merchant
+
+Editable fields match the session admin UI: `display_name`, `status` (`active`|`draft`), `logo_url`, `icon_name` (logo and icon are mutually exclusive). Renames best-effort update linked `merchant_groups.display_name`. Audited in `admin_merchant_agent_actions` with old/new values and API key.
+
+```http
+PATCH /api/admin/v1/merchants/42
+Content-Type: application/json
+
+{
+  "display_name": "Bridge City Coffee Roasters",
+  "status": "active"
+}
+```
+
+```json
+{
+  "data": {
+    "merchant": {
+      "id": 42,
+      "display_name": "Bridge City Coffee Roasters",
+      "status": "active"
+    },
+    "unchanged": false,
+    "audit_id": 20
+  },
+  "meta": { }
+}
+```
+
+Name collision (another merchant already has that `display_name`):
+
+```json
+{
+  "error": {
+    "code": "conflict",
+    "message": "A merchant with this name already exists",
+    "existing_id": 17
+  }
+}
+```
+
+HTTP status **409**.
+
+### Merge merchants
+
+Merge source `:id` into another merchant (moves patterns, re-links user groups, syncs transactions, deletes source). Same behavior as the session admin merge UI.
+
+```http
+POST /api/admin/v1/merchants/42/merge
+Content-Type: application/json
+
+{ "into_id": 17 }
+```
+
+(`target_merchant_id` is also accepted as an alias for `into_id`.)
+
+```json
+{
+  "data": {
+    "source_merchant": { "id": 42, "display_name": "Bridge City Coffee" },
+    "target_merchant": { "id": 17, "display_name": "Bridge City" },
+    "patterns_moved": 12,
+    "user_groups_updated": 3,
+    "transactions_updated": 40,
+    "groups_created": 0,
+    "audit_id": 21
+  },
+  "meta": { }
+}
+```
+
 ### Map patterns (auto-approve)
 
 Groups patterns under a merchant, runs the same transaction sync as the admin UI, writes an audit row, and inserts an **approved** suggestion (with confidence/reasoning metadata) for history.
