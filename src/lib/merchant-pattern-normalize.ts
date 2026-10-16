@@ -3,8 +3,10 @@
  * Used for global_merchant_patterns matching so dated / location / store-number
  * bank strings collapse to the same key (e.g. Aldi, Target, Bridge City Coffee).
  *
- * Keep in sync with SQL normalize_merchant_pattern() in
- * migrations/127_pattern_sync_and_brand_tld_normalize.sql
+ * Keep in sync with SQL public.normalize_merchant_pattern() in
+ * migrations/127_pattern_sync_and_brand_tld_normalize.sql and
+ * migrations/128_fix_normalize_merchant_pattern_search_path.sql
+ * (callers under SET search_path = '' must use the public. prefix).
  */
 
 const US_STATE_CODES = new Set([
