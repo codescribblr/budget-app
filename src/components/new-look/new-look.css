@@ -1864,3 +1864,55 @@ button.nl-activity-link {
     flex-wrap: wrap;
   }
 }
+
+/* Goals keep progress separate from the money available to spend. */
+.nl-goals-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; align-items: start; gap: 28px; }
+.nl-goals-single { grid-template-columns: minmax(0, 1fr); max-width: 850px; }
+.nl-goals-main { min-width: 0; }
+.nl-goal-list { display: grid; gap: 16px; }
+.nl-goals-main > .nl-tabs { margin-bottom: 20px; }
+.nl-goals-main > .nl-tabs span { margin-left: 6px; color: var(--muted-foreground); font-size: 11px; }
+.nl-goal-card { padding: 24px; overflow-wrap: anywhere; }
+.nl-goal-card-heading { display: flex; justify-content: space-between; align-items: start; gap: 18px; }
+.nl-goal-card h3 { font-size: 19px; line-height: 1.4; margin: 3px 0 0; }
+.nl-goal-card h3 button { display: flex; align-items: center; gap: 8px; text-align: left; }
+.nl-goal-card h3 svg { flex-shrink: 0; color: var(--muted-foreground); }
+.nl-goal-status { font-size: 11px; border-radius: 5px; background: var(--muted); padding: 5px 9px; max-width: 170px; }
+.nl-goal-amount { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+.nl-goal-amount strong { font-size: 27px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.nl-goal-amount span, .nl-goal-pace { font-size: 12px; color: var(--muted-foreground); }
+.nl-goal-progress { height: 7px; border-radius: 20px; overflow: hidden; background: var(--muted); margin: 12px 0; }
+.nl-goal-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
+.nl-goal-pace { display: flex; justify-content: space-between; gap: 12px; }
+.nl-goal-card-actions { display: flex; align-items: center; gap: 18px; margin-top: 22px; }
+.nl-goal-empty { display: grid; justify-items: start; gap: 12px; padding: 32px; }
+.nl-goal-empty svg { color: var(--primary); }
+.nl-goal-empty h3 { font-size: 20px; }
+.nl-goal-empty p { max-width: 480px; }
+.nl-buffer-card { display: grid; gap: 16px; }
+.nl-buffer-card > :is(h2, .nl-goal-progress), .nl-panel.nl-buffer-card > p { margin: 0; }
+.nl-buffer-balance { display: grid; gap: 1px; padding-top: 8px; }
+.nl-buffer-balance strong { font-size: 34px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.nl-buffer-balance span { font-size: 12px; color: var(--muted-foreground); }
+.nl-buffer-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.nl-buffer-actions > button { padding-inline: 10px; }
+.nl-buffer-receipt { padding: 16px; background: var(--accent); border-radius: 8px; }
+.nl-buffer-receipt p { font-size: 12px; margin-block: 8px 12px; }
+.nl-goal-dialog { display: flex; flex-direction: column; max-height: calc(100dvh - 2rem); overflow: hidden; overflow-wrap: anywhere; }
+.nl-goal-dialog > :is([data-slot="dialog-header"], .nl-tabs, .nl-goal-detail-actions) { flex-shrink: 0; }
+.nl-goal-detail-scroll { min-height: 0; overflow-y: auto; }
+.nl-goal-detail-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 18px; border-top: 1px solid var(--border); }
+.nl-goal-explanation { padding: 18px; margin-top: 20px; border-radius: 8px; background: var(--muted); font-size: 13px; }
+.nl-goal-explanation h3 { font-weight: 600; margin-bottom: 8px; }
+.nl-goal-explanation p { margin-bottom: 0; }
+.nl-preserve-lines { white-space: pre-wrap; }
+.nl-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+@media (max-width: 1100px) { .nl-goals-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) {
+  .nl-goal-card-heading { flex-direction: column; gap: 10px; }
+  .nl-goal-status { max-width: none; }
+  .nl-goal-card { padding: 20px; }
+  .nl-goal-pace { flex-direction: column; gap: 4px; }
+  .nl-goal-detail-actions { flex-wrap: wrap; }
+  .nl-goal-detail-actions > .nl-primary { width: 100%; }
+}

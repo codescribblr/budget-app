@@ -217,8 +217,8 @@ function EnvelopeSetupContent() {
               </div>
               <div className="nl-setup-row-actions">
                 {category.is_goal ? (
-                  <Link className="nl-secondary" href="/goals">
-                    Manage linked goal ↗
+                  <Link className="nl-secondary" href={`/new/goals?category=${category.id}`}>
+                    Manage linked goal →
                   </Link>
                 ) : (
                   <>

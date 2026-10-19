@@ -345,8 +345,8 @@ function PaydayContent() {
         </div>
       </div>
       <p className="nl-footnote">
-        Need to fund from your income buffer or use other allocation tools?{" "}
-        <Link href="/money-movement">Open money movement in classic ↗</Link>
+        Need to use money you reserved for later?{" "}
+        <Link href="/new/goals#income-buffer">Release money from your income buffer →</Link>
       </p>
       <Dialog
         open={preview}

@@ -1,4 +1,10 @@
 import type { CreateGoalRequest, UpdateGoalRequest, Goal } from '@/lib/types';
+import { localDate } from '@/lib/new-look';
+
+function validTargetDate(value: string) {
+  const date = new Date(`${value}T12:00:00`);
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(date.getTime()) && localDate(date) === value && value >= localDate();
+}
 
 /**
  * Validate goal creation request
@@ -20,12 +26,8 @@ export function validateCreateGoal(data: CreateGoalRequest): { valid: boolean; e
   }
   
   if (data.target_date) {
-    const targetDate = new Date(data.target_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (targetDate < today) {
-      return { valid: false, error: 'Target date must be in the future' };
+    if (!validTargetDate(data.target_date)) {
+      return { valid: false, error: 'Target date must be today or a future date' };
     }
   }
   
@@ -102,7 +104,7 @@ export function validateCreateGoal(data: CreateGoalRequest): { valid: boolean; e
 export function validateUpdateGoal(
   goal: Goal,
   data: UpdateGoalRequest,
-  currentBalance: number
+  _currentBalance: number
 ): { valid: boolean; error?: string; warning?: string } {
   if (data.name !== undefined && data.name.trim().length === 0) {
     return { valid: false, error: 'Goal name cannot be empty' };
@@ -113,12 +115,8 @@ export function validateUpdateGoal(
   }
   
   if (data.target_date !== undefined && data.target_date !== null) {
-    const targetDate = new Date(data.target_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (targetDate < today) {
-      return { valid: false, error: 'Target date must be in the future' };
+    if (!validTargetDate(data.target_date)) {
+      return { valid: false, error: 'Target date must be today or a future date' };
     }
   }
   
@@ -131,13 +129,8 @@ export function validateUpdateGoal(
     return { valid: false, error: 'Account-linked goals must have a linked account' };
   }
   
-  // Warn if changing goal type with existing balance
-  if (goal.goal_type === 'envelope' && currentBalance > 0) {
-    return {
-      valid: true,
-      warning: 'Changing goal type with existing balance may cause data inconsistencies. Consider creating a new goal instead.',
-    };
-  }
+  // Goal type is immutable in UpdateGoalRequest. Ordinary edits to a funded
+  // envelope do not change its type and must not produce a type-change warning.
   
   return { valid: true };
 }

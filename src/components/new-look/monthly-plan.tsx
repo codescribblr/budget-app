@@ -233,8 +233,8 @@ function PlanContent() {
                 </td>
                 <td data-label="Funding target" className="nl-right">
                   {c.is_goal ? (
-                    <Link href="/goals" className="nl-secondary">
-                      Edit goal ↗
+                    <Link href={`/new/goals?category=${c.id}&edit=true&from=plan${checkin ? "&checkin=monthly" : ""}`} className="nl-secondary">
+                      Edit goal →
                     </Link>
                   ) : (
                     <>
@@ -278,7 +278,7 @@ function PlanContent() {
           Set up envelope purposes and balance targets →
         </Link>
         . Goal-linked contributions are managed through{" "}
-        <Link href="/goals">goals in classic ↗</Link>.
+        <Link href="/new/goals">goals →</Link>.
       </p>
       <CheckinFooter
         task="plan"

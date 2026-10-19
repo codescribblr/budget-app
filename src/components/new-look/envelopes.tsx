@@ -290,7 +290,7 @@ function EnvelopesContent() {
   );
 }
 
-function EnvelopeEditor({
+export function EnvelopeEditor({
   category,
   mode,
   onTabChange,
