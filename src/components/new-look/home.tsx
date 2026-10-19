@@ -188,10 +188,10 @@ function HomeContent() {
               <div className="nl-panel">
                 <h3>Your envelopes start here</h3>
                 <p>
-                  Create your categories in classic, then return to plan and
+                  Create your envelopes, then return to plan and
                   review them here.
                 </p>
-                <Link href="/categories" className="nl-secondary">
+                <Link href="/new/budget/manage?edit=new" className="nl-secondary">
                   Set up envelopes →
                 </Link>
               </div>

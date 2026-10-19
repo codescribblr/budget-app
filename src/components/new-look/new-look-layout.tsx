@@ -78,6 +78,11 @@ export function NewLookLayout({ children }: { children: React.ReactNode }) {
         { href: "/new/goals", label: "Goals & buffer", icon: Target },
       ]
     : navigation;
+  const activeLink = links.find(
+    (link) =>
+      pathname === link.href ||
+      (link.href !== "/new" && pathname.startsWith(`${link.href}/`)),
+  );
   return (
     <SubscriptionProvider>
       <SidebarProvider open={true}>
@@ -149,8 +154,10 @@ export function NewLookLayout({ children }: { children: React.ReactNode }) {
                   <Link
                     key={href}
                     href={href}
-                    className={pathname === href ? "active" : ""}
-                    aria-current={pathname === href ? "page" : undefined}
+                    className={activeLink?.href === href ? "active" : ""}
+                    aria-current={
+                      activeLink?.href === href ? "page" : undefined
+                    }
                     onClick={() => setMenu(false)}
                   >
                     <Icon size={18} />
@@ -192,8 +199,8 @@ export function NewLookLayout({ children }: { children: React.ReactNode }) {
                   <Menu size={21} />
                 </button>
                 <span className="nl-breadcrumb">
-                  Your budget <span>/</span>{" "}
-                  {links.find((l) => l.href === pathname)?.label || "New look"}
+                  Your budget <span>/</span> {activeLink?.label || "New look"}
+                  {pathname.endsWith("/manage") ? " / Setup" : ""}
                 </span>
                 <div className="nl-top-actions">
                   <span className="nl-beta">New look · Beta</span>

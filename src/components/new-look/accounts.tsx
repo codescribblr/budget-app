@@ -133,10 +133,16 @@ function AccountsContent() {
         description="Check your bank balances, then copy the available credit shown for each card. We’ll calculate what’s owed. Import transactions separately to update spending in your envelopes."
       >
         <div className="nl-checkin-actions">
-          <Link className="nl-secondary" href="/accounts">
-            Manage accounts in classic ↗
+          <Link
+            className="nl-secondary"
+            href={
+              checkin
+                ? "/new/accounts/manage?from=daily"
+                : "/new/accounts/manage"
+            }
+          >
+            Set up accounts & cards →
           </Link>
-          {!data.cards.length && <Link className="nl-secondary" href="/credit-cards">Add a credit card in classic ↗</Link>}
         </div>
       </PageHeading>
       <ReadOnlyNotice />
@@ -167,8 +173,14 @@ function AccountsContent() {
                   {kind === "card" ? "Credit cards" : "Bank & cash accounts"}
                 </h2>
                 {kind === "card" && (
-                  <Link href="/credit-cards">
-                    Manage credit limits in classic ↗
+                  <Link
+                    href={
+                      checkin
+                        ? "/new/accounts/manage?from=daily"
+                        : "/new/accounts/manage"
+                    }
+                  >
+                    Edit card details & limits →
                   </Link>
                 )}
               </div>
@@ -336,10 +348,17 @@ function AccountsContent() {
         <div className="nl-panel">
           <h2>Add your first account</h2>
           <p>
-            Set up a bank, cash account, or credit card in classic, then return
-            here for your daily balance pass.
+            Set up a bank, cash account, or credit card, then return here for
+            your daily balance pass.
           </p>
-          <Link href="/accounts" className="nl-primary">
+          <Link
+            href={
+              checkin
+                ? "/new/accounts/manage?from=daily"
+                : "/new/accounts/manage"
+            }
+            className="nl-primary"
+          >
             Add an account →
           </Link>
         </div>

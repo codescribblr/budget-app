@@ -114,12 +114,22 @@ function PlanContent() {
         title="A plan you can keep up with"
         description="Set your regular funding targets using what you’ve learned from real spending. Targets guide future allocations; editing them doesn’t move any money."
       >
-        <Link
-          className="nl-secondary"
-          href={checkin ? "/new/reports?checkin=monthly" : "/new/reports"}
-        >
-          Review spending →
-        </Link>
+        <div className="nl-checkin-actions">
+          <Link
+            href={
+              checkin ? "/new/budget/manage?from=monthly" : "/new/budget/manage"
+            }
+            className="nl-secondary"
+          >
+            Set up envelopes →
+          </Link>
+          <Link
+            className="nl-secondary"
+            href={checkin ? "/new/reports?checkin=monthly" : "/new/reports"}
+          >
+            Review spending →
+          </Link>
+        </div>
       </PageHeading>
       <ReadOnlyNotice />
       <div className="nl-stat-grid">
@@ -152,8 +162,16 @@ function PlanContent() {
       {!envelopes.length && (
         <div className="nl-panel">
           <h2>Start with your envelopes</h2>
-          <p>Create categories for the things you want to fund, then set their monthly targets here.</p>
-          <Link className="nl-secondary" href="/categories">Create envelopes in classic ↗</Link>
+          <p>
+            Create categories for the things you want to fund, then set their
+            monthly targets here.
+          </p>
+          <Link
+            className="nl-secondary"
+            href={`/new/budget/manage?edit=new${checkin ? "&from=monthly" : ""}`}
+          >
+            Create an envelope →
+          </Link>
         </div>
       )}
       <div className="nl-table-wrap">
@@ -171,6 +189,14 @@ function PlanContent() {
               <tr key={c.id}>
                 <td>
                   <strong>{c.name}</strong>
+                  {!c.is_goal && (
+                    <Link
+                      className="nl-subtext"
+                      href={`/new/budget/manage?edit=${c.id}${checkin ? "&from=monthly" : ""}`}
+                    >
+                      Edit purpose & details →
+                    </Link>
+                  )}
                   {errors[c.id] && (
                     <p role="alert" className="nl-error">
                       {errors[c.id]}
@@ -187,8 +213,7 @@ function PlanContent() {
                         : "Monthly expense"}
                   {c.category_type === "target_balance" && (
                     <span className="nl-subtext">
-                      Balance target: {money(c.target_balance || 0)} · edit in
-                      classic
+                      Balance target: {money(c.target_balance || 0)}
                     </span>
                   )}
                 </td>
@@ -244,8 +269,16 @@ function PlanContent() {
       </div>
       <p className="nl-footnote">
         Annual expenses build gradually and can carry large balances
-        intentionally. Goal contributions and category types are managed in
-        classic for now. <Link href="/categories">Manage categories ↗</Link>
+        intentionally.{" "}
+        <Link
+          href={
+            checkin ? "/new/budget/manage?from=monthly" : "/new/budget/manage"
+          }
+        >
+          Set up envelope purposes and balance targets →
+        </Link>
+        . Goal-linked contributions are managed through{" "}
+        <Link href="/goals">goals in classic ↗</Link>.
       </p>
       <CheckinFooter
         task="plan"

@@ -6,7 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import * as Tabs from "@radix-ui/react-tabs";
 import { EnvelopeActivity } from "./envelope-activity";
-import { envelopeReviewHref, envelopeReviewTarget, type EnvelopeTab } from "@/lib/envelope-navigation";
+import {
+  envelopeReviewHref,
+  envelopeReviewTarget,
+  type EnvelopeTab,
+} from "@/lib/envelope-navigation";
 import {
   Dialog,
   DialogContent,
@@ -86,8 +90,15 @@ function EnvelopesContent() {
         title="Every envelope, in perspective"
         description="Scan balances, cover overages, and decide where your money is most useful. Review the whole picture before moving anything."
       >
-        <Link href="/categories" className="nl-secondary">
-          Manage envelopes in classic ↗
+        <Link
+          href={
+            checkin
+              ? `/new/budget/manage?from=${checkin}`
+              : "/new/budget/manage"
+          }
+          className="nl-secondary"
+        >
+          Set up envelopes →
         </Link>
       </PageHeading>
       <ReadOnlyNotice />
@@ -148,7 +159,11 @@ function EnvelopesContent() {
                 <td>
                   <Link
                     className="nl-row-button"
-                    href={envelopeReviewHref(c.id, "activity", params.toString())}
+                    href={envelopeReviewHref(
+                      c.id,
+                      "activity",
+                      params.toString(),
+                    )}
                     scroll={false}
                   >
                     {c.name}
@@ -193,22 +208,30 @@ function EnvelopesContent() {
                 </td>
                 <td>
                   <div className="nl-envelope-actions">
-                  <Link
-                    className="nl-secondary"
-                    aria-label={`Review ${c.name}`}
-                    href={envelopeReviewHref(c.id, "activity", params.toString())}
-                    scroll={false}
-                  >
-                    Review →
-                  </Link>
-                  <Link
-                    className="nl-activity-link"
-                    aria-label={`Move money for ${c.name}`}
-                    href={envelopeReviewHref(c.id, "transfer", params.toString())}
-                    scroll={false}
-                  >
-                    Move money
-                  </Link>
+                    <Link
+                      className="nl-secondary"
+                      aria-label={`Review ${c.name}`}
+                      href={envelopeReviewHref(
+                        c.id,
+                        "activity",
+                        params.toString(),
+                      )}
+                      scroll={false}
+                    >
+                      Review →
+                    </Link>
+                    <Link
+                      className="nl-activity-link"
+                      aria-label={`Move money for ${c.name}`}
+                      href={envelopeReviewHref(
+                        c.id,
+                        "transfer",
+                        params.toString(),
+                      )}
+                      scroll={false}
+                    >
+                      Move money
+                    </Link>
                   </div>
                 </td>
               </tr>
@@ -223,8 +246,10 @@ function EnvelopesContent() {
           ) : (
             <>
               No envelopes yet.{" "}
-              <Link href="/categories">
-                Create your categories in classic →
+              <Link
+                href={`/new/budget/manage?edit=new${checkin ? `&from=${checkin}` : ""}`}
+              >
+                Create your first envelope →
               </Link>
             </>
           )}
@@ -247,14 +272,18 @@ function EnvelopesContent() {
           key={`${data.identity.activeAccountId}:${category.id}`}
           category={category}
           mode={tab}
-          onTabChange={nextTab => router.replace(
-            envelopeReviewHref(category.id, nextTab, params.toString()),
-            { scroll: false },
-          )}
-          onClose={() => router.replace(
-            envelopeReviewHref(null, "activity", params.toString()),
-            { scroll: false },
-          )}
+          onTabChange={(nextTab) =>
+            router.replace(
+              envelopeReviewHref(category.id, nextTab, params.toString()),
+              { scroll: false },
+            )
+          }
+          onClose={() =>
+            router.replace(
+              envelopeReviewHref(null, "activity", params.toString()),
+              { scroll: false },
+            )
+          }
         />
       )}
     </>
@@ -296,15 +325,17 @@ function EnvelopeEditor({
   const target = direction === "in" ? category : counterpart;
   const validTransfer = Boolean(
     source &&
-      target &&
-      transferAmount !== null &&
-      transferAmount > 0 &&
-      cents(transferAmount) <= cents(source.current_balance),
+    target &&
+    transferAmount !== null &&
+    transferAmount > 0 &&
+    cents(transferAmount) <= cents(source.current_balance),
   );
   const valid =
-    mode === "activity" ? false : mode === "transfer"
-      ? validTransfer
-      : newBalance !== null && newBalance !== category.current_balance;
+    mode === "activity"
+      ? false
+      : mode === "transfer"
+        ? validTransfer
+        : newBalance !== null && newBalance !== category.current_balance;
   const after =
     mode === "adjust"
       ? newBalance
@@ -370,156 +401,184 @@ function EnvelopeEditor({
         <DialogHeader>
           <DialogTitle>{category.name}</DialogTitle>
           <DialogDescription>
-            Available now: {money(category.current_balance)}. Review what changed,
-            then decide whether to move money.
+            Available now: {money(category.current_balance)}. Review what
+            changed, then decide whether to move money.
           </DialogDescription>
         </DialogHeader>
-        <Tabs.Root className="nl-envelope-review" value={mode} onValueChange={value => onTabChange(value as EnvelopeTab)}>
-          <Tabs.List className="nl-tabs nl-envelope-tabs" aria-label="Review envelope">
-            <Tabs.Trigger value="activity" disabled={saving}>Activity</Tabs.Trigger>
-            <Tabs.Trigger value="transfer" disabled={saving}>Move money</Tabs.Trigger>
-            <Tabs.Trigger value="adjust" disabled={saving}>Set balance</Tabs.Trigger>
+        <Tabs.Root
+          className="nl-envelope-review"
+          value={mode}
+          onValueChange={(value) => onTabChange(value as EnvelopeTab)}
+        >
+          <Tabs.List
+            className="nl-tabs nl-envelope-tabs"
+            aria-label="Review envelope"
+          >
+            <Tabs.Trigger value="activity" disabled={saving}>
+              Activity
+            </Tabs.Trigger>
+            <Tabs.Trigger value="transfer" disabled={saving}>
+              Move money
+            </Tabs.Trigger>
+            <Tabs.Trigger value="adjust" disabled={saving}>
+              Set balance
+            </Tabs.Trigger>
           </Tabs.List>
-          <Tabs.Content className="nl-envelope-activity" value="activity" forceMount hidden={mode !== "activity"}>
+          <Tabs.Content
+            className="nl-envelope-activity"
+            value="activity"
+            forceMount
+            hidden={mode !== "activity"}
+          >
             <EnvelopeActivity
               categoryId={category.id}
               currentBalance={category.current_balance}
-              funded={data.funding.categories.find(f => f.categoryId === category.id)?.fundedAmount || 0}
+              funded={
+                data.funding.categories.find(
+                  (f) => f.categoryId === category.id,
+                )?.fundedAmount || 0
+              }
               spent={data.spending[category.id] || 0}
             />
           </Tabs.Content>
-          {mode !== "activity" && <Tabs.Content value={mode}>
-        <form
-          className="nl-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save();
-          }}
-        >
-          {mode === "transfer" ? (
-            <>
-              <label>
-                Direction
-                <select
-                  aria-label="Direction"
-                  value={direction}
-                  disabled={saving || !canEdit}
-                  onChange={(e) => {
-                    setDirection(e.target.value as "in" | "out");
-                    setOther("");
-                  }}
-                >
-                  <option value="in">Move money into {category.name}</option>
-                  <option value="out">Move money out of {category.name}</option>
-                </select>
-              </label>
-              <label>
-                {direction === "in" ? "From envelope" : "To envelope"}
-                <select
-                  aria-label={
-                    direction === "in" ? "From envelope" : "To envelope"
-                  }
-                  value={other}
-                  disabled={saving || !canEdit}
-                  onChange={(e) => setOther(e.target.value)}
-                >
-                  <option value="">Choose an envelope</option>
-                  {others.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} · {money(c.current_balance)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Amount
-                <input
-                  inputMode="decimal"
-                  value={amount}
-                  disabled={saving || !canEdit}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.00"
-                />
-              </label>
-              {source &&
-                transferAmount !== null &&
-                transferAmount > source.current_balance && (
+          {mode !== "activity" && (
+            <Tabs.Content value={mode}>
+              <form
+                className="nl-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void save();
+                }}
+              >
+                {mode === "transfer" ? (
+                  <>
+                    <label>
+                      Direction
+                      <select
+                        aria-label="Direction"
+                        value={direction}
+                        disabled={saving || !canEdit}
+                        onChange={(e) => {
+                          setDirection(e.target.value as "in" | "out");
+                          setOther("");
+                        }}
+                      >
+                        <option value="in">
+                          Move money into {category.name}
+                        </option>
+                        <option value="out">
+                          Move money out of {category.name}
+                        </option>
+                      </select>
+                    </label>
+                    <label>
+                      {direction === "in" ? "From envelope" : "To envelope"}
+                      <select
+                        aria-label={
+                          direction === "in" ? "From envelope" : "To envelope"
+                        }
+                        value={other}
+                        disabled={saving || !canEdit}
+                        onChange={(e) => setOther(e.target.value)}
+                      >
+                        <option value="">Choose an envelope</option>
+                        {others.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} · {money(c.current_balance)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Amount
+                      <input
+                        inputMode="decimal"
+                        value={amount}
+                        disabled={saving || !canEdit}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </label>
+                    {source &&
+                      transferAmount !== null &&
+                      transferAmount > source.current_balance && (
+                        <p className="nl-error">
+                          The source envelope does not have enough available.
+                        </p>
+                      )}
+                    <small>
+                      A transfer changes both envelopes. Available to save and
+                      monthly funding stay the same.
+                    </small>
+                  </>
+                ) : (
+                  <>
+                    <label>
+                      New envelope balance
+                      <input
+                        inputMode="decimal"
+                        value={balance}
+                        disabled={saving || !canEdit}
+                        onChange={(e) => setBalance(e.target.value)}
+                      />
+                    </label>
+                    <small>
+                      Increasing this balance uses available-to-save money.
+                      Decreasing it releases money. This is a balance adjustment
+                      and does not count as monthly funding.{" "}
+                      <Link href="/new/payday">
+                        Use payday allocation to record funding.
+                      </Link>
+                    </small>
+                  </>
+                )}
+                <div className="nl-dialog-summary">
+                  <div>
+                    <span>{category.name} after</span>
+                    <strong>{after === null ? "—" : money(after)}</strong>
+                  </div>
+                  <div>
+                    <span>Available to save after</span>
+                    <strong className={availableAfter < 0 ? "nl-negative" : ""}>
+                      {money(availableAfter)}
+                    </strong>
+                  </div>
+                </div>
+                {mode === "adjust" && availableAfter < 0 && (
                   <p className="nl-error">
-                    The source envelope does not have enough available.
+                    This adjustment leaves available to save below zero. Review
+                    your recorded balances and commitments before saving.
                   </p>
                 )}
-              <small>
-                A transfer changes both envelopes. Available to save and monthly
-                funding stay the same.
-              </small>
-            </>
-          ) : (
-            <>
-              <label>
-                New envelope balance
-                <input
-                  inputMode="decimal"
-                  value={balance}
-                  disabled={saving || !canEdit}
-                  onChange={(e) => setBalance(e.target.value)}
-                />
-              </label>
-              <small>
-                Increasing this balance uses available-to-save money. Decreasing
-                it releases money. This is a balance adjustment and does not
-                count as monthly funding.{" "}
-                <Link href="/new/payday">
-                  Use payday allocation to record funding.
-                </Link>
-              </small>
-            </>
+                {error && (
+                  <p className="nl-error" role="alert">
+                    {error}
+                  </p>
+                )}
+                <div className="nl-form-actions">
+                  <button
+                    type="button"
+                    className="nl-secondary"
+                    disabled={saving}
+                    onClick={onClose}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="nl-primary"
+                    disabled={!canEdit || !valid || saving}
+                  >
+                    {saving
+                      ? "Saving…"
+                      : mode === "transfer"
+                        ? "Move money"
+                        : "Save balance adjustment"}
+                  </button>
+                </div>
+              </form>
+            </Tabs.Content>
           )}
-          <div className="nl-dialog-summary">
-            <div>
-              <span>{category.name} after</span>
-              <strong>{after === null ? "—" : money(after)}</strong>
-            </div>
-            <div>
-              <span>Available to save after</span>
-              <strong className={availableAfter < 0 ? "nl-negative" : ""}>
-                {money(availableAfter)}
-              </strong>
-            </div>
-          </div>
-          {mode === "adjust" && availableAfter < 0 && (
-            <p className="nl-error">
-              This adjustment leaves available to save below zero. Review your
-              recorded balances and commitments before saving.
-            </p>
-          )}
-          {error && (
-            <p className="nl-error" role="alert">
-              {error}
-            </p>
-          )}
-          <div className="nl-form-actions">
-            <button
-              type="button"
-              className="nl-secondary"
-              disabled={saving}
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="nl-primary"
-              disabled={!canEdit || !valid || saving}
-            >
-              {saving
-                ? "Saving…"
-                : mode === "transfer"
-                  ? "Move money"
-                  : "Save balance adjustment"}
-            </button>
-          </div>
-        </form>
-          </Tabs.Content>}
         </Tabs.Root>
       </DialogContent>
     </Dialog>
