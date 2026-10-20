@@ -1,4 +1,5 @@
 "use client";
+import { AccountNavigation } from "./account-navigation";
 import { useTaskCheckin } from "./checkin-flow";
 import { useState } from "react";
 import Link from "next/link";
@@ -123,6 +124,7 @@ function AccountsContent() {
   return (
     <>
       <TaskReturn task="accounts" cadence="daily" />
+      <AccountNavigation />
       <PageHeading
         eyebrow={
           checkin

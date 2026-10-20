@@ -36,6 +36,7 @@ const icons = {
 const steps = ["Your goal", "How to track it", "Your plan", "Ready to begin"];
 
 export function GoalWizard({
+  initialSource,
   goals,
   loans,
   assets,
@@ -43,6 +44,7 @@ export function GoalWizard({
   onClose,
   onSaved,
 }: {
+  initialSource?: string | null;
   goals: GoalWithDetails[];
   loans: Loan[];
   assets: NonCashAsset[];
@@ -51,7 +53,34 @@ export function GoalWizard({
   onSaved: (id?: number) => Promise<void>;
 }) {
   const { data } = useBudget();
-  const [draft, setDraft] = useState<GoalDraft>(() => goalDraft());
+  const [draft, setDraft] = useState<GoalDraft>(() => {
+    const initial = goalDraft();
+    const match = /^(loan|asset):(\d+)$/.exec(initialSource || "");
+    if (!match) return initial;
+    const id = Number(match[2]);
+    const item =
+      match[1] === "loan"
+        ? loans.find((l) => l.id === id)
+        : assets.find((a) => a.id === id && a.asset_type === "investment");
+    if (
+      !item ||
+      goals.some(
+        (g) =>
+          g.status !== "completed" &&
+          (match[1] === "loan"
+            ? g.linked_loan_id === id
+            : g.linked_non_cash_asset_id === id),
+      )
+    )
+      return initial;
+    return {
+      ...initial,
+      purpose: match[1] === "loan" ? "debt" : "retirement",
+      type: match[1] === "loan" ? "debt-paydown" : "asset-linked",
+      source: initialSource!,
+      name: `${match[1] === "loan" ? "Pay off" : "Grow"} ${item.name}`,
+    };
+  });
   const [step, setStep] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
   const submission = useRef<{ signature: string; key: string } | null>(null);
@@ -123,6 +152,7 @@ export function GoalWizard({
   const purpose = goalPurposes.find((p) => p.value === draft.purpose);
 
   function choosePurpose(value: GoalPurpose) {
+    if (value === draft.purpose) return;
     setDraft((previous) => ({
       ...goalDraft(),
       name: previous.name,
@@ -426,9 +456,7 @@ export function GoalWizard({
                 accounts.{" "}
                 {investments.length === 0 &&
                   "You don’t have an available investment to link yet. "}
-                <Link href="/non-cash-assets">
-                  Manage investments in classic ↗
-                </Link>
+                <Link href="/new/investments">Manage investments →</Link>
               </p>
               <p className="nl-setup-callout">
                 Progress follows the value you record, including market gains
@@ -473,7 +501,7 @@ export function GoalWizard({
                 This goal pays off the entire recorded balance. Update an
                 out-of-date balance before starting.{" "}
                 <Link href="/new/accounts">Card balances →</Link> ·{" "}
-                <Link href="/loans">Loans in classic ↗</Link>
+                <Link href="/new/loans">Manage loans →</Link>
               </p>
               {(card || loan) && (
                 <>

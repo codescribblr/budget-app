@@ -39,6 +39,7 @@ export async function GET(
       .eq('loan_id', loanId)
       .eq('budget_account_id', budgetAccountId)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (auditError) {

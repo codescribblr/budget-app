@@ -16,6 +16,7 @@ import { SetupDialog } from "./setup-dialog";
 import { GoalWizard } from "./goal-wizard";
 
 type Props = {
+  initialSource?: string | null;
   goal?: GoalWithDetails;
   goals: GoalWithDetails[];
   loans: Loan[];

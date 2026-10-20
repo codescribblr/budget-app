@@ -10,6 +10,8 @@ export function safeReturnPath(value: string | null, fallback = "/dashboard") {
     : fallback;
 }
 const routes = [
+  ["/new/loans", "/loans"],
+  ["/new/investments", "/non-cash-assets"],
   ["/new/accounts", "/accounts"],
   ["/new/budget", "/categories"],
   ["/new/imports", "/imports"],
@@ -23,6 +25,8 @@ const routes = [
 ] as const;
 
 export function interfaceRoute(pathname: string, target: "new" | "classic") {
+  if (target === "new" && /^\/(loans|non-cash-assets)\/\d+$/.test(pathname)) return pathname.replace("/loans/", "/new/loans/").replace("/non-cash-assets/", "/new/investments/");
+  if (target === "classic" && /^\/new\/(loans|investments)\/\d+$/.test(pathname)) return pathname.replace("/new/loans/", "/loans/").replace("/new/investments/", "/non-cash-assets/");
   if (target === "new" && /^\/categories\/\d+$/.test(pathname)) return pathname.replace("/categories/", "/new/budget/");
   if (target === "classic" && /^\/new\/budget\/\d+$/.test(pathname)) return pathname.replace("/new/budget/", "/categories/");
   if (target === "new" && pathname === "/income-buffer") return "/new/goals#income-buffer";

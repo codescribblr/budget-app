@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { GuidedReports } from "@/components/new-look/shared-workflows";
+import { GuidedBudgetReports } from "@/components/new-look/budget-reports";
 
 export default function Page() {
   return (
     <Suspense fallback={<p role="status">Loading…</p>}>
-      <GuidedReports />
+      <GuidedBudgetReports />
     </Suspense>
   );
 }

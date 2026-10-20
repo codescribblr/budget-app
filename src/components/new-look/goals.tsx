@@ -105,6 +105,7 @@ function GoalsContent() {
     }
     const next = new URLSearchParams(params.toString());
     next.delete("category");
+    next.delete("source");
     next.delete("edit");
     next.delete("goal");
     if (id !== null) next.set("goal", String(id));
@@ -136,6 +137,7 @@ function GoalsContent() {
   const ready = !loading && !featuresLoading && !error && !featureError;
   async function saved(createdId?: number) {
     toast.success(selected ? "Goal updated." : "Goal created.");
+    if (createdId) openGoal(createdId);
     // A successful write followed by a failed refresh must not invite another create.
     await Promise.all([
       load(),
@@ -145,7 +147,6 @@ function GoalsContent() {
         ),
       ),
     ]);
-    if (createdId) openGoal(createdId);
   }
   return (
     <>
@@ -297,6 +298,7 @@ function GoalsContent() {
           </p>
         )}
       {goalsEnabled &&
+        (!creating || !loading) &&
         !featuresLoading &&
         !featureError &&
         !error &&
@@ -305,6 +307,7 @@ function GoalsContent() {
           <GoalEditor
             key={selected?.id ?? "new"}
             goal={selected}
+            initialSource={params.get("source")}
             goals={goals}
             loans={loans}
             assets={assets}
@@ -658,16 +661,16 @@ function GoalDetails({
               className="nl-primary"
               href={
                 goal.linked_non_cash_asset_id
-                  ? "/non-cash-assets"
+                  ? `/new/investments/${goal.linked_non_cash_asset_id}?action=balance`
                   : goal.linked_loan_id
-                    ? "/loans"
+                    ? `/new/loans/${goal.linked_loan_id}?action=balance`
                     : "/new/accounts"
               }
             >
               {goal.linked_non_cash_asset_id
-                ? "Update investment in classic ↗"
+                ? "Update investment value →"
                 : goal.linked_loan_id
-                  ? "Update loan in classic ↗"
+                  ? "Update loan balance →"
                   : "Update recorded balance →"}
             </Link>
           )}

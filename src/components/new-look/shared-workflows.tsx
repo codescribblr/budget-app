@@ -1,11 +1,9 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
 import { useTaskCheckin } from "./checkin-flow";
 import { useImportPaths } from "@/components/import/use-import-paths";
 import ImportTransactionsPage from "@/components/import/ImportTransactionsPage";
 export { GuidedTransactions } from "./transactions";
-import ReportsPage from "@/components/reports/ReportsPage";
 import { PageHeading, TaskReturn, CheckinFooter } from "./common";
 
 export function GuidedImports() {
@@ -39,32 +37,6 @@ export function GuidedImports() {
         cadence="weekly"
         title="Ready to look at your spending?"
         description="Check that you’ve imported and reviewed the accounts you use. Continuing records your review; it does not approve queued transactions."
-      />
-    </>
-  );
-}
-export function GuidedReports() {
-  const [reportReady, setReportReady] = useState(false);
-  const checkin = useTaskCheckin("reports");
-  const monthly = checkin === "monthly";
-  return (
-    <>
-      <TaskReturn task="reports" cadence="weekly" />
-      {checkin && (
-        <p className="nl-notice">
-          {monthly
-            ? "Reflect on the previous month and notice what you’d like to plan differently. Adjust the dates if you’re reviewing another period."
-            : "Review spending over the past week. Adjust the dates to match the period you’re reviewing."}{" "}
-          Reports include recorded transactions.
-        </p>
-      )}
-      <ReportsPage onReviewReadyChange={setReportReady} />
-      <CheckinFooter
-        task="reports"
-        cadence="weekly"
-        title="What would you like to adjust?"
-        description="Notice where spending differed from your expectations. Take those observations into the next step."
-        disabled={!reportReady}
       />
     </>
   );

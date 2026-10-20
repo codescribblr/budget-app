@@ -1,4 +1,5 @@
 "use client";
+import { AccountNavigation } from "./account-navigation";
 import { NativeSelect } from "./native-select";
 import { useState } from "react";
 import Link from "next/link";
@@ -34,6 +35,7 @@ function AccountSetupContent() {
   if (!data) return null;
   return (
     <>
+      <AccountNavigation />
       <PageHeading
         eyebrow="Accounts · setup"
         title="Choose what belongs in your budget"
@@ -143,7 +145,7 @@ function AccountSetupContent() {
                   </h3>
                   <p>
                     {kind === "account"
-                      ? "Add checking, savings, or cash on hand. Investment and retirement accounts belong under non-cash assets in classic."
+                      ? "Add checking, savings, or cash on hand. Use Investments & assets for retirement and investment accounts."
                       : "Save the credit limit and available credit shown by your card provider. We’ll work out what’s owed."}
                   </p>
                 </div>

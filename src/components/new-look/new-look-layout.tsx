@@ -31,6 +31,7 @@ import { InterfaceSwitch } from "./interface-switch";
 import { BudgetProvider } from "./budget-context";
 import { FeedbackDialog } from "./feedback-dialog";
 import "./new-look.css";
+import "./planning.css";
 
 const navigation = [
   { href: "/new", label: "Home", icon: Home },
@@ -80,6 +81,7 @@ export function NewLookLayout({ children }: { children: React.ReactNode }) {
     : navigation;
   const activeLink = links.find(
     (link) =>
+      (link.href === "/new/accounts" && (pathname.startsWith("/new/loans") || pathname.startsWith("/new/investments"))) ||
       pathname === link.href ||
       (link.href !== "/new" && pathname.startsWith(`${link.href}/`)),
   );
