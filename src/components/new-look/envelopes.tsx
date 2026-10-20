@@ -185,6 +185,11 @@ function EnvelopesContent() {
       )}
       {shown.length > 0 && (
         <div className="nl-envelope-list">
+          <p className="nl-envelope-bar-guide">
+            <span className="nl-envelope-bar-key" aria-hidden="true" />
+            Bars show money left compared with the budget or target named below
+            each bar.
+          </p>
           <div className="nl-envelope-list-heading" aria-hidden="true">
             <span>Envelope</span>
             <span>Money left</span>
@@ -323,16 +328,19 @@ function EnvelopeMoney({
         {money(o.balance)}
       </strong>
       {o.percent !== null && (
-        <div
-          className="nl-envelope-meter"
-          role="meter"
-          aria-label={`${name}: money left compared with ${o.referenceLabel.toLowerCase()}`}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(o.percent)}
-          aria-valuetext={`${money(o.balance)} in this envelope. ${o.referenceLabel}: ${money(o.reference)}.`}
-        >
-          <span style={{ width: `${o.percent}%` }} />
+        <div className="nl-envelope-comparison">
+          <div
+            className="nl-envelope-meter"
+            role="meter"
+            aria-label={`${name}: money left compared with ${o.referenceLabel.toLowerCase()}`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(o.percent)}
+            aria-valuetext={`${money(o.balance)} left in this envelope. ${o.meterCaption}.`}
+          >
+            <span style={{ width: `${o.percent}%` }} />
+          </div>
+          <span>{o.meterCaption}</span>
         </div>
       )}
       {o.balanceNote && (
@@ -340,11 +348,6 @@ function EnvelopeMoney({
           className={o.negative ? "nl-negative" : "nl-envelope-balance-note"}
         >
           {o.balanceNote}
-        </span>
-      )}
-      {(o.kind === "reserve" || o.kind === "yearly") && o.reference > 0 && (
-        <span className="nl-envelope-reference">
-          {o.referenceLabel}: {money(o.reference)}
         </span>
       )}
       {o.kind === "goal" && (

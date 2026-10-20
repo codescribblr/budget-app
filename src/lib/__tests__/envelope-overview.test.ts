@@ -20,10 +20,12 @@ describe("balance-first envelope overview", () => {
       budget: 600,
       funding: 300,
       percent: 30,
+      meterCaption: "30% of $600.00 monthly budget",
     });
     expect(envelopeOverview(category, 600)).toMatchObject({
       balance: 180,
       percent: 30,
+      meterCaption: "30% of $600.00 monthly budget",
       funding: 600,
     });
   });
@@ -31,7 +33,8 @@ describe("balance-first envelope overview", () => {
     expect(
       envelopeOverview({ ...category, current_balance: -72.75 }, 600),
     ).toMatchObject({
-      percent: 0,
+      percent: null,
+      meterCaption: null,
       negative: true,
       balanceNote: "$72.75 needs covering",
       attention: 0,
@@ -45,6 +48,7 @@ describe("balance-first envelope overview", () => {
       funding: 0,
       percent: 100,
       surplus: 250,
+      meterCaption: "141.7% of $600.00 monthly budget",
       balanceNote: "$250.00 above monthly budget",
     });
   });
@@ -55,6 +59,7 @@ describe("balance-first envelope overview", () => {
       balance: 0,
       percent: 0,
       funding: 600,
+      meterCaption: "0% of $600.00 monthly budget",
       balanceNote: "No money in this envelope",
       attention: 1,
     });
@@ -64,6 +69,7 @@ describe("balance-first envelope overview", () => {
       envelopeOverview({ ...category, monthly_amount: 0 }, 0),
     ).toMatchObject({
       percent: null,
+      meterCaption: null,
       balance: 180,
     });
   });
@@ -76,6 +82,7 @@ describe("balance-first envelope overview", () => {
     ).toMatchObject({
       reference: 1000,
       percent: 18,
+      meterCaption: "18% of $1,000.00 balance target",
       surplus: 0,
     });
     expect(
@@ -92,6 +99,7 @@ describe("balance-first envelope overview", () => {
       percent: 100,
       surplus: 0,
       balanceNote: null,
+      meterCaption: "120% of $1,000.00 balance target",
     });
   });
   it("compares yearly expense cash to the annual amount while keeping the monthly budget visible", () => {
@@ -109,6 +117,7 @@ describe("balance-first envelope overview", () => {
     ).toMatchObject({
       reference: 1800,
       referenceLabel: "Yearly budget",
+      meterCaption: "66.7% of $1,800.00 yearly budget",
       balance: 1200,
       budget: 150,
       funding: 75,
@@ -125,6 +134,7 @@ describe("balance-first envelope overview", () => {
       kind: "goal",
       balance: 2000,
       percent: null,
+      meterCaption: null,
       surplus: 0,
       budget: 600,
       funding: 300,

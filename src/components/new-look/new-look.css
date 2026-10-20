@@ -1968,9 +1968,12 @@ button.nl-activity-link {
 .nl-envelope-budget > strong, .nl-envelope-funding > strong { display: block; font-size: 15px; font-weight: 550; font-variant-numeric: tabular-nums; }
 .nl-envelope-money > span { display: block; font-size: 11px; margin-top: 4px; color: var(--muted-foreground); }
 .nl-envelope-money > .nl-negative { color: var(--destructive); }
-.nl-envelope-meter { height: 7px; border-radius: 10px; background: var(--muted); overflow: hidden; margin: 9px 0 6px; }
+.nl-envelope-bar-guide { display: flex; align-items: center; gap: 9px; margin: 0; padding: 13px 22px; border-bottom: 1px solid var(--border); font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+.nl-envelope-bar-key { width: 22px; height: 6px; border-radius: 4px; background: var(--primary); flex: none; }
+.nl-envelope-comparison { margin-top: 9px; }
+.nl-envelope-comparison > span { display: block; font-size: 11px; line-height: 1.5; color: var(--muted-foreground); margin-top: 6px; }
+.nl-envelope-meter { height: 7px; border-radius: 10px; background: var(--muted); overflow: hidden; }
 .nl-envelope-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
-.nl-envelope-money[data-negative="true"] .nl-envelope-meter { background: color-mix(in srgb, var(--destructive) 20%, var(--muted)); }
 .nl-envelope-row .nl-envelope-mobile-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .nl-envelope-row .nl-envelope-actions { justify-content: flex-start; gap: 6px 14px; font-size: 11px; margin-top: 9px; }
 @media (min-width: 801px) and (max-width: 1150px) {

@@ -31,11 +31,17 @@ export function envelopeOverview(category: Category, funded: number) {
       : kind === "yearly"
         ? "Yearly budget"
         : "Monthly budget";
-  const percent =
-    reference > 0
-      ? Math.max(0, Math.min(100, (balance / reference) * 100))
-      : null;
   const negative = balance < 0;
+  // The track stops at its target, but its caption must retain balances above 100%.
+  // A shortfall is an amount to cover, not a savings/progress percentage.
+  const balancePercent =
+    reference > 0 && !negative ? (balance / reference) * 100 : null;
+  const percent =
+    balancePercent === null ? null : Math.min(100, balancePercent);
+  const meterCaption =
+    balancePercent === null
+      ? null
+      : `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(balancePercent)}% of ${money(reference)} ${referenceLabel.toLowerCase()}`;
   const surplus = potentialSurplus(category);
   const balanceNote = negative
     ? `${money(-balance)} needs covering`
@@ -53,6 +59,7 @@ export function envelopeOverview(category: Category, funded: number) {
     reference,
     referenceLabel,
     percent,
+    meterCaption,
     negative,
     surplus,
     balanceNote,
