@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTaskCheckin } from "./checkin-flow";
 import { useImportPaths } from "@/components/import/use-import-paths";
 import ImportTransactionsPage from "@/components/import/ImportTransactionsPage";
-import TransactionsPage from "@/components/transactions/TransactionsPage";
+export { GuidedTransactions } from "./transactions";
 import ReportsPage from "@/components/reports/ReportsPage";
 import { PageHeading, TaskReturn, CheckinFooter } from "./common";
 
@@ -40,18 +40,6 @@ export function GuidedImports() {
         title="Ready to look at your spending?"
         description="Check that you’ve imported and reviewed the accounts you use. Continuing records your review; it does not approve queued transactions."
       />
-    </>
-  );
-}
-export function GuidedTransactions() {
-  const { importPath } = useImportPaths();
-  return (
-    <>
-      <div className="nl-task-return">
-        <Link href={importPath()}>← Import & review CSVs</Link>
-        <Link href="/new">Budget overview →</Link>
-      </div>
-      <TransactionsPage />
     </>
   );
 }
