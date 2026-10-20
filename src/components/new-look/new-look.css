@@ -1943,7 +1943,9 @@ button.nl-activity-link {
 .nl-envelope-fund-action { display: flex; gap: 22px; align-items: center; }
 .nl-envelope-controls { display: flex; flex-wrap: wrap; gap: 10px; }
 .nl-envelope-controls input { width: 190px; }
-.nl-envelope-controls select { font-size: 12px; }
+.nl-envelope-sort { position: relative; }
+.new-look .nl-envelope-sort select { appearance: none; width: 100%; padding-inline-end: 36px; font-size: 12px; }
+.nl-envelope-sort > svg { position: absolute; inset-inline-end: 12px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--muted-foreground); pointer-events: none; }
 .nl-envelope-list { border: 1px solid var(--border); border-radius: 10px; background: var(--card); overflow: hidden; }
 .nl-envelope-list ul { list-style: none; padding: 0; margin: 0; }
 .nl-envelope-list-heading, .nl-envelope-row { display: grid; grid-template-columns: minmax(165px, 1.3fr) minmax(180px, 1.4fr) minmax(100px, .85fr) minmax(115px, .95fr); gap: 22px; align-items: center; padding: 18px 22px; }
@@ -1983,5 +1985,5 @@ button.nl-activity-link {
   .nl-envelope-fund-action .nl-primary { font-size: 12px; padding-inline: 12px; }
   .nl-envelope-controls { width: 100%; }
   .nl-envelope-controls input { flex: 1; min-width: 130px; width: 100%; }
-  .nl-envelope-controls select { flex: 1; min-width: 130px; }
+  .nl-envelope-sort { flex: 1; min-width: 130px; }
 }

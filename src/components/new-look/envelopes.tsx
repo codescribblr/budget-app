@@ -1,6 +1,7 @@
 "use client";
 import { useTaskCheckin } from "./checkin-flow";
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   envelopeOverview,
   type EnvelopeOverview,
@@ -163,15 +164,18 @@ function EnvelopesContent() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <select
-            aria-label="Sort envelopes"
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-          >
-            <option value="envelope">Envelope order</option>
-            <option value="attention">Needs attention first</option>
-            <option value="name">Name: A to Z</option>
-          </select>
+          <div className="nl-envelope-sort">
+            <select
+              aria-label="Sort envelopes"
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+            >
+              <option value="envelope">Envelope order</option>
+              <option value="attention">Needs attention first</option>
+              <option value="name">Name: A to Z</option>
+            </select>
+            <ChevronDown aria-hidden="true" />
+          </div>
         </div>
       </div>
       {filter === "surplus" && (
