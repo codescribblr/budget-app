@@ -26,7 +26,7 @@ export default function GoalDialog({ isOpen, onClose, goal, onSuccess }: GoalDia
   const [name, setName] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
   const [targetDate, setTargetDate] = useState<Date | undefined>(undefined);
-  const [goalType, setGoalType] = useState<'envelope' | 'account-linked' | 'debt-paydown'>('envelope');
+  const [goalType, setGoalType] = useState<CreateGoalRequest['goal_type']>('envelope');
   const [monthlyContribution, setMonthlyContribution] = useState('');
   const [linkedAccountId, setLinkedAccountId] = useState<string>('');
   const [linkedCreditCardId, setLinkedCreditCardId] = useState<string>('');

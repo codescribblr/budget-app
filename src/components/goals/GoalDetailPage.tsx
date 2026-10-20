@@ -16,6 +16,7 @@ import type { EnvelopeGoalBreakdown } from '@/lib/goals/calculations';
 import { toast } from 'sonner';
 import { handleApiError } from '@/lib/api-error-handler';
 import { ArrowLeft } from 'lucide-react';
+import { goalWorkflow, goalProgressLabel } from '@/lib/guided-goals';
 
 interface GoalDetailPageProps {
   goalId: string;
@@ -66,7 +67,7 @@ export function GoalDetailContent({
           <Progress value={Math.min(progress, 100)} className="h-2" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
-              <div className="text-muted-foreground">Toward goal</div>
+              <div className="text-muted-foreground">{goalProgressLabel(goal)}</div>
               <div className="font-semibold">{formatCurrency(current)}</div>
             </div>
             <div>
@@ -94,8 +95,9 @@ export function GoalDetailContent({
           <CardHeader>
             <CardTitle>How this total is calculated</CardTitle>
             <CardDescription>
-              Money still in the envelope plus payments still categorized here.
-              Moving money to another envelope does not count.
+              {goal.purpose === 'reserve' ? 'Only money still in the envelope counts. Spending and transfers out reduce the reserve.' :
+                goal.purpose === 'retirement' ? 'Only contributions categorized to this envelope count. Money waiting in the envelope is not yet contributed.' :
+                'Money still in the envelope plus payments still categorized here. Moving money to another envelope does not count.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -166,6 +168,12 @@ export function GoalDetailContent({
         </Card>
       )}
 
+      {goal.purpose && <Card>
+        <CardHeader><CardTitle>How to use this goal</CardTitle></CardHeader>
+        <CardContent><ol className="list-decimal pl-5 space-y-3 text-sm">{goalWorkflow(goal).map(line => <li key={line}>{line}</li>)}</ol>
+          <Button variant="link" asChild><Link href={`/new/goals?goal=${goal.id}`}>Open guided goal review</Link></Button>
+        </CardContent>
+      </Card>}
       {goal.goal_type === 'account-linked' && goal.linked_account && (
         <Card>
           <CardHeader>

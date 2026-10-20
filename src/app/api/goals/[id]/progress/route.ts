@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGoalById, getAuthenticatedUser } from '@/lib/supabase-queries';
-import { calculateGoalProgress } from '@/lib/goals/calculations';
+import { calculateGoalProgress, goalEnvelopeProgress } from '@/lib/goals/calculations';
 import { getEnvelopeGoalBreakdown } from '@/lib/goals/envelope-progress';
 import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
 import { getActiveAccountId } from '@/lib/account-context';
@@ -53,6 +53,9 @@ export async function GET(
         goal.linked_category?.current_balance || 0,
         accountId
       );
+      breakdown.total = goalEnvelopeProgress(breakdown.leftover, breakdown.categorized_spending, goal.purpose);
+      if (goal.purpose === 'reserve') breakdown.items = breakdown.items.filter(item => item.kind === 'leftover');
+      if (goal.purpose === 'retirement') breakdown.items = breakdown.items.filter(item => item.kind === 'transaction');
     }
     
     return NextResponse.json({

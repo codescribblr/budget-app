@@ -536,13 +536,18 @@ export interface DashboardSummary {
 }
 
 // Goals
+export type GoalPurpose = 'purchase' | 'reserve' | 'retirement' | 'debt';
+
 export interface Goal {
   id: number;
   user_id: string;
   name: string;
   target_amount: number; // For debt-paydown: starting debt amount (from credit card/loan balance at creation)
   target_date: string | null; // ISO date string or null
-  goal_type: 'envelope' | 'account-linked' | 'debt-paydown';
+  goal_type: 'envelope' | 'account-linked' | 'debt-paydown' | 'asset-linked';
+  purpose?: GoalPurpose | null; // Null preserves the original goal semantics.
+  funding_category_id?: number | null; // Optional payment envelope, never debt progress.
+  linked_non_cash_asset_id?: number | null;
   monthly_contribution: number;
   linked_account_id: number | null;
   linked_category_id: number | null;
@@ -567,6 +572,8 @@ export interface Goal {
 }
 
 export interface GoalWithDetails extends Goal {
+  funding_category?: Category | null;
+  linked_non_cash_asset?: NonCashAsset | null;
   linked_account?: Account | null;
   linked_category?: Category | null;
   linked_credit_card?: CreditCard | null; // For debt-paydown goals (credit cards)
@@ -574,10 +581,15 @@ export interface GoalWithDetails extends Goal {
 }
 
 export interface CreateGoalRequest {
+  creation_key?: string;
   name: string;
   target_amount?: number; // For debt-paydown: captured automatically from credit card/loan balance at creation
   target_date?: string | null;
-  goal_type: 'envelope' | 'account-linked' | 'debt-paydown';
+  goal_type: Goal['goal_type'];
+  purpose?: GoalPurpose;
+  funding_category_id?: number | null;
+  create_funding_envelope?: boolean;
+  linked_non_cash_asset_id?: number | null;
   monthly_contribution: number;
   linked_account_id?: number | null;
   linked_category_id?: number | null; // For envelope goals (auto-created)
@@ -592,6 +604,7 @@ export interface CreateGoalRequest {
 }
 
 export interface UpdateGoalRequest {
+  funding_category_id?: number | null;
   name?: string;
   target_amount?: number;
   target_date?: string | null;

@@ -19,6 +19,9 @@ export function SetupDialog({
   onSave,
   onClose,
   children,
+  onBack,
+  onContinue,
+  closeOnSave = true,
 }: {
   title: string;
   description: string;
@@ -28,6 +31,9 @@ export function SetupDialog({
   onSave: () => Promise<void>;
   onClose: () => void;
   children: ReactNode;
+  onBack?: () => void;
+  onContinue?: () => void | Promise<void>;
+  closeOnSave?: boolean;
 }) {
   const [saving, setSaving] = useState(false);
   const [discard, setDiscard] = useState(false);
@@ -45,8 +51,11 @@ export function SetupDialog({
     setSaving(true);
     setError("");
     try {
-      await onSave();
-      onClose();
+      if (onContinue) await onContinue();
+      else {
+        await onSave();
+        if (closeOnSave) onClose();
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -133,12 +142,29 @@ export function SetupDialog({
                 >
                   Cancel
                 </button>
+                {onBack && (
+                  <button
+                    type="button"
+                    className="nl-secondary"
+                    disabled={saving}
+                    onClick={() => {
+                      setError("");
+                      onBack();
+                    }}
+                  >
+                    Back
+                  </button>
+                )}
                 <button
                   type="submit"
                   className="nl-primary"
-                  disabled={saving || !canEdit || !dirty}
+                  disabled={saving || !canEdit || (!dirty && !onContinue)}
                 >
-                  {saving ? "Saving…" : saveLabel}
+                  {saving
+                    ? onContinue
+                      ? "Continuing…"
+                      : "Saving…"
+                    : saveLabel}
                 </button>
               </div>
             )}

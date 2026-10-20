@@ -1,5 +1,6 @@
 import type { CreateGoalRequest, UpdateGoalRequest, Goal } from '@/lib/types';
 import { localDate } from '@/lib/new-look';
+import { purposeAllowsType } from '@/lib/guided-goals';
 
 function validTargetDate(value: string) {
   const date = new Date(`${value}T12:00:00`);
@@ -10,6 +11,32 @@ function validTargetDate(value: string) {
  * Validate goal creation request
  */
 export function validateCreateGoal(data: CreateGoalRequest): { valid: boolean; error?: string } {
+  if (data.creation_key !== undefined && (typeof data.creation_key !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.creation_key)))
+    return { valid: false, error: 'Invalid goal setup identifier' };
+  if (!['envelope', 'account-linked', 'debt-paydown', 'asset-linked'].includes(data.goal_type))
+    return { valid: false, error: 'Choose a valid goal type' };
+  if (typeof data.name !== 'string')
+    return { valid: false, error: 'Goal name is required' };
+  if (!Number.isFinite(data.monthly_contribution) || data.monthly_contribution < 0 || data.monthly_contribution > 99999999.99)
+    return { valid: false, error: 'Enter a valid monthly amount' };
+  if (data.goal_type !== 'debt-paydown' && (!Number.isFinite(data.target_amount) || Number(data.target_amount) > 99999999.99))
+    return { valid: false, error: 'Enter a valid target amount' };
+  if (data.purpose && !purposeAllowsType(data.purpose, data.goal_type))
+    return { valid: false, error: 'Choose a tracking method that fits this goal' };
+  if (!data.purpose && (data.goal_type === 'asset-linked' || data.funding_category_id || data.create_funding_envelope))
+    return { valid: false, error: 'Use guided setup for this goal' };
+  if (data.goal_type === 'asset-linked' && (!data.linked_non_cash_asset_id || data.linked_account_id || data.linked_category_id || data.linked_credit_card_id || data.linked_loan_id))
+    return { valid: false, error: 'Choose one investment to track' };
+  if (data.goal_type !== 'asset-linked' && data.linked_non_cash_asset_id)
+    return { valid: false, error: 'This goal cannot track an investment' };
+  if ((data.funding_category_id || data.create_funding_envelope) && data.goal_type !== 'debt-paydown')
+    return { valid: false, error: 'Only debt goals have payment envelopes' };
+  if (data.funding_category_id && data.create_funding_envelope)
+    return { valid: false, error: 'Choose a new or existing payment envelope' };
+  for (const id of [data.linked_category_id, data.funding_category_id, data.linked_account_id, data.linked_credit_card_id, data.linked_loan_id, data.linked_non_cash_asset_id]) {
+    if (id != null && (!Number.isSafeInteger(id) || id <= 0))
+      return { valid: false, error: 'Choose a valid source for this goal' };
+  }
   if (!data.name || data.name.trim().length === 0) {
     return { valid: false, error: 'Goal name is required' };
   }
@@ -106,6 +133,13 @@ export function validateUpdateGoal(
   data: UpdateGoalRequest,
   _currentBalance: number
 ): { valid: boolean; error?: string; warning?: string } {
+  if (data.funding_category_id !== undefined && (goal.goal_type !== 'debt-paydown' ||
+    (data.funding_category_id !== null && (!Number.isSafeInteger(data.funding_category_id) || data.funding_category_id <= 0))))
+    return { valid: false, error: 'Choose a valid payment envelope for a debt goal' };
+  if (data.target_amount !== undefined && (!Number.isFinite(data.target_amount) || data.target_amount > 99999999.99))
+    return { valid: false, error: 'Enter a valid target amount' };
+  if (data.monthly_contribution !== undefined && (!Number.isFinite(data.monthly_contribution) || data.monthly_contribution > 99999999.99))
+    return { valid: false, error: 'Enter a valid monthly amount' };
   if (data.name !== undefined && data.name.trim().length === 0) {
     return { valid: false, error: 'Goal name cannot be empty' };
   }

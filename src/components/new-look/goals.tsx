@@ -5,8 +5,13 @@ import Link from "next/link";
 import { ArrowUpRight, Plus, ShieldCheck, Target } from "lucide-react";
 import { toast } from "sonner";
 import { useFeatures } from "@/contexts/FeatureContext";
-import type { GoalWithDetails, Loan } from "@/lib/types";
-import { goalGuidance } from "@/lib/guided-goals";
+import type { GoalWithDetails, Loan, NonCashAsset } from "@/lib/types";
+import {
+  goalGuidance,
+  goalProgressLabel,
+  goalWorkflow,
+  goalPurposes,
+} from "@/lib/guided-goals";
 import { money } from "@/lib/new-look";
 import type { EnvelopeTab } from "@/lib/envelope-navigation";
 import {
@@ -49,6 +54,7 @@ function GoalsContent() {
   const goalsEnabled = hasPremium && isFeatureEnabled("goals");
   const bufferEnabled = hasPremium && isFeatureEnabled("income_buffer");
   const [goals, setGoals] = useState<GoalWithDetails[]>([]);
+  const [assets, setAssets] = useState<NonCashAsset[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -61,17 +67,19 @@ function GoalsContent() {
     setLoading(true);
     setError("");
     try {
-      const [nextGoals, nextLoans] = await Promise.all(
+      const [nextGoals, nextLoans, nextAssets] = await Promise.all(
         goalsEnabled
           ? [
               budgetRequest<GoalWithDetails[]>("/api/goals"),
               budgetRequest<Loan[]>("/api/loans"),
+              budgetRequest<NonCashAsset[]>("/api/non-cash-assets"),
             ]
-          : [Promise.resolve([]), Promise.resolve([])],
+          : [Promise.resolve([]), Promise.resolve([]), Promise.resolve([])],
       );
       if (request.current === id) {
         setGoals(nextGoals);
         setLoans(nextLoans);
+        setAssets(nextAssets);
       }
     } catch (err) {
       if (request.current === id)
@@ -126,7 +134,7 @@ function GoalsContent() {
     (g) => g.status === "overdue" || (g.target_date && !g.is_on_track),
   ).length;
   const ready = !loading && !featuresLoading && !error && !featureError;
-  async function saved() {
+  async function saved(createdId?: number) {
     toast.success(selected ? "Goal updated." : "Goal created.");
     // A successful write followed by a failed refresh must not invite another create.
     await Promise.all([
@@ -137,6 +145,7 @@ function GoalsContent() {
         ),
       ),
     ]);
+    if (createdId) openGoal(createdId);
   }
   return (
     <>
@@ -298,6 +307,7 @@ function GoalsContent() {
             goal={selected}
             goals={goals}
             loans={loans}
+            assets={assets}
             canEdit={canEdit && !loading}
             onClose={() => openGoal(null)}
             onSaved={saved}
@@ -349,11 +359,12 @@ function GoalCard({
       <div className="nl-goal-card-heading">
         <div>
           <p className="nl-eyebrow">
-            {debt
-              ? "Debt payoff"
-              : goal.goal_type === "envelope"
-                ? "Goal envelope"
-                : "Dedicated account"}
+            {goalPurposes.find((p) => p.value === goal.purpose)?.title ||
+              (debt
+                ? "Debt payoff"
+                : goal.goal_type === "envelope"
+                  ? "Goal envelope"
+                  : "Dedicated account")}
           </p>
           <h3>
             <button onClick={onOpen}>
@@ -378,7 +389,7 @@ function GoalCard({
         <span>
           {debt
             ? `left of ${money(goal.target_amount)} starting debt`
-            : `of ${money(goal.target_amount)} target`}
+            : `${goal.purpose === "retirement" && goal.goal_type === "envelope" ? "contributed toward" : "of"} ${money(goal.target_amount)} target`}
         </span>
       </div>
       <div
@@ -434,8 +445,12 @@ function GoalDetails({
   const [moneyTab, setMoneyTab] = useState<EnvelopeTab>("adjust");
   const category =
     (moving
-      ? data?.categories.find((c) => c.id === goal.linked_category_id)
-      : null) ?? goal.linked_category;
+      ? data?.categories.find(
+          (c) => c.id === (goal.linked_category_id ?? goal.funding_category_id),
+        )
+      : null) ??
+    goal.linked_category ??
+    goal.funding_category;
   const debt = goal.goal_type === "debt-paydown";
   const funding = data?.funding.categories.find(
     (f) => f.categoryId === category?.id,
@@ -499,9 +514,7 @@ function GoalDetails({
             <>
               <dl className="nl-metrics">
                 <div>
-                  <dt>
-                    {debt ? "Debt remaining" : "Progress toward your target"}
-                  </dt>
+                  <dt>{goalProgressLabel(goal)}</dt>
                   <dd>{money(goal.current_balance ?? 0)}</dd>
                 </div>
                 <div>
@@ -519,22 +532,37 @@ function GoalDetails({
               </dl>
               {category ? (
                 <div className="nl-goal-explanation">
-                  <h3>What counts as progress?</h3>
+                  <h3>
+                    {debt
+                      ? "Money waiting for a payment"
+                      : "What counts as progress?"}
+                  </h3>
                   <dl className="nl-metrics">
                     <div>
                       <dt>Still in the envelope</dt>
                       <dd>{money(category.current_balance)}</dd>
                     </div>
-                    <div>
-                      <dt>Categorized spending, all time</dt>
-                      <dd>{money(goal.categorized_spending ?? 0)}</dd>
-                    </div>
+                    {!debt && goal.purpose !== "reserve" && (
+                      <div>
+                        <dt>
+                          {goal.purpose === "retirement"
+                            ? "Contributions categorized here"
+                            : "Categorized spending, all time"}
+                        </dt>
+                        <dd>{money(goal.categorized_spending ?? 0)}</dd>
+                      </div>
+                    )}
                   </dl>
                   <p>
-                    Spending toward this goal stays in your progress. Transfers
-                    out reduce it.{" "}
+                    {debt
+                      ? "This reserve is separate from debt progress. Your debt falls only when the recorded amount owed falls."
+                      : goal.purpose === "reserve"
+                        ? "Only money still in the envelope counts as progress. Spending and transfers out reduce your reserve."
+                        : goal.purpose === "retirement"
+                          ? "Only net contributions categorized here count as progress. Money waiting in the envelope has not been contributed yet."
+                          : "Spending toward this goal stays in your progress. Transfers out reduce it."}{" "}
                     {category.current_balance < 0
-                      ? "This envelope is overdrawn. That shortage does not subtract spending already counted toward the goal; cover it in your envelope review."
+                      ? "This envelope is overdrawn. Review its activity and cover the shortage before setting aside more."
                       : "Only the envelope balance is still available to spend."}
                   </p>
                 </div>
@@ -542,7 +570,9 @@ function GoalDetails({
                 <p className="nl-goal-explanation">
                   {debt
                     ? `Tracks the recorded amount owed on ${goal.linked_credit_card?.name || goal.linked_loan?.name || "your linked debt"}. Update the balance after payments, interest, or new spending.`
-                    : `Tracks the entire recorded balance of ${goal.linked_account?.name || "your linked account"}. ${goal.linked_account?.include_in_totals ? "This account is currently included in budget totals. Its balance has not been reserved separately from your spending budget." : "This money is excluded from available to save."}`}
+                    : goal.goal_type === "asset-linked"
+                      ? `Tracks the recorded value of ${goal.linked_non_cash_asset?.name || "your investment"}. Gains, losses and withdrawals change progress. Investment values are outside your available budget money.`
+                      : `Tracks the entire recorded balance of ${goal.linked_account?.name || "your linked account"}. ${goal.linked_account?.include_in_totals ? "This account is currently included in budget totals. Its balance has not been reserved separately from your spending budget." : "This money is excluded from available to save."}`}
                 </p>
               )}
               {goal.status !== "completed" && goal.status !== "paused" && (
@@ -562,9 +592,37 @@ function GoalDetails({
                           : "Set a monthly amount when you’re ready, or make progress whenever you can."}{" "}
                     {debt &&
                       "This is a simple estimate, without future interest or new spending."}
+                    {goal.goal_type === "asset-linked" &&
+                      " This estimate assumes only the planned contributions, with no investment gains or losses."}
                   </p>
                 </div>
               )}
+              <div className="nl-goal-explanation">
+                <h3>How to use this goal</h3>
+                <ol className="nl-goal-workflow">
+                  {goalWorkflow(goal).map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ol>
+                {category && (
+                  <p>
+                    <Link href="/new/payday">Allocate available money →</Link>
+                  </p>
+                )}
+                {debt && category && (
+                  <p>
+                    <Link href={`/new/budget/manage?edit=${category.id}`}>
+                      Edit the payment envelope’s{" "}
+                      {money(category.monthly_amount)} monthly target →
+                    </Link>
+                  </p>
+                )}
+                {goal.purpose === "retirement" && (
+                  <p>
+                    <Link href="/new/income">Review payroll deductions →</Link>
+                  </p>
+                )}
+              </div>
               {goal.notes && (
                 <div className="nl-goal-explanation">
                   <h3>Your notes</h3>
@@ -583,25 +641,34 @@ function GoalDetails({
           <button className="nl-secondary" disabled={!canEdit} onClick={onEdit}>
             Edit goal
           </button>
-          {category ? (
+          {category && (
             <button
-              className="nl-primary"
+              className={debt ? "nl-secondary" : "nl-primary"}
               disabled={!canEdit}
               onClick={() => {
                 setMoneyTab("adjust");
                 setMoving(true);
               }}
             >
-              Add or release money →
+              {debt ? "Review payment money →" : "Add or release money →"}
             </button>
-          ) : (
+          )}
+          {(!category || debt) && (
             <Link
               className="nl-primary"
-              href={goal.linked_loan_id ? "/loans" : "/new/accounts"}
+              href={
+                goal.linked_non_cash_asset_id
+                  ? "/non-cash-assets"
+                  : goal.linked_loan_id
+                    ? "/loans"
+                    : "/new/accounts"
+              }
             >
-              {goal.linked_loan_id
-                ? "Update loan in classic ↗"
-                : "Update recorded balance →"}
+              {goal.linked_non_cash_asset_id
+                ? "Update investment in classic ↗"
+                : goal.linked_loan_id
+                  ? "Update loan in classic ↗"
+                  : "Update recorded balance →"}
             </Link>
           )}
         </div>

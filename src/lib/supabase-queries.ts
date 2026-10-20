@@ -3382,7 +3382,9 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
       linked_account:accounts!goals_linked_account_id_fkey(*),
       linked_category:categories!goals_linked_category_id_fkey(*),
       linked_credit_card:credit_cards!goals_linked_credit_card_id_fkey(*),
-      linked_loan:loans!goals_linked_loan_id_fkey(*)
+      linked_loan:loans!goals_linked_loan_id_fkey(*),
+      funding_category:categories!goals_funding_category_id_fkey(*),
+      linked_non_cash_asset:non_cash_assets!goals_linked_non_cash_asset_id_fkey(*)
     `)
     .eq('account_id', accountId)
     .order('sort_order')
@@ -3412,8 +3414,11 @@ export async function getAllGoals(): Promise<GoalWithDetails[]> {
         currentBalance = applyEnvelopeGoalProgress(
           goal.linked_category.current_balance || 0,
           envelopeSpending,
-          goal.linked_category_id
+          goal.linked_category_id,
+          goal.purpose
         );
+      } else if (goal.goal_type === 'asset-linked' && goal.linked_non_cash_asset) {
+        currentBalance = Math.max(0, Number(goal.linked_non_cash_asset.current_value) || 0);
       } else if (goal.goal_type === 'account-linked' && goal.linked_account) {
         currentBalance = goal.linked_account.balance || 0;
       } else if (goal.goal_type === 'debt-paydown') {
@@ -3475,7 +3480,9 @@ export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
       linked_account:accounts!goals_linked_account_id_fkey(*),
       linked_category:categories!goals_linked_category_id_fkey(*),
       linked_credit_card:credit_cards!goals_linked_credit_card_id_fkey(*),
-      linked_loan:loans!goals_linked_loan_id_fkey(*)
+      linked_loan:loans!goals_linked_loan_id_fkey(*),
+      funding_category:categories!goals_funding_category_id_fkey(*),
+      linked_non_cash_asset:non_cash_assets!goals_linked_non_cash_asset_id_fkey(*)
     `)
     .eq('id', id)
     .eq('account_id', accountId)
@@ -3502,8 +3509,11 @@ export async function getGoalById(id: number): Promise<GoalWithDetails | null> {
     currentBalance = applyEnvelopeGoalProgress(
       goal.linked_category.current_balance || 0,
       envelopeSpending,
-      goal.linked_category_id
+      goal.linked_category_id,
+      goal.purpose
     );
+  } else if (goal.goal_type === 'asset-linked' && goal.linked_non_cash_asset) {
+    currentBalance = Math.max(0, Number(goal.linked_non_cash_asset.current_value) || 0);
   } else if (goal.goal_type === 'account-linked' && goal.linked_account) {
     currentBalance = goal.linked_account.balance || 0;
   } else if (goal.goal_type === 'debt-paydown') {
@@ -3541,6 +3551,23 @@ export async function createGoal(data: CreateGoalRequest): Promise<GoalWithDetai
   const accountId = await getActiveAccountId();
   if (!accountId) throw new Error('No active account');
   
+  if (data.purpose) {
+    const { data: id, error } = await supabase.rpc('create_guided_goal', {
+      budget_id: accountId,
+      payload: data,
+    });
+    if (error) throw error;
+    try {
+      const created = await getGoalById(Number(id));
+      if (created) return created;
+    } catch (readError) {
+      console.error('Goal saved, but could not load its details:', readError);
+    }
+    // A post-commit read failure must not invite a second create. Guided clients
+    // need only the durable identifier to navigate and retry the detail read.
+    return { id: Number(id), name: data.name } as GoalWithDetails;
+  }
+
   let linkedCategoryId: number | null = null;
   let linkedAccountId: number | null = null;
   let linkedCreditCardId: number | null = null;
@@ -3807,6 +3834,21 @@ export async function updateGoal(id: number, data: UpdateGoalRequest): Promise<G
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.sort_order !== undefined) updateData.sort_order = data.sort_order;
   
+  if (data.funding_category_id !== undefined && existingGoal.goal_type === 'debt-paydown') {
+    if (data.funding_category_id && data.funding_category_id !== existingGoal.funding_category_id) {
+      const { data: category, error: categoryError } = await supabase.from('categories')
+        .select('*').eq('id', data.funding_category_id).eq('account_id', accountId).single();
+      if (categoryError || !category || category.is_system || category.is_buffer || category.is_goal || category.is_archived)
+        throw new Error('Choose an active ordinary envelope in this budget');
+      const { data: linkedGoals, error: linkError } = await supabase.from('goals')
+        .select('id').eq('account_id', accountId).neq('id', id)
+        .or(`linked_category_id.eq.${data.funding_category_id},funding_category_id.eq.${data.funding_category_id}`);
+      if (linkError) throw linkError;
+      if (linkedGoals?.length) throw new Error('This envelope is already used by another goal');
+    }
+    updateData.funding_category_id = data.funding_category_id;
+  }
+
   updateData.updated_at = new Date().toISOString();
   
   // Handle linked account change for account-linked goals
@@ -3882,7 +3924,7 @@ export async function updateGoal(id: number, data: UpdateGoalRequest): Promise<G
   if (data.monthly_contribution !== undefined && existingGoal.linked_category_id) {
     await supabase
       .from('categories')
-      .update({ monthly_amount: data.monthly_contribution })
+      .update({ monthly_amount: data.monthly_contribution, ...(existingGoal.purpose ? { monthly_target: data.monthly_contribution } : {}) })
       .eq('id', existingGoal.linked_category_id);
   }
   

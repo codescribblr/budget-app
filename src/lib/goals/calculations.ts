@@ -1,4 +1,4 @@
-import type { Goal, GoalProgress } from '@/lib/types';
+import type { Goal, GoalProgress, GoalPurpose } from '@/lib/types';
 
 /**
  * Envelope goal progress: leftover in the envelope plus transactions
@@ -18,6 +18,13 @@ export function envelopeGoalProgressAmount(
   // Using max(leftover, 0) keeps that payment in the goal total.
   const total = Math.max(0, leftover) + spent;
   return Math.round(Math.max(0, total) * 100) / 100;
+}
+
+/** Purpose controls what completion means; legacy goals retain their old total. */
+export function goalEnvelopeProgress(balance: number, spending: number, purpose?: GoalPurpose | null): number {
+  if (purpose === 'reserve') return Math.round(Math.max(0, Number(balance) || 0) * 100) / 100;
+  if (purpose === 'retirement') return Math.round(Math.max(0, Number(spending) || 0) * 100) / 100;
+  return envelopeGoalProgressAmount(balance, spending);
 }
 
 export type EnvelopeGoalBreakdownItem = {
@@ -148,7 +155,7 @@ export function calculateGoalProgress(goal: Goal, currentBalance: number): GoalP
   } else {
     // Savings goal logic (envelope or account-linked)
     const remaining_amount = Math.max(0, goal.target_amount - currentBalance);
-    const progress_percentage = Math.min(100, (currentBalance / goal.target_amount) * 100);
+    const progress_percentage = Math.max(0, Math.min(100, (currentBalance / goal.target_amount) * 100));
     
     let months_remaining: number | null = null;
     let required_monthly_contribution: number = goal.monthly_contribution;

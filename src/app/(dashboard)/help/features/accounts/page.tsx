@@ -290,12 +290,16 @@ export default function AccountsFeaturePage() {
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground leading-relaxed">
               Credit card balances are shown as negative numbers on the dashboard because they represent
-              money you owe. They don't affect your "Available to Save" calculation directly, but they
-              do affect your net worth.
+              money you owe. Cards included in budget totals reduce “Available to Save” by the
+              amount owed, calculated from credit limit minus available credit.
             </p>
             <Callout type="tip" title="Best Practice">
-              Create a budget category for "Credit Card Payment" and allocate money to it each month.
-              This ensures you have the funds set aside to pay your credit card bill.
+              If a card is included in budget totals, its debt is already deducted from available
+              money. A separate payment envelope would be an additional earmark. Use a debt goal
+              to follow the balance down, update both account and card balances after paying,
+              and exclude payment transfers from imports when the purchases are already categorized.
+              For loans or cards excluded from totals, a payment envelope can help reserve cash
+              for payments; avoid recording the same spending twice.
             </Callout>
           </CardContent>
         </Card>

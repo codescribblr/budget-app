@@ -1,7 +1,8 @@
+import type { GoalPurpose } from '@/lib/types';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   buildEnvelopeGoalBreakdown,
-  envelopeGoalProgressAmount,
+  goalEnvelopeProgress,
   type EnvelopeGoalBreakdown,
   type EnvelopeGoalTransactionRow,
 } from '@/lib/goals/calculations';
@@ -76,12 +77,13 @@ export async function sumCategorizedSpendingByCategory(
 export function applyEnvelopeGoalProgress(
   envelopeBalance: number,
   spendingByCategory: Record<number, number>,
-  categoryId: number | null | undefined
+  categoryId: number | null | undefined,
+  purpose?: GoalPurpose | null
 ): number {
   if (!categoryId) {
-    return envelopeGoalProgressAmount(envelopeBalance, 0);
+    return goalEnvelopeProgress(envelopeBalance, 0, purpose);
   }
-  return envelopeGoalProgressAmount(envelopeBalance, spendingByCategory[categoryId] || 0);
+  return goalEnvelopeProgress(envelopeBalance, spendingByCategory[categoryId] || 0, purpose);
 }
 
 export async function getEnvelopeGoalBreakdown(
