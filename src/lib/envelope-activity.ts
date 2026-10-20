@@ -69,3 +69,17 @@ export function envelopeActivityDetails(record: EnvelopeActivityRecord) {
     }),
   };
 }
+
+export const envelopeActivityGroups = {
+  all: "All activity",
+  funding: "Funding",
+  transfers: "Transfers",
+  transactions: "Transactions",
+  adjustments: "Adjustments",
+} as const;
+export type EnvelopeActivityGroup = keyof typeof envelopeActivityGroups;
+export const envelopeActivityTypes = {
+  funding: ["allocation_batch", "allocation_manual", "allocation_income"],
+  transfers: ["transfer_from", "transfer_to"],
+  transactions: ["transaction_create", "transaction_import", "transaction_update", "transaction_delete", "transaction_merge"],
+} as const;

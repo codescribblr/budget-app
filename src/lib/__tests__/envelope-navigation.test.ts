@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { envelopeReviewHref, envelopeReviewTarget, type EnvelopeTab } from "../envelope-navigation";
+import { envelopeReviewHref, envelopeReviewTarget, envelopeDetailHref, type EnvelopeTab } from "../envelope-navigation";
 
 describe("envelope review navigation", () => {
   it.each<EnvelopeTab>(["activity", "transfer", "adjust"])("links directly to %s while preserving check-in context", tab => {
@@ -25,5 +25,12 @@ describe("envelope review navigation", () => {
     for (const id of ["", "0", "-1", "1.5", "1e3", "NaN", "42abc", "9007199254740992"]) {
       expect(envelopeReviewTarget(new URLSearchParams({ envelope: id, tab: "transfer" })).categoryId).toBeNull();
     }
+  });
+});
+
+describe("envelope detail links", () => {
+  it("preserves a valid check-in and drops popup-specific state", () => {
+    expect(envelopeDetailHref(42, "checkin=daily&envelope=42&tab=transfer")).toBe("/new/budget/42?checkin=daily");
+    expect(envelopeDetailHref(42, "checkin=invalid")).toBe("/new/budget/42");
   });
 });

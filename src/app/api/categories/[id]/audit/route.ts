@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { envelopeActivityGroups, envelopeActivityTypes, type EnvelopeActivityGroup } from '@/lib/envelope-activity';
 
 /**
  * GET /api/categories/[id]/audit
@@ -41,10 +42,14 @@ export async function GET(
 
     // Get query parameters
     const searchParams = request.nextUrl.searchParams;
-    const limit = parseInt(searchParams.get('limit') || '20', 10);
-    const offset = parseInt(searchParams.get('offset') || '0', 10);
+    const limit = Number(searchParams.get('limit') || '20');
+    const offset = Number(searchParams.get('offset') || '0');
+    const group = searchParams.get('group') || 'all';
+    if (!Object.hasOwn(envelopeActivityGroups, group) || !Number.isSafeInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0) {
+      return NextResponse.json({ error: 'Invalid activity filters' }, { status: 400 });
+    }
 
-    const { data: auditRecords, error: auditError, count } = await supabase
+    let query = supabase
       .from('category_balance_audit')
       .select('*', { count: 'exact' })
       .eq('category_id', categoryId)
@@ -52,6 +57,12 @@ export async function GET(
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .range(offset, offset + limit - 1);
+    if (group === 'adjustments') {
+      query = query.not('change_type', 'in', `(${Object.values(envelopeActivityTypes).flat().join(',')})`);
+    } else if (group !== 'all') {
+      query = query.in('change_type', [...envelopeActivityTypes[group as Exclude<EnvelopeActivityGroup, 'all' | 'adjustments'>]]);
+    }
+    const { data: auditRecords, error: auditError, count } = await query;
 
     if (auditError) {
       console.error('Error fetching audit trail:', auditError);

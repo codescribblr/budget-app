@@ -163,3 +163,8 @@ describe("calendar check-in boundaries", () => {
     expect(checkinPeriod("monthly", new Date(2026, 10, 1))).toBe("2026-11");
   });
 });
+
+it("switches between the matching envelope detail pages", () => {
+  expect(interfaceRoute("/categories/42", "new")).toBe("/new/budget/42");
+  expect(interfaceRoute("/new/budget/42", "classic")).toBe("/categories/42");
+});

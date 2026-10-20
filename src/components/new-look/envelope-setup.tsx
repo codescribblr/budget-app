@@ -363,7 +363,7 @@ function EnvelopeSetupContent() {
   );
 }
 
-function EnvelopeSetupEditor({
+export function EnvelopeSetupEditor({
   category,
   advanced,
   priorityEnabled,

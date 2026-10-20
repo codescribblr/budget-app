@@ -28,3 +28,12 @@ export function envelopeReviewHref(
   const query = params.toString();
   return `/new/budget${query ? `?${query}` : ""}`;
 }
+
+/** Detail pages retain check-in context without carrying popup state with them. */
+export function envelopeDetailHref(categoryId: number, search = "") {
+  const source = new URLSearchParams(search);
+  const params = new URLSearchParams();
+  const checkin = source.get("checkin");
+  if (checkin && ["daily", "weekly", "monthly"].includes(checkin)) params.set("checkin", checkin);
+  return `/new/budget/${categoryId}${params.size ? `?${params}` : ""}`;
+}

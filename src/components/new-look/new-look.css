@@ -1997,3 +1997,125 @@ button.nl-activity-link {
   .nl-envelope-controls input { flex: 1; min-width: 130px; width: 100%; }
   .nl-envelope-sort { flex: 1; min-width: 130px; }
 }
+
+/* Preserve the popup’s flex layout while the page uses a full-width timeline. */
+.nl-activity-dialog { display: contents; }
+
+/* Envelope detail: spendable balance first, its story and plan alongside it. */
+.nl-envelope-detail { max-width: 1200px; margin: 0 auto; }
+.nl-detail-topline { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 26px; }
+.nl-detail-back { display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 13px; }
+.nl-detail-back:hover { color: var(--primary); }
+.nl-detail-heading { display: flex; align-items: center; gap: 18px; margin-bottom: 26px; }
+.nl-detail-heading h1 { margin: 3px 0 0; font-size: clamp(28px, 3vw, 40px); font-weight: 650; letter-spacing: -1.1px; line-height: 1.2; overflow-wrap: anywhere; }
+.nl-detail-heading .nl-eyebrow { margin-bottom: 4px; }
+.nl-detail-emblem { display: grid; place-items: center; width: 58px; height: 58px; flex: none; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border)); color: var(--primary); background: var(--accent); }
+.nl-detail-hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(270px, 1fr); border: 1px solid var(--border); background: var(--card); border-radius: 16px; overflow: hidden; margin-bottom: 38px; }
+.nl-detail-balance { padding: 32px 36px; background: linear-gradient(120deg, var(--accent), var(--card)); }
+.nl-detail-balance .nl-envelope-money { text-align: left; }
+.nl-detail-balance .nl-envelope-money > .nl-envelope-mobile-label { text-transform: uppercase; letter-spacing: 1.2px; font-size: 11px; font-weight: 600; margin-bottom: 10px; }
+.nl-detail-balance .nl-envelope-money > strong { font-size: clamp(38px, 4.4vw, 60px); letter-spacing: -2px; line-height: 1.15; font-weight: 550; }
+.nl-detail-balance .nl-envelope-comparison { max-width: 330px; margin-top: 20px; }
+.nl-detail-balance .nl-envelope-comparison > span { font-size: 12px; }
+.nl-detail-balance > p { max-width: 330px; color: var(--muted-foreground); font-size: 12px; line-height: 1.7; margin: 14px 0 22px; }
+.nl-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.nl-detail-actions :is(button, a), .nl-detail-topline button, .nl-detail-fund-footer a, .nl-envelope-detail .nl-activity-link { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.nl-detail-actions svg, .nl-envelope-detail .nl-activity-link svg { flex: none; }
+.nl-detail-funding { padding: 30px; border-left: 1px solid var(--border); }
+.nl-detail-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.nl-detail-section-heading > svg { flex: none; color: var(--muted-foreground); }
+.new-look .nl-detail-section-heading h2 { font-size: 17px; letter-spacing: -.3px; margin: 0; line-height: 1.4; }
+.nl-detail-funding dl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0 16px; }
+.nl-detail-funding dt, .nl-detail-purpose dt { font-size: 12px; color: var(--muted-foreground); margin-bottom: 6px; }
+.nl-detail-funding dd { font-size: clamp(20px, 2.1vw, 28px); line-height: 1.3; font-weight: 550; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; margin: 0; }
+.nl-detail-funding > p { font-size: 12px; line-height: 1.7; color: var(--muted-foreground); margin: 0 0 8px; }
+.nl-detail-fund-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.nl-detail-fund-footer small { display: block; color: var(--muted-foreground); font-size: 11px; margin-bottom: 4px; }
+.nl-detail-fund-footer strong { font-size: 15px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.nl-detail-fund-footer a { font-size: 12px; color: var(--primary); }
+.nl-detail-body { display: grid; grid-template-columns: minmax(0, 1fr) 330px; align-items: start; gap: 32px; }
+.nl-detail-history { min-width: 0; }
+.nl-detail-history .nl-detail-section-heading { align-items: flex-end; }
+.nl-detail-history .nl-detail-section-heading h2 { font-size: 26px; letter-spacing: -.6px; scroll-margin-top: 24px; }
+.nl-detail-history .nl-eyebrow { margin: 0 0 8px; }
+.nl-detail-intro { margin: 10px 0 20px; color: var(--muted-foreground); font-size: 13px; line-height: 1.6; }
+.nl-detail-history-filters { flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+.nl-detail-history-filters button { padding: 7px 10px; font-size: 11px; }
+.nl-activity-page .nl-activity-heading { margin: 0 0 10px; }
+.nl-activity-page .nl-activity-heading p { margin: 0; font-size: 11px; color: var(--muted-foreground); }
+.nl-activity-page .nl-activity-scroll { max-height: none; overflow: visible; scrollbar-gutter: auto; border: 0; border-radius: 0; background: transparent; }
+.nl-activity-page .nl-activity-list > li { position: relative; margin: 0; padding: 20px 20px 20px 63px; border: 1px solid var(--border); border-bottom: 0; background: var(--card); }
+.nl-activity-page .nl-activity-list > li:first-child { border-radius: 12px 12px 0 0; }
+.nl-activity-page .nl-activity-list > li:last-child { border-radius: 0 0 12px 12px; border-bottom: 1px solid var(--border); }
+.nl-activity-page .nl-activity-list > li:only-child { border-radius: 12px; }
+.nl-detail-event-icon { position: absolute; display: grid; place-items: center; left: 18px; top: 18px; width: 32px; height: 32px; background: var(--muted); border: 1px solid var(--border); color: var(--muted-foreground); border-radius: 50%; }
+.nl-activity-page .nl-activity-row > strong:first-child { font-size: 13px; }
+.nl-activity-page .nl-activity-row > .nl-number { font-size: 16px; font-weight: 600; }
+.nl-activity-page .nl-activity-description { font-size: 13px; line-height: 1.6; margin-block: 8px; }
+.nl-activity-page .nl-activity-meta { font-size: 11px; line-height: 1.6; color: var(--muted-foreground); }
+.nl-activity-page .nl-activity-balance { display: inline-block; padding: 4px 9px; border-radius: 5px; background: var(--muted); margin-block: 9px; font-size: 11px; color: var(--muted-foreground); }
+.nl-activity-page .nl-activity-balance strong { color: var(--foreground); font-weight: 500; }
+.nl-activity-page .nl-activity-state { padding: 24px 0; }
+.nl-detail-context { display: grid; gap: 22px; min-width: 0; }
+.nl-detail-spending, .nl-detail-purpose { border: 1px solid var(--border); border-radius: 12px; padding: 24px; background: var(--card); min-width: 0; }
+.nl-detail-month-label { margin: 6px 0 22px; font-size: 11px; color: var(--muted-foreground); }
+.nl-detail-spent { display: flex; flex-direction: column; gap: 3px; margin-bottom: 20px; }
+.nl-detail-spent strong { font-size: 30px; font-weight: 550; letter-spacing: -.6px; font-variant-numeric: tabular-nums; }
+.nl-detail-spent span { font-size: 12px; color: var(--muted-foreground); }
+.nl-detail-income { display: grid; gap: 10px; font-size: 12px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.nl-detail-income > div { display: flex; justify-content: space-between; gap: 15px; }
+.nl-detail-income dt { color: var(--muted-foreground); }
+.nl-detail-income dd { margin: 0; font-weight: 550; font-variant-numeric: tabular-nums; }
+.new-look .nl-detail-spending-history h3 { font-size: 12px; font-weight: 500; margin: 20px 0 16px; }
+.nl-detail-chart { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.nl-detail-chart a { display: flex; flex-direction: column; align-items: center; text-align: center; border-radius: 4px; padding-top: 3px; }
+.nl-detail-bar-value { font-size: 10px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; margin-bottom: 7px; }
+.nl-detail-bar-track { height: 86px; width: 100%; max-width: 28px; position: relative; display: flex; align-items: flex-end; border-bottom: 1px solid var(--border); }
+.nl-detail-bar-track > span { display: block; width: 100%; min-height: 2px; border-radius: 4px 4px 0 0; background: color-mix(in srgb, var(--chart-1) 45%, var(--muted)); }
+.nl-detail-chart [data-current="true"] .nl-detail-bar-track > span { background: var(--primary); }
+.nl-detail-chart a:hover .nl-detail-bar-track > span { background: var(--chart-1); }
+.nl-detail-bar-month { font-size: 11px; color: var(--muted-foreground); margin-top: 8px; }
+.nl-detail-chart [data-current="true"] .nl-detail-bar-month { color: var(--primary); font-weight: 650; }
+.nl-detail-chart-help { font-size: 11px; line-height: 1.7; color: var(--muted-foreground); margin: 18px 0 14px; }
+.nl-detail-spending > .nl-activity-link { font-size: 11px; justify-content: flex-start; }
+.nl-detail-purpose > p, .nl-detail-guidance p, .nl-detail-notes p { font-size: 12px; color: var(--muted-foreground); line-height: 1.8; margin: 14px 0; }
+.nl-detail-purpose dl { margin-top: 16px; }
+.nl-detail-purpose dd { margin: 0; font-size: 22px; font-variant-numeric: tabular-nums; }
+.nl-detail-guidance { border-left: 2px solid var(--primary); padding-left: 12px; margin-block: 20px; }
+.nl-detail-guidance > strong { font-size: 12px; font-weight: 550; }
+.nl-detail-guidance p { margin: 6px 0 0; }
+.nl-detail-notes { padding-top: 17px; margin-top: 17px; border-top: 1px solid var(--border); }
+.new-look .nl-detail-notes h3 { font-size: 12px; font-weight: 550; margin: 0; }
+.nl-detail-notes p { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 8px; color: var(--foreground); }
+.nl-detail-load-state { font-size: 12px; color: var(--muted-foreground); line-height: 1.7; padding-block: 18px; }
+.nl-activity-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; }
+@media (max-width: 1150px) {
+  .nl-detail-body { grid-template-columns: minmax(0, 1fr) 290px; gap: 22px; }
+  .nl-detail-balance { padding: 28px; }
+  .nl-detail-funding { padding: 26px; }
+  .nl-detail-spending, .nl-detail-purpose { padding: 20px; }
+}
+@media (max-width: 950px) {
+  .nl-detail-body { grid-template-columns: minmax(0, 1fr); }
+  .nl-detail-context { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .nl-detail-funding { padding: 22px; }
+  .nl-detail-hero { grid-template-columns: minmax(0, 1.1fr) minmax(250px, 1fr); }
+}
+@media (max-width: 600px) {
+  .nl-detail-topline { margin-bottom: 22px; gap: 10px; }
+  .nl-detail-topline .nl-secondary { font-size: 11px; padding-inline: 10px; }
+  .nl-detail-back { font-size: 12px; }
+  .nl-detail-heading { gap: 13px; }
+  .nl-detail-emblem { width: 46px; height: 46px; border-radius: 14px; }
+  .nl-detail-hero { grid-template-columns: minmax(0, 1fr); margin-bottom: 30px; }
+  .nl-detail-balance { padding: 25px; }
+  .nl-detail-balance .nl-envelope-money > strong { font-size: 45px; }
+  .nl-detail-funding { border-left: 0; border-top: 1px solid var(--border); padding: 24px; }
+  .nl-detail-context { grid-template-columns: minmax(0, 1fr); }
+  .nl-detail-history .nl-detail-section-heading { align-items: center; }
+  .nl-detail-history .nl-detail-section-heading > a { max-width: 90px; text-align: right; font-size: 11px; }
+  .nl-activity-page .nl-activity-list > li { padding: 18px 15px 18px 51px; }
+  .nl-detail-event-icon { width: 27px; height: 27px; left: 12px; }
+  .nl-detail-event-icon svg { width: 14px; height: 14px; }
+  .nl-activity-page .nl-activity-row > .nl-number { font-size: 14px; }
+}

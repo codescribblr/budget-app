@@ -23,6 +23,8 @@ const routes = [
 ] as const;
 
 export function interfaceRoute(pathname: string, target: "new" | "classic") {
+  if (target === "new" && /^\/categories\/\d+$/.test(pathname)) return pathname.replace("/categories/", "/new/budget/");
+  if (target === "classic" && /^\/new\/budget\/\d+$/.test(pathname)) return pathname.replace("/new/budget/", "/categories/");
   if (target === "new" && pathname === "/income-buffer") return "/new/goals#income-buffer";
   if (target === "new" && /^\/goals\/\d+$/.test(pathname)) return `/new/goals?goal=${pathname.split("/").pop()}`;
   if (target === "classic" && pathname === "/new/accounts/manage") return "/accounts";

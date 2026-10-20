@@ -13,6 +13,7 @@ import * as Tabs from "@radix-ui/react-tabs";
 import { EnvelopeActivity } from "./envelope-activity";
 import {
   envelopeReviewHref,
+  envelopeDetailHref,
   envelopeReviewTarget,
   type EnvelopeTab,
 } from "@/lib/envelope-navigation";
@@ -206,12 +207,7 @@ function EnvelopesContent() {
                 <div className="nl-envelope-name">
                   <Link
                     className="nl-row-button"
-                    href={envelopeReviewHref(
-                      c.id,
-                      "activity",
-                      params.toString(),
-                    )}
-                    scroll={false}
+                    href={envelopeDetailHref(c.id, params.toString())}
                   >
                     {c.name}
                   </Link>
@@ -314,7 +310,7 @@ function EnvelopesContent() {
   );
 }
 
-function EnvelopeMoney({
+export function EnvelopeMoney({
   name,
   overview: o,
 }: {
