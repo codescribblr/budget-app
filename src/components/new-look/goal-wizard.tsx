@@ -1,4 +1,5 @@
 "use client";
+import { NativeSelect } from "./native-select";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -325,7 +326,7 @@ export function GoalWizard({
             <>
               <label>
                 Envelope
-                <select
+                <NativeSelect
                   value={draft.envelope}
                   onChange={(e) => {
                     const found = envelopes.find(
@@ -344,7 +345,7 @@ export function GoalWizard({
                       {c.name} · {money(c.current_balance)} reserved
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <p className="nl-setup-help">
                 {envelope
@@ -368,7 +369,7 @@ export function GoalWizard({
             <>
               <label>
                 Account to dedicate
-                <select
+                <NativeSelect
                   required
                   value={draft.source}
                   onChange={(e) => change("source", e.target.value)}
@@ -379,7 +380,7 @@ export function GoalWizard({
                       {a.name} · {money(a.balance)}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <p className="nl-setup-help">
                 Use an account devoted to this one goal.{" "}
@@ -407,7 +408,7 @@ export function GoalWizard({
             <>
               <label>
                 Investment to track
-                <select
+                <NativeSelect
                   required
                   value={draft.source}
                   onChange={(e) => change("source", e.target.value)}
@@ -418,7 +419,7 @@ export function GoalWizard({
                       {a.name} · {money(a.current_value)}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <p className="nl-setup-help">
                 These come from your investment assets, not your everyday cash
@@ -440,7 +441,7 @@ export function GoalWizard({
             <>
               <label>
                 Card or loan
-                <select
+                <NativeSelect
                   required
                   value={draft.source}
                   onChange={(e) =>
@@ -466,7 +467,7 @@ export function GoalWizard({
                       </option>
                     ))}
                   </optgroup>
-                </select>
+                </NativeSelect>
               </label>
               <p className="nl-setup-help">
                 This goal pays off the entire recorded balance. Update an
@@ -491,7 +492,7 @@ export function GoalWizard({
                   </div>
                   <label>
                     Money waiting for payments
-                    <select
+                    <NativeSelect
                       value={draft.payment}
                       onChange={(e) => change("payment", e.target.value)}
                     >
@@ -510,7 +511,7 @@ export function GoalWizard({
                           Use {c.name} · {money(c.current_balance)} reserved
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                   <p className="nl-setup-callout">
                     {card?.include_in_totals

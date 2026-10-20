@@ -1,4 +1,5 @@
 "use client";
+import { NativeSelect } from "./native-select";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -545,7 +546,7 @@ function EnvelopeSetupEditor({
           {priorityEnabled && (
             <label>
               Funding priority
-              <select
+              <NativeSelect
                 value={draft.priority}
                 onChange={(e) => change("priority", Number(e.target.value))}
               >
@@ -555,7 +556,7 @@ function EnvelopeSetupEditor({
                     {i === 0 ? " · Highest" : i === 9 ? " · Lowest" : ""}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               <small>
                 Used by Smart Allocation in classic. A lower number is funded
                 first.

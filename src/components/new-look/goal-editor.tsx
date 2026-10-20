@@ -1,4 +1,5 @@
 "use client";
+import { NativeSelect } from "./native-select";
 import { useState } from "react";
 import Link from "next/link";
 import { Switch } from "@/components/ui/switch";
@@ -106,7 +107,7 @@ function ExistingGoalEditor({
         <>
           <label>
             Payment envelope (optional)
-            <select
+            <NativeSelect
               value={draft.payment}
               onChange={(e) => change("payment", e.target.value)}
             >
@@ -124,7 +125,7 @@ function ExistingGoalEditor({
                   {c.name} · {money(c.current_balance)} reserved
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <p className="nl-setup-help">
             Link an envelope you already use so its money and activity appear

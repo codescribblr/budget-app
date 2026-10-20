@@ -1,4 +1,5 @@
 "use client";
+import { NativeSelect } from "./native-select";
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
@@ -181,7 +182,7 @@ export function IncomeEditor({
               </label>
               <label>
                 Amount is
-                <select
+                <NativeSelect
                   value={basis}
                   onChange={(e) => {
                     const next = e.target.value as IncomeBasis;
@@ -195,11 +196,11 @@ export function IncomeEditor({
                   <option value="paycheck">Per paycheck</option>
                   <option value="month">Per month</option>
                   <option value="year">Per year</option>
-                </select>
+                </NativeSelect>
               </label>
               <label>
                 Pay schedule
-                <select
+                <NativeSelect
                   value={frequency}
                   onChange={(e) => {
                     const next = e.target.value as PayFrequency;
@@ -221,7 +222,7 @@ export function IncomeEditor({
                       {f.label}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <label>
                 Estimated tax rate (%)
@@ -236,7 +237,7 @@ export function IncomeEditor({
             {frequency === "bi-weekly" && (
               <label>
                 Monthly planning basis
-                <select
+                <NativeSelect
                   value={extra ? "all" : "two"}
                   onChange={(e) => setExtra(e.target.value === "all")}
                 >
@@ -244,7 +245,7 @@ export function IncomeEditor({
                     Average all 26 paychecks over the year
                   </option>
                   <option value="two">Use 2 paychecks per month</option>
-                </select>
+                </NativeSelect>
                 <small>
                   The two-paycheck option keeps the extra paychecks out of
                   regular monthly funding.
@@ -286,7 +287,7 @@ export function IncomeEditor({
                   </label>
                   <label>
                     Basis
-                    <select
+                    <NativeSelect
                       aria-label={`Deduction ${i + 1} basis`}
                       value={d.type}
                       onChange={(e) =>
@@ -305,7 +306,7 @@ export function IncomeEditor({
                     >
                       <option value="fixed">$ per paycheck</option>
                       <option value="percentage">% of gross pay</option>
-                    </select>
+                    </NativeSelect>
                   </label>
                   <label>
                     {d.type === "fixed" ? "Amount ($)" : "Percent (%)"}
@@ -374,7 +375,7 @@ export function IncomeEditor({
               )}
               <label>
                 Linked asset
-                <select
+                <NativeSelect
                   value={linkedAsset ?? "none"}
                   disabled={!!assetsError}
                   onChange={(e) =>
@@ -393,7 +394,7 @@ export function IncomeEditor({
                       {a.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
             </details>
             <label className="nl-switch-label">

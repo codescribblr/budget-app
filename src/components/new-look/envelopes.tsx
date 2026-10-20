@@ -1,7 +1,7 @@
 "use client";
+import { NativeSelect } from "./native-select";
 import { useTaskCheckin } from "./checkin-flow";
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
 import {
   envelopeOverview,
   type EnvelopeOverview,
@@ -164,18 +164,16 @@ function EnvelopesContent() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <div className="nl-envelope-sort">
-            <select
-              aria-label="Sort envelopes"
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-            >
-              <option value="envelope">Envelope order</option>
-              <option value="attention">Needs attention first</option>
-              <option value="name">Name: A to Z</option>
-            </select>
-            <ChevronDown aria-hidden="true" />
-          </div>
+          <NativeSelect
+            wrapperClassName="nl-envelope-sort"
+            aria-label="Sort envelopes"
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+          >
+            <option value="envelope">Envelope order</option>
+            <option value="attention">Needs attention first</option>
+            <option value="name">Name: A to Z</option>
+          </NativeSelect>
         </div>
       </div>
       {filter === "surplus" && (
@@ -520,7 +518,7 @@ export function EnvelopeEditor({
                   <>
                     <label>
                       Direction
-                      <select
+                      <NativeSelect
                         aria-label="Direction"
                         value={direction}
                         disabled={saving || !canEdit}
@@ -535,11 +533,11 @@ export function EnvelopeEditor({
                         <option value="out">
                           Move money out of {category.name}
                         </option>
-                      </select>
+                      </NativeSelect>
                     </label>
                     <label>
                       {direction === "in" ? "From envelope" : "To envelope"}
-                      <select
+                      <NativeSelect
                         aria-label={
                           direction === "in" ? "From envelope" : "To envelope"
                         }
@@ -553,7 +551,7 @@ export function EnvelopeEditor({
                             {c.name} · {money(c.current_balance)}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </label>
                     <label>
                       Amount

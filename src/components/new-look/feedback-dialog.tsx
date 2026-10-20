@@ -1,4 +1,5 @@
 "use client";
+import { NativeSelect } from "./native-select";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
@@ -71,7 +72,7 @@ export function FeedbackDialog({
         <form className="nl-form" onSubmit={submit}>
           <label>
             Feedback type
-            <select
+            <NativeSelect
               aria-label="Feedback type"
               value={kind}
               disabled={sending}
@@ -84,7 +85,7 @@ export function FeedbackDialog({
               <option value="problem">Something didn’t work</option>
               <option value="missing">A tool I’m missing</option>
               <option value="positive">Something I like</option>
-            </select>
+            </NativeSelect>
           </label>
           <label>
             Your feedback

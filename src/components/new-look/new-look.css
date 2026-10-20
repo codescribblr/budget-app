@@ -781,6 +781,14 @@
   font: inherit;
   min-height: 40px;
 }
+/* Native selects share the same arrow inset as the themed select triggers. */
+.nl-native-select { display: inline-flex; position: relative; min-width: 0; width: 100%; vertical-align: middle; }
+:is(.new-look, .new-look-theme) .nl-native-select > select { width: 100%; min-width: 0; }
+:is(.new-look, .new-look-theme) .nl-native-select[data-dropdown="true"] > select { appearance: none; padding-inline-end: 36px; }
+.nl-native-select > svg { position: absolute; inset-inline-end: 12px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--muted-foreground); pointer-events: none; }
+.nl-native-select:has(> select:disabled) > svg { opacity: .5; }
+:is(.new-look, .new-look-theme) [data-import-selection-trigger] { width: 48px; min-width: 48px; padding-inline: 8px; gap: 4px; }
+:is(.new-look, .new-look-theme) [data-import-selection-trigger] > svg { position: static; margin: 0; width: 12px; height: 12px; flex: none; }
 .new-look input[type="checkbox"] {
   accent-color: var(--primary);
   width: 16px;
@@ -1943,9 +1951,8 @@ button.nl-activity-link {
 .nl-envelope-fund-action { display: flex; gap: 22px; align-items: center; }
 .nl-envelope-controls { display: flex; flex-wrap: wrap; gap: 10px; }
 .nl-envelope-controls input { width: 190px; }
-.nl-envelope-sort { position: relative; }
-.new-look .nl-envelope-sort select { appearance: none; width: 100%; padding-inline-end: 36px; font-size: 12px; }
-.nl-envelope-sort > svg { position: absolute; inset-inline-end: 12px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--muted-foreground); pointer-events: none; }
+.nl-envelope-sort { width: auto; }
+.new-look .nl-envelope-sort select { font-size: 12px; }
 .nl-envelope-list { border: 1px solid var(--border); border-radius: 10px; background: var(--card); overflow: hidden; }
 .nl-envelope-list ul { list-style: none; padding: 0; margin: 0; }
 .nl-envelope-list-heading, .nl-envelope-row { display: grid; grid-template-columns: minmax(165px, 1.3fr) minmax(180px, 1.4fr) minmax(100px, .85fr) minmax(115px, .95fr); gap: 22px; align-items: center; padding: 18px 22px; }

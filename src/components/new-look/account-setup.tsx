@@ -1,4 +1,5 @@
 "use client";
+import { NativeSelect } from "./native-select";
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -335,7 +336,7 @@ function AccountSetupEditor({
           <div className="nl-setup-field-grid">
             <label>
               Account type
-              <select
+              <NativeSelect
                 value={draft.accountType}
                 onChange={(e) =>
                   change(
@@ -347,7 +348,7 @@ function AccountSetupEditor({
                 <option value="checking">Checking</option>
                 <option value="savings">Savings</option>
                 <option value="cash">Cash on hand</option>
-              </select>
+              </NativeSelect>
             </label>
             {!selection.item ? (
               <label>

@@ -1015,6 +1015,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
                       className="h-8 w-8 p-0 relative"
                       onClick={(e) => e.stopPropagation()}
                       aria-label="Select transactions"
+                      data-import-selection-trigger=""
                     >
                       <span
                         className={`inline-flex items-center justify-center w-4 h-4 rounded-[4px] border shadow-xs transition-shadow ${
