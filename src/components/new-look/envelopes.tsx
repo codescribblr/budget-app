@@ -1,6 +1,10 @@
 "use client";
 import { useTaskCheckin } from "./checkin-flow";
 import { useState } from "react";
+import {
+  envelopeProgress,
+  type EnvelopeProgress,
+} from "@/lib/envelope-overview";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -19,13 +23,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import type { Category } from "@/lib/types";
-import {
-  money,
-  parseMoney,
-  ordinaryEnvelopes,
-  potentialSurplus,
-  cents,
-} from "@/lib/new-look";
+import { money, parseMoney, ordinaryEnvelopes, cents } from "@/lib/new-look";
 import { budgetRequest, useBudget, DataBoundary } from "./budget-context";
 import {
   PageHeading,
@@ -49,32 +47,57 @@ function EnvelopesContent() {
   const { categoryId: selected, tab } = envelopeReviewTarget(params);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("envelope");
   if (!data) return null;
   const envelopes = ordinaryEnvelopes(data.categories);
+  const rows = envelopes.map((category) => ({
+    category,
+    progress: envelopeProgress(
+      category,
+      data.spending[category.id] || 0,
+      data.funding.categories.find((f) => f.categoryId === category.id)
+        ?.fundedAmount || 0,
+    ),
+  }));
   const counts = {
-    all: envelopes.length,
-    negative: envelopes.filter((c) => c.current_balance < 0).length,
-    spending: envelopes.filter(
-      (c) =>
-        !c.is_goal &&
-        (!c.category_type || c.category_type === "monthly_expense") &&
-        (data.spending[c.id] || 0) > c.monthly_amount,
-    ).length,
-    surplus: envelopes.filter((c) => potentialSurplus(c) > 0).length,
+    all: rows.length,
+    negative: rows.filter((r) => r.progress.negative).length,
+    spending: rows.filter((r) => r.progress.overPlan).length,
+    surplus: rows.filter((r) => r.progress.surplus > 0).length,
   };
-  const shown = envelopes.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) &&
-      (filter === "negative"
-        ? c.current_balance < 0
-        : filter === "spending"
-          ? !c.is_goal &&
-            (!c.category_type || c.category_type === "monthly_expense") &&
-            (data.spending[c.id] || 0) > c.monthly_amount
-          : filter === "surplus"
-            ? potentialSurplus(c) > 0
-            : true),
-  );
+  const shown = rows
+    .filter(
+      ({ category: c, progress }) =>
+        c.name.toLowerCase().includes(search.trim().toLowerCase()) &&
+        (filter === "negative"
+          ? progress.negative
+          : filter === "spending"
+            ? progress.overPlan
+            : filter === "surplus"
+              ? progress.surplus > 0
+              : true),
+    )
+    .sort(
+      (a, b) =>
+        (sort === "attention"
+          ? a.progress.attention - b.progress.attention
+          : sort === "name"
+            ? a.category.name.localeCompare(b.category.name)
+            : 0) ||
+        a.category.sort_order - b.category.sort_order ||
+        a.category.id - b.category.id,
+    );
+  const available =
+    envelopes.reduce((total, c) => total + cents(c.current_balance), 0) / 100;
+  const toCover =
+    envelopes.reduce(
+      (total, c) => total + Math.max(0, -cents(c.current_balance)),
+      0,
+    ) / 100;
+  const month = new Date().toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
   const category = envelopes.find((c) => c.id === selected);
   return (
     <>
@@ -88,7 +111,7 @@ function EnvelopesContent() {
               : "Envelopes · your spending money"
         }
         title="Every envelope, in perspective"
-        description="Scan balances, cover overages, and decide where your money is most useful. Review the whole picture before moving anything."
+        description="See how this month is going, what’s available, and where your money may need a second look."
       >
         <Link
           href={
@@ -102,6 +125,26 @@ function EnvelopesContent() {
         </Link>
       </PageHeading>
       <ReadOnlyNotice />
+      <section className="nl-envelope-overview" aria-label="Envelope overview">
+        <div>
+          <h2>{month}</h2>
+          <p>Monthly spending, funding, and reserve balances.</p>
+        </div>
+        <dl>
+          <div>
+            <dt>Available in envelopes</dt>
+            <dd className={available < 0 ? "nl-negative" : ""}>
+              {money(available)}
+            </dd>
+          </div>
+          <div>
+            <dt>Negative balances to cover</dt>
+            <dd className={toCover > 0 ? "nl-negative" : ""}>
+              {money(toCover)}
+            </dd>
+          </div>
+        </dl>
+      </section>
       <div className="nl-toolbar">
         <div className="nl-filters">
           {(
@@ -122,12 +165,23 @@ function EnvelopesContent() {
             </button>
           ))}
         </div>
-        <input
-          aria-label="Search envelopes"
-          placeholder="Find an envelope…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="nl-envelope-controls">
+          <input
+            aria-label="Search envelopes"
+            placeholder="Find an envelope…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select
+            aria-label="Sort envelopes"
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+          >
+            <option value="envelope">Envelope order</option>
+            <option value="attention">Needs attention first</option>
+            <option value="name">Name: A to Z</option>
+          </select>
+        </div>
       </div>
       {filter === "surplus" && (
         <p className="nl-notice">
@@ -136,27 +190,22 @@ function EnvelopesContent() {
           target-balance, and buffer funds are excluded from this suggestion.
         </p>
       )}
-      <div className="nl-table-wrap">
-        <table className="nl-table">
-          <caption className="sr-only">
-            Envelope balances, spending, and funding this month
-          </caption>
-          <thead>
-            <tr>
-              <th>Envelope</th>
-              <th className="nl-right">Monthly plan</th>
-              <th className="nl-right">Funded this month</th>
-              <th className="nl-right">Spent this month</th>
-              <th className="nl-right">Available now</th>
-              <th>
-                <span className="sr-only">Action</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((c) => (
-              <tr key={c.id} data-attention={c.current_balance < 0}>
-                <td>
+      {shown.length > 0 && (
+        <div className="nl-envelope-list">
+          <div className="nl-envelope-list-heading" aria-hidden="true">
+            <span>Envelope</span>
+            <span>Progress</span>
+            <span>Available now</span>
+            <span />
+          </div>
+          <ul aria-label="Envelopes and progress">
+            {shown.map(({ category: c, progress }) => (
+              <li
+                key={c.id}
+                className="nl-envelope-row"
+                data-attention={progress.negative}
+              >
+                <div className="nl-envelope-name">
                   <Link
                     className="nl-row-button"
                     href={envelopeReviewHref(
@@ -168,77 +217,54 @@ function EnvelopesContent() {
                   >
                     {c.name}
                   </Link>
-                  <span className="nl-subtext">
-                    {c.is_goal
-                      ? "Goal envelope"
-                      : c.category_type === "accumulation"
-                        ? "Saving for irregular expenses"
-                        : c.category_type === "target_balance"
-                          ? "Target balance"
-                          : c.current_balance < 0
-                            ? "Consider covering this overage"
-                            : potentialSurplus(c) > 0
-                              ? "Above one month’s plan"
-                              : "Monthly expense"}
+                  <span>{progress.typeLabel}</span>
+                </div>
+                <EnvelopeProgressBar name={c.name} progress={progress} />
+                <div className="nl-envelope-balance">
+                  <span className="nl-envelope-mobile-label" aria-hidden="true">
+                    Available now
                   </span>
-                </td>
-                <td data-label="Monthly plan" className="nl-right nl-number">
-                  {money(c.monthly_amount)}
-                </td>
-                <td
-                  data-label="Funded this month"
-                  className="nl-right nl-number"
-                >
-                  {money(
-                    data.funding.categories.find((f) => f.categoryId === c.id)
-                      ?.fundedAmount || 0,
+                  <span className="sr-only">Available now: </span>
+                  <strong className={progress.negative ? "nl-negative" : ""}>
+                    {money(c.current_balance)}
+                  </strong>
+                  {progress.balanceNote && (
+                    <span className={progress.negative ? "nl-negative" : ""}>
+                      {progress.balanceNote}
+                    </span>
                   )}
-                </td>
-                <td
-                  data-label="Spent this month"
-                  className="nl-right nl-number"
-                >
-                  {money(data.spending[c.id] || 0)}
-                </td>
-                <td
-                  data-label="Available now"
-                  className={`nl-right nl-number ${c.current_balance < 0 ? "nl-negative" : ""}`}
-                >
-                  <strong>{money(c.current_balance)}</strong>
-                </td>
-                <td>
-                  <div className="nl-envelope-actions">
-                    <Link
-                      className="nl-secondary"
-                      aria-label={`Review ${c.name}`}
-                      href={envelopeReviewHref(
-                        c.id,
-                        "activity",
-                        params.toString(),
-                      )}
-                      scroll={false}
-                    >
-                      Review →
-                    </Link>
-                    <Link
-                      className="nl-activity-link"
-                      aria-label={`Move money for ${c.name}`}
-                      href={envelopeReviewHref(
-                        c.id,
-                        "transfer",
-                        params.toString(),
-                      )}
-                      scroll={false}
-                    >
-                      Move money
-                    </Link>
-                  </div>
-                </td>
-              </tr>
+                </div>
+                <div className="nl-envelope-actions">
+                  <Link
+                    className="nl-secondary"
+                    aria-label={`Review ${c.name}`}
+                    href={envelopeReviewHref(
+                      c.id,
+                      "activity",
+                      params.toString(),
+                    )}
+                    scroll={false}
+                  >
+                    Review →
+                  </Link>
+                  <Link
+                    className="nl-activity-link"
+                    aria-label={`Move money for ${c.name}`}
+                    href={envelopeReviewHref(
+                      c.id,
+                      "transfer",
+                      params.toString(),
+                    )}
+                    scroll={false}
+                  >
+                    Move money
+                  </Link>
+                </div>
+              </li>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </ul>
+        </div>
+      )}
       {!shown.length && (
         <div className="nl-panel">
           {envelopes.length ? (
@@ -256,9 +282,12 @@ function EnvelopesContent() {
         </div>
       )}
       <p className="nl-footnote">
-        Available now includes carryover and adjustments. Funded this month
-        measures allocations; spent this month uses recorded transactions and
-        refunds. These numbers answer different questions.
+        Spending is based on recorded transactions minus refunds; import your
+        latest transactions to keep it current. Left in plan is not your
+        available balance: available money includes carryover, transfers, and
+        adjustments. Savings and goal bars show monthly funding, except
+        reserves, which show their balance target. Goal completion is tracked on
+        the Goals page. Buffer money is shown there separately.
       </p>
       <CheckinFooter
         task="budget"
@@ -287,6 +316,57 @@ function EnvelopesContent() {
         />
       )}
     </>
+  );
+}
+
+function EnvelopeProgressBar({
+  name,
+  progress: p,
+}: {
+  name: string;
+  progress: EnvelopeProgress;
+}) {
+  const amount = p.kind === "spending" && p.amount < 0 ? -p.amount : p.amount;
+  return (
+    <div className="nl-envelope-progress" data-tone={p.tone}>
+      <div className="nl-envelope-progress-heading">
+        <span>{p.label}</span>
+        <strong>
+          {money(amount)}
+          {p.target > 0 && (
+            <>
+              {" "}
+              <span>
+                {p.kind === "spending" && p.amount < 0 ? "· plan" : "of"}{" "}
+                {money(p.target)}
+              </span>
+            </>
+          )}
+        </strong>
+      </div>
+      {p.percent === null ? (
+        <div
+          className="nl-envelope-meter nl-envelope-meter-empty"
+          aria-hidden="true"
+        />
+      ) : (
+        <div
+          className="nl-envelope-meter"
+          role="progressbar"
+          aria-label={`${name}: ${p.label.toLowerCase()}`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(p.percent)}
+          aria-valuetext={`${money(amount)} of ${money(p.target)}. ${p.detail}`}
+        >
+          <span style={{ width: `${p.percent}%` }} />
+        </div>
+      )}
+      <div className="nl-envelope-progress-caption">
+        <span className="nl-envelope-progress-detail">{p.detail}</span>
+        <span className="nl-envelope-progress-secondary">{p.secondary}</span>
+      </div>
+    </div>
   );
 }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
+import { fetchAllPages } from '@/lib/supabase/fetch-all-pages';
 
 const MONTH_PARAM = /^(\d{4})-(\d{2})$/;
 
@@ -53,29 +54,25 @@ export async function GET(request: Request) {
     const lastDay = new Date(year, monthIndex0 + 1, 0).getDate();
     const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
 
-    // Fetch all transactions for the requested month with splits
-    const { data: transactions, error: transactionsError } = await supabase
-      .from('transactions')
-      .select(`
-        id,
-        date,
-        transaction_type,
-        splits:transaction_splits(
-          category_id,
-          amount
-        )
-      `)
-      .eq('budget_account_id', accountId)
-      .gte('date', startDate)
-      .lte('date', endDate);
-
-    if (transactionsError) {
-      console.error('Error fetching transactions:', transactionsError);
-      return NextResponse.json(
-        { error: 'Failed to fetch transactions' },
-        { status: 500 }
-      );
-    }
+    // A month can contain more rows than PostgREST's default limit.
+    // Fetch every page in a stable order rather than silently undercounting it.
+    const transactions = await fetchAllPages(async (from, to) => {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select(`
+          id,
+          date,
+          transaction_type,
+          splits:transaction_splits(category_id, amount)
+        `)
+        .eq('budget_account_id', accountId)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('id', { ascending: true })
+        .range(from, to);
+      if (error) throw error;
+      return data ?? [];
+    });
 
     // Calculate spending by category
     // For expenses: add amount to spending
