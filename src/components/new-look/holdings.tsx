@@ -394,7 +394,7 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
                   <RefreshCw size={16} />
                 </button>
               </div>
-              <div className="nl-holding-list">
+              <div className="nl-holding-list" hidden={!matching.length}>
                 {matching.map((item) => {
                   const reduction =
                     "balance" in item ? loanReduction(item) : null;
