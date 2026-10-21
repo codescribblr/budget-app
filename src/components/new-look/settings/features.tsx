@@ -1,4 +1,5 @@
 "use client";
+import { PremiumBadge } from "@/components/subscription/PremiumBadge";
 import { useState, useRef } from "react";
 import Link from "next/link";
 import { NativeSelect } from "../native-select";
@@ -109,7 +110,7 @@ export function SettingsFeatures() {
                       <div className="nl-feature-title">
                         <h3 id={`feature-${feature.key}`}>{feature.name}</h3>
                         {feature.requiresPremium && (
-                          <span className="nl-beta">Premium</span>
+                          <PremiumBadge />
                         )}
                       </div>
                       <p id={`feature-description-${feature.key}`}>

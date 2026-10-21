@@ -1,3 +1,4 @@
+import { PremiumBadge } from "@/components/subscription/PremiumBadge";
 import Link from 'next/link';
 import { Breadcrumbs } from '@/components/help/Breadcrumbs';
 import { Callout } from '@/components/help/Callout';
@@ -79,7 +80,7 @@ export default function ReportsFeaturePage() {
             <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border border-yellow-500/30">
               <div className="font-medium text-sm min-w-[200px]">
                 <Link href="/reports/trends" className="text-primary hover:underline">Spending Trends</Link>
-                <Badge variant="secondary" className="ml-2 text-xs">Premium</Badge>
+                <PremiumBadge variant="secondary" className="ml-2 text-xs" />
               </div>
               <div className="flex-1 text-sm text-muted-foreground">
                 Track how your spending changes over time with detailed trend analysis, monthly spending
@@ -89,7 +90,7 @@ export default function ReportsFeaturePage() {
             <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border border-yellow-500/30">
               <div className="font-medium text-sm min-w-[200px]">
                 <Link href="/reports/retirement-planning" className="text-primary hover:underline">Retirement Planning</Link>
-                <Badge variant="secondary" className="ml-2 text-xs">Premium</Badge>
+                <PremiumBadge variant="secondary" className="ml-2 text-xs" />
               </div>
               <div className="flex-1 text-sm text-muted-foreground">
                 Project your future net worth and plan for retirement. Includes retirement age planning,
@@ -100,7 +101,7 @@ export default function ReportsFeaturePage() {
             <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border border-yellow-500/30">
               <div className="font-medium text-sm min-w-[200px]">
                 <Link href="/reports/categories" className="text-primary hover:underline">Advanced Category Reports</Link>
-                <Badge variant="secondary" className="ml-2 text-xs">Premium</Badge>
+                <PremiumBadge variant="secondary" className="ml-2 text-xs" />
               </div>
               <div className="flex-1 text-sm text-muted-foreground">
                 Detailed analytics for each category including spending statistics, trends, transaction
@@ -247,7 +248,7 @@ export default function ReportsFeaturePage() {
       <div className="space-y-6">
         <div className="flex items-center gap-3">
           <h2 className="text-2xl font-bold">Spending Trends Report</h2>
-          <Badge variant="secondary" className="text-xs">Premium</Badge>
+          <PremiumBadge variant="secondary" className="text-xs" />
         </div>
 
         <Card>
@@ -373,7 +374,7 @@ export default function ReportsFeaturePage() {
       <div className="space-y-6">
         <div className="flex items-center gap-3">
           <h2 className="text-2xl font-bold">Net Worth Forecast</h2>
-          <Badge variant="secondary" className="text-xs">Premium</Badge>
+          <PremiumBadge variant="secondary" className="text-xs" />
         </div>
 
         <Card>
@@ -430,7 +431,7 @@ export default function ReportsFeaturePage() {
       <div className="space-y-6">
         <div className="flex items-center gap-3">
           <h2 className="text-2xl font-bold">Advanced Category Reports</h2>
-          <Badge variant="secondary" className="text-xs">Premium</Badge>
+          <PremiumBadge variant="secondary" className="text-xs" />
         </div>
 
         <Card>

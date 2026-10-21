@@ -1,5 +1,6 @@
 'use client';
 
+import { PremiumBadge } from "@/components/subscription/PremiumBadge";
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -146,7 +147,7 @@ export function AdminUsersList() {
                           </TableCell>
                           <TableCell className="text-center">
                             {user.isPremium ? (
-                              <Badge className="bg-amber-600">Premium</Badge>
+                              <PremiumBadge variant="secondary" className="bg-amber-600 text-white" />
                             ) : user.subscriptionStatus ? (
                               <Badge variant="secondary">{user.subscriptionStatus}</Badge>
                             ) : (

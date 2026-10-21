@@ -20,6 +20,12 @@
   --destructive: #a2534d;
   --destructive-foreground: #fff;
   --destructive-hover: color-mix(in srgb, var(--destructive) 88%, var(--foreground));
+  --premium-start: #f1dfad;
+  --premium-end: #e7c2a1;
+  --premium-foreground: #69491e;
+  --premium-border: #d2b37d;
+  --premium-icon: #865b1e;
+  --premium-highlight: #fff6dc;
   --nl-negative: var(--destructive);
   --nl-warning: #82591d;
   --nl-warning-background: #faf2e3;
@@ -68,6 +74,12 @@
   --ring: #a0d4b6;
   --destructive: #d49b94;
   --destructive-foreground: #311d1a;
+  --premium-start: #4d402b;
+  --premium-end: #573c30;
+  --premium-foreground: #f6dfaa;
+  --premium-border: #8b7046;
+  --premium-icon: #efc774;
+  --premium-highlight: #796346;
   --nl-negative: var(--destructive);
   --nl-warning: #eac586;
   --nl-warning-background: #342c1e;
@@ -92,6 +104,28 @@
 /* Recharts sets the series color inline; legend text needs the normal text contrast. */
 .new-look .nl-report-chart .recharts-legend-item-text { color: var(--foreground) !important; }
 .new-look .nl-chart-tooltip { background: var(--popover); border-color: var(--border); color: var(--popover-foreground); }
+/* Warm brass and clay distinguish Premium from everyday green controls. */
+:is(.new-look, .new-look-theme) .premium-badge {
+  background: linear-gradient(120deg, var(--premium-start), var(--premium-end));
+  color: var(--premium-foreground);
+  border: 1px solid var(--premium-border);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--premium-highlight) 55%, transparent);
+  gap: 5px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 16px;
+  letter-spacing: .1px;
+  vertical-align: middle;
+}
+:is(.new-look, .new-look-theme) .premium-badge > svg {
+  width: 13px;
+  height: 13px;
+  color: var(--premium-icon);
+  stroke-width: 1.8;
+  flex-shrink: 0;
+}
 /* Shared classic workflows opt into these semantic colors in the new interface. */
 :is(.new-look, .new-look-theme) [data-slot="import-dropzone"] { border-color: var(--input); }
 :is(.new-look, .new-look-theme) [data-slot="import-dropzone"][data-disabled="false"]:is(:hover, :focus-within),

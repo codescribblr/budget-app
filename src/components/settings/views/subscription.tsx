@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumBadge } from "@/components/subscription/PremiumBadge";
 import { useInterfacePath } from "@/hooks/use-interface-path";
 
 import { useState, useEffect, useRef, Suspense } from "react";
@@ -314,17 +315,11 @@ function SubscriptionPageContent() {
                 Your subscription status and details
               </CardDescription>
             </div>
-            <Badge
-              variant={isPremium ? "default" : "secondary"}
-              className={
-                isPremium
-                  ? "theme-action-accent bg-gradient-to-r from-yellow-400 to-orange-500"
-                  : ""
-              }
-            >
-              {isPremium && <Crown className="h-3 w-3 mr-1" />}
-              {subscription?.tier === "premium" ? "Premium" : "Free"}
-            </Badge>
+            {subscription?.tier === "premium" ? (
+              <PremiumBadge />
+            ) : (
+              <Badge variant="secondary">Free</Badge>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">

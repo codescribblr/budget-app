@@ -504,7 +504,7 @@ export default function HomePage() {
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-12">
             <Badge className="mb-4" variant="secondary">
-              <Code2 className="h-3 w-3 mr-1" />
+              <Crown className="h-3 w-3 mr-1" aria-hidden="true" />
               Premium
             </Badge>
             <h2 className="text-4xl font-bold mb-4">Build on Your Budget Data</h2>

@@ -2,6 +2,7 @@
 
 import { useInterfacePath } from "@/hooks/use-interface-path";
 
+import { PremiumBadge } from "@/components/subscription/PremiumBadge";
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -196,13 +197,7 @@ export default function FeaturesSettings() {
                           <div className="flex flex-wrap items-center gap-2">
                             <h4 className="font-semibold">{feature.name}</h4>
                             {feature.requiresPremium && (
-                              <Badge
-                                variant="default"
-                                className="theme-action-accent bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-0 text-xs shrink-0"
-                              >
-                                <Crown className="h-3 w-3 mr-1" />
-                                Premium
-                              </Badge>
+                              <PremiumBadge />
                             )}
                             {helpContent && (
                               <HelpTooltip content={helpContent.tooltip} />
