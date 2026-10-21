@@ -18,6 +18,7 @@ import {
   ArrowUpRight,
   Mail,
   Banknote,
+  Settings,
 } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
@@ -168,6 +169,9 @@ export function NewLookLayout({ children }: { children: React.ReactNode }) {
                 ))}
               </nav>
               <div className="nl-sidebar-bottom">
+                <Link href="/new/settings" aria-current={pathname.startsWith("/new/settings") ? "page" : undefined} onClick={() => setMenu(false)}>
+                  <Settings size={17} />Settings
+                </Link>
                 <Link href="/dashboard">
                   <ArrowUpRight size={17} />
                   All classic tools
@@ -201,7 +205,7 @@ export function NewLookLayout({ children }: { children: React.ReactNode }) {
                   <Menu size={21} />
                 </button>
                 <span className="nl-breadcrumb">
-                  Your budget <span>/</span> {activeLink?.label || "New look"}
+                  Your budget <span>/</span> {pathname.startsWith("/new/settings") ? "Settings" : activeLink?.label || "New look"}
                   {pathname.endsWith("/manage") ? " / Setup" : ""}
                 </span>
                 <div className="nl-top-actions">

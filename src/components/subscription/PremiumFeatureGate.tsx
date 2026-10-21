@@ -1,5 +1,7 @@
 'use client';
 
+import { useInterfacePath } from "@/hooks/use-interface-path";
+
 import { useRouter } from 'next/navigation';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useFeature, useFeatures } from '@/contexts/FeatureContext';
@@ -24,6 +26,7 @@ export function PremiumFeatureGate({
   featureKey,
   fallback,
 }: PremiumFeatureGateProps) {
+  const interfacePath = useInterfacePath();
   const router = useRouter();
   const { isPremium, loading: subscriptionLoading } = useSubscription();
   const { loading: featuresLoading } = useFeatures();
@@ -81,7 +84,7 @@ export function PremiumFeatureGate({
             <p className="text-sm text-muted-foreground mb-4">
               To access {featureName}, please enable the feature in your settings.
             </p>
-            <Button onClick={() => router.push('/settings/features')}>
+            <Button onClick={() => router.push(interfacePath('/settings/features'))}>
               Go to Feature Settings
             </Button>
           </CardContent>

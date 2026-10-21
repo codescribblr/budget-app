@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -297,7 +297,7 @@ export default function TellerAccountMappingDialog({
                 {mapping.enabled && (
                   <div className="space-y-3 pl-6 border-l-2">
                     <div className="flex items-center space-x-2">
-                      <Checkbox
+                      <Switch
                         id={`historical-${tellerAccount.id}`}
                         checked={mapping.is_historical || false}
                         onCheckedChange={(checked) => {

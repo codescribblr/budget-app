@@ -59,10 +59,10 @@ export default function IntegrationSelector({
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
-            <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={handleEmailSelected}>
+            <Card className="cursor-pointer hover:bg-muted/50 transition-colors" role="button" tabIndex={0} aria-label="Email Import" onClick={handleEmailSelected} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleEmailSelected(); } }}>
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <Mail className="h-6 w-6 text-blue-600" />
+                  <Mail className="theme-text-accent h-6 w-6 text-blue-600" />
                   <div className="flex-1">
                     <CardTitle className="text-lg">Email Import</CardTitle>
                     <CardDescription>
@@ -89,10 +89,10 @@ export default function IntegrationSelector({
               </CardContent>
             </Card>
 
-            <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={handleTellerSelected}>
+            <Card className="cursor-pointer hover:bg-muted/50 transition-colors" role="button" tabIndex={0} aria-label="Teller Integration" onClick={handleTellerSelected} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleTellerSelected(); } }}>
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <CreditCard className="h-6 w-6 text-purple-600" />
+                  <CreditCard className="theme-text-accent h-6 w-6 text-purple-600" />
                   <div className="flex-1">
                     <CardTitle className="text-lg">Teller Integration</CardTitle>
                     <CardDescription>

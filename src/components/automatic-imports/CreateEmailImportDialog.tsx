@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Mail, Copy, Check } from 'lucide-react';
@@ -165,7 +165,7 @@ export default function CreateEmailImportDialog({
           </div>
 
           <div className="flex items-center space-x-2">
-            <Checkbox
+            <Switch
               id="historical"
               checked={isHistorical}
               onCheckedChange={(checked) => setIsHistorical(checked === true)}

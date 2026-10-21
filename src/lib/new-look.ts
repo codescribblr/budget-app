@@ -25,6 +25,8 @@ const routes = [
 ] as const;
 
 export function interfaceRoute(pathname: string, target: "new" | "classic") {
+  if (target === "new" && (pathname === "/settings" || pathname.startsWith("/settings/"))) return `/new${pathname}`;
+  if (target === "classic" && (pathname === "/new/settings" || pathname.startsWith("/new/settings/"))) return pathname.slice(4);
   if (target === "new" && /^\/(loans|non-cash-assets)\/\d+$/.test(pathname)) return pathname.replace("/loans/", "/new/loans/").replace("/non-cash-assets/", "/new/investments/");
   if (target === "classic" && /^\/new\/(loans|investments)\/\d+$/.test(pathname)) return pathname.replace("/new/loans/", "/loans/").replace("/new/investments/", "/non-cash-assets/");
   if (target === "new" && /^\/categories\/\d+$/.test(pathname)) return pathname.replace("/categories/", "/new/budget/");
@@ -43,6 +45,15 @@ export function interfaceRoute(pathname: string, target: "new" | "classic") {
   if (match) return match[target === "new" ? 0 : 1];
   if (target === "new" && pathname === "/credit-cards") return "/new/accounts";
   return target === "new" ? "/new" : "/dashboard";
+}
+
+/** Preserve shared settings/import destinations, including query strings and fragments. */
+export function currentInterfacePath(path: string, modern: boolean) {
+  const base = path.split(/[?#]/)[0];
+  if (!modern) return path;
+  if (base === "/settings" || base.startsWith("/settings/") || base === "/imports" || base.startsWith("/imports/")) return `/new${path}`;
+  if (base === "/dashboard") return path.replace("/dashboard", "/new");
+  return path;
 }
 
 export function localDate(date = new Date()) {

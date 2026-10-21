@@ -659,7 +659,7 @@ function PlanReview({ report }: { report: BudgetReview }) {
           with today’s monthly budgets. Enable Advanced Reporting with Premium
           to use this view.
         </p>
-        <Link className="nl-secondary" href="/settings/features">
+        <Link className="nl-secondary" href="/new/settings/features">
           Manage report features
         </Link>
       </section>

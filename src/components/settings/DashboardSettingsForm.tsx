@@ -1,5 +1,7 @@
 'use client';
 
+import { useInterfacePath } from "@/hooks/use-interface-path";
+
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,23 +27,27 @@ import { Crown } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function DashboardSettingsForm() {
+  const interfacePath = useInterfacePath();
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const { isFeatureEnabled, features, loading: featuresLoading } = useFeatures();
   const { isPremium, loading: subscriptionLoading } = useSubscription();
   const [visibility, setVisibility] = useState<DashboardCardVisibility>(DEFAULT_DASHBOARD_CARD_VISIBILITY);
   const [loading, setLoading] = useState(true);
+  const [loadError,setLoadError] = useState(false);
+  const [saving,setSaving] = useState(false);
 
   const accessLoading = featuresLoading || subscriptionLoading;
 
   const load = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoading(true); setLoadError(false);
       const res = await fetch('/api/settings');
       if (!res.ok) throw new Error('Failed to load settings');
       const data = (await res.json()) as Record<string, string>;
       const raw = data[DASHBOARD_CARD_VISIBILITY_KEY];
       setVisibility(parseDashboardCardVisibility(raw));
     } catch {
+      setLoadError(true);
       toast.error('Could not load dashboard layout');
       setVisibility({ ...DEFAULT_DASHBOARD_CARD_VISIBILITY });
     } finally {
@@ -54,6 +60,7 @@ export default function DashboardSettingsForm() {
   }, [load]);
 
   const persist = async (next: DashboardCardVisibility) => {
+    setSaving(true);
     try {
       const res = await fetch('/api/settings', {
         method: 'POST',
@@ -77,11 +84,11 @@ export default function DashboardSettingsForm() {
       setVisibility(next);
     } catch {
       toast.error('Could not save dashboard layout');
-    }
+    } finally { setSaving(false); }
   };
 
   const handleToggle = (id: DashboardCardId, checked: boolean) => {
-    if (!isEditor) return;
+    if (!isEditor || saving || loadError) return;
     const next = { ...visibility, [id]: checked };
     void persist(next);
   };
@@ -97,6 +104,8 @@ export default function DashboardSettingsForm() {
     );
   }
 
+  if(loadError) return <div role="alert" className="space-y-4"><p>We couldn’t load the classic dashboard preferences.</p><Button onClick={load}>Try again</Button></div>;
+
   return (
     <div className="space-y-6">
       <div>
@@ -106,7 +115,7 @@ export default function DashboardSettingsForm() {
           need to be turned on in Features; some of those also require Premium before you can show or hide their card.
         </p>
         {!isEditor && (
-          <p className="text-sm text-amber-600 dark:text-amber-500 mt-2">
+          <p className="theme-text-warning text-sm text-amber-600 dark:text-amber-500 mt-2">
             Only editors and owners can change visibility toggles.
           </p>
         )}
@@ -143,7 +152,7 @@ export default function DashboardSettingsForm() {
                         id={`dash-card-${opt.id}`}
                         checked={visibility[opt.id]}
                         onCheckedChange={(checked) => handleToggle(opt.id, checked)}
-                        disabled={!isEditor}
+                        disabled={!isEditor || saving}
                       />
                     </div>
                   </div>
@@ -185,9 +194,9 @@ export default function DashboardSettingsForm() {
                     <Button
                       size="sm"
                       asChild
-                      className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
+                      className="theme-action-accent bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0"
                     >
-                      <Link href="/settings/subscription">
+                      <Link href={interfacePath("/settings/subscription")}>
                         <Crown className="mr-2 h-4 w-4" aria-hidden />
                         Upgrade to Premium
                       </Link>
@@ -195,7 +204,7 @@ export default function DashboardSettingsForm() {
                   ) : showEnable ? (
                     <Button size="sm" variant="secondary" asChild>
                       <Link
-                        href="/settings/features"
+                        href={interfacePath("/settings/features")}
                         title={`Enable ${featureDisplayName(featureKey)}`}
                       >
                         Enable this feature
@@ -210,7 +219,7 @@ export default function DashboardSettingsForm() {
                         id={`dash-card-${opt.id}`}
                         checked={visibility[opt.id]}
                         onCheckedChange={(checked) => handleToggle(opt.id, checked)}
-                        disabled={!isEditor}
+                        disabled={!isEditor || saving}
                       />
                     </div>
                   ) : null}

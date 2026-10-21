@@ -1,5 +1,7 @@
 "use client"
 
+import { useInterfacePath } from "@/hooks/use-interface-path";
+
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -19,6 +21,7 @@ import { useSidebar } from "@/components/ui/sidebar"
 import { useSubscription } from "@/contexts/SubscriptionContext"
 
 export function UserMenu() {
+  const interfacePath = useInterfacePath();
   const router = useRouter()
   const { state } = useSidebar()
   const { isPremium } = useSubscription()
@@ -97,7 +100,7 @@ export function UserMenu() {
         {!isPremium && (
           <>
             <DropdownMenuItem
-              onClick={() => router.push('/settings/subscription')}
+              onClick={() => router.push(interfacePath('/settings/subscription'))}
               className="theme-action-accent bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white border-0 focus:bg-gradient-to-r focus:from-yellow-500 focus:to-orange-600"
             >
               <Crown className="mr-2 h-4 w-4 text-white" />
@@ -106,7 +109,7 @@ export function UserMenu() {
             <DropdownMenuSeparator />
           </>
         )}
-        <DropdownMenuItem onClick={() => router.push('/settings')}>
+        <DropdownMenuItem onClick={() => router.push(interfacePath('/settings'))}>
           <Settings className="mr-2 h-4 w-4" />
           <span>Settings</span>
         </DropdownMenuItem>

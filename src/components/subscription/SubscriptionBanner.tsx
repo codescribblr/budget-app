@@ -1,5 +1,7 @@
 'use client';
 
+import { useInterfacePath } from "@/hooks/use-interface-path";
+
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -10,6 +12,7 @@ import { useLocalStorage } from '@/hooks/use-local-storage';
 import { formatCurrency } from '@/lib/utils';
 
 export function SubscriptionBanner() {
+  const interfacePath = useInterfacePath();
   const { subscription, isPremium, isTrialing, trialDaysRemaining, loading } = useSubscription();
   const [billingDescription, setBillingDescription] = useState<string>('$100/year');
 
@@ -83,7 +86,7 @@ export function SubscriptionBanner() {
             </span>
           </div>
           <div className="flex gap-2">
-            <Link href="/settings/subscription">
+            <Link href={interfacePath("/settings/subscription")}>
               <Button size="sm" variant="default">
                 Manage Subscription
               </Button>
@@ -112,7 +115,7 @@ export function SubscriptionBanner() {
             </span>
           </div>
           <div className="flex gap-2">
-            <Link href="/settings/subscription">
+            <Link href={interfacePath("/settings/subscription")}>
               <Button size="sm" variant="default">
                 <CreditCard className="h-4 w-4 mr-2" />
                 Update Payment Method
@@ -142,7 +145,7 @@ export function SubscriptionBanner() {
             </span>
           </div>
           <div className="flex gap-2">
-            <Link href="/settings/subscription">
+            <Link href={interfacePath("/settings/subscription")}>
               <Button size="sm" variant="default">
                 <CreditCard className="h-4 w-4 mr-2" />
                 Update Payment Method

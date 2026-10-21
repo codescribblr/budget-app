@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  currentInterfacePath,
   checkinPeriod,
   interfaceRoute,
   parseMoney,
@@ -42,7 +43,12 @@ describe("interface navigation", () => {
       "/new/imports/map-columns",
     );
     expect(interfaceRoute("/new/imports/abc", "classic")).toBe("/imports/abc");
-    expect(interfaceRoute("/settings", "new")).toBe("/new");
+    expect(interfaceRoute("/settings", "new")).toBe("/new/settings");
+    for (const section of ["features", "dashboard", "account", "collaborators", "profile", "password", "notifications", "subscription", "automatic-imports", "import-templates", "duplicates", "merchants", "backup", "integrations", "api-keys"]) {
+      expect(interfaceRoute(`/settings/${section}`, "new")).toBe(`/new/settings/${section}`);
+      expect(interfaceRoute(`/new/settings/${section}`, "classic")).toBe(`/settings/${section}`);
+    }
+    expect(interfaceRoute("/new/settings", "classic")).toBe("/settings");
   });
 });
 describe("money entry", () => {
@@ -167,4 +173,16 @@ describe("calendar check-in boundaries", () => {
 it("switches between the matching envelope detail pages", () => {
   expect(interfaceRoute("/categories/42", "new")).toBe("/new/budget/42");
   expect(interfaceRoute("/new/budget/42", "classic")).toBe("/categories/42");
+});
+
+describe("shared workflow destinations", () => {
+ it("keeps settings, billing returns, remapping and restored budgets in the active interface", () => {
+   for (const [classic,modern] of [["/settings","/new/settings"],["/settings/subscription?success=true","/new/settings/subscription?success=true"],["/settings/subscription?canceled=true","/new/settings/subscription?canceled=true"],["/settings?tab=features","/new/settings?tab=features"],["/imports/map-columns?remap=true&batchId=123","/new/imports/map-columns?remap=true&batchId=123"],["/dashboard","/new"]]) {
+     expect(currentInterfacePath(classic,true)).toBe(modern);
+     expect(currentInterfacePath(classic,false)).toBe(classic);
+   }
+ });
+ it("leaves unrelated and already-modern destinations alone", () => {
+   for(const path of ["/new/settings", "/api/v1/docs", "/login", "/settings-elsewhere", "https://billing.example/settings"]) expect(currentInterfacePath(path,true)).toBe(path);
+ });
 });

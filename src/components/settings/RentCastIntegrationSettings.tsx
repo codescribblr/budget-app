@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
@@ -17,6 +17,7 @@ import { DEFAULT_RENTCAST_MONTHLY_LIMIT, RENTCAST_AFFILIATE_URL, RENTCAST_PROMO_
 export default function RentCastIntegrationSettings() {
   const [integration, setIntegration] = useState<RentCastIntegrationSettingsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError,setLoadError] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
@@ -31,6 +32,7 @@ export default function RentCastIntegrationSettings() {
   const fetchIntegration = async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
+    setIsLoading(true);setLoadError(false);
 
     try {
       const response = await fetch('/api/settings/integrations/rentcast');
@@ -46,6 +48,7 @@ export default function RentCastIntegrationSettings() {
       setEnforceLimit(nextIntegration.config.enforce_monthly_limit);
       setMonthlyLimit(String(nextIntegration.config.monthly_request_limit));
     } catch (error: any) {
+      setLoadError(true);
       console.error(error);
       toast.error(error.message || 'Failed to load RentCast integration');
     } finally {
@@ -161,6 +164,8 @@ export default function RentCastIntegrationSettings() {
     );
   }
 
+  if(loadError) return <div role="alert" className="space-y-4"><p>We couldn’t load the RentCast connection.</p><Button onClick={fetchIntegration}>Try again</Button></div>;
+
   const usageLabel = integration
     ? `${integration.requests_this_month} / ${integration.config.monthly_request_limit} requests this month`
     : `0 / ${DEFAULT_RENTCAST_MONTHLY_LIMIT} requests this month`;
@@ -189,7 +194,7 @@ export default function RentCastIntegrationSettings() {
               href={RENTCAST_AFFILIATE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
+              className="theme-text-accent inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
             >
               Sign up for RentCast.io
               <ExternalLink className="h-3 w-3" />
@@ -257,7 +262,7 @@ export default function RentCastIntegrationSettings() {
         </div>
 
         <div className="flex items-start space-x-2">
-          <Checkbox
+          <Switch
             id="rentcast-enabled"
             checked={isEnabled}
             onCheckedChange={(checked) => setIsEnabled(checked === true)}
@@ -274,7 +279,7 @@ export default function RentCastIntegrationSettings() {
 
         <div className="space-y-3 rounded-md border p-3">
           <div className="flex items-start space-x-2">
-            <Checkbox
+            <Switch
               id="rentcast-enforce-limit"
               checked={enforceLimit}
               onCheckedChange={(checked) => setEnforceLimit(checked === true)}

@@ -249,9 +249,9 @@ export default function DuplicateTransactionFinder() {
 
         {duplicateGroups.length > 0 && (
           <div className="space-y-6">
-            <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg border border-yellow-200 dark:border-yellow-800">
-              <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-              <p className="text-sm text-yellow-900 dark:text-yellow-100">
+            <div className="theme-surface-warning theme-border-warning flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              <AlertTriangle className="theme-text-warning h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+              <p className="theme-text-warning text-sm text-yellow-900 dark:text-yellow-100">
                 Found {duplicateGroups.length} group(s) of potential duplicates. 
                 Review carefully and merge them to combine their data, or mark as reviewed if they're not duplicates.
               </p>

@@ -68,7 +68,7 @@ export function GuidedHoldings({
               ? "Enable Loans with Premium to track debt and connect it to your goals."
               : "Enable Non-Cash Assets to track investments and property separately from spendable money."}
           </p>
-          <Link className="nl-primary" href="/settings/features">
+          <Link className="nl-primary" href="/new/settings/features">
             Manage features
           </Link>
         </div>

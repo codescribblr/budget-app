@@ -1,5 +1,7 @@
 'use client';
 
+import { useInterfacePath } from "@/hooks/use-interface-path";
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,12 +26,13 @@ const PREMIUM_BENEFITS = [
 ];
 
 export function UpgradePrompt({ featureName, featureDescription }: UpgradePromptProps) {
+  const interfacePath = useInterfacePath();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const handleUpgrade = () => {
     setLoading(true);
-    router.push('/settings/subscription');
+    router.push(interfacePath('/settings/subscription'));
   };
 
   return (

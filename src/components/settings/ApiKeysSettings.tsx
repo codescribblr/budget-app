@@ -1,5 +1,6 @@
 'use client';
 
+import { useAccountPermissions } from "@/hooks/use-account-permissions";
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -79,6 +80,8 @@ interface ApiKeyUsageLog {
 }
 
 export default function ApiKeysSettings() {
+  const {isOwner, isLoading: permissionsLoading} = useAccountPermissions();
+  const [loadError,setLoadError] = useState(false);
   const [keys, setKeys] = useState<ApiKeyListItem[]>([]);
   const [sections, setSections] = useState<ScopeSection[]>([]);
   const [presets, setPresets] = useState<ScopePreset[]>([]);
@@ -108,6 +111,7 @@ export default function ApiKeysSettings() {
   const fetchKeys = async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
+    setIsLoading(true); setLoadError(false);
 
     try {
       const response = await fetch('/api/settings/api-keys');
@@ -128,6 +132,7 @@ export default function ApiKeysSettings() {
         setSelectedPermissions(new Set(defaultPreset.permissions));
       }
     } catch (error) {
+      setLoadError(true);
       console.error('Error fetching API keys:', error);
       toast.error('Failed to load API keys');
     } finally {
@@ -137,11 +142,11 @@ export default function ApiKeysSettings() {
   };
 
   useEffect(() => {
-    if (!hasMountedRef.current) {
+    if (!permissionsLoading && isOwner && !hasMountedRef.current) {
       hasMountedRef.current = true;
       fetchKeys();
     }
-  }, []);
+  }, [permissionsLoading, isOwner]);
 
   const applyPreset = (presetId: string) => {
     setSelectedPreset(presetId);
@@ -269,6 +274,9 @@ export default function ApiKeysSettings() {
   const activeKeys = keys.filter((key) => !key.revoked_at);
   const revokedKeys = keys.filter((key) => key.revoked_at);
 
+  if (permissionsLoading) return <Loader2 className="animate-spin" aria-label="Loading permissions"/>;
+  if (!isOwner) return <p className="text-muted-foreground">Only the budget owner can manage API access.</p>;
+  if (loadError) return <div role="alert" className="space-y-4"><p>We couldn’t load API access settings.</p><Button onClick={fetchKeys}>Try again</Button></div>;
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -297,7 +305,7 @@ export default function ApiKeysSettings() {
             </Alert>
           )}
 
-          <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground space-y-2">
+          <details className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground space-y-2"><summary className="cursor-pointer font-medium">Developer documentation &amp; connection guide</summary>
             <p>
               <strong>Documentation:</strong>{' '}
               <a href="/api/v1/docs" target="_blank" rel="noopener noreferrer" className="text-primary underline">
@@ -327,9 +335,9 @@ export default function ApiKeysSettings() {
               Authenticate with <code className="text-xs bg-muted px-1 py-0.5 rounded">Authorization: Bearer YOUR_KEY</code>.
             </p>
             <p>
-              Example: <code className="text-xs bg-muted px-1 py-0.5 rounded break-all">curl -H &quot;Authorization: Bearer bud_test_...&quot; http://localhost:3000/api/v1/me</code>
+              Example: <code className="text-xs bg-muted px-1 py-0.5 rounded break-all">curl -H &quot;Authorization: Bearer bud_test_...&quot; https://YOUR_BUDGET_APP/api/v1/me</code>
             </p>
-          </div>
+          </details>
 
           {!showCreateForm ? (
             <Button onClick={() => setShowCreateForm(true)} disabled={!apiAccessEnabled}>
@@ -383,7 +391,8 @@ export default function ApiKeysSettings() {
                 />
               </div>
 
-              <div className="space-y-3">
+              <details className="space-y-3 rounded-lg border p-4">
+                <summary className="cursor-pointer font-medium">Review permissions ({selectedPermissions.size} selected)</summary>
                 <div className="flex items-center justify-between">
                   <Label>Permissions</Label>
                   {useCustomPermissions && (
@@ -403,6 +412,7 @@ export default function ApiKeysSettings() {
                         <div className="flex items-center gap-4">
                           <label className="flex items-center gap-2 text-sm">
                             <Checkbox
+                              aria-label={`${section.label}: read`}
                               checked={selectedPermissions.has(readScope)}
                               onCheckedChange={(checked) =>
                                 togglePermission(readScope, checked === true)
@@ -412,6 +422,7 @@ export default function ApiKeysSettings() {
                           </label>
                           <label className="flex items-center gap-2 text-sm">
                             <Checkbox
+                              aria-label={`${section.label}: write`}
                               checked={selectedPermissions.has(writeScope)}
                               onCheckedChange={(checked) =>
                                 togglePermission(writeScope, checked === true)
@@ -424,7 +435,7 @@ export default function ApiKeysSettings() {
                     );
                   })}
                 </div>
-              </div>
+              </details>
 
               <div className="flex gap-2">
                 <Button onClick={handleCreateKey} disabled={isCreating}>

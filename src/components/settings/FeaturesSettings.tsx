@@ -1,5 +1,7 @@
 'use client';
 
+import { useInterfacePath } from "@/hooks/use-interface-path";
+
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,6 +41,7 @@ const LEVEL_LABELS = {
 };
 
 export default function FeaturesSettings() {
+  const interfacePath = useInterfacePath();
   const router = useRouter();
   const { features, loading, hasPremium, toggleFeature, refreshFeatures } = useFeatures();
   const { isOwner, isLoading: permissionsLoading } = useAccountPermissions();
@@ -57,7 +60,7 @@ export default function FeaturesSettings() {
   const handleToggle = async (feature: Feature, enabled: boolean) => {
     // Check if premium required and user doesn't have premium
     if (enabled && feature.requiresPremium && !hasPremium) {
-      router.push('/settings/subscription');
+      router.push(interfacePath('/settings/subscription'));
       return;
     }
 
@@ -133,13 +136,13 @@ export default function FeaturesSettings() {
         <CardContent className="space-y-6">
           {/* Show button to enable premium features if user has premium but features aren't enabled */}
           {hasPremium && isOwner && !loading && premiumFeaturesNotEnabled && (
-            <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <div className="theme-surface-warning theme-border-warning p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex-1">
-                  <p className="font-semibold text-yellow-800 dark:text-yellow-200">
+                  <p className="theme-text-warning font-semibold text-yellow-800 dark:text-yellow-200">
                     Premium features not enabled
                   </p>
-                  <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                  <p className="theme-text-warning text-sm text-yellow-700 dark:text-yellow-300 mt-1">
                     You have a premium subscription, but some premium features haven't been enabled yet. Click below to enable all premium features.
                   </p>
                 </div>
@@ -159,7 +162,7 @@ export default function FeaturesSettings() {
                       toast.error(error.message || 'Failed to enable premium features');
                     }
                   }}
-                  className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:from-yellow-500 hover:to-orange-600 w-full sm:w-auto shrink-0"
+                  className="theme-action-accent bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:from-yellow-500 hover:to-orange-600 w-full sm:w-auto shrink-0"
                 >
                   Enable All Premium Features
                 </Button>
@@ -195,7 +198,7 @@ export default function FeaturesSettings() {
                             {feature.requiresPremium && (
                               <Badge
                                 variant="default"
-                                className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-0 text-xs shrink-0"
+                                className="theme-action-accent bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-0 text-xs shrink-0"
                               >
                                 <Crown className="h-3 w-3 mr-1" />
                                 Premium
@@ -237,16 +240,17 @@ export default function FeaturesSettings() {
 
                         <div className="flex flex-row sm:flex-col items-center sm:items-end justify-end sm:justify-start gap-2 shrink-0">
                           <Switch
+                            aria-label={feature.name}
                             checked={feature.enabled}
                             onCheckedChange={(checked) => handleToggle(feature, checked)}
-                            disabled={togglingFeature === feature.key || isPremiumLocked || !isOwner || permissionsLoading}
+                            disabled={togglingFeature !== null || isPremiumLocked || !isOwner || permissionsLoading}
                           />
                           {isPremiumLocked && (
                             <Button
                               variant="link"
                               size="sm"
                               className="h-auto p-0 text-xs whitespace-nowrap"
-                              onClick={() => router.push('/settings/subscription')}
+                              onClick={() => router.push(interfacePath('/settings/subscription'))}
                             >
                               Upgrade →
                             </Button>
@@ -270,7 +274,7 @@ export default function FeaturesSettings() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              <AlertTriangle className="theme-text-warning h-5 w-5 text-orange-500" />
               Disable {confirmDialog.feature?.name}?
             </AlertDialogTitle>
             <AlertDialogDescription asChild>

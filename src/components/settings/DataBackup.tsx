@@ -1,5 +1,8 @@
 'use client';
 
+import { useAccountPermissions } from "@/hooks/use-account-permissions";
+import { useInterfacePath } from "@/hooks/use-interface-path";
+
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,10 +57,13 @@ interface BackupPreview {
 }
 
 export default function DataBackup() {
+  const interfacePath = useInterfacePath();
+  const {isEditor, isLoading: permissionsLoading} = useAccountPermissions();
   const [backups, setBackups] = useState<Backup[]>([]);
   const [maxBackups, setMaxBackups] = useState(3);
   const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError,setLoadError] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isDeletingId, setIsDeletingId] = useState<number | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -109,6 +115,7 @@ export default function DataBackup() {
       return;
     }
     fetchingRef.current = true;
+    setIsLoading(true);setLoadError(false);
 
     try {
       const response = await fetch('/api/backups');
@@ -129,6 +136,7 @@ export default function DataBackup() {
         setIsPremium(data.isPremium);
       }
     } catch (error) {
+      setLoadError(true);
       console.error('Error fetching backups:', error);
       toast.error('Failed to load backups');
       setBackups([]);
@@ -251,7 +259,7 @@ export default function DataBackup() {
 
       setImportProgress('Restore complete! Refreshing page...');
       setTimeout(() => {
-        window.location.href = '/dashboard';
+        window.location.href = interfacePath("/dashboard");
       }, 1500);
     } catch (error) {
       console.error('Error restoring backup:', error);
@@ -454,7 +462,7 @@ export default function DataBackup() {
 
       setImportProgress('Import complete! Refreshing page...');
       setTimeout(() => {
-        window.location.href = '/dashboard';
+        window.location.href = interfacePath("/dashboard");
       }, 1500);
     } catch (error) {
       console.error('Error importing backup:', error);
@@ -476,6 +484,8 @@ export default function DataBackup() {
     });
   };
 
+  if(loadError) return <div role="alert" className="space-y-4"><p>We couldn’t load your backups.</p><Button onClick={fetchBackups}>Try again</Button></div>;
+
   return (
     <>
       <Card>
@@ -491,7 +501,7 @@ export default function DataBackup() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            <Button onClick={handleCreateBackup} disabled={isCreating || isLoading}>
+            <Button onClick={handleCreateBackup} disabled={isCreating || isLoading || permissionsLoading || !isEditor}>
               {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Backup
             </Button>
@@ -499,7 +509,7 @@ export default function DataBackup() {
               <FileOutput className="mr-2 h-4 w-4" />
               Export to File
             </Button>
-            <Button variant="outline" onClick={openImportDialog} disabled={isLoading}>
+            <Button variant="outline" onClick={openImportDialog} disabled={isLoading || permissionsLoading || !isEditor}>
               <Upload className="mr-2 h-4 w-4" />
               Import from File
             </Button>
@@ -541,7 +551,7 @@ export default function DataBackup() {
                       variant="outline"
                       size="sm"
                       onClick={() => openRestoreDialog(backup.id)}
-                      disabled={isRestoring}
+                      disabled={isRestoring || !isEditor}
                     >
                       <RotateCcw className="mr-2 h-4 w-4" />
                       Restore
@@ -550,7 +560,8 @@ export default function DataBackup() {
                       variant="destructive"
                       size="sm"
                       onClick={() => handleDeleteBackup(backup.id)}
-                      disabled={isDeletingId === backup.id}
+                      aria-label="Delete backup"
+                      disabled={isDeletingId === backup.id || !isEditor}
                     >
                       {isDeletingId === backup.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -679,7 +690,7 @@ export default function DataBackup() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isRestoring}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isRestoring || !isEditor}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRestoreBackup}
               disabled={

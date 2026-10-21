@@ -29,8 +29,8 @@ export function GuidedImports() {
       <p className="nl-footnote">
         {checkin &&
           "Before continuing, confirm that you’ve included each account you use. "}
-        Automatic import settings remain in{" "}
-        <Link href="/settings/automatic-imports">classic ↗</Link>.
+        Manage connections in{" "}
+        <Link href="/new/settings/automatic-imports">automatic import settings</Link>.
       </p>
       <CheckinFooter
         task="imports"

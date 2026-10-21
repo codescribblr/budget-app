@@ -1,5 +1,7 @@
 'use client';
 
+import { useInterfacePath } from "@/hooks/use-interface-path";
+
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,6 +60,7 @@ interface ImportSetupCardProps {
 }
 
 export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportSetupCardProps) {
+  const interfacePath = useInterfacePath();
   const router = useRouter();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isActive, setIsActive] = useState(setup.is_active);
@@ -314,7 +317,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
           if (reviewingImports.length > 0) {
             const batchId = reviewingImports[0].source_batch_id;
             if (batchId) {
-              router.push(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
+              router.push(interfacePath(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`));
               return;
             }
           }
@@ -325,7 +328,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
       
       const batchId = imports[0].source_batch_id;
       if (batchId) {
-        router.push(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`);
+        router.push(interfacePath(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`));
       } else {
         alert('No batch ID found');
       }
@@ -377,7 +380,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
         )[0];
         
         if (latestBatch.source_batch_id) {
-          router.push(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`);
+          router.push(interfacePath(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`));
         }
         return;
       }
@@ -408,7 +411,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
             )[0];
             
             if (latestBatch.source_batch_id) {
-              router.push(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`);
+              router.push(interfacePath(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`));
               return;
             }
           }
@@ -423,7 +426,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
       )[0];
       
       if (latestBatch.source_batch_id) {
-        router.push(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`);
+        router.push(interfacePath(`/imports/map-columns?remap=true&batchId=${encodeURIComponent(latestBatch.source_batch_id)}`));
       } else {
         alert('No batch ID found');
       }
@@ -569,7 +572,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
                             <Badge variant="secondary" className="text-xs">Disabled</Badge>
                           )}
                           {isHistorical && (
-                            <Badge variant="outline" className="text-xs text-amber-600 dark:text-amber-400">
+                            <Badge variant="outline" className="theme-text-warning text-xs text-amber-600 dark:text-amber-400">
                               Historical
                             </Badge>
                           )}
@@ -625,7 +628,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
 
             {/* Legacy: Show global historical flag for non-Teller integrations */}
             {setup.source_type !== 'teller' && setup.is_historical && (
-              <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+              <div className="theme-text-warning flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
                 <span className="font-medium">Historical transactions</span>
                 <span className="text-muted-foreground">(won't affect current budget)</span>
               </div>
@@ -655,7 +658,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => router.push('/imports')}
+                  onClick={() => router.push(interfacePath('/imports'))}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   View Imports
@@ -669,7 +672,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => router.push('/imports')}
+                  onClick={() => router.push(interfacePath('/imports'))}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   View Imports
@@ -717,7 +720,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
             )}
 
             {setup.error_count === 0 && setup.last_successful_fetch_at && (
-              <div className="flex items-center gap-2 text-sm text-green-600">
+              <div className="theme-text-accent flex items-center gap-2 text-sm text-green-600">
                 <CheckCircle2 className="h-4 w-4" />
                 <span>Working correctly</span>
               </div>

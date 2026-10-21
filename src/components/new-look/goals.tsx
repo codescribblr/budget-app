@@ -281,8 +281,8 @@ function GoalsContent() {
                 Enable goals or an income buffer when you’re ready to plan
                 further ahead.
               </p>
-              <Link className="nl-secondary" href="/settings">
-                Planning settings ↗
+              <Link className="nl-secondary" href="/new/settings/features">
+                Planning settings
               </Link>
             </section>
           )}
