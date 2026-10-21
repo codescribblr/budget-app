@@ -142,6 +142,7 @@ export function CheckinFooter({
     [
       task,
       flow.cadence,
+      flow.period.key,
       flow.active,
       data?.userId,
       data?.identity.activeAccountId,

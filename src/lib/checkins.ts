@@ -1,4 +1,4 @@
-import type { Cadence } from "./new-look";
+import { checkinPeriod, type Cadence } from "./new-look";
 
 export type CheckinTask =
   | "accounts"
@@ -139,4 +139,84 @@ export function parseCheckinProgress(
   } catch {
     return {};
   }
+}
+
+/** The same local calendar boundaries drive storage, labels, and reset times. */
+export function checkinWindow(cadence: Cadence, date = new Date()) {
+  const key = checkinPeriod(cadence, date);
+  const start = new Date(
+    `${key}${cadence === "monthly" ? "-01" : ""}T00:00:00`,
+  );
+  const next = new Date(start);
+  if (cadence === "monthly") next.setMonth(next.getMonth() + 1);
+  else next.setDate(next.getDate() + (cadence === "weekly" ? 7 : 1));
+  const end = new Date(next);
+  end.setDate(end.getDate() - 1);
+  const shortDate = (value: Date) =>
+    value.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      ...(start.getFullYear() !== end.getFullYear()
+        ? { year: "numeric" as const }
+        : {}),
+    });
+  const periodLabel =
+    cadence === "monthly"
+      ? start.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      : cadence === "weekly"
+        ? `${shortDate(start)} – ${shortDate(end)}`
+        : shortDate(start);
+  const nextLabel = `${cadence === "daily" ? "Tomorrow" : next.toLocaleDateString("en-US", { weekday: "long" })}, ${next.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  return { key, start, next, periodLabel, nextLabel };
+}
+
+export function checkinStatus(
+  steps: CheckinStep[],
+  items: Record<string, string>,
+) {
+  const dates = steps.flatMap((step) =>
+    items[step.key] ? [items[step.key]] : [],
+  );
+  const done = dates.length;
+  const complete = steps.length > 0 && done === steps.length;
+  return {
+    done,
+    total: steps.length,
+    state: complete
+      ? ("complete" as const)
+      : done
+        ? ("in-progress" as const)
+        : ("due" as const),
+    completedAt: complete
+      ? new Date(
+          Math.max(...dates.map((date) => Date.parse(date))),
+        ).toISOString()
+      : null,
+  };
+}
+
+export function checkinStatusLabel(
+  cadence: Cadence,
+  state: ReturnType<typeof checkinStatus>["state"],
+) {
+  const period =
+    cadence === "daily"
+      ? "today"
+      : cadence === "weekly"
+        ? "this week"
+        : "this month";
+  return state === "complete"
+    ? `Done ${period}`
+    : state === "in-progress"
+      ? "In progress"
+      : `Due ${period}`;
+}
+
+export function checkinCompletedLabel(completedAt: string) {
+  return `Completed ${new Date(completedAt).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
 }

@@ -56,12 +56,9 @@ export function useCheckinProgress(key: string | null) {
   function mark(task: string, done = true) {
     if (!key) return empty;
     const updated = { ...read(key) };
-    if (done) updated[task] = new Date().toISOString();
+    if (done) updated[task] ??= new Date().toISOString();
     else delete updated[task];
     return write(key, updated);
   }
-  function restart() {
-    if (key) write(key, {});
-  }
-  return { items: snapshot ?? empty, ready: snapshot !== null, mark, restart };
+  return { items: snapshot ?? empty, ready: snapshot !== null, mark };
 }

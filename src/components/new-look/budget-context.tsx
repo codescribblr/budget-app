@@ -15,13 +15,10 @@ import type {
   CreditCard,
   DashboardSummary,
 } from "@/lib/types";
-import {
-  checkinPeriod,
-  localDate,
-  type Cadence,
-  type Funding,
-} from "@/lib/new-look";
+import { localDate, type Cadence, type Funding } from "@/lib/new-look";
 import { useCheckinProgress } from "./checkin-progress";
+import { checkinWindow } from "@/lib/checkins";
+import { watchCheckinDay } from "@/lib/checkin-calendar";
 
 export async function budgetRequest<T>(
   url: string,
@@ -60,6 +57,7 @@ export interface BudgetData {
   userId: string;
 }
 interface Context {
+  today: string;
   data: BudgetData | null;
   error: string | null;
   refreshing: boolean;
@@ -68,6 +66,8 @@ interface Context {
 }
 const BudgetContext = createContext<Context | null>(null);
 export function BudgetProvider({ children }: { children: React.ReactNode }) {
+  const [today, setToday] = useState(() => localDate());
+  useEffect(() => watchCheckinDay(setToday), []);
   const [data, setData] = useState<BudgetData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -135,6 +135,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
   return (
     <BudgetContext.Provider
       value={{
+        today,
         data,
         error,
         refreshing,
@@ -182,12 +183,13 @@ export function DataBoundary({ children }: { children: React.ReactNode }) {
 }
 
 export function useCheckins(cadence: Cadence) {
-  const { data } = useBudget();
-  const period = checkinPeriod(cadence);
+  const { data, today } = useBudget();
+  const period = checkinWindow(cadence, new Date(`${today}T12:00:00`));
   const key = data
-    ? `budget-checkin:v1:${data.userId}:${data.identity.activeAccountId}:${cadence}:${period}`
+    ? `budget-checkin:v1:${data.userId}:${data.identity.activeAccountId}:${cadence}:${period.key}`
     : null;
-  return useCheckinProgress(key);
+  const progress = useCheckinProgress(key);
+  return { ...progress, period };
 }
 
 export function useUnsavedChanges(dirty: boolean) {

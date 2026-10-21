@@ -1,12 +1,18 @@
 "use client";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, Check, CalendarDays } from "lucide-react";
 import { useCheckinSteps, CheckinLoadError } from "./checkin-flow";
 import { money, ordinaryEnvelopes, type Cadence } from "@/lib/new-look";
 import { envelopeReviewHref } from "@/lib/envelope-navigation";
 import { useBudget, useCheckins, DataBoundary } from "./budget-context";
 import { PageHeading, AvailableCalculation } from "./common";
+import { CheckinRoutines } from "./checkin-routines";
+import {
+  checkinStatus,
+  checkinStatusLabel,
+  checkinCompletedLabel,
+} from "@/lib/checkins";
 
 export function GuidedHome() {
   return (
@@ -17,12 +23,11 @@ export function GuidedHome() {
 }
 function HomeContent() {
   const { data } = useBudget();
-  const router = useRouter();
   const query = useSearchParams();
   const value = query.get("checkin");
   const cadence: Cadence =
     value === "weekly" || value === "monthly" ? value : "daily";
-  const { items, ready } = useCheckins(cadence);
+  const { items, ready, period } = useCheckins(cadence);
   const { steps, loading, error, retry } = useCheckinSteps(cadence);
   if (!data) return null;
   const envelopes = ordinaryEnvelopes(data.categories);
@@ -36,9 +41,16 @@ function HomeContent() {
           ? `${negative.length} negative ${negative.length === 1 ? "balance" : "balances"} to consider. Scan the rest before deciding what you can spend.`
           : step.detail,
   }));
-  const done = tasks.filter((t) => items[t.key]).length;
+  const status = checkinStatus(tasks, items);
+  const known = ready && !loading && !error;
+  const complete = known && status.state === "complete";
   const next = tasks.find((t) => !items[t.key]);
-  const month = new Date().toLocaleDateString("en-US", { month: "long" });
+  const periodWord =
+    cadence === "daily"
+      ? "today"
+      : cadence === "weekly"
+        ? "this week"
+        : "this month";
   return (
     <>
       <PageHeading
@@ -56,20 +68,7 @@ function HomeContent() {
             : "A little attention now gives your next decisions better context."
         }
       />
-      <div className="nl-tabs" aria-label="Check-in cadence">
-        {(["daily", "weekly", "monthly"] as const).map((c) => (
-          <button
-            key={c}
-            aria-pressed={cadence === c}
-            className={cadence === c ? "active" : ""}
-            onClick={() =>
-              router.replace(`/new?checkin=${c}`, { scroll: false })
-            }
-          >
-            {c[0].toUpperCase() + c.slice(1)} check-in
-          </button>
-        ))}
-      </div>
+      <CheckinRoutines selected={cadence} />
       <section className="nl-hero">
         <div className="nl-hero-money">
           <p className="nl-eyebrow">Available to save</p>
@@ -82,12 +81,34 @@ function HomeContent() {
           <AvailableCalculation />
         </div>
         <div className="nl-hero-next">
-          <p className="nl-eyebrow">Your next step</p>
-          <h2>{next?.title || "Your check-in is complete"}</h2>
-          <p>
-            {next?.detail ||
-              "You’ve reviewed what matters for this check-in. You can revisit any step whenever you need to."}
+          <p className="nl-eyebrow">
+            {complete ? "Check-in complete" : "Your next step"}
           </p>
+          <h2>
+            {!known
+              ? "Your check-in"
+              : complete
+                ? `You’re all set for ${periodWord}`
+                : next?.title}
+          </h2>
+          {known && (
+            <p>
+              {complete
+                ? "You’ve finished this review. Use your budget whenever you need it; your next check-in will be ready automatically."
+                : next?.detail}
+            </p>
+          )}
+          {complete && status.completedAt && (
+            <div className="nl-routine-receipt" role="status">
+              <span>
+                <Check size={16} aria-hidden="true" />{" "}
+                {checkinCompletedLabel(status.completedAt)}
+              </span>
+              <span>
+                Next {cadence} check-in: {period.nextLabel}
+              </span>
+            </div>
+          )}
           {error ? (
             <CheckinLoadError retry={retry} />
           ) : !ready || loading ? (
@@ -97,7 +118,7 @@ function HomeContent() {
               className="nl-primary"
               href={`${next.href}?checkin=${cadence}`}
             >
-              {done ? "Continue check-in" : "Start check-in"}
+              {status.done ? "Continue check-in" : "Start check-in"}
               <ArrowRight size={16} />
             </Link>
           ) : (
@@ -114,16 +135,15 @@ function HomeContent() {
       <div className="nl-two-column">
         <div>
           <div className="nl-section-title">
-            <h2>
-              {cadence === "daily"
-                ? "Today"
-                : cadence === "weekly"
-                  ? "This week"
-                  : month}{" "}
-              · your check-in
-            </h2>
+            <h2>{cadence[0].toUpperCase() + cadence.slice(1)} check-in</h2>
             <span className="nl-tag">
-              {done} / {tasks.length}
+              {known
+                ? complete
+                  ? checkinStatusLabel(cadence, status.state)
+                  : `${status.done} of ${tasks.length} reviewed`
+                : error
+                  ? "Status unavailable"
+                  : "Loading…"}
             </span>
           </div>
           <div className="nl-task-list">
@@ -131,7 +151,7 @@ function HomeContent() {
               <Link
                 className="nl-task"
                 key={t.key}
-                href={`${t.href}?checkin=${cadence}`}
+                href={complete ? t.href : `${t.href}?checkin=${cadence}`}
               >
                 <span className={`nl-step ${items[t.key] ? "is-done" : ""}`}>
                   {items[t.key] ? <Check size={16} /> : i + 1}
@@ -145,9 +165,10 @@ function HomeContent() {
             ))}
           </div>
           <p className="nl-footnote">
-            Each step leads to the next. Finish after you’ve reviewed; you don’t
-            need to change anything. Checkmarks are saved for this user and
-            household in this browser.
+            {complete
+              ? "Your review is saved. You can revisit any page without clearing this check-in."
+              : "Finish each step to complete this check-in. Reviewing is enough; you don’t need to change anything."}{" "}
+            Progress is saved in this browser for you and this budget.
           </p>
           <div className="nl-section-title">
             <h2>
@@ -160,38 +181,43 @@ function HomeContent() {
           <div className="nl-list">
             {(negative.length ? negative : envelopes).slice(0, 4).map((c) => (
               <div key={c.id} className="nl-home-envelope">
-              <Link href={envelopeReviewHref(c.id, "activity")}>
-                <div>
-                  <h3>{c.name}</h3>
-                  <p>
-                    {c.current_balance < 0
-                      ? "Negative balance · consider covering"
-                      : "Current balance"}
-                  </p>
-                </div>
-                <strong className={c.current_balance < 0 ? "nl-negative" : ""}>
-                  {money(c.current_balance)} →
-                </strong>
-              </Link>
-              {c.current_balance < 0 && (
-                <Link
-                  className="nl-activity-link nl-cover-overage"
-                  aria-label={`Cover overage in ${c.name}`}
-                  href={envelopeReviewHref(c.id, "transfer")}
-                >
-                  Cover overage →
+                <Link href={envelopeReviewHref(c.id, "activity")}>
+                  <div>
+                    <h3>{c.name}</h3>
+                    <p>
+                      {c.current_balance < 0
+                        ? "Negative balance · consider covering"
+                        : "Current balance"}
+                    </p>
+                  </div>
+                  <strong
+                    className={c.current_balance < 0 ? "nl-negative" : ""}
+                  >
+                    {money(c.current_balance)} →
+                  </strong>
                 </Link>
-              )}
+                {c.current_balance < 0 && (
+                  <Link
+                    className="nl-activity-link nl-cover-overage"
+                    aria-label={`Cover overage in ${c.name}`}
+                    href={envelopeReviewHref(c.id, "transfer")}
+                  >
+                    Cover overage →
+                  </Link>
+                )}
               </div>
             ))}
             {envelopes.length === 0 && (
               <div className="nl-panel">
                 <h3>Your envelopes start here</h3>
                 <p>
-                  Create your envelopes, then return to plan and
-                  review them here.
+                  Create your envelopes, then return to plan and review them
+                  here.
                 </p>
-                <Link href="/new/budget/manage?edit=new" className="nl-secondary">
+                <Link
+                  href="/new/budget/manage?edit=new"
+                  className="nl-secondary"
+                >
                   Set up envelopes →
                 </Link>
               </div>
@@ -213,7 +239,11 @@ function HomeContent() {
           </section>
           <section className="nl-panel">
             <h2 className="nl-icon-heading">
-              <CalendarDays className="nl-accent" size={21} aria-hidden="true" />
+              <CalendarDays
+                className="nl-accent"
+                size={21}
+                aria-hidden="true"
+              />
               <span>Your monthly plan</span>
             </h2>
             <dl className="nl-metrics">

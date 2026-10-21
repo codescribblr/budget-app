@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, Check } from "lucide-react";
 import { money, ordinaryEnvelopes, type Cadence } from "@/lib/new-look";
 import { useBudget, useCheckins, DataBoundary } from "./budget-context";
 import { useCheckinSteps, CheckinLoadError } from "./checkin-flow";
+import { checkinStatus, checkinCompletedLabel } from "@/lib/checkins";
 
 export function CheckinComplete() {
   return (
@@ -14,16 +15,16 @@ export function CheckinComplete() {
   );
 }
 function CompletionContent() {
-  const router = useRouter();
   const value = useSearchParams().get("checkin");
   const cadence: Cadence =
     value === "weekly" || value === "monthly" ? value : "daily";
   const { data, error } = useBudget();
-  const { items, ready, restart } = useCheckins(cadence);
+  const { items, ready, period } = useCheckins(cadence);
   const { steps, loading, error: stepsError, retry } = useCheckinSteps(cadence);
   if (stepsError) return <CheckinLoadError retry={retry} />;
   if (!data || !ready || loading)
     return <p role="status">Loading your check-in…</p>;
+  const status = checkinStatus(steps, items);
   const remaining = steps.find((step) => !items[step.key]);
   const negative = ordinaryEnvelopes(data.categories).filter(
     (c) => c.current_balance < 0,
@@ -38,21 +39,41 @@ function CompletionContent() {
       )}
       <p className="nl-eyebrow">
         {remaining
-          ? "Pick up where you left off"
+          ? status.done
+            ? "Pick up where you left off"
+            : "A fresh check-in is ready"
           : "A little attention, a clearer picture"}
       </p>
       <h1>
-        {title} {remaining ? "in progress" : "complete"}
+        {title}{" "}
+        {remaining
+          ? status.done
+            ? "in progress"
+            : "ready to start"
+          : "complete"}
       </h1>
       <p className="nl-summary-intro">
         {remaining
-          ? "Your review isn’t finished yet. Your progress is saved, so you can continue whenever you’re ready."
+          ? status.done
+            ? "Your review isn’t finished yet. Your progress is saved, so you can continue whenever you’re ready."
+            : "Work through the steps below to complete your review for this period."
           : cadence === "daily"
             ? "You’ve checked your balances and reviewed your envelopes. You’re ready to carry on with your day."
             : cadence === "weekly"
               ? "You’ve reviewed imports, spending, and your envelopes. Let what you learned guide the week ahead."
               : "You’ve looked back and reviewed your plan for the month ahead."}
       </p>
+      {status.completedAt && (
+        <div className="nl-routine-receipt" role="status">
+          <span>
+            <Check size={16} aria-hidden="true" />{" "}
+            {checkinCompletedLabel(status.completedAt)}
+          </span>
+          <span>
+            Next {cadence} check-in: {period.nextLabel}
+          </span>
+        </div>
+      )}
       <section className="nl-panel">
         <h2>{remaining ? "Your progress" : "What you reviewed"}</h2>
         <ol className="nl-completion-list">
@@ -67,7 +88,7 @@ function CompletionContent() {
               </span>
               <span>{step.title}</span>
               <Link
-                href={`${step.href}?checkin=${cadence}`}
+                href={remaining ? `${step.href}?checkin=${cadence}` : step.href}
                 aria-label={`${items[step.key] ? "Revisit" : "Review"} ${step.label.toLowerCase()}`}
               >
                 {items[step.key] ? "Revisit" : "Review"} →
@@ -95,7 +116,11 @@ function CompletionContent() {
               : "envelopes still have negative balances"}
             . Reviewing doesn’t require resolving everything today.{" "}
             <Link
-              href={cadence === "monthly" ? "/new/budget" : `/new/budget?checkin=${cadence}`}
+              href={
+                !remaining || cadence === "monthly"
+                  ? "/new/budget"
+                  : `/new/budget?checkin=${cadence}`
+              }
             >
               Revisit envelopes →
             </Link>
@@ -108,7 +133,8 @@ function CompletionContent() {
             className="nl-primary"
             href={`${remaining.href}?checkin=${cadence}`}
           >
-            Continue check-in <ArrowRight size={16} />
+            {status.done ? "Continue check-in" : "Start check-in"}{" "}
+            <ArrowRight size={16} />
           </Link>
         ) : (
           <Link className="nl-primary" href={`/new?checkin=${cadence}`}>
@@ -117,17 +143,6 @@ function CompletionContent() {
         )}
         {remaining && (
           <Link href={`/new?checkin=${cadence}`}>Back to overview</Link>
-        )}
-        {!remaining && (
-          <button
-            className="nl-secondary"
-            onClick={() => {
-              restart();
-              router.push(`${steps[0].href}?checkin=${cadence}`);
-            }}
-          >
-            Review again
-          </button>
         )}
       </div>
       {!remaining && (
@@ -147,9 +162,15 @@ function CompletionContent() {
         </p>
       )}
       <p className="nl-footnote">
-        Review progress is saved for this user and household in this browser. It
-        records what you reviewed, not which accounts were imported or whether
-        every overage was covered.
+        Progress is saved in this browser for you and this budget. Revisiting a
+        page keeps your completed check-in. A fresh review starts automatically
+        each
+        {cadence === "daily"
+          ? " day at midnight"
+          : cadence === "weekly"
+            ? " Monday"
+            : " month on the first"}
+        .
       </p>
     </div>
   );
