@@ -2,7 +2,7 @@
 import { useImportPaths } from './use-import-paths';
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, usePathname } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +34,7 @@ import { toast } from 'sonner';
 export default function BatchReviewPage() {
   const params = useParams();
   const router = useRouter();
+  const modern = usePathname().startsWith('/new/');
   const { importPath } = useImportPaths();
   const batchId = params.batchId as string;
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
@@ -609,6 +610,32 @@ export default function BatchReviewPage() {
         onCancel={() => router.push(importPath())}
       />
 
+      {modern && (
+        <header className="nl-mobile-batch-header md:hidden">
+          <div className="nl-mobile-batch-navigation">
+            <button onClick={() => router.push(importPath())}><ArrowLeft size={17} />Imports</button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><button className="nl-mobile-icon-action" aria-label="Import batch actions"><MoreVertical size={20} /></button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {hasCsvData && <DropdownMenuItem onClick={() => router.push(importPath(`/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`))}>Re-map fields</DropdownMenuItem>}
+                <DropdownMenuItem disabled={pendingTasks.length > 0 || isRerunningDuplicates || isRerunningCategorization || !transactions.length} onClick={handleRerunDuplicateCheck}>{isRerunningDuplicates ? 'Checking…' : 'Re-check duplicates'}</DropdownMenuItem>
+                <DropdownMenuItem disabled={pendingTasks.length > 0 || isRerunningDuplicates || isRerunningCategorization || !transactions.length} onClick={handleRerunCategorization}>{isRerunningCategorization ? 'Categorizing…' : 'Re-run categorization'}</DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" onClick={() => setDeleteDialogOpen(true)}>{selectedTransactionIds.size ? `Delete ${selectedTransactionIds.size} selected` : 'Delete import batch'}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <h1>Review import</h1>
+          <p>{batchInfo?.target_account_name || batchInfo?.setup_name || 'Imported transactions'} · {transactions.length} transactions</p>
+          <details><summary>File & import details</summary><dl>
+            {importFileName && <div><dt>File</dt><dd>{importFileName}</dd></div>}
+            <div><dt>Source</dt><dd>{batchInfo?.setup_name} · {batchInfo?.source_type}</dd></div>
+            {(mappingTemplateName || mappingName) && <div><dt>Mapping</dt><dd>{mappingTemplateName || mappingName}</dd></div>}
+            <div><dt>Duplicates</dt><dd>{duplicateCounts.database} already imported · {duplicateCounts.withinFile} possible repeats in this file</dd></div>
+            {batchInfo?.is_historical && <div><dt>History</dt><dd>{batchInfo.is_historical === 'mixed' ? 'Some transactions are historical' : 'Historical import'}</dd></div>}
+          </dl></details>
+        </header>
+      )}
+      <div className={modern ? 'hidden md:block space-y-6' : 'space-y-6'}>
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.push(importPath())}>
           <ArrowLeft className="h-4 w-4" />
@@ -791,6 +818,8 @@ export default function BatchReviewPage() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
+
       </div>
 
       {pendingTasks.length > 0 && (

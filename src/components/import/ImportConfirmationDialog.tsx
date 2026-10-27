@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 
 interface ImportConfirmationDialogProps {
   open: boolean;
+  mobileReview?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
   categorizedCount: number;
@@ -23,6 +24,7 @@ interface ImportConfirmationDialogProps {
 
 export default function ImportConfirmationDialog({
   open,
+  mobileReview = false,
   onConfirm,
   onCancel,
   categorizedCount,
@@ -48,7 +50,7 @@ export default function ImportConfirmationDialog({
           <div className="space-y-2">
             <div data-dialog-panel="accent" className="flex justify-between items-center p-3 bg-green-50 theme-surface-accent dark:bg-green-950 rounded-lg border border-green-200 theme-border-accent dark:border-green-800">
               <span className="font-medium text-green-900 theme-text-accent dark:text-green-100">
-                Transactions to Import
+                {mobileReview ? 'Ready to import' : 'Transactions to Import'}
               </span>
               <span className="text-2xl font-bold text-green-600 theme-text-accent dark:text-green-400">
                 {categorizedCount}
@@ -59,7 +61,7 @@ export default function ImportConfirmationDialog({
               <div className="space-y-2">
                 <div data-dialog-panel="muted" className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
                   <span className="font-medium text-gray-900 dark:text-gray-100">
-                    Transactions to Exclude
+                    {mobileReview ? 'Left out of this import' : 'Transactions to Exclude'}
                   </span>
                   <span className="text-2xl font-bold text-gray-600 dark:text-gray-400">
                     {totalExcluded}
@@ -69,7 +71,7 @@ export default function ImportConfirmationDialog({
                 <div data-dialog-color="muted" className="ml-4 space-y-1 text-sm text-gray-600 dark:text-gray-400">
                   {uncategorizedCount > 0 && (
                     <div className="flex justify-between">
-                      <span>• Uncategorized:</span>
+                      <span>• {mobileReview ? 'Still need review' : 'Uncategorized'}:</span>
                       <span className="font-medium">{uncategorizedCount}</span>
                     </div>
                   )}
@@ -99,8 +101,8 @@ export default function ImportConfirmationDialog({
           {uncategorizedCount > 0 && (
             <div data-dialog-panel="warning" className="p-3 bg-yellow-50 theme-surface-warning dark:bg-yellow-950 rounded-lg border border-yellow-200 theme-border-warning dark:border-yellow-800">
               <p className="text-sm text-yellow-900 theme-text-warning dark:text-yellow-100">
-                <strong>Note:</strong> {uncategorizedCount} uncategorized transaction{uncategorizedCount !== 1 ? 's' : ''} will be excluded.
-                You can categorize them later and import them in a future batch.
+                {mobileReview ? <>These {uncategorizedCount} transactions need valid details and envelopes before they can be imported.</> : <><strong>Note:</strong> {uncategorizedCount} uncategorized transaction{uncategorizedCount !== 1 ? 's' : ''} will be excluded.
+                You can categorize them later and import them in a future batch.</>}
               </p>
             </div>
           )}

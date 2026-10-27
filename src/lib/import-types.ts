@@ -15,6 +15,7 @@ export interface ParsedTransaction {
   duplicateOf?: number; // Transaction ID if duplicate
   status: 'pending' | 'confirmed' | 'excluded';
   splits: TransactionSplit[];
+  reviewSkipped?: boolean; // Explicitly left out during this review, including uncategorized rows
   forceImport?: boolean; // User explicitly clicked "Include" on a duplicate
   is_historical?: boolean; // Per-transaction historical flag
   tag_ids?: number[]; // Tag IDs to assign to transaction

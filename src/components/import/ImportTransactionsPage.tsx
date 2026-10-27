@@ -70,7 +70,7 @@ export default function ImportTransactionsPage() {
   if (parsedTransactions.length > 0) {
     return (
       <div>
-        <div className="mb-4 flex justify-between items-center">
+        <div className="nl-import-upload-heading mb-4 flex justify-between items-center">
           <div>
             <h2 className="text-xl font-semibold">Preview: {fileName}</h2>
             <p className="text-sm text-muted-foreground">

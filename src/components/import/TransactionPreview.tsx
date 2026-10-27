@@ -30,7 +30,10 @@ import { toast } from 'sonner';
 import { useAIUsage } from '@/hooks/use-ai-usage';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useFeature } from '@/contexts/FeatureContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+import { useIsMobile } from '@/hooks/use-mobile';
+import MobileImportReview from './MobileImportReview';
+import { reviewBucket } from '@/lib/import/mobile-review';
 import { Crown } from 'lucide-react';
 import { handleApiError } from '@/lib/api-error-handler';
 import { useShiftClickSelection } from '@/hooks/useShiftClickSelection';
@@ -119,6 +122,11 @@ function DatePickerWrapper({
 
 export default function TransactionPreview({ transactions, onImportComplete, onSelectionChange }: TransactionPreviewProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const modern = pathname.startsWith('/new/');
+  const mobile = useIsMobile();
+  const mobileReview = modern && mobile;
+  const importInFlight = useRef(false);
   const [items, setItems] = useState<ParsedTransaction[]>(transactions);
   const [categories, setCategories] = useState<Category[]>([]);
   const [showArchivedCategories, setShowArchivedCategories] = useState(false);
@@ -271,7 +279,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
 
 
   const fetchCategories = async () => {
-    const includeArchived = showArchivedCategories ? 'all' : 'none';
+    const includeArchived = modern || showArchivedCategories ? 'all' : 'none';
     const response = await fetch(`/api/categories?excludeGoals=false&includeArchived=${includeArchived}`);
     const data = await response.json();
     const base = Array.isArray(data) ? data : [];
@@ -346,13 +354,14 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
             description: newDescription,
             hash: newHash,
             status: newStatus,
+            reviewSkipped: false,
             forceImport: true,
             isDuplicate: false, // No longer a duplicate after modification
             duplicateType: null,
           };
         }
 
-        return { ...item, status: newStatus };
+        return { ...item, status: newStatus, reviewSkipped: newStatus === 'excluded' };
       }
       return item;
     }));
@@ -368,7 +377,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
         // Auto-include when categorized (unless it's a duplicate)
         const hasSplits = updated.splits.length > 0;
         const newStatus: 'pending' | 'confirmed' | 'excluded' = updated.isDuplicate ? 'excluded' : (hasSplits ? 'pending' : 'excluded');
-        const updatedItem = { ...updated, status: newStatus };
+        const updatedItem = { ...updated, status: newStatus, reviewSkipped: false };
         
         // Save tag_ids to database if this is a queued import
         if (typeof updated.id === 'string' && updated.id.startsWith('queued-')) {
@@ -488,7 +497,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
         // Update status based on changes
         const hasCategory = updated.splits.length > 0;
         const isDuplicate = updated.isDuplicate || false;
-        updated.status = (isDuplicate ? 'excluded' : (!hasCategory ? 'excluded' : 'pending')) as 'pending' | 'confirmed' | 'excluded';
+        updated.status = (updated.reviewSkipped || isDuplicate ? 'excluded' : (!hasCategory ? 'excluded' : 'pending')) as 'pending' | 'confirmed' | 'excluded';
 
         return updated;
       });
@@ -574,6 +583,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
         return {
           ...item,
           status: newStatus,
+          reviewSkipped: false,
           splits: [{
             categoryId: category.id,
             categoryName: category.name,
@@ -658,15 +668,15 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
       const categoriesForNames = await (categoriesResponse.ok ? categoriesResponse.json() : []);
 
       // Update transactions with AI suggestions
-      setItems(items.map(transaction => {
+      setItems(currentItems => currentItems.map(transaction => {
         const suggestion = suggestions.find((s: any) => s.transactionId === transaction.id);
         
-        if (suggestion && suggestion.categoryId && !transaction.isDuplicate) {
+        if (suggestion && suggestion.categoryId && !isDuplicateTransaction(transaction) && transaction.splits.length === 0) {
           const category = (categoriesForNames || []).find((c: any) => c.id === suggestion.categoryId);
           return {
             ...transaction,
             suggestedCategory: suggestion.categoryId,
-            status: 'pending' as const,
+            status: transaction.reviewSkipped ? 'excluded' as const : 'pending' as const,
             splits: [{
               categoryId: suggestion.categoryId,
               categoryName: category?.name || suggestion.categoryName,
@@ -691,10 +701,11 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
   };
 
   const handleConfirmImport = async () => {
+    if (importInFlight.current) return;
     setShowConfirmation(false);
 
     // Only import categorized transactions (have splits)
-    const toImport = items.filter(item =>
+    const toImport = items.filter(item => modern ? reviewBucket(item) === 'ready' :
       item.status !== 'excluded' &&
       !item.isDuplicate &&
       item.splits.length > 0
@@ -717,6 +728,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
     const batchId = sessionStorage.getItem('queuedBatchId');
 
     // Show progress dialog
+    importInFlight.current = true;
     setIsImporting(true);
     setShowProgress(true);
     setProgressStatus('processing');
@@ -809,6 +821,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
       setProgressMessage(error instanceof Error ? error.message : 'An unexpected error occurred');
       // Error toast already shown by handleApiError
     } finally {
+      importInFlight.current = false;
       setIsImporting(false);
     }
   };
@@ -847,19 +860,19 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
 
     for (const item of items) {
       const isDup = item.isDuplicate || !!item.duplicateType;
-      if (item.status !== 'excluded' && !isDup && item.splits.length > 0) {
+      if (modern ? reviewBucket(item) === 'ready' : item.status !== 'excluded' && !isDup && item.splits.length > 0) {
         categorizedCount++;
       }
-      if (!isDup && item.splits.length === 0) {
+      if (modern ? reviewBucket(item) === 'attention' : !isDup && item.splits.length === 0) {
         uncategorizedCount++;
         uncategorizedTransactions.push(item);
       }
-      if (item.duplicateType === 'database') databaseDuplicateCount++;
+      if (item.duplicateType === 'database' || (item.isDuplicate && !item.duplicateType)) databaseDuplicateCount++;
       if (item.duplicateType === 'within-file') withinFileDuplicateCount++;
-      if (item.status === 'excluded' && !isDup && item.splits.length > 0) {
+      if (modern ? reviewBucket(item) === 'skipped' && !isDup : item.status === 'excluded' && !isDup && item.splits.length > 0) {
         manuallyExcludedCount++;
       }
-      if (item.status === 'excluded') totalExcludedCount++;
+      if (modern ? reviewBucket(item) !== 'ready' : item.status === 'excluded') totalExcludedCount++;
     }
 
     return {
@@ -872,7 +885,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
       totalExcludedCount,
       uncategorizedTransactions,
     };
-  }, [items]);
+  }, [items, modern]);
 
   const {
     categorizedCount,
@@ -888,6 +901,23 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
 
   return (
     <div className="space-y-4 max-w-full overflow-hidden">
+      {/* Keep the mobile editor mounted so rotation cannot discard its draft. */}
+      {modern && <div className={mobileReview ? undefined : 'hidden'}>
+        <MobileImportReview
+          items={items}
+          categories={categories}
+          accounts={accounts}
+          cards={creditCards}
+          onUpdate={updated => setItems(previous => previous.map(item => item.id === updated.id ? updated : item))}
+          onImport={handleImportClick}
+          importing={isImporting}
+          selected={selectedTransactions}
+          onSelectionChange={setSelectedTransactions}
+          onBulkEdit={isQueuedImport ? () => setShowBulkEditDialog(true) : undefined}
+          ai={isPremium && aiChatEnabled ? { run: handleAICategorize, busy: isAICategorizing, disabled: !stats || stats.categorization.used >= stats.categorization.limit } : undefined}
+        />
+      </div>}
+      {!mobileReview && <div className={modern ? 'nl-import-desktop-review space-y-4' : 'space-y-4'}>
       {/* Historical Import Indicator */}
       {isHistorical && (
         <div className="p-3 bg-blue-50 theme-surface-accent dark:bg-blue-950 border border-blue-200 theme-border-accent dark:border-blue-800 rounded-md">
@@ -1387,6 +1417,8 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
         </Table>
       </div>
 
+      </div>}
+
       {editingTransaction && (
         <TransactionEditDialog
           transaction={editingTransaction}
@@ -1398,6 +1430,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
 
       <ImportConfirmationDialog
         open={showConfirmation}
+        mobileReview={mobileReview}
         onConfirm={handleConfirmImport}
         onCancel={() => setShowConfirmation(false)}
         categorizedCount={categorizedCount}

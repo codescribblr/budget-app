@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { approveAndImportQueuedTransactions } from '@/lib/automatic-imports/queue-manager';
+import { separateImportHash } from '@/lib/import/mobile-review';
 import { checkWriteAccess } from '@/lib/api-helpers';
 
 /**
@@ -78,6 +79,12 @@ export async function POST(request: Request) {
         hash = generateTransactionHash(txn.date, txn.description, txn.amount, txn.originalData);
       }
 
+      // An explicit duplicate override needs a distinct, retry-safe identity.
+      // Derive it from the canonical queue hash rather than trusting a client hash.
+      if (txn.forceImport === true && typeof txn.id === 'string' && hashMap.has(Number(txn.id.replace('queued-', '')))) {
+        hash = separateImportHash(hash, txn.id);
+      }
+
       return {
         id: txn.id,
         date: txn.date,
@@ -89,6 +96,7 @@ export async function POST(request: Request) {
         credit_card_id: txn.credit_card_id,
         is_historical: txn.is_historical !== undefined ? txn.is_historical : false,
         splits: txn.splits || [],
+        tag_ids: txn.tag_ids || [],
         hash: hash,
         originalData: txn.originalData || null,
       };
