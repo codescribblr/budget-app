@@ -62,9 +62,9 @@ export function localDate(date = new Date()) {
 export function checkinPeriod(cadence: Cadence, date = new Date()) {
   if (cadence === "monthly") return localDate(date).slice(0, 7);
   if (cadence === "weekly") {
-    const monday = new Date(date);
-    monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-    return localDate(monday);
+    const sunday = new Date(date);
+    sunday.setDate(date.getDate() - date.getDay());
+    return localDate(sunday);
   }
   return localDate(date);
 }

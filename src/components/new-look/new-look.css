@@ -2375,3 +2375,17 @@ button.nl-activity-link {
   .nl-tx-filterbar > .nl-tx-clear { order: 4; }
   .nl-tx-overview > div:last-child small { display: none; }
 }
+
+/* A compact version of the same envelope row for the check-in overview. */
+.nl-home-envelope-intro { color: var(--muted-foreground); font-size: 13px; line-height: 1.6; margin: -4px 0 16px; }
+.nl-home-envelope-attention { margin: 0 0 16px; font-size: 12px; }
+.nl-home-envelope-list .nl-envelope-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 24px; padding: 20px; }
+.nl-home-envelope-list .nl-envelope-name { grid-area: 1 / 1; }
+.nl-home-envelope-list .nl-envelope-money { grid-area: 1 / 2; text-align: right; }
+.nl-home-envelope-list .nl-envelope-budget { grid-area: 2 / 1; }
+.nl-home-envelope-list .nl-envelope-funding { grid-area: 2 / 2; text-align: right; }
+.nl-home-envelope-list .nl-envelope-mobile-label { display: block; position: static; width: auto; height: auto; clip-path: none; overflow: visible; white-space: normal; margin: 0 0 4px; font-size: 11px; color: var(--muted-foreground); }
+@media (max-width: 400px) {
+  .nl-home-envelope-list .nl-envelope-row { padding: 16px; gap: 16px; }
+  .nl-home-envelope-list .nl-envelope-money > strong { font-size: 21px; }
+}

@@ -7,11 +7,18 @@ import { useCheckins } from "./budget-context";
 import { useCheckinSteps } from "./checkin-flow";
 
 function useRoutine(cadence: Cadence) {
-  const { items, ready, period } = useCheckins(cadence);
-  const { steps, loading, error } = useCheckinSteps(cadence);
+  const {
+    items,
+    ready,
+    period,
+    completedAt,
+    error: progressError,
+  } = useCheckins(cadence);
+  const { steps, loading, error: stepsError } = useCheckinSteps(cadence);
+  const error = progressError || stepsError;
   return {
     period,
-    status: checkinStatus(steps, items),
+    status: checkinStatus(steps, items, completedAt),
     known: ready && !loading && !error,
     error,
   };

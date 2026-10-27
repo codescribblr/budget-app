@@ -1,64 +1,93 @@
 "use client";
-import { useSyncExternalStore } from "react";
-import { toast } from "sonner";
-import { parseCheckinProgress } from "@/lib/checkins";
+import { useEffect, useSyncExternalStore } from "react";
+import { createCheckinStore, emptyCheckinSnapshot } from "@/lib/checkin-store";
+import {
+  checkinScopeKey,
+  legacyCheckinItems,
+  type CheckinScope,
+} from "@/lib/checkin-persistence";
+import type { CheckinTask } from "@/lib/checkins";
 
-// Share progress across the header, footer and home, including when storage is
-// unavailable. The key includes the user, household, cadence and calendar period.
-const cache = new Map<string, Record<string, string>>();
-const listeners = new Set<() => void>();
-let listening = false;
-const notify = () => listeners.forEach((listener) => listener());
-function storageChanged(event: StorageEvent) {
-  if (event.key) cache.delete(event.key);
-  else cache.clear();
-  notify();
-}
-function subscribe(listener: () => void) {
-  if (!listening) {
-    window.addEventListener("storage", storageChanged);
-    listening = true;
-  }
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-function read(key: string) {
-  if (!cache.has(key)) {
-    try {
-      cache.set(key, parseCheckinProgress(localStorage.getItem(key)));
-    } catch {
-      cache.set(key, {});
-    }
-  }
-  return cache.get(key)!;
-}
-const empty: Record<string, string> = {};
-function write(key: string, updated: Record<string, string>) {
-  cache.set(key, updated);
-  try {
-    localStorage.setItem(key, JSON.stringify(updated));
-  } catch {
-    toast.warning(
-      "Review progress is kept for this visit, but could not be saved in this browser. Your budget is unaffected.",
+const store = createCheckinStore(
+  async (scope, change) => {
+    const { accountId, cadence, period, timeZone, planning } = scope;
+    const response = await fetch(
+      change
+        ? "/api/checkins"
+        : `/api/checkins?${new URLSearchParams({ accountId: String(accountId), cadence, period, timeZone })}`,
+      change
+        ? {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              accountId,
+              cadence,
+              period,
+              timeZone,
+              planning,
+              ...change,
+            }),
+          }
+        : { cache: "no-store" },
     );
-  }
-  notify();
-  return updated;
-}
-export function useCheckinProgress(key: string | null) {
+    const record = await response.json();
+    if (!response.ok)
+      throw new Error(record.error || "Unable to load check-in progress");
+    if (change) {
+      // Other tabs re-read the authoritative record; this is only a wake-up signal.
+      try {
+        localStorage.setItem(
+          "budget-checkin:updated",
+          `${checkinScopeKey(scope)}:${Date.now()}`,
+        );
+      } catch {}
+    }
+    return record;
+  },
+  (scope) => {
+    try {
+      return legacyCheckinItems(scope, (key) => localStorage.getItem(key));
+    } catch {
+      return {};
+    }
+  },
+);
+
+export function useCheckinProgress(scope: CheckinScope | null) {
+  const key = scope ? checkinScopeKey(scope) : null;
   const snapshot = useSyncExternalStore(
-    subscribe,
-    () => (key ? read(key) : null),
-    () => null,
+    store.subscribe,
+    () => (scope ? store.snapshot(scope) : emptyCheckinSnapshot),
+    () => emptyCheckinSnapshot,
   );
-  function mark(task: string, done = true) {
-    if (!key) return empty;
-    const updated = { ...read(key) };
-    if (done) updated[task] ??= new Date().toISOString();
-    else delete updated[task];
-    return write(key, updated);
-  }
-  return { items: snapshot ?? empty, ready: snapshot !== null, mark };
+  useEffect(() => {
+    if (!scope) return;
+    const reload = () => {
+      if (document.visibilityState !== "hidden")
+        void store.load(scope, true).catch(() => {});
+    };
+    const storage = (event: StorageEvent) => {
+      if (event.key === "budget-checkin:updated") reload();
+    };
+    void store.load(scope).catch(() => {});
+    window.addEventListener("focus", reload);
+    document.addEventListener("visibilitychange", reload);
+    window.addEventListener("storage", storage);
+    return () => {
+      window.removeEventListener("focus", reload);
+      document.removeEventListener("visibilitychange", reload);
+      window.removeEventListener("storage", storage);
+    };
+    // The scope is a value object; period, identity and feature state drive reloads.
+  }, [key, scope?.timeZone, scope?.planning]);
+  return {
+    ...snapshot,
+    mark: (task: CheckinTask) =>
+      scope
+        ? store.mark(scope, task)
+        : Promise.reject(new Error("Check-in is not ready")),
+    retry: async () => {
+      if (scope) await store.load(scope, true).catch(() => {});
+    },
+  };
 }

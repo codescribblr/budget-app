@@ -43,9 +43,13 @@ function useCheckinFlow(task: CheckinTask, defaultCadence: Cadence) {
     steps,
     index,
     loading,
-    error,
-    retry,
-    next: nextCheckinStep(steps, task, progress.items),
+    error: progress.error || error,
+    retry: async () => {
+      await Promise.all([retry(), progress.retry()]);
+    },
+    next: progress.completedAt
+      ? undefined
+      : nextCheckinStep(steps, task, progress.items),
   };
 }
 
@@ -102,7 +106,7 @@ export function CheckinHeader({
 export function CheckinLoadError({ retry }: { retry: () => Promise<void> }) {
   return (
     <div role="alert" className="nl-notice">
-      We couldn’t load the planning tools for this check-in.{" "}
+      We couldn’t load your check-in progress.{" "}
       <button className="nl-secondary" onClick={() => void retry()}>
         Retry check-in
       </button>
@@ -167,8 +171,11 @@ export function CheckinFooter({
       // A user may leave while a save is in flight. Let the save finish without
       // marking a different visit reviewed or navigating them away again.
       if (startedVisit !== visit.current) return;
-      const updated = flow.mark(task);
-      const next = nextCheckinStep(flow.steps, task, updated);
+      const updated = await flow.mark(task);
+      if (startedVisit !== visit.current) return;
+      const next = updated.completedAt
+        ? undefined
+        : nextCheckinStep(flow.steps, task, updated.items);
       router.push(
         next
           ? `${next.href}?checkin=${flow.cadence}`

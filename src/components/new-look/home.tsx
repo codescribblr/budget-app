@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowRight, Check, CalendarDays } from "lucide-react";
 import { useCheckinSteps, CheckinLoadError } from "./checkin-flow";
 import { money, ordinaryEnvelopes, type Cadence } from "@/lib/new-look";
-import { envelopeReviewHref } from "@/lib/envelope-navigation";
+import { HomeEnvelopes } from "./home-envelopes";
 import { useBudget, useCheckins, DataBoundary } from "./budget-context";
 import { PageHeading, AvailableCalculation } from "./common";
 import { CheckinRoutines } from "./checkin-routines";
@@ -27,8 +27,24 @@ function HomeContent() {
   const value = query.get("checkin");
   const cadence: Cadence =
     value === "weekly" || value === "monthly" ? value : "daily";
-  const { items, ready, period } = useCheckins(cadence);
-  const { steps, loading, error, retry } = useCheckinSteps(cadence);
+  const {
+    items,
+    ready,
+    period,
+    completedAt,
+    error: progressError,
+    retry: retryProgress,
+  } = useCheckins(cadence);
+  const {
+    steps,
+    loading,
+    error: stepsError,
+    retry: retrySteps,
+  } = useCheckinSteps(cadence);
+  const error = progressError || stepsError;
+  const retry = async () => {
+    await Promise.all([retryProgress(), retrySteps()]);
+  };
   if (!data) return null;
   const envelopes = ordinaryEnvelopes(data.categories);
   const negative = envelopes.filter((c) => c.current_balance < 0);
@@ -41,10 +57,10 @@ function HomeContent() {
           ? `${negative.length} negative ${negative.length === 1 ? "balance" : "balances"} to consider. Scan the rest before deciding what you can spend.`
           : step.detail,
   }));
-  const status = checkinStatus(tasks, items);
+  const status = checkinStatus(tasks, items, completedAt);
   const known = ready && !loading && !error;
   const complete = known && status.state === "complete";
-  const next = tasks.find((t) => !items[t.key]);
+  const next = complete ? undefined : tasks.find((t) => !items[t.key]);
   const periodWord =
     cadence === "daily"
       ? "today"
@@ -168,61 +184,9 @@ function HomeContent() {
             {complete
               ? "Your review is saved. You can revisit any page without clearing this check-in."
               : "Finish each step to complete this check-in. Reviewing is enough; you don’t need to change anything."}{" "}
-            Progress is saved in this browser for you and this budget.
+            Progress is saved to your account for this budget.
           </p>
-          <div className="nl-section-title">
-            <h2>
-              {negative.length
-                ? "Envelopes needing a look"
-                : "Your envelopes at a glance"}
-            </h2>
-            <Link href="/new/budget">All envelopes →</Link>
-          </div>
-          <div className="nl-list">
-            {(negative.length ? negative : envelopes).slice(0, 4).map((c) => (
-              <div key={c.id} className="nl-home-envelope">
-                <Link href={envelopeReviewHref(c.id, "activity")}>
-                  <div>
-                    <h3>{c.name}</h3>
-                    <p>
-                      {c.current_balance < 0
-                        ? "Negative balance · consider covering"
-                        : "Current balance"}
-                    </p>
-                  </div>
-                  <strong
-                    className={c.current_balance < 0 ? "nl-negative" : ""}
-                  >
-                    {money(c.current_balance)} →
-                  </strong>
-                </Link>
-                {c.current_balance < 0 && (
-                  <Link
-                    className="nl-activity-link nl-cover-overage"
-                    aria-label={`Cover overage in ${c.name}`}
-                    href={envelopeReviewHref(c.id, "transfer")}
-                  >
-                    Cover overage →
-                  </Link>
-                )}
-              </div>
-            ))}
-            {envelopes.length === 0 && (
-              <div className="nl-panel">
-                <h3>Your envelopes start here</h3>
-                <p>
-                  Create your envelopes, then return to plan and review them
-                  here.
-                </p>
-                <Link
-                  href="/new/budget/manage?edit=new"
-                  className="nl-secondary"
-                >
-                  Set up envelopes →
-                </Link>
-              </div>
-            )}
-          </div>
+          <HomeEnvelopes />
         </div>
         <aside className="nl-aside-stack">
           <section className="nl-panel">

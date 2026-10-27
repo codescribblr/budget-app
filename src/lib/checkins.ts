@@ -173,12 +173,14 @@ export function checkinWindow(cadence: Cadence, date = new Date()) {
 export function checkinStatus(
   steps: CheckinStep[],
   items: Record<string, string>,
+  savedCompletion: string | null = null,
 ) {
   const dates = steps.flatMap((step) =>
     items[step.key] ? [items[step.key]] : [],
   );
   const done = dates.length;
-  const complete = steps.length > 0 && done === steps.length;
+  const complete =
+    !!savedCompletion || (steps.length > 0 && done === steps.length);
   return {
     done,
     total: steps.length,
@@ -187,11 +189,13 @@ export function checkinStatus(
       : done
         ? ("in-progress" as const)
         : ("due" as const),
-    completedAt: complete
-      ? new Date(
-          Math.max(...dates.map((date) => Date.parse(date))),
-        ).toISOString()
-      : null,
+    completedAt:
+      savedCompletion ??
+      (complete
+        ? new Date(
+            Math.max(...dates.map((date) => Date.parse(date))),
+          ).toISOString()
+        : null),
   };
 }
 

@@ -19,13 +19,30 @@ function CompletionContent() {
   const cadence: Cadence =
     value === "weekly" || value === "monthly" ? value : "daily";
   const { data, error } = useBudget();
-  const { items, ready, period } = useCheckins(cadence);
+  const {
+    items,
+    ready,
+    period,
+    completedAt,
+    error: progressError,
+    retry: retryProgress,
+  } = useCheckins(cadence);
   const { steps, loading, error: stepsError, retry } = useCheckinSteps(cadence);
-  if (stepsError) return <CheckinLoadError retry={retry} />;
+  if (stepsError || progressError)
+    return (
+      <CheckinLoadError
+        retry={async () => {
+          await Promise.all([retry(), retryProgress()]);
+        }}
+      />
+    );
   if (!data || !ready || loading)
     return <p role="status">Loading your check-in…</p>;
-  const status = checkinStatus(steps, items);
-  const remaining = steps.find((step) => !items[step.key]);
+  const status = checkinStatus(steps, items, completedAt);
+  const remaining =
+    status.state === "complete"
+      ? undefined
+      : steps.find((step) => !items[step.key]);
   const negative = ordinaryEnvelopes(data.categories).filter(
     (c) => c.current_balance < 0,
   ).length;
@@ -162,13 +179,12 @@ function CompletionContent() {
         </p>
       )}
       <p className="nl-footnote">
-        Progress is saved in this browser for you and this budget. Revisiting a
-        page keeps your completed check-in. A fresh review starts automatically
-        each
+        Progress is saved to your account for this budget. Revisiting a page
+        keeps your completed check-in. A fresh review starts automatically each
         {cadence === "daily"
           ? " day at midnight"
           : cadence === "weekly"
-            ? " Monday"
+            ? " Sunday at midnight"
             : " month on the first"}
         .
       </p>

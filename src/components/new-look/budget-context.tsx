@@ -19,6 +19,7 @@ import { localDate, type Cadence, type Funding } from "@/lib/new-look";
 import { useCheckinProgress } from "./checkin-progress";
 import { checkinWindow } from "@/lib/checkins";
 import { watchCheckinDay } from "@/lib/checkin-calendar";
+import { useFeatures } from "@/contexts/FeatureContext";
 
 export async function budgetRequest<T>(
   url: string,
@@ -128,7 +129,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
   }, []);
   useEffect(() => {
     void refresh().catch(() => {});
-  }, [refresh, pathname]);
+  }, [refresh, pathname, today]);
   const role = data?.identity.accounts.find(
     (a) => a.accountId === data.identity.activeAccountId,
   )?.role;
@@ -185,10 +186,27 @@ export function DataBoundary({ children }: { children: React.ReactNode }) {
 export function useCheckins(cadence: Cadence) {
   const { data, today } = useBudget();
   const period = checkinWindow(cadence, new Date(`${today}T12:00:00`));
-  const key = data
-    ? `budget-checkin:v1:${data.userId}:${data.identity.activeAccountId}:${cadence}:${period.key}`
-    : null;
-  const progress = useCheckinProgress(key);
+  const {
+    hasPremium,
+    isFeatureEnabled,
+    loading,
+    error: featureError,
+  } = useFeatures();
+  const planning =
+    hasPremium &&
+    (isFeatureEnabled("goals") || isFeatureEnabled("income_buffer"));
+  const progress = useCheckinProgress(
+    data && !(cadence === "monthly" && (loading || featureError))
+      ? {
+          userId: data.userId,
+          accountId: data.identity.activeAccountId,
+          cadence,
+          period: period.key,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          planning,
+        }
+      : null,
+  );
   return { ...progress, period };
 }
 

@@ -166,12 +166,12 @@ describe("check-in completion status", () => {
 });
 
 describe("calendar periods shown with saved progress", () => {
-  it("keeps a Sunday in the current week and resets on Monday", () => {
-    const sunday = checkinWindow("weekly", new Date(2026, 9, 25, 23, 59));
-    expect(sunday.key).toBe("2026-10-19");
-    expect(sunday.periodLabel).toBe("Oct 19 – Oct 25");
-    expect(sunday.next).toEqual(new Date(2026, 9, 26));
-    expect(checkinWindow("weekly", sunday.next).key).toBe("2026-10-26");
+  it("keeps Saturday in the current week and resets at Sunday midnight", () => {
+    const sunday = checkinWindow("weekly", new Date(2026, 9, 24, 23, 59));
+    expect(sunday.key).toBe("2026-10-18");
+    expect(sunday.periodLabel).toBe("Oct 18 – Oct 24");
+    expect(sunday.next).toEqual(new Date(2026, 9, 25));
+    expect(checkinWindow("weekly", sunday.next).key).toBe("2026-10-25");
   });
   it("starts a new day without changing the calendar week or month", () => {
     const evening = new Date(2026, 9, 21, 23, 59);
@@ -194,9 +194,9 @@ describe("calendar periods shown with saved progress", () => {
       new Date(2027, 0, 1),
     );
     const week = checkinWindow("weekly", new Date(2027, 0, 1));
-    expect(week.key).toBe("2026-12-28");
-    expect(week.next).toEqual(new Date(2027, 0, 4));
-    expect(week.periodLabel).toBe("Dec 28, 2026 – Jan 3, 2027");
+    expect(week.key).toBe("2026-12-27");
+    expect(week.next).toEqual(new Date(2027, 0, 3));
+    expect(week.periodLabel).toBe("Dec 27, 2026 – Jan 2, 2027");
   });
   it("uses the next local midnight on daylight-saving transition days", () => {
     for (const date of [new Date(2026, 2, 8), new Date(2026, 10, 1)]) {

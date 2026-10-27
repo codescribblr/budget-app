@@ -159,12 +159,12 @@ describe("paycheck suggestions", () => {
   });
 });
 describe("calendar check-in boundaries", () => {
-  it("uses local calendar days, Monday-start weeks and month keys", () => {
+  it("uses local calendar days, Sunday-start weeks and month keys", () => {
     expect(checkinPeriod("daily", new Date(2026, 9, 14, 23, 59))).toBe(
       "2026-10-14",
     );
-    expect(checkinPeriod("weekly", new Date(2026, 9, 18))).toBe("2026-10-12");
-    expect(checkinPeriod("weekly", new Date(2026, 9, 19))).toBe("2026-10-19");
+    expect(checkinPeriod("weekly", new Date(2026, 9, 18))).toBe("2026-10-18");
+    expect(checkinPeriod("weekly", new Date(2026, 9, 19))).toBe("2026-10-18");
     expect(checkinPeriod("monthly", new Date(2026, 9, 31))).toBe("2026-10");
     expect(checkinPeriod("monthly", new Date(2026, 10, 1))).toBe("2026-11");
   });
