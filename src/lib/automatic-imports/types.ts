@@ -1,3 +1,4 @@
+import type { BatchDuplicateSummary } from "../import/batch-duplicates";
 /**
  * Types for automatic transaction import system
  */
@@ -59,6 +60,7 @@ export interface QueuedImport {
 }
 
 export interface QueuedImportBatch {
+  duplicates: BatchDuplicateSummary;
   batch_id: string;
   import_setup_id: number;
   setup_name: string;

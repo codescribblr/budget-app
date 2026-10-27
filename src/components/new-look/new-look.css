@@ -2493,3 +2493,18 @@ button.nl-activity-link {
 .nl-mobile-review-footer .nl-error { font-size: 12px; color: var(--destructive); padding: 6px 0; }
 .nl-mobile-discard { padding-top: 8px; font-size: 13px; }
 .nl-mobile-discard > div { display: flex; gap: 10px; margin-top: 12px; }
+
+/* Duplicate results stay beside each batch, including after a partial import. */
+.new-look .nl-import-queue-card[data-duplicates-only="true"] { background: color-mix(in srgb, var(--card) 72%, var(--muted)); }
+.nl-batch-duplicate-status > div { flex-wrap: wrap; }
+.new-look .nl-batch-duplicate-status { border-color: var(--border); }
+.new-look .nl-batch-duplicate-status[data-all-duplicates="true"] { background: var(--muted); }
+.new-look .nl-batch-all-duplicates { background: var(--card); color: var(--muted-foreground); border-color: var(--border); }
+.new-look .nl-batch-delete { color: var(--destructive); border-color: color-mix(in srgb, var(--destructive) 38%, var(--border)); background: var(--card); }
+.new-look .nl-batch-delete:hover { background: color-mix(in srgb, var(--destructive) 8%, var(--card)); }
+@media (max-width: 639px) {
+  .new-look .nl-batch-actions { width: 100%; justify-content: flex-end; }
+  .new-look .nl-batch-actions button { min-height: 44px; }
+  .new-look .nl-batch-actions .nl-batch-delete { flex: 1; }
+  .new-look .nl-batch-actions .nl-batch-delete + button { flex: 1; }
+}

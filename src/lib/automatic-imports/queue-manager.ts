@@ -14,6 +14,7 @@ import {
   getMerchantNameFromTransactionRow,
 } from '../duplicate-matching';
 import { fetchAllPages } from '../supabase/fetch-all-pages';
+import { summarizeBatchDuplicates } from '../import/batch-duplicates';
 
 /**
  * Get or create a single shared manual import setup for the current account
@@ -677,10 +678,10 @@ export async function getQueuedImportBatches() {
     const isCreditCard = !!firstItem.target_credit_card_id;
 
     // Extract filename from original_data for manual uploads
-    let fileName: string | null = null;
+    let fileName: string | null = items.find(item => item.csv_file_name)?.csv_file_name || null;
     if (firstItem.automatic_import_setups?.source_type === 'manual') {
       // First, try to get filename from original_data (new format)
-      if (firstItem.original_data) {
+      if (!fileName && firstItem.original_data) {
         try {
           const originalData = typeof firstItem.original_data === 'string' 
             ? JSON.parse(firstItem.original_data) 
@@ -728,6 +729,7 @@ export async function getQueuedImportBatches() {
       setup_name: firstItem.automatic_import_setups?.integration_name || 'Unknown',
       source_type: firstItem.automatic_import_setups?.source_type || 'email',
       count: items.length,
+      duplicates: summarizeBatchDuplicates(items),
       date_range: {
         start: dates[0],
         end: dates[dates.length - 1],

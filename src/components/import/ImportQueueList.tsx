@@ -20,6 +20,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { parseLocalDate } from '@/lib/date-utils';
+import BatchDuplicateStatus from './BatchDuplicateStatus';
+import type { BatchDuplicateSummary } from '@/lib/import/batch-duplicates';
 
 export interface QueuedImportBatch {
   batch_id: string;
@@ -27,6 +30,7 @@ export interface QueuedImportBatch {
   setup_name: string;
   source_type: string;
   count: number;
+  duplicates?: BatchDuplicateSummary;
   date_range: { start: string; end: string };
   created_at: string;
   status: string;
@@ -125,12 +129,12 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
   };
 
   const handleDeleteBatch = async () => {
-    if (!batchToDelete) return;
+    if (!batchToDelete || isDeleting) return;
 
     setIsDeleting(true);
     try {
       const response = await fetch(
-        `/api/automatic-imports/queue/batch/${batchToDelete.batch_id}/delete`,
+        `/api/automatic-imports/queue/batch/${encodeURIComponent(batchToDelete.batch_id)}/delete`,
         { method: 'DELETE' }
       );
 
@@ -221,12 +225,12 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
       ) : (
         <div className="grid gap-3">
           {batches.map((batch) => (
-            <Card key={batch.batch_id}>
+            <Card key={batch.batch_id} className="nl-import-queue-card gap-3" data-duplicates-only={batch.duplicates?.all_duplicates || undefined}>
               <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-base">{batch.setup_name}</CardTitle>
-                    <CardDescription className="mt-1">
+                <div className="nl-batch-header flex flex-col sm:flex-row items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0 w-full">
+                    <CardTitle className="text-base leading-snug break-words">{batch.setup_name}</CardTitle>
+                    <CardDescription className="mt-1 break-words [overflow-wrap:anywhere]">
                       {batch.count} transaction{batch.count !== 1 ? 's' : ''} •{' '}
                       {batch.source_type === 'manual'
                         ? 'Manual upload'
@@ -271,11 +275,13 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
                         </Badge>
                       )}
                     </div>
+                    <div className="mt-3"><BatchDuplicateStatus summary={batch.duplicates} count={batch.count} /></div>
                   </div>
-                  <div className="flex gap-2 shrink-0">
+                  <div className="nl-batch-actions flex gap-2 shrink-0">
                     <Button
                       variant="outline"
-                      size="icon"
+                      size={batch.duplicates?.all_duplicates ? "sm" : "icon"}
+                      className={batch.duplicates?.all_duplicates ? "nl-batch-delete" : undefined}
                       aria-label={`Delete import batch ${batch.file_name || batch.setup_name || ''}`.trim()}
                       onClick={() => {
                         setBatchToDelete(batch);
@@ -283,8 +289,9 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
                       }}
                     >
                       <Trash2 className="h-4 w-4" />
+                      {batch.duplicates?.all_duplicates && "Delete batch"}
                     </Button>
-                    <Button size="sm" onClick={() => handleReviewBatch(batch.batch_id, batch.source_type)}>
+                    <Button size="sm" variant={batch.duplicates?.all_duplicates ? "ghost" : "default"} onClick={() => handleReviewBatch(batch.batch_id, batch.source_type)}>
                       Review
                     </Button>
                   </div>
@@ -300,8 +307,8 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
                   </div>
                 )}
                 <div className="text-sm text-muted-foreground">
-                  Transactions: {new Date(batch.date_range.start).toLocaleDateString()} –{' '}
-                  {new Date(batch.date_range.end).toLocaleDateString()}
+                  Transactions: {parseLocalDate(batch.date_range.start)?.toLocaleDateString() ?? '—'} –{' '}
+                  {parseLocalDate(batch.date_range.end)?.toLocaleDateString() ?? '—'}
                 </div>
               </CardContent>
             </Card>
@@ -314,6 +321,7 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete import batch</AlertDialogTitle>
             <AlertDialogDescription>
+              {batchToDelete?.duplicates?.all_duplicates && <><strong>All {batchToDelete.count} transactions in this batch are flagged as duplicates.</strong><br /><br /></>}
               {batchToDelete?.source_type === 'manual' ? (
                 <>
                   Are you sure you want to delete this manual import batch? This will permanently
@@ -344,6 +352,8 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
                   on future syncs.
                 </>
               )}
+              <br /><br />
+              Transactions already saved in your budget will not be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
