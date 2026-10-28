@@ -18,7 +18,7 @@ import type {
 } from "@/lib/types";
 import { calculateStreamMonthlyNet } from "@/lib/income-calculations";
 import { incomeSummary, payFrequencies } from "@/lib/income-planning";
-import { money, ordinaryEnvelopes } from "@/lib/new-look";
+import { money, ordinaryEnvelopes, hasMoneyToAllocate } from "@/lib/new-look";
 import { budgetRequest, DataBoundary, useBudget } from "./budget-context";
 import { PageHeading, ReadOnlyNotice } from "./common";
 import { IncomeEditor } from "./income-editor";
@@ -357,17 +357,19 @@ function IncomeContent() {
                   an estimate, not a deposit balance.
                 </p>
               </section>
-              <section className="nl-panel">
-                <p className="nl-eyebrow">When money arrives</p>
-                <h2>Give the actual paycheck a job</h2>
-                <p>
-                  Updating income changes your plan. When you get paid, check
-                  your account balance and allocate the money that arrived.
-                </p>
-                <Link href="/new/payday">
-                  Allocate a paycheck <ArrowRight size={15} />
-                </Link>
-              </section>
+              {hasMoneyToAllocate(data?.summary) && (
+                <section className="nl-panel">
+                  <p className="nl-eyebrow">When money arrives</p>
+                  <h2>Give the actual paycheck a job</h2>
+                  <p>
+                    Updating income changes your plan. When you get paid, check
+                    your account balance and allocate the money that arrived.
+                  </p>
+                  <Link href="/new/payday">
+                    Allocate a paycheck <ArrowRight size={15} />
+                  </Link>
+                </section>
+              )}
             </aside>
           </div>
         </>

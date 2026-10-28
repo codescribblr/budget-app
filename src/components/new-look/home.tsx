@@ -3,7 +3,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Check, CalendarDays } from "lucide-react";
 import { useCheckinSteps, CheckinLoadError } from "./checkin-flow";
-import { money, ordinaryEnvelopes, type Cadence } from "@/lib/new-look";
+import {
+  money,
+  ordinaryEnvelopes,
+  hasMoneyToAllocate,
+  type Cadence,
+} from "@/lib/new-look";
 import { HomeNetWorth } from "./home-net-worth";
 import { HomeEnvelopes } from "./home-envelopes";
 import { useBudget, useCheckins, DataBoundary } from "./budget-context";
@@ -190,18 +195,20 @@ function HomeContent() {
           <HomeEnvelopes />
         </div>
         <aside className="nl-aside-stack">
-          <section className="nl-panel">
-            <p className="nl-eyebrow">When you get paid</p>
-            <h2>Give this paycheck a job</h2>
-            <p>
-              Use what has arrived. What you already funded this month stays
-              visible.
-            </p>
-            <Link className="nl-primary" href="/new/payday">
-              Allocate this paycheck
-              <ArrowRight size={16} />
-            </Link>
-          </section>
+          {hasMoneyToAllocate(data.summary) && (
+            <section className="nl-panel">
+              <p className="nl-eyebrow">When you get paid</p>
+              <h2>Give this paycheck a job</h2>
+              <p>
+                Use what has arrived. What you already funded this month stays
+                visible.
+              </p>
+              <Link className="nl-primary" href="/new/payday">
+                Allocate this paycheck
+                <ArrowRight size={16} />
+              </Link>
+            </section>
+          )}
           <section className="nl-panel">
             <h2 className="nl-icon-heading">
               <CalendarDays

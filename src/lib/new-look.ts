@@ -1,4 +1,4 @@
-import type { Category } from "@/lib/types";
+import type { Category, DashboardSummary } from "@/lib/types";
 
 export type Cadence = "daily" | "weekly" | "monthly";
 export const INTERFACE_COOKIE = "budget-interface";
@@ -80,6 +80,16 @@ export function parseMoney(value: string): number | null {
     : null;
 }
 export const cents = (amount: number) => Math.round(amount * 100);
+/** Show funding prompts only when either source has a spendable cent. */
+export function hasMoneyToAllocate(
+  summary?: Pick<DashboardSummary, "buffer_balance" | "current_savings">,
+) {
+  return (
+    cents(summary?.buffer_balance ?? 0) > 0 ||
+    cents(summary?.current_savings ?? 0) > 0
+  );
+}
+
 export const money = (amount: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
     amount,
