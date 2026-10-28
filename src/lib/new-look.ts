@@ -10,6 +10,7 @@ export function safeReturnPath(value: string | null, fallback = "/dashboard") {
     : fallback;
 }
 const routes = [
+  ["/new/reports/net-worth", "/net-worth"],
   ["/new/loans", "/loans"],
   ["/new/investments", "/non-cash-assets"],
   ["/new/accounts", "/accounts"],

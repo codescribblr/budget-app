@@ -2508,3 +2508,10 @@ button.nl-activity-link {
   .new-look .nl-batch-actions .nl-batch-delete { flex: 1; }
   .new-look .nl-batch-actions .nl-batch-delete + button { flex: 1; }
 }
+
+/* A quiet long-term balance alongside the monthly plan. */
+.nl-worth-card { background: linear-gradient(135deg, var(--card) 45%, var(--secondary)); }
+.nl-worth-card-amount { font-size: 28px; line-height: 1.3; letter-spacing: -.7px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 17px; overflow-wrap: anywhere; }
+.nl-panel.nl-worth-card > p { font-size: 12px; margin: 5px 0 0; }
+.nl-worth-card-change { display: block; color: var(--muted-foreground); font-size: 11px; margin-top: 9px; }
+.nl-panel.nl-worth-card > a { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; }

@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowRight, Check, CalendarDays } from "lucide-react";
 import { useCheckinSteps, CheckinLoadError } from "./checkin-flow";
 import { money, ordinaryEnvelopes, type Cadence } from "@/lib/new-look";
+import { HomeNetWorth } from "./home-net-worth";
 import { HomeEnvelopes } from "./home-envelopes";
 import { useBudget, useCheckins, DataBoundary } from "./budget-context";
 import { PageHeading, AvailableCalculation } from "./common";
@@ -222,6 +223,7 @@ function HomeContent() {
             </dl>
             <Link href="/new/plan">Review the plan →</Link>
           </section>
+          <HomeNetWorth />
           <p className="nl-footnote">
             Balance checks and CSV imports do different jobs. Keep balances
             current daily; import spending as often as you need to trust your

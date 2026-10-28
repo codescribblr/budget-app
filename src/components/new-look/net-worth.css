@@ -1,0 +1,479 @@
+.nl-worth-page {
+  min-width: 0;
+}
+.nl-worth-hero {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 32px;
+  align-items: center;
+  padding: 32px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(115deg, var(--secondary), var(--card) 82%);
+}
+.nl-worth-number {
+  font-size: clamp(32px, 4vw, 50px);
+  line-height: 1.2;
+  letter-spacing: -1.8px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  margin: 8px 0 12px;
+  overflow-wrap: anywhere;
+}
+.nl-worth-total > p:not(.nl-eyebrow) {
+  color: var(--muted-foreground);
+}
+.nl-worth-note {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-top: 6px;
+}
+.nl-worth-equation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+  border-left: 1px solid var(--border);
+  padding-left: 32px;
+}
+.nl-worth-equation > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.nl-worth-equation strong {
+  font-size: 23px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.nl-worth-equation small,
+.nl-worth-equation > svg {
+  color: var(--muted-foreground);
+}
+.nl-worth-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.nl-worth-section-head h2 {
+  margin-top: 4px;
+}
+.nl-worth-section-head > span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.nl-worth-ranges {
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  background: var(--muted);
+  border-radius: 8px;
+}
+.nl-worth-ranges button {
+  border-radius: 5px;
+  padding: 7px 12px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  font-size: 12px;
+}
+.nl-worth-ranges button[aria-pressed="true"] {
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+.nl-worth-ranges button:hover {
+  color: var(--foreground);
+}
+.nl-worth-change {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+.nl-worth-change > span {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.nl-worth-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 20px;
+  line-height: 1.4;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.nl-worth-delta.is-up {
+  color: var(--primary);
+}
+.nl-worth-delta.is-down {
+  color: var(--destructive);
+}
+.nl-worth-delta > svg {
+  flex: none;
+}
+.nl-worth-chart {
+  width: 100%;
+  height: 270px;
+  min-width: 0;
+  margin-top: 10px;
+}
+.nl-worth-tooltip {
+  display: grid;
+  gap: 5px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.nl-worth-tooltip span {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.nl-worth-breakdown-title {
+  margin: 30px 0 16px;
+}
+.nl-worth-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.nl-worth-side {
+  padding: 22px;
+  min-width: 0;
+}
+.nl-worth-side-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 18px;
+}
+.nl-worth-side-heading > strong {
+  font-size: 19px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.nl-worth-group {
+  border-top: 1px solid var(--border);
+}
+.nl-worth-group > summary {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto 15px;
+  gap: 12px;
+  align-items: center;
+  padding: 18px 0;
+  cursor: pointer;
+  list-style: none;
+}
+.nl-worth-group > summary::-webkit-details-marker,
+.nl-worth-excluded > summary::-webkit-details-marker,
+.nl-worth-recorded-history > summary::-webkit-details-marker {
+  display: none;
+}
+.nl-worth-group > summary > svg:first-child {
+  color: var(--primary);
+}
+.nl-worth-group-cards > summary > svg:first-child,
+.nl-worth-group-loans > summary > svg:first-child {
+  color: var(--chart-2);
+}
+.nl-worth-group > summary strong {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.nl-worth-group small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.nl-worth-bar {
+  height: 4px;
+  border-radius: 4px;
+  background: var(--muted);
+  margin: 8px 0 5px;
+}
+.nl-worth-bar i {
+  display: block;
+  min-width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--chart-1);
+}
+.nl-worth-group-assets .nl-worth-bar i {
+  background: var(--chart-4);
+}
+.nl-worth-group-cards .nl-worth-bar i {
+  background: var(--chart-2);
+}
+.nl-worth-group-loans .nl-worth-bar i {
+  background: var(--chart-3);
+}
+.nl-worth-chevron {
+  color: var(--muted-foreground);
+  transition: transform 0.15s;
+}
+.nl-worth-group[open] .nl-worth-chevron {
+  transform: rotate(180deg);
+}
+.nl-worth-records {
+  padding: 0 0 15px;
+}
+.nl-worth-records > p {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.new-look .nl-worth-record {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 14px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  color: var(--foreground);
+  text-decoration: none;
+}
+.nl-worth-record > span {
+  min-width: 0;
+}
+.nl-worth-record strong {
+  font-size: 12px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.nl-worth-record > strong {
+  font-variant-numeric: tabular-nums;
+}
+.nl-worth-record small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.new-look .nl-worth-record:hover {
+  color: var(--primary);
+}
+.nl-worth-manage {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.nl-worth-excluded {
+  margin: 18px 0;
+}
+.nl-worth-excluded > summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  cursor: pointer;
+  font-size: 13px;
+  list-style: none;
+}
+.nl-worth-excluded > p {
+  color: var(--muted-foreground);
+  margin: 12px 0;
+  font-size: 12px;
+}
+.nl-worth-drivers {
+  margin-top: 24px;
+}
+.nl-worth-driver-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  margin: 24px 0 18px;
+}
+.nl-worth-driver-grid > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.nl-worth-driver-grid > div > span {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.nl-worth-driver-grid p {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.nl-worth-driver-grid small {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.nl-worth-recorded-history {
+  margin-top: 24px;
+}
+.nl-worth-recorded-history > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+}
+.nl-worth-recorded-history summary small {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+  margin-top: 4px;
+}
+.nl-worth-history-scroll {
+  overflow: auto;
+  max-height: 420px;
+  margin: 18px 0;
+}
+.nl-worth-history-scroll table {
+  width: 100%;
+  min-width: 650px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  border-collapse: collapse;
+}
+.nl-worth-history-scroll td,
+.nl-worth-history-scroll th {
+  padding: 11px 12px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.nl-worth-history-scroll th {
+  font-weight: 550;
+}
+.nl-worth-history-scroll th:first-child {
+  text-align: left;
+}
+.nl-worth-history-scroll thead th {
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  color: var(--muted-foreground);
+}
+.nl-worth-guidance {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 26px 0 5px;
+}
+.nl-worth-guidance > svg {
+  flex: none;
+  color: var(--primary);
+}
+.nl-worth-guidance > div {
+  flex: 1;
+}
+.nl-worth-guidance p {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-top: 5px;
+}
+.nl-worth-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 45px 20px;
+}
+.nl-worth-empty > svg {
+  color: var(--chart-1);
+}
+.nl-worth-empty p {
+  color: var(--muted-foreground);
+  max-width: 470px;
+  font-size: 13px;
+}
+.nl-worth-empty a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+@media (max-width: 1100px) {
+  .nl-worth-hero {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .nl-worth-equation {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: 22px 0 0;
+  }
+  .nl-worth-driver-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .nl-worth-breakdown {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .nl-worth-hero {
+    padding: 22px;
+  }
+  .nl-worth-number {
+    font-size: 36px;
+    letter-spacing: -1.2px;
+  }
+  .nl-worth-equation {
+    gap: 10px;
+  }
+  .nl-worth-equation strong {
+    font-size: 19px;
+  }
+  .nl-worth-equation span {
+    font-size: 12px;
+  }
+  .nl-worth-page .nl-panel {
+    padding: 18px;
+  }
+  .nl-worth-ranges {
+    width: 100%;
+  }
+  .nl-worth-ranges button {
+    min-height: 40px;
+    flex: 1;
+    padding: 6px;
+  }
+  .nl-worth-chart {
+    height: 230px;
+  }
+  .nl-worth-group > summary {
+    grid-template-columns: minmax(0, 1fr) auto 15px;
+    gap: 10px;
+  }
+  .nl-worth-group > summary > svg:first-child {
+    display: none;
+  }
+  .nl-worth-group > summary strong {
+    font-size: 14px;
+  }
+  .nl-worth-delta {
+    font-size: 18px;
+  }
+  .nl-worth-guidance {
+    flex-wrap: wrap;
+  }
+  .nl-worth-guidance > div {
+    flex-basis: 80%;
+  }
+  .nl-worth-guidance > a {
+    margin-left: 0;
+  }
+  .nl-worth-record {
+    min-height: 50px;
+  }
+}

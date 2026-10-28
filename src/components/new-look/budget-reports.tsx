@@ -229,6 +229,7 @@ function BudgetReportsContent() {
         >
           Monthly plan check
         </button>
+        <Link href="/new/reports/net-worth">Net worth</Link>
       </nav>
       {view === "spending" && (
         <div className="nl-report-controls">
