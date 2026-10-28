@@ -9,6 +9,7 @@ import {
   hasMoneyToAllocate,
   type Cadence,
 } from "@/lib/new-look";
+import { AvailableBuffer } from "./available-buffer";
 import { HomeNetWorth } from "./home-net-worth";
 import { HomeEnvelopes } from "./home-envelopes";
 import { useBudget, useCheckins, DataBoundary } from "./budget-context";
@@ -101,6 +102,7 @@ function HomeContent() {
           </div>
           <p>Unallocated funds · based on recorded balances</p>
           <AvailableCalculation />
+          <AvailableBuffer key={data.identity.activeAccountId} />
         </div>
         <div className="nl-hero-next">
           <p className="nl-eyebrow">

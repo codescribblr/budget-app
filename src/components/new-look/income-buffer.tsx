@@ -3,11 +3,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import { bufferMovePreview } from "@/lib/guided-goals";
 import { cents, money, ordinaryEnvelopes } from "@/lib/new-look";
-import type { DashboardSummary } from "@/lib/types";
-import { budgetRequest, useBudget } from "./budget-context";
-import { SetupDialog } from "./setup-dialog";
+import { useBudget } from "./budget-context";
+import { BufferMove } from "./buffer-move";
 import { EnvelopeActivity } from "./envelope-activity";
 
 export function GuidedBuffer({ canEdit }: { canEdit: boolean }) {
@@ -94,7 +92,7 @@ export function GuidedBuffer({ canEdit }: { canEdit: boolean }) {
           disabled={!canEdit || !buffer || balance <= 0}
           onClick={() => setDirection("release")}
         >
-          Release money
+          Use buffer money
         </button>
       </div>
       <p className="nl-setup-help">
@@ -162,111 +160,5 @@ export function GuidedBuffer({ canEdit }: { canEdit: boolean }) {
         />
       )}
     </section>
-  );
-}
-
-function BufferMove({
-  direction,
-  balance,
-  available,
-  canEdit,
-  onClose,
-  onSaved,
-}: {
-  direction: "add" | "release";
-  balance: number;
-  available: number;
-  canEdit: boolean;
-  onClose: () => void;
-  onSaved: (amount: number) => Promise<void>;
-}) {
-  const { refresh } = useBudget();
-  const [amount, setAmount] = useState("");
-  const [uncertain, setUncertain] = useState(false);
-  let preview: ReturnType<typeof bufferMovePreview> | null = null;
-  let validation = "";
-  try {
-    preview = bufferMovePreview(direction, amount, balance, available);
-  } catch (err) {
-    if (amount) validation = (err as Error).message;
-  }
-  return (
-    <SetupDialog
-      title={
-        direction === "add"
-          ? "Reserve money for later"
-          : "Make buffer money available"
-      }
-      description={
-        direction === "add"
-          ? "Use money already reflected in your recorded balances."
-          : "Release only what you need. You’ll choose how to allocate it afterward."
-      }
-      dirty={amount !== ""}
-      canEdit={canEdit && !uncertain}
-      saveLabel={
-        direction === "add" ? "Add to buffer" : "Release to available to save"
-      }
-      onClose={onClose}
-      onSave={async () => {
-        const next = bufferMovePreview(direction, amount, balance, available);
-        const fresh = await budgetRequest<DashboardSummary>("/api/dashboard");
-        if (
-          cents(fresh.buffer_balance) !== cents(balance) ||
-          cents(fresh.current_savings) !== cents(available)
-        ) {
-          await refresh();
-          throw new Error(
-            "Your balances changed. Review the updated preview before saving.",
-          );
-        }
-        try {
-          await budgetRequest(
-            `/api/income-buffer/${direction === "add" ? "add" : "fund-month"}`,
-            { amount: next.amount, expectedBalance: balance },
-          );
-        } catch (err) {
-          // A lost response can hide a completed write. Never silently retry it.
-          setUncertain(true);
-          void refresh().catch(() => {});
-          throw new Error(
-            `${err instanceof Error ? err.message : "Could not confirm this change."} Close this dialog and review buffer activity before trying again.`,
-          );
-        }
-        await onSaved(next.amount);
-      }}
-    >
-      <label>
-        Amount
-        <input
-          autoFocus
-          required
-          inputMode="decimal"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="0.00"
-        />
-      </label>
-      <p className="nl-setup-help">
-        Up to {money(Math.max(0, direction === "add" ? available : balance))}{" "}
-        {direction === "add" ? "available to reserve" : "in your buffer"}.
-      </p>
-      {validation && (
-        <p className="nl-error" role="status">
-          {validation}
-        </p>
-      )}
-      <div className="nl-setup-preview">
-        <span>Buffer after this change</span>
-        <strong>{money(preview?.balance ?? balance)}</strong>
-        <span>Available to save afterward</span>
-        <strong>{money(preview?.available ?? available)}</strong>
-        <small>
-          {direction === "add"
-            ? "Your envelope balances and bank balances stay unchanged."
-            : "This step does not fund envelopes. After releasing, use Allocate to envelopes to give the money a job."}
-        </small>
-      </div>
-    </SetupDialog>
   );
 }
