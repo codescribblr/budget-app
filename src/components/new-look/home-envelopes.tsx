@@ -5,6 +5,7 @@ import { ordinaryEnvelopes } from "@/lib/new-look";
 import { envelopeOverview } from "@/lib/envelope-overview";
 import { useBudget } from "./budget-context";
 import { EnvelopeRow } from "./envelope-row";
+import { HomeEnvelopesSkeleton } from "./home-skeleton";
 
 type RecentEnvelope = { category_id: number; transaction_date: string };
 export function HomeEnvelopes() {
@@ -76,7 +77,7 @@ export function HomeEnvelopes() {
           </button>
         </div>
       ) : !current?.rows ? (
-        <p role="status">Finding your recently used envelopes…</p>
+        <HomeEnvelopesSkeleton count={Math.min(envelopes.length, 3)} />
       ) : (
         <>
           <p className="nl-home-envelope-intro">

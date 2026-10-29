@@ -2529,3 +2529,29 @@ button.nl-activity-link {
 @media (max-width: 600px) {
   .nl-available-buffer-actions > button { min-height: 44px; flex: 1 1 auto; }
 }
+
+/* Home-page pilot: the real layout stays in place as each section resolves. */
+.nl-skeleton { display: inline-block; max-width: 100%; flex-shrink: 0; vertical-align: middle; border-radius: 4px; background: color-mix(in srgb, var(--muted-foreground) 22%, transparent); animation: nl-skeleton-breathe 2.2s ease-in-out infinite; }
+@keyframes nl-skeleton-breathe { 50% { opacity: .6; } }
+@media (prefers-reduced-motion: reduce) { .nl-skeleton { animation: none; } }
+.nl-skeleton-copy { display: flex; flex-direction: column; gap: 9px; }
+.nl-skeleton-next > .nl-skeleton-copy { margin: 18px 0; }
+.nl-skeleton-next > .nl-skeleton-action { display: block; width: 100%; border-radius: 7px; }
+.nl-skeleton-amount { display: flex; align-items: center; min-height: 57px; }
+.nl-skeleton-circle { border-radius: 50%; }
+.nl-skeleton-task:hover { background: transparent; }
+.nl-skeleton-task .nl-skeleton-copy { min-width: 0; }
+.nl-skeleton-envelope-intro { margin-bottom: 16px; }
+.nl-home-envelope-list .nl-envelope-money.nl-skeleton-copy { align-items: flex-end; }
+.nl-skeleton-worth { display: flex; flex-direction: column; gap: 12px; margin: 8px 0; }
+.nl-available-buffer > .nl-skeleton-copy { margin-top: 12px; }
+.nl-skeleton-tabs > span { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 10px 17px; font-size: 13px; border-bottom: 2px solid transparent; color: var(--muted-foreground); }
+.nl-skeleton-tabs > span.active { color: var(--primary); border-bottom-color: var(--primary); }
+.nl-skeleton-tabs + .nl-routine-context { min-height: 18px; }
+.nl-skeleton-brand { display: flex; align-items: center; gap: 12px; }
+.nl-skeleton-navigation { display: flex; flex-direction: column; gap: 28px; padding: 14px 16px; }
+.nl-loading-preview { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+@media (max-width: 600px) {
+  .nl-skeleton-tabs > span { padding: 10px 5px; gap: 6px; font-size: 12px; }
+  .nl-available-buffer-actions > .nl-skeleton { height: 44px !important; }
+}

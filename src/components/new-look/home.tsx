@@ -13,7 +13,16 @@ import { AvailableBuffer } from "./available-buffer";
 import { HomeNetWorth } from "./home-net-worth";
 import { HomeEnvelopes } from "./home-envelopes";
 import { useBudget, useCheckins, DataBoundary } from "./budget-context";
-import { PageHeading, AvailableCalculation } from "./common";
+import { AvailableCalculation } from "./common";
+import { useFeatures } from "@/contexts/FeatureContext";
+import {
+  HomeHeading,
+  HomeSkeleton,
+  HomeSkeletonContent,
+  HomeNextSkeleton,
+  HomeTasksSkeleton,
+  SkeletonLine,
+} from "./home-skeleton";
 import { CheckinRoutines } from "./checkin-routines";
 import {
   checkinStatus,
@@ -22,18 +31,67 @@ import {
 } from "@/lib/checkins";
 
 export function GuidedHome() {
-  return (
-    <DataBoundary>
-      <HomeContent />
-    </DataBoundary>
-  );
-}
-function HomeContent() {
-  const { data } = useBudget();
   const query = useSearchParams();
   const value = query.get("checkin");
   const cadence: Cadence =
     value === "weekly" || value === "monthly" ? value : "daily";
+  const features = useFeatures();
+  const showBuffer =
+    !features.error &&
+    features.hasPremium &&
+    features.isFeatureEnabled("income_buffer");
+  const showNetWorth =
+    !features.error &&
+    features.hasPremium &&
+    features.isFeatureEnabled("retirement_planning");
+  const planning =
+    showBuffer ||
+    (!features.error &&
+      features.hasPremium &&
+      features.isFeatureEnabled("goals"));
+  // A local-only, persistent preview makes a brief loading state easy to review.
+  if (
+    process.env.NODE_ENV === "development" &&
+    query.get("preview") === "loading"
+  ) {
+    return (
+      <>
+        <div className="nl-notice nl-loading-preview">
+          <span>Loading preview · actual dashboard placeholders</span>
+          <Link className="nl-secondary" href={`/new?checkin=${cadence}`}>
+            Show loaded dashboard →
+          </Link>
+        </div>
+        <HomeSkeleton
+          cadence={cadence}
+          showBuffer={showBuffer}
+          showNetWorth={showNetWorth}
+          planning={planning}
+        />
+      </>
+    );
+  }
+  return (
+    <>
+      <HomeHeading cadence={cadence} />
+      <CheckinRoutines selected={cadence} />
+      <DataBoundary
+        fallback={
+          <HomeSkeletonContent
+            cadence={cadence}
+            showBuffer={showBuffer}
+            showNetWorth={showNetWorth}
+            planning={planning}
+          />
+        }
+      >
+        <HomeContent cadence={cadence} />
+      </DataBoundary>
+    </>
+  );
+}
+function HomeContent({ cadence }: { cadence: Cadence }) {
+  const { data } = useBudget();
   const {
     items,
     ready,
@@ -76,22 +134,6 @@ function HomeContent() {
         : "this month";
   return (
     <>
-      <PageHeading
-        eyebrow="Your money, your decisions"
-        title={
-          cadence === "daily"
-            ? "A few minutes with your budget"
-            : cadence === "weekly"
-              ? "See the week. Adjust the plan."
-              : "Make room for the month ahead"
-        }
-        description={
-          cadence === "daily"
-            ? "Refresh the picture. Check before spending. Carry on with your day."
-            : "A little attention now gives your next decisions better context."
-        }
-      />
-      <CheckinRoutines selected={cadence} />
       <section className="nl-hero">
         <div className="nl-hero-money">
           <p className="nl-eyebrow">Available to save</p>
@@ -108,13 +150,15 @@ function HomeContent() {
           <p className="nl-eyebrow">
             {complete ? "Check-in complete" : "Your next step"}
           </p>
-          <h2>
-            {!known
-              ? "Your check-in"
-              : complete
+          {!known && !error ? (
+            <HomeNextSkeleton />
+          ) : (
+            <h2>
+              {complete
                 ? `You’re all set for ${periodWord}`
-                : next?.title}
-          </h2>
+                : next?.title || "Your check-in"}
+            </h2>
+          )}
           {known && (
             <p>
               {complete
@@ -135,9 +179,7 @@ function HomeContent() {
           )}
           {error ? (
             <CheckinLoadError retry={retry} />
-          ) : !ready || loading ? (
-            <p role="status">Loading your check-in…</p>
-          ) : next ? (
+          ) : !known ? null : next ? (
             <Link
               className="nl-primary"
               href={`${next.href}?checkin=${cadence}`}
@@ -161,33 +203,41 @@ function HomeContent() {
           <div className="nl-section-title">
             <h2>{cadence[0].toUpperCase() + cadence.slice(1)} check-in</h2>
             <span className="nl-tag">
-              {known
-                ? complete
-                  ? checkinStatusLabel(cadence, status.state)
-                  : `${status.done} of ${tasks.length} reviewed`
-                : error
-                  ? "Status unavailable"
-                  : "Loading…"}
+              {known ? (
+                complete ? (
+                  checkinStatusLabel(cadence, status.state)
+                ) : (
+                  `${status.done} of ${tasks.length} reviewed`
+                )
+              ) : error ? (
+                "Status unavailable"
+              ) : (
+                <SkeletonLine width={80} />
+              )}
             </span>
           </div>
-          <div className="nl-task-list">
-            {tasks.map((t, i) => (
-              <Link
-                className="nl-task"
-                key={t.key}
-                href={complete ? t.href : `${t.href}?checkin=${cadence}`}
-              >
-                <span className={`nl-step ${items[t.key] ? "is-done" : ""}`}>
-                  {items[t.key] ? <Check size={16} /> : i + 1}
-                </span>
-                <div>
-                  <h3>{t.title}</h3>
-                  <p>{t.detail}</p>
-                </div>
-                <ArrowRight size={18} />
-              </Link>
-            ))}
-          </div>
+          {!known && !error ? (
+            <HomeTasksSkeleton count={tasks.length} />
+          ) : (
+            <div className="nl-task-list">
+              {tasks.map((t, i) => (
+                <Link
+                  className="nl-task"
+                  key={t.key}
+                  href={complete ? t.href : `${t.href}?checkin=${cadence}`}
+                >
+                  <span className={`nl-step ${items[t.key] ? "is-done" : ""}`}>
+                    {items[t.key] ? <Check size={16} /> : i + 1}
+                  </span>
+                  <div>
+                    <h3>{t.title}</h3>
+                    <p>{t.detail}</p>
+                  </div>
+                  <ArrowRight size={18} />
+                </Link>
+              ))}
+            </div>
+          )}
           <p className="nl-footnote">
             {complete
               ? "Your review is saved. You can revisit any page without clearing this check-in."

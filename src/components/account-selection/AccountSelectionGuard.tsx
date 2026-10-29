@@ -7,9 +7,10 @@ import { fetchBudgetAccounts, clearBudgetAccountsCache } from '@/lib/budget-acco
 
 interface AccountSelectionGuardProps {
   children: React.ReactNode
+  checkingFallback?: React.ReactNode
 }
 
-export function AccountSelectionGuard({ children }: AccountSelectionGuardProps) {
+export function AccountSelectionGuard({ children, checkingFallback }: AccountSelectionGuardProps) {
   const pathname = usePathname()
   const [needsAccountSelection, setNeedsAccountSelection] = useState<boolean | null>(null)
   const [checking, setChecking] = useState(true)
@@ -77,7 +78,7 @@ export function AccountSelectionGuard({ children }: AccountSelectionGuardProps) 
   }
 
   if (checking) {
-    return null // Or a loading spinner
+    return <>{checkingFallback ?? null}</>
   }
 
   if (needsAccountSelection) {

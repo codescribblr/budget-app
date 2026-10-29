@@ -5,6 +5,7 @@ import type { Cadence } from "@/lib/new-look";
 import { checkinStatus, checkinStatusLabel } from "@/lib/checkins";
 import { useCheckins } from "./budget-context";
 import { useCheckinSteps } from "./checkin-flow";
+import { SkeletonLine } from "./home-skeleton";
 
 function useRoutine(cadence: Cadence) {
   const {
@@ -45,15 +46,20 @@ export function CheckinRoutines({ selected }: { selected: Cadence }) {
         <span>{period.periodLabel}</span>
         <span aria-hidden="true"> · </span>
         <span>
-          {error
-            ? "Status unavailable"
-            : !known
-              ? "Loading…"
-              : status.state === "complete"
-                ? checkinStatusLabel(selected, status.state)
-                : status.done
-                  ? `${status.done} of ${status.total} steps reviewed`
-                  : `${status.total} steps to review`}
+          {error ? (
+            "Status unavailable"
+          ) : !known ? (
+            <>
+              <span className="sr-only">Loading check-in status</span>
+              <SkeletonLine width={110} />
+            </>
+          ) : status.state === "complete" ? (
+            checkinStatusLabel(selected, status.state)
+          ) : status.done ? (
+            `${status.done} of ${status.total} steps reviewed`
+          ) : (
+            `${status.total} steps to review`
+          )}
         </span>
       </p>
     </div>
@@ -95,7 +101,7 @@ function Routine({
         {error ? (
           "!"
         ) : !known ? (
-          "…"
+          <SkeletonLine width={20} height={11} />
         ) : status.state === "complete" ? (
           <>
             <Check size={13} />

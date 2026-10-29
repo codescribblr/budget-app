@@ -154,7 +154,13 @@ export function useBudget() {
   if (!context) throw new Error("BudgetProvider is required");
   return context;
 }
-export function DataBoundary({ children }: { children: React.ReactNode }) {
+export function DataBoundary({
+  children,
+  fallback,
+}: {
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+}) {
   const { data, error, refresh } = useBudget();
   const failure = error ? (
     <div className="nl-panel" role="alert">
@@ -171,9 +177,11 @@ export function DataBoundary({ children }: { children: React.ReactNode }) {
   if (error && !data) return failure;
   if (!data)
     return (
-      <div className="nl-panel" role="status">
-        Loading your budget…
-      </div>
+      fallback ?? (
+        <div className="nl-panel" role="status">
+          Loading your budget…
+        </div>
+      )
     );
   return (
     <>

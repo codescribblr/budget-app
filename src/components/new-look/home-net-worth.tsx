@@ -4,6 +4,7 @@ import { ArrowRight, ChartNoAxesCombined } from "lucide-react";
 import { money } from "@/lib/new-look";
 import type { WorthSummary } from "@/lib/net-worth-report";
 import { useNetWorth } from "./use-net-worth";
+import { HomeWorthSkeleton } from "./home-skeleton";
 
 export function HomeNetWorth() {
   const { data, enabled, features, loading, error, retry } =
@@ -23,7 +24,7 @@ export function HomeNetWorth() {
         Your net worth
       </h2>
       {loading ? (
-        <p role="status">Loading net worth…</p>
+        <HomeWorthSkeleton />
       ) : error || !data ? (
         <div role="alert">
           <p>Net worth couldn’t load.</p>
