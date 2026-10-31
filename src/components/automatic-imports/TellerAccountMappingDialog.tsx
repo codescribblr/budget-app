@@ -1,4 +1,5 @@
 'use client';
+import { ContentLoading } from "@/components/new-look/page-skeleton";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useState, useEffect, useRef } from 'react';
@@ -263,9 +264,9 @@ export default function TellerAccountMappingDialog({
 
         {saveError && <div className="nl-notice" role="alert">{saveError}</div>}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
+          <ContentLoading label="Loading saved details"><div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
+          </div></ContentLoading>
         ) : (
           <div className="space-y-4 py-4">
           {accounts.map(tellerAccount => {

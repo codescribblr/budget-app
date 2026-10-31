@@ -1,4 +1,5 @@
 "use client"
+import { PageSkeleton } from "@/components/new-look/page-skeleton";
 
 import { usePathname } from "next/navigation"
 import { AppLayout } from "@/components/layout/app-layout"
@@ -28,7 +29,7 @@ export default function DashboardLayout({
 
   return (
     <FeatureProvider>
-      <AccountSelectionGuard checkingFallback={pathname === "/new" ? <HomeLoadingShell /> : undefined}>
+      <AccountSelectionGuard checkingFallback={pathname === "/new" || pathname.startsWith("/new/") ? <HomeLoadingShell><PageSkeleton /></HomeLoadingShell> : undefined}>
         <Layout>
           <FirstLoginWizard />
           {children}

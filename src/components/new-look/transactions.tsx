@@ -1,5 +1,6 @@
 "use client";
-import { PageSkeleton } from "./page-skeleton";
+import { SkeletonRows } from "./skeleton-sections";
+import { SkeletonLine } from "./home-skeleton";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 import { useResourceVersion } from "./use-resource-version";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -599,7 +600,7 @@ function TransactionReview() {
               Money out
             </span>
             <strong>
-              {loading || error ? "—" : money(loaded?.summary.expenses || 0)}
+              {loading ? <SkeletonLine width={92} height={26} /> : error ? "—" : money(loaded?.summary.expenses || 0)}
             </strong>
             <small>Recorded expenses</small>
           </div>
@@ -609,7 +610,7 @@ function TransactionReview() {
               Money in
             </span>
             <strong>
-              {loading || error ? "—" : money(loaded?.summary.income || 0)}
+              {loading ? <SkeletonLine width={92} height={26} /> : error ? "—" : money(loaded?.summary.income || 0)}
             </strong>
             <small>Income & refunds</small>
           </div>
@@ -619,7 +620,7 @@ function TransactionReview() {
               Records
             </span>
             <strong>
-              {loading || error ? "—" : (loaded?.total || 0).toLocaleString()}
+              {loading ? <SkeletonLine width={92} height={26} /> : error ? "—" : (loaded?.total || 0).toLocaleString()}
             </strong>
             <small>{amountScope}</small>
           </div>
@@ -788,7 +789,7 @@ function TransactionReview() {
             </button>
           </div>
         ) : loading ? (
-          <PageSkeleton heading={false} />
+          <SkeletonRows kind="transactions" count={6} label="Loading transactions" />
         ) : !rows.length ? (
           <div className="nl-tx-empty">
             <ReceiptText size={28} />

@@ -1,4 +1,5 @@
 'use client';
+import { ContentLoading } from "@/components/new-look/page-skeleton";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 import { usePathname } from "next/navigation";
 import { useResourceVersion } from "@/components/new-look/use-resource-version";
@@ -189,9 +190,7 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
 
   if (permissionsLoading || loading) {
     return (
-      <div className="flex justify-center py-8">
-        <LoadingSpinner />
-      </div>
+      <ContentLoading label="Loading queued imports"><div className="flex justify-center py-8"><LoadingSpinner /></div></ContentLoading>
     );
   }
 

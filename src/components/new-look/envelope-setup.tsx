@@ -1,6 +1,6 @@
 "use client";
 import { useResourceVersion } from "./use-resource-version";
-import { PageSkeleton } from "./page-skeleton";
+import { SkeletonRows } from "./skeleton-sections";
 import { useRecordGuard, guardedMetadata } from "./record-guard";
 import { NativeSelect } from "./native-select";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -201,7 +201,7 @@ function EnvelopeSetupContent() {
           </button>
         </div>
       ) : filter === "archived" && archiveLoading ? (
-        <PageSkeleton heading={false} />
+        <SkeletonRows count={5} label="Loading archived envelopes" />
       ) : (
         <div className="nl-setup-list">
           {shown.map((category) => (

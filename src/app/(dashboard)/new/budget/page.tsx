@@ -1,9 +1,10 @@
+import { PageSkeleton } from "@/components/new-look/page-skeleton";
 import { Suspense } from "react";
 import { GuidedEnvelopes } from "@/components/new-look/envelopes";
 
 export default function Page() {
   return (
-    <Suspense fallback={<p role="status">Loading…</p>}>
+    <Suspense fallback={<PageSkeleton />}>
       <GuidedEnvelopes />
     </Suspense>
   );

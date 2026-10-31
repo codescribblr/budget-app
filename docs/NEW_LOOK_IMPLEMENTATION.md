@@ -4,7 +4,11 @@ The new interface lives at `/new`. Classic remains at its existing URLs. Both us
 
 ## Cross-device safety and freshness
 
-The proposed next infrastructure work is detailed in [Cross-device freshness and safe editing](NEW_LOOK_SYNC_PLAN.md). It prioritizes guarded account/card saves, draft-aware resume refresh, and a Supabase Free Realtime pilot in the new UI. Shared changes remain backward compatible; classic receives only necessary compatibility updates. The dashboard skeleton pilot remains compatible, and wider skeleton rollout can resume once the shared loading/refresh contract is in place. This is a plan, not implemented sync functionality.
+[Cross-device freshness and safe editing](NEW_LOOK_SYNC_PLAN.md) is implemented and deployed. New-interface editors guard stale saves and preserve drafts; shared resource updates refresh mounted views. Classic receives only necessary shared API compatibility changes.
+
+## Loading standard
+
+All new-interface views use layout-matched skeletons for initial data, route/Suspense fallbacks, and independently loaded sections. Existing content remains visible during background refresh; saving and import processing retain explicit action progress. Follow [the loading guide](NEW_LOOK_LOADING.md) when creating or changing any view. A development-only gallery at `/new/loading-preview` exposes the real skeleton components for desktop/mobile and theme review.
 
 ## Delivery order
 

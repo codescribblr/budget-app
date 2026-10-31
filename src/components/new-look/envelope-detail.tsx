@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonRows } from "./skeleton-sections";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 import { useResourceVersion } from "./use-resource-version";
 
@@ -352,9 +353,7 @@ function EnvelopeDetailBody({
                 </button>
               </div>
             ) : insightsLoading || !current ? (
-              <p className="nl-detail-load-state" role="status">
-                Loading recorded spending…
-              </p>
+              <SkeletonRows count={3} label="Loading recorded spending" />
             ) : (
               <>
                 <div className="nl-detail-spent">

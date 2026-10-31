@@ -1,4 +1,5 @@
 'use client';
+import { PageSkeleton } from "@/components/new-look/page-skeleton";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 import { useImportPaths } from './use-import-paths';
 
@@ -969,6 +970,7 @@ export default function MapColumnsPage() {
   };
 
   if (!analysis) {
+    if (modern) return <PageSkeleton view="import-mapping" />;
     return (
       <div className="container mx-auto p-6">
         <div className="flex items-center justify-center min-h-[400px]">

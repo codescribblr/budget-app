@@ -1,4 +1,5 @@
 'use client';
+import { ContentLoading } from "@/components/new-look/page-skeleton";
 import { usePathname } from "next/navigation";
 import { useResourceVersion } from "@/components/new-look/use-resource-version";
 import { freshFetch as fetch } from "@/lib/view-freshness";
@@ -179,10 +180,10 @@ export default function RentCastIntegrationSettings() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <ContentLoading kind="fields" label="Loading property integration"><div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
         Loading RentCast integration...
-      </div>
+      </div></ContentLoading>
     );
   }
 

@@ -1,9 +1,10 @@
+import { PageSkeleton } from "@/components/new-look/page-skeleton";
 import { Suspense } from "react";
 import { GuidedPayday } from "@/components/new-look/payday";
 
 export default function Page() {
   return (
-    <Suspense fallback={<p role="status">Loading…</p>}>
+    <Suspense fallback={<PageSkeleton />}>
       <GuidedPayday />
     </Suspense>
   );

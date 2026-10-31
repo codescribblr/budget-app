@@ -1,4 +1,5 @@
 "use client";
+import { ContentLoading } from "@/components/new-look/page-skeleton";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { PremiumBadge } from "@/components/subscription/PremiumBadge";
@@ -243,9 +244,7 @@ function SubscriptionPageContent() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <ContentLoading kind="page"><div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div></ContentLoading>
     );
   }
 

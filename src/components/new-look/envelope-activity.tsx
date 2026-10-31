@@ -1,5 +1,5 @@
 "use client";
-import { SkeletonLine } from "./home-skeleton";
+import { SkeletonRows } from "./skeleton-sections";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 import { useResourceVersion } from "./use-resource-version";
 
@@ -158,11 +158,7 @@ export function EnvelopeActivity({
         aria-busy={loading}
       >
         {loading && !page && (
-          <p className="nl-activity-state" role="status">
-            <SkeletonLine width="70%" height={22} />
-            <SkeletonLine width="45%" />
-            <SkeletonLine width="80%" />
-          </p>
+          <SkeletonRows kind="activity" count={4} label="Loading envelope activity" />
         )}
         {page?.records.length === 0 && !loading && (
           <p className="nl-activity-state">

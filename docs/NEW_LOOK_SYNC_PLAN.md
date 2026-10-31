@@ -1,6 +1,6 @@
 # Cross-device freshness and safe editing in the new interface
 
-Status: stages 1–4 implemented and verified · 2026-10-31. Production rollout authorized. Migrations 131–149 run before the server release; migration 150 runs only after deployment succeeds.
+Status: stages 1–4 deployed successfully · 2026-10-31 · release `61f075b`. The production backup, migrations 131–149, server deployment, and post-deploy migration 150 all succeeded.
 
 ## Implementation checkpoint
 

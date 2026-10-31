@@ -7,7 +7,7 @@ import { useFeatures, type Feature } from "@/contexts/FeatureContext";
 import { useAccountPermissions } from "@/hooks/use-account-permissions";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { PageSkeleton } from "../page-skeleton";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -57,7 +57,7 @@ export function SettingsFeatures() {
       setPending(null);
     }
   }
-  if (loading || isLoading) return <LoadingSpinner />;
+  if (loading || isLoading) return <PageSkeleton heading={false} />;
   if (error && !features.length)
     return (
       <div className="nl-settings-panel" role="alert">

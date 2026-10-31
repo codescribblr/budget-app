@@ -1,4 +1,5 @@
 'use client';
+import { ContentLoading } from "@/components/new-look/page-skeleton";
 
 import { useInterfacePath } from "@/hooks/use-interface-path";
 
@@ -53,9 +54,7 @@ export function PremiumFeatureGate({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <ContentLoading kind="page"><div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div></ContentLoading>
     );
   }
 

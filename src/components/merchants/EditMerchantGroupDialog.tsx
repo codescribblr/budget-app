@@ -1,4 +1,5 @@
 'use client';
+import { ContentLoading } from "@/components/new-look/page-skeleton";
 
 import { useState, useEffect } from 'react';
 import {
@@ -142,9 +143,9 @@ export default function EditMerchantGroupDialog({
             <Label>Transaction Patterns ({mappings.length})</Label>
             <div className="border rounded-lg p-4 space-y-2 max-h-96 overflow-y-auto">
               {loadingMappings ? (
-                <div className="flex items-center justify-center py-8">
+                <ContentLoading label="Loading merchant details"><div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
+                </div></ContentLoading>
               ) : mappings.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   No transaction patterns

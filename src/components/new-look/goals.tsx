@@ -1,5 +1,6 @@
 "use client";
-import { SkeletonLine } from "./home-skeleton";
+import { PageSkeleton } from "./page-skeleton";
+import { GoalCardsSkeleton } from "./skeleton-sections";
 import { useResourceVersion } from "./use-resource-version";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -199,7 +200,7 @@ function GoalsContent() {
           </button>
         </div>
       ) : featuresLoading ? (
-        <p role="status">Loading your planning tools…</p>
+        <PageSkeleton view="goals" heading={false} />
       ) : (
         <div
           className={`nl-goals-layout ${!goalsEnabled || !bufferEnabled ? "nl-goals-single" : ""}`}
@@ -234,15 +235,7 @@ function GoalsContent() {
                 ))}
               </div>
               {loading ? (
-                <div role="status" aria-label="Loading goals">
-                  {[0, 1, 2].map((n) => (
-                    <div className="nl-panel" key={n}>
-                      <SkeletonLine width="45%" height={20} />
-                      <SkeletonLine width="80%" />
-                      <SkeletonLine width="65%" />
-                    </div>
-                  ))}
-                </div>
+                <GoalCardsSkeleton />
               ) : error && !loaded.current ? (
                 <div className="nl-panel" role="alert">
                   <p>{error}</p>

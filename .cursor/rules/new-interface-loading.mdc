@@ -1,0 +1,12 @@
+---
+description: Use layout-matched skeletons for new-interface views and preserve content during refresh.
+globs: src/components/**/*.tsx,src/app/**/new/**/*.tsx
+alwaysApply: false
+---
+# New-interface loading
+
+For views rendered under `/new`, follow `docs/NEW_LOOK_LOADING.md` and the repository `AGENTS.md`.
+
+Use `PageSkeleton` for full-view loading, and the primitives in `skeleton-sections.tsx` for independent regions. Match the actual page structure; do not substitute a generic spinner or “Loading…” card. Cover route/Suspense, initial data, and access/feature checks.
+
+Only show a skeleton when the current user/budget/filter scope has no usable data. Background refresh preserves existing content and drafts. Errors, empty results, and user-initiated actions have their own states.

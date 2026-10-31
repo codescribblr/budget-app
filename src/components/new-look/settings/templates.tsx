@@ -12,7 +12,7 @@ import {
 } from "@/lib/mapping-templates";
 import { useAccountPermissions } from "@/hooks/use-account-permissions";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { PageSkeleton } from "../page-skeleton";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -78,14 +78,14 @@ export function SettingsTemplates() {
       setDeleting(false);
     }
   }
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading) return <PageSkeleton heading={false} />;
   if (!isEditor)
     return (
       <p className="nl-notice">
         Only editors and owners can manage CSV templates.
       </p>
     );
-  if (loading) return <LoadingSpinner />;
+  if (loading) return <PageSkeleton heading={false} />;
   if (error && !loaded.current)
     return (
       <div className="nl-settings-panel" role="alert">

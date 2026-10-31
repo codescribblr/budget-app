@@ -51,7 +51,7 @@ export function GuidedHoldings({
     <DataBoundary>
       <AccountNavigation />
       {features.loading ? (
-        <PageSkeleton heading={false} />
+        <PageSkeleton />
       ) : features.error && !features.features.length ? (
         <div className="nl-panel" role="alert">
           <h2>Your account settings could not load</h2>

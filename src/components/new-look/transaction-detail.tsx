@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonRows, SkeletonRegion } from "./skeleton-sections";
 import { SkeletonLine } from "./home-skeleton";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 import { useResourceVersion } from "./use-resource-version";
@@ -105,11 +106,7 @@ export function TransactionReviewDetail({
             </button>
           </div>
         ) : !transaction ? (
-          <p className="nl-tx-detail-body" role="status">
-            <SkeletonLine width="55%" height={32} />
-            <SkeletonLine width="80%" />
-            <SkeletonLine width="65%" />
-          </p>
+          <div className="nl-tx-detail-body"><SkeletonRegion label="Loading transaction details"><SkeletonLine width="55%" height={36} /><SkeletonRows count={4} /></SkeletonRegion></div>
         ) : (
           <>
             <div className="nl-tx-detail-body">

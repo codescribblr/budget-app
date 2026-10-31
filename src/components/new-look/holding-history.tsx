@@ -1,5 +1,5 @@
 "use client";
-import { SkeletonLine } from "./home-skeleton";
+import { SkeletonRows } from "./skeleton-sections";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 import { useResourceVersion } from "./use-resource-version";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -250,10 +250,7 @@ export function HoldingHistory({
         </p>
       )}
       {loading && !records.length && (
-        <p role="status" className="nl-muted">
-          <SkeletonLine width="70%" />
-          <SkeletonLine width="50%" />
-        </p>
+        <SkeletonRows kind="activity" count={3} label="Loading balance history" />
       )}
       {more && !error && (
         <button

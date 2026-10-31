@@ -1,9 +1,10 @@
+import { PageSkeleton } from "@/components/new-look/page-skeleton";
 import { Suspense } from "react";
 import { GuidedIncome } from "@/components/new-look/income";
 
 export default function Page() {
   return (
-    <Suspense fallback={<p role="status">Loading…</p>}>
+    <Suspense fallback={<PageSkeleton />}>
       <GuidedIncome />
     </Suspense>
   );

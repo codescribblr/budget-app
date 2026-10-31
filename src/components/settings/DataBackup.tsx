@@ -1,4 +1,5 @@
 'use client';
+import { ContentLoading } from "@/components/new-look/page-skeleton";
 import { useResourceVersion } from "@/components/new-look/use-resource-version";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 
@@ -521,9 +522,9 @@ export default function DataBackup() {
           </p>
 
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
+            <ContentLoading label="Loading saved records"><div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            </div></ContentLoading>
           ) : backups.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <p>No backups yet. Create your first backup to get started.</p>
@@ -613,9 +614,9 @@ export default function DataBackup() {
             </DialogDescription>
           </DialogHeader>
           {isLoadingDownloadPreview ? (
-            <div className="flex items-center justify-center py-8">
+            <ContentLoading label="Loading saved records"><div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            </div></ContentLoading>
           ) : downloadPreview ? (
             <BackupTypeSelector
               availableTypes={downloadPreview.typesPresent}
@@ -663,9 +664,9 @@ export default function DataBackup() {
                 </div>
 
                 {isLoadingRestorePreview ? (
-                  <div className="flex items-center justify-center py-6">
+                  <ContentLoading label="Loading saved details"><div className="flex items-center justify-center py-6">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
+                  </div></ContentLoading>
                 ) : restorePreview ? (
                   <div className="mb-4">
                     <p className="text-sm font-medium mb-2">Data types to restore:</p>

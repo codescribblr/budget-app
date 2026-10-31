@@ -6,6 +6,7 @@ import { useInterfacePath } from "@/hooks/use-interface-path";
 import { useState, useEffect, useRef } from "react";
 import { useResourceVersion } from "@/components/new-look/use-resource-version";
 import { usePathname } from "next/navigation";
+import { SkeletonLine } from "@/components/new-look/home-skeleton";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -306,7 +307,7 @@ export default function AccountPage() {
           <div className="flex items-center gap-2">
             <code className="flex-1 rounded-md border bg-muted px-3 py-2 text-sm font-mono break-all">
               {loadingAccountInfo
-                ? "Loading..."
+                ? (modern ? <SkeletonLine width="75%" height={16} /> : "Loading...")
                 : (accountPublicId ?? "No active account")}
             </code>
             <Button
@@ -385,7 +386,7 @@ export default function AccountPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium">
-                    {accountName || "Loading..."}
+                    {accountName || (modern && loadingAccountInfo ? <SkeletonLine width={160} height={16} /> : "Loading...")}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     This name appears in the account switcher and throughout the

@@ -1,4 +1,5 @@
 "use client";
+import { ContentLoading } from "@/components/new-look/page-skeleton";
 
 import RentCastIntegrationSettings from "@/components/settings/RentCastIntegrationSettings";
 import {
@@ -39,10 +40,7 @@ export default function IntegrationsSettingsPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <LoadingSpinner className="h-4 w-4" />
-              Loading...
-            </div>
+            <ContentLoading kind="fields" label="Loading integration settings"><div className="flex items-center gap-2 text-sm text-muted-foreground"><LoadingSpinner className="h-4 w-4" />Loading...</div></ContentLoading>
           ) : !isOwner ? (
             <Alert>
               <AlertDescription>

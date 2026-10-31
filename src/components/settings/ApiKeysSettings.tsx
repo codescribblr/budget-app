@@ -1,4 +1,5 @@
 'use client';
+import { ContentLoading } from "@/components/new-look/page-skeleton";
 import { useResourceVersion } from "@/components/new-look/use-resource-version";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 
@@ -278,14 +279,12 @@ export default function ApiKeysSettings() {
   const activeKeys = keys.filter((key) => !key.revoked_at);
   const revokedKeys = keys.filter((key) => key.revoked_at);
 
-  if (permissionsLoading) return <Loader2 className="animate-spin" aria-label="Loading permissions"/>;
+  if (permissionsLoading) return <ContentLoading kind="page"><Loader2 className="animate-spin" aria-label="Loading permissions" /></ContentLoading>;
   if (!isOwner) return <p className="text-muted-foreground">Only the budget owner can manage API access.</p>;
   if (loadError && !loaded.current) return <div role="alert" className="space-y-4"><p>We couldn’t load API access settings.</p><Button onClick={fetchKeys}>Try again</Button></div>;
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <ContentLoading kind="page"><div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div></ContentLoading>
     );
   }
 
@@ -579,9 +578,9 @@ export default function ApiKeysSettings() {
           </DialogHeader>
           <div className="overflow-y-auto flex-1 min-h-0">
             {logsLoading ? (
-              <div className="flex justify-center py-8">
+              <ContentLoading label="Loading saved details"><div className="flex justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
+              </div></ContentLoading>
             ) : logs.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">No activity recorded yet.</p>
             ) : (

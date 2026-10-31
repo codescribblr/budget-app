@@ -314,7 +314,7 @@ function BudgetReportsContent() {
         </div>
       )}
       {loading ? (
-        <PageSkeleton heading={false} />
+        <PageSkeleton heading={false} view={view === "plan" ? "plan-report" : "reports"} />
       ) : error && !report ? (
         <div className="nl-panel" role="alert">
           <h2>Your report could not load</h2>

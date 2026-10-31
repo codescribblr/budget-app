@@ -1,4 +1,5 @@
 "use client";
+import { PageSkeleton } from "./page-skeleton";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Check } from "lucide-react";
@@ -37,7 +38,7 @@ function CompletionContent() {
       />
     );
   if (!data || !ready || loading)
-    return <p role="status">Loading your check-in…</p>;
+    return <PageSkeleton view="checkin" heading={false} />;
   const status = checkinStatus(steps, items, completedAt);
   const remaining =
     status.state === "complete"

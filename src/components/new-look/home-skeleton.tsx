@@ -289,7 +289,7 @@ export function HomeSkeleton({
 }
 
 /** Shown during account selection checks; no budget data or providers mount early. */
-export function HomeLoadingShell() {
+export function HomeLoadingShell({ children }: { children?: React.ReactNode }) {
   return (
     <div className="new-look nl-shell">
       <aside className="nl-sidebar" aria-hidden="true">
@@ -310,7 +310,7 @@ export function HomeLoadingShell() {
           <SkeletonLine width={96} height={28} />
         </header>
         <main className="nl-main">
-          <HomeSkeleton />
+          {children ?? <HomeSkeleton />}
         </main>
       </div>
     </div>

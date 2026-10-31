@@ -2581,3 +2581,53 @@ button.nl-activity-link {
 .new-look .nl-skeleton-record > div:last-child { justify-items:end; }
 .new-look .nl-skeleton-chart > div { display:flex; align-items:end; justify-content:space-between; height:220px; margin-top:24px; }
 @media(max-width:600px) { .new-look .nl-skeleton-metrics { gap:8px; } .new-look .nl-skeleton-metrics .nl-panel { padding:14px 10px; } .new-look .nl-skeleton-record { padding:17px 0; } }
+
+/* Loading regions follow page geometry and never replace background-refresh data. */
+.new-look .nl-skeleton-region { min-width: 0; width: 100%; }
+.new-look .nl-page-skeleton > div, .new-look .nl-skeleton-page-content { display: grid; gap: 24px; min-width: 0; }
+.new-look .nl-page-skeleton .nl-page-heading { margin-bottom: 8px; }
+.new-look .nl-page-skeleton .nl-page-heading h1 .nl-skeleton { display: block; }
+.new-look .nl-skeleton-panel { min-width: 0; }
+.new-look .nl-skeleton-panel > h2 { margin-bottom: 20px; }
+.new-look .nl-skeleton-metrics p { margin: 0; }
+.new-look .nl-skeleton-split { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px; }
+.new-look .nl-skeleton-hero { padding: 28px; }
+.new-look .nl-skeleton-hero > .nl-skeleton-copy { gap: 18px; }
+.new-look .nl-skeleton-rows .nl-skeleton-record:first-child { border-top: 0; }
+.new-look .nl-skeleton-record .nl-skeleton-copy { min-width: 0; }
+.new-look .nl-skeleton-record-envelopes { align-items: center; }
+.new-look .nl-skeleton-record-envelopes > div:not(:first-child) { align-items: flex-end; }
+.new-look .nl-skeleton-record-transactions, .new-look .nl-skeleton-record-activity { grid-template-columns: 32px minmax(0,1fr) auto; align-items: center; }
+.new-look .nl-skeleton-record > .nl-skeleton-value { align-items: flex-end; }
+.new-look .nl-skeleton-pill { border-radius: 999px; }
+.new-look .nl-skeleton-fields > div, .new-look .nl-skeleton-cards > div { display: grid; gap: 24px; }
+.new-look .nl-skeleton-fields .nl-skeleton-copy { gap: 10px; }
+.new-look .nl-skeleton-cards .nl-panel { gap: 16px; }
+.new-look .nl-skeleton-chart .nl-skeleton-chart-plot { display: block; height: 220px; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 12px 0 0 12px; margin-top: 24px; }
+.new-look .nl-skeleton-chart-plot .nl-skeleton { opacity: .4; }
+.new-look .nl-skeleton-chart .nl-skeleton-chart-labels { display: flex; justify-content: space-between; height: auto; margin-top: 14px; }
+.new-look .nl-skeleton-dropzone { display: flex; align-items: center; flex-direction: column; gap: 18px; padding: 28px 16px; border: 1px dashed var(--border); border-radius: 8px; }
+.new-look .nl-skeleton-review-mobile { display: none; }
+.new-look .nl-skeleton-toolbar { align-items: center; min-width: 0; }
+@media(max-width:700px) {
+  .new-look .nl-skeleton-split { grid-template-columns: minmax(0,1fr); gap: 16px; }
+
+  .new-look .nl-skeleton-record-envelopes > div:nth-child(3) { align-items: flex-start; }
+  .new-look .nl-skeleton-record { gap: 14px; }
+  .new-look .nl-skeleton-hero { padding: 20px; }
+  .new-look .nl-skeleton-review-mobile { display: block; }
+  .new-look .nl-skeleton-review-desktop { display: none; }
+}
+.new-look .nl-skeleton-settings-layout { display: grid; grid-template-columns: 210px minmax(0,1fr); gap: 36px; }
+.new-look .nl-skeleton-settings-layout > aside { gap: 26px; padding: 16px 0; }
+.new-look [data-slot="skeleton"] { background: color-mix(in srgb, var(--muted-foreground) 22%, transparent); animation: nl-skeleton-breathe 2.2s ease-in-out infinite; }
+@media(max-width:850px) { .new-look .nl-skeleton-settings-layout { grid-template-columns: minmax(0,1fr); } .new-look .nl-skeleton-settings-layout > aside { display: none; } }
+@media(prefers-reduced-motion:reduce) { .new-look [data-slot="skeleton"] { animation: none; } }
+
+@media(max-width:800px) { .new-look .nl-skeleton-record-envelopes { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; } }
+.new-look .nl-skeleton-record-envelopes { grid-template-columns: minmax(165px,1.3fr) minmax(180px,1.4fr) minmax(100px,.85fr) minmax(115px,.95fr); gap:22px; padding:18px 22px; }
+.new-look .nl-skeleton-record-envelopes > div:not(:first-child), .new-look .nl-skeleton-value { justify-items:end; }
+@media(min-width:801px) and (max-width:1150px) { .new-look .nl-skeleton-record-envelopes { grid-template-columns:minmax(130px,1.25fr) minmax(135px,1.3fr) minmax(85px,.85fr) minmax(100px,1fr); gap:12px; padding-inline:16px; } }
+@media(max-width:800px) { .new-look .nl-skeleton-record-envelopes { grid-template-columns:minmax(0,1fr) minmax(0,1fr); padding:20px; gap:18px 24px; } .new-look .nl-skeleton-record-envelopes > div:nth-child(3) { justify-items:start; } }
+.new-look .nl-skeleton-toolbar > .nl-skeleton { flex-shrink: 1; min-width: 0; }
+.new-look .nl-skeleton-review-mobile .nl-skeleton-fields { margin-top: 24px; }
