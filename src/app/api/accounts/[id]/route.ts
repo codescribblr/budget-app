@@ -1,3 +1,4 @@
+import { guardedAccountUpdate } from "@/lib/guarded-account-route";
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccountById, updateAccount, deleteAccount } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
@@ -47,6 +48,8 @@ export async function PATCH(
     if (accessCheck) return accessCheck;
     
     const body = (await request.json()) as UpdateAccountRequest;
+    const guarded = await guardedAccountUpdate("account", accountId, body);
+    if (guarded) return guarded;
     const account = await updateAccount(accountId, body);
 
     if (!account) {

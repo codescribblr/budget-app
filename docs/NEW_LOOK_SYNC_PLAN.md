@@ -1,6 +1,23 @@
 # Cross-device freshness and safe editing in the new interface
 
-Status: proposed implementation plan · 2026-10-30. No application or database changes are included in this document.
+Status: initial working pilot implemented locally · 2026-10-30. Skeleton-only commit `1b3bb9d` is deployed. Sync work remains on the guided-interface branch and test Supabase project.
+
+## Implementation checkpoint
+
+Implemented for local review:
+
+- Guarded cash-account and card saves in the daily balance pass and account/card setup, using opaque database UUID revisions. Both precondition metadata and the expected household are required by these editors; legacy requests keep their existing contract.
+- Transactional financial update/card calculation/audit insertion; typed conflicts; draft retention; explicit latest-versus-mine review; missing-record handling. Post-commit snapshot/notification failures cannot report a successful financial save as failed.
+- One request scopes the shared budget snapshot to a single authenticated household. Resume/focus/online and visible-page periodic refresh preserve loaded data and drafts; background refresh no longer removes edit permission.
+- Private, database-originated signals for accounts, cards, and personal check-in progress, with one shared client, explicit auth-before-subscribe, catch-up reads, hidden-tab cleanup, and transaction-level event coalescing. The current reconciliation interval is 60 seconds while visible/online; adaptive backoff and resource-specific read scheduling remain follow-up work.
+- Shared balance/envelope summaries plus dashboard recent envelopes and net worth refresh. The status deliberately says **Balances checked**, not that every independent page query is current.
+
+Not yet covered: guarded envelope money commands, allocations, transactions/imports, loan/asset/goal/income/settings editors; independent page queries on all remaining screens; resource-specific freshness/error indicators; bulk-import event batching and volume measurements; broader skeleton rollout. These remain required for the complete two-part outcome. Do not describe the pilot as app-wide stale-write protection or app-wide live freshness.
+
+Test-only migrations: `131_guarded_account_edits.sql` and `132_budget_sync_pilot.sql`. Production has neither migration yet. Disable client subscriptions with `NEXT_PUBLIC_BUDGET_LIVE_SYNC=false`; disable publication with an administrative update of `budget_sync_config.enabled`. Revision checks and HTTP refresh stay active when live delivery is disabled.
+
+Verification: 55 focused tests; real test-database races, legacy invalidation, derived card balances, unauthorized writes, and audit rollback; two authenticated sessions receive compact events, unrelated budgets/personal channels are rejected, and multiple committed rows produce one signal. Browser verification covers a retained draft conflicting with a real second save, explicit resolution, account-details merge without replacing a newer balance, and light/dark mobile layout with keyboard-accessible conflict choices. Type checking and an isolated production build pass. Repeatable test-project-only checks are `node scripts/test-budget-concurrency.cjs` and `node scripts/test-budget-realtime.cjs`; both assert the synthetic test project/household and remove their disposable financial records.
+
 
 ## Outcome and scope
 
@@ -52,7 +69,7 @@ When offline, preserve drafts and explain that saving requires reconnecting. Do 
 
 ### 1. The server protects writes
 
-Add a database-managed `revision` to cash accounts and cards first. A trigger increments it for every relevant update regardless of source: new UI, classic, integrations, imports, jobs, or direct authorized database writes. Start with whole-record revisions; a conservative conflict on an unrelated metadata edit is acceptable for the pilot. Serialize revisions as opaque strings at the API boundary to avoid JavaScript bigint precision issues.
+Add a database-managed `revision` to cash accounts and cards first. A trigger replaces the opaque UUID token for every update regardless of source: new UI, classic, integrations, imports, jobs, or direct authorized database writes. Start with whole-record revisions; a conservative conflict on an unrelated metadata edit is acceptable for the pilot. Serialize revisions as opaque strings at the API boundary; UUID tokens avoid JavaScript bigint precision issues and cannot be reused by backup restores.
 
 GET and successful PATCH responses add `revision`. New UI PATCH requests include `expectedRevision` and only changed fields. Preserve legacy requests that omit the precondition. Validate and separate request metadata from database fields.
 

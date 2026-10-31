@@ -70,10 +70,12 @@ export function useCheckinProgress(scope: CheckinScope | null) {
       if (event.key === "budget-checkin:updated") reload();
     };
     void store.load(scope).catch(() => {});
+    window.addEventListener("budget:checkins-refresh", reload);
     window.addEventListener("focus", reload);
     document.addEventListener("visibilitychange", reload);
     window.addEventListener("storage", storage);
     return () => {
+      window.removeEventListener("budget:checkins-refresh", reload);
       window.removeEventListener("focus", reload);
       document.removeEventListener("visibilitychange", reload);
       window.removeEventListener("storage", storage);

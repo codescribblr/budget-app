@@ -1,7 +1,8 @@
 "use client";
+import { editBalance, balanceChanged, balanceConflict, type BalanceDraft } from "@/lib/balance-drafts";
 import { AccountNavigation } from "./account-navigation";
 import { useTaskCheckin } from "./checkin-flow";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { money, parseMoney, cents } from "@/lib/new-look";
@@ -21,16 +22,17 @@ import {
 } from "./common";
 
 export function GuidedAccounts() {
+  const { data } = useBudget();
   return (
     <DataBoundary>
-      <AccountsContent />
+      <AccountsContent key={`${data?.userId}:${data?.identity.activeAccountId}`} />
     </DataBoundary>
   );
 }
 function AccountsContent() {
   const checkin = useTaskCheckin("accounts");
   const { data, canEdit, refresh, refreshing } = useBudget();
-  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [draft, setDraft] = useState<Record<string, BalanceDraft>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const rows = data
@@ -42,6 +44,7 @@ function AccountsContent() {
           kind: "account" as const,
           label: a.account_type,
           value: a.balance,
+          revision: a.revision,
           included: a.include_in_totals,
           limit: 0,
           owed: 0,
@@ -53,6 +56,7 @@ function AccountsContent() {
           kind: "card" as const,
           label: "Credit card",
           value: c.available_credit,
+          revision: c.revision,
           included: c.include_in_totals,
           limit: c.credit_limit,
           owed: getCreditCardBalanceOwed(c),
@@ -60,14 +64,16 @@ function AccountsContent() {
       ]
     : [];
   const changed = rows.filter(
-    (r) => draft[r.key] !== undefined && parseMoney(draft[r.key]) !== r.value,
+    (r) => balanceChanged(draft[r.key]) || balanceConflict(draft[r.key], r.revision),
   );
-  const invalid = changed.some((r) => parseMoney(draft[r.key]) === null);
-  useUnsavedChanges(changed.length > 0);
+  const missing = Object.keys(draft).filter(key => !rows.some(row => row.key === key));
+  const conflicts = changed.some(row => balanceConflict(draft[row.key], row.revision));
+  const invalid = missing.length > 0 || conflicts || changed.some((r) => !r.revision || parseMoney(draft[r.key].value) === null);
+  useUnsavedChanges(changed.length > 0 || missing.length > 0);
   if (!data) return null;
   const delta =
     changed.reduce((sum, r) => {
-      const value = parseMoney(draft[r.key]);
+      const value = parseMoney(draft[r.key].value);
       if (value === null || !r.included) return sum;
       return (
         sum +
@@ -83,13 +89,12 @@ function AccountsContent() {
     const failed: Record<string, string> = {};
     let saved = 0;
     for (const row of changed) {
-      const amount = parseMoney(draft[row.key])!;
+      const amount = parseMoney(draft[row.key].value)!;
       try {
         await budgetRequest(
           `/api/${row.kind === "card" ? "credit-cards" : "accounts"}/${row.id}`,
-          row.kind === "card"
-            ? { available_credit: amount }
-            : { balance: amount },
+          { ...(row.kind === "card" ? { available_credit: amount } : { balance: amount }),
+            expectedRevision: draft[row.key].revision, expectedBudgetId: data!.identity.activeAccountId },
           "PATCH",
         );
         saved++;
@@ -225,14 +230,14 @@ function AccountsContent() {
                       .filter((row) => row.kind === kind)
                       .map((row) => {
                         const entered = parseMoney(
-                          draft[row.key] ?? Number(row.value).toFixed(2),
+                          draft[row.key]?.value ?? Number(row.value).toFixed(2),
                         );
                         const owed =
                           entered === null
                             ? null
                             : (cents(row.limit) - cents(entered)) / 100;
                         return (
-                          <tr key={row.key}>
+                          <Fragment key={row.key}><tr>
                             <td>
                               <strong>{row.name}</strong>
                               <span className="nl-subtext">
@@ -316,21 +321,24 @@ function AccountsContent() {
                                 }
                                 aria-invalid={
                                   draft[row.key] !== undefined &&
-                                  parseMoney(draft[row.key]) === null
+                                  parseMoney(draft[row.key].value) === null
                                 }
                                 inputMode="decimal"
                                 onFocus={(e) => e.target.select()}
                                 value={
-                                  draft[row.key] ?? Number(row.value).toFixed(2)
+                                  draft[row.key]?.value ?? Number(row.value).toFixed(2)
                                 }
-                                disabled={!canEdit || saving}
-                                onChange={(e) =>
-                                  setDraft({
-                                    ...draft,
-                                    [row.key]: e.target.value,
-                                  })
-                                }
+                                disabled={!canEdit || saving || !row.revision}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setDraft(previous => {
+                                    const next = { ...previous, [row.key]: editBalance(previous[row.key], value, row.value, row.revision) };
+                                    if (!balanceChanged(next[row.key]) && !balanceConflict(next[row.key], row.revision)) delete next[row.key];
+                                    return next;
+                                  });
+                                }}
                               />
+                              {!row.revision && <span className="nl-error">Reload to enable safe balance editing.</span>}
                               {kind === "card" && (
                                 <span className="nl-subtext">
                                   Recorded: {money(row.value)} available
@@ -338,6 +346,24 @@ function AccountsContent() {
                               )}
                             </td>
                           </tr>
+                              {balanceConflict(draft[row.key], row.revision) && (
+                                <tr className="nl-balance-conflict-row"><td colSpan={4}><div className="nl-sync-conflict" role="alert">
+                                  <strong>{row.name}: this balance changed elsewhere</strong>
+                                  <span>Latest saved: {money(row.value)} · Your entry: {draft[row.key].value}</span>
+                                  <span>Review the amounts before saving.</span>
+                                  <div className="nl-form-actions">
+                                    <button type="button" className="nl-secondary" onClick={() => setDraft(previous => {
+                                      const next = { ...previous }; delete next[row.key]; return next;
+                                    })}>Use latest</button>
+                                    <button type="button" className="nl-secondary" onClick={() => setDraft(previous => {
+                                      const next = { ...previous, [row.key]: editBalance(undefined, previous[row.key].value, row.value, row.revision) };
+                                      if (!balanceChanged(next[row.key])) delete next[row.key];
+                                      return next;
+                                    })}>Keep my entry</button>
+                                  </div>
+                                </div></td></tr>
+                              )}
+                          </Fragment>
                         );
                       })}
                   </tbody>
@@ -371,8 +397,13 @@ function AccountsContent() {
         provider includes. Excluded accounts stay outside available-to-save
         totals.
       </p>
+      {missing.length > 0 && <div className="nl-sync-conflict" role="alert">
+        An account you were editing is no longer available. Discard its draft before continuing.
+        <button className="nl-secondary" onClick={() => setDraft(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => !missing.includes(key))))}>Discard unavailable drafts</button>
+      </div>}
       <AvailableCalculation />
       <CheckinFooter
+        sticky={!conflicts && missing.length === 0}
         task="accounts"
         cadence="daily"
         title={
@@ -381,8 +412,11 @@ function AccountsContent() {
             : "Balances checked?"
         }
         description={
-          invalid
-            ? "Use amounts with up to two decimal places."
+          conflicts
+            ? "Review the balances that changed elsewhere before continuing."
+            : missing.length ? "Resolve the unavailable account drafts before continuing."
+            : invalid
+            ? "Use valid amounts and reload if safe editing is unavailable."
             : changed.length
               ? `Available to save after saving: ${money(data.summary.current_savings + delta)}`
               : "Continue when these match what your banks and cards show. No changes needed? You can still move on."

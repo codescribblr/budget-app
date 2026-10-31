@@ -9,7 +9,7 @@ import { HomeEnvelopesSkeleton } from "./home-skeleton";
 
 type RecentEnvelope = { category_id: number; transaction_date: string };
 export function HomeEnvelopes() {
-  const { data } = useBudget();
+  const { data, refreshVersion } = useBudget();
   const accountId = data?.identity.activeAccountId;
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{
@@ -20,7 +20,7 @@ export function HomeEnvelopes() {
   useEffect(() => {
     if (!accountId) return;
     const controller = new AbortController();
-    setResult(null);
+
     void fetch(`/api/categories/recent?accountId=${accountId}`, {
       cache: "no-store",
       signal: controller.signal,
@@ -36,7 +36,7 @@ export function HomeEnvelopes() {
           setResult({ accountId, error: error.message });
       });
     return () => controller.abort();
-  }, [accountId, attempt]);
+  }, [accountId, attempt, refreshVersion]);
   if (!data) return null;
   const envelopes = ordinaryEnvelopes(data.categories);
   const current = result?.accountId === accountId ? result : null;

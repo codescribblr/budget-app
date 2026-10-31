@@ -29,6 +29,7 @@ import { UserMenu } from "@/components/layout/user-menu";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import { InterfaceSwitch } from "./interface-switch";
+import { BudgetFreshness } from "./budget-freshness";
 import { BudgetProvider } from "./budget-context";
 import { FeedbackDialog } from "./feedback-dialog";
 import "./new-look.css";
@@ -217,6 +218,7 @@ export function NewLookLayout({ children }: { children: React.ReactNode }) {
               </header>
               <main className="nl-main" id="new-look-main">
                 <SubscriptionBanner />
+                <BudgetFreshness />
                 {children}
               </main>
             </div>

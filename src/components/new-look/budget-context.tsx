@@ -9,6 +9,8 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { createRefreshQueue } from "@/lib/refresh-queue";
+import { BudgetRequestError } from "@/lib/budget-request";
 import type {
   Account,
   Category,
@@ -16,33 +18,14 @@ import type {
   DashboardSummary,
 } from "@/lib/types";
 import { localDate, type Cadence, type Funding } from "@/lib/new-look";
+import { useBudgetLive } from "./use-budget-live";
 import { useCheckinProgress } from "./checkin-progress";
 import { checkinWindow } from "@/lib/checkins";
 import { watchCheckinDay } from "@/lib/checkin-calendar";
 import { useFeatures } from "@/contexts/FeatureContext";
 
-export async function budgetRequest<T>(
-  url: string,
-  body?: unknown,
-  method = "POST",
-): Promise<T> {
-  const response = await fetch(
-    url,
-    body === undefined
-      ? { cache: "no-store" }
-      : {
-          method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        },
-  );
-  const data = await response.json().catch(() => null);
-  if (!response.ok)
-    throw new Error(
-      data?.error || `Request failed (${response.status}). Please try again.`,
-    );
-  return data as T;
-}
+import { budgetRequest } from "@/lib/budget-request";
+export { budgetRequest } from "@/lib/budget-request";
 interface Identity {
   activeAccountId: number;
   accounts: { accountId: number; accountName: string; role: string }[];
@@ -64,6 +47,9 @@ interface Context {
   refreshing: boolean;
   refresh: () => Promise<void>;
   canEdit: boolean;
+  lastUpdated: number | null;
+  refreshVersion: number;
+  online: boolean;
 }
 const BudgetContext = createContext<Context | null>(null);
 export function BudgetProvider({ children }: { children: React.ReactNode }) {
@@ -73,63 +59,74 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const requestId = useRef(0);
+  const dataRef = useRef<BudgetData | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [online, setOnline] = useState(true);
   const pathname = usePathname();
-  const refresh = useCallback(async () => {
+  const queue = useRef<ReturnType<typeof createRefreshQueue> | null>(null);
+  if (!queue.current) queue.current = createRefreshQueue(async () => {
     const id = ++requestId.current;
     setRefreshing(true);
     try {
-      const month = localDate().slice(0, 7);
-      const [
-        accounts,
-        cards,
-        categories,
-        summary,
-        funding,
-        spending,
-        identity,
-        auth,
-      ] = await Promise.all([
-        budgetRequest<Account[]>("/api/accounts"),
-        budgetRequest<CreditCard[]>("/api/credit-cards"),
-        budgetRequest<Category[]>("/api/categories"),
-        budgetRequest<DashboardSummary>("/api/dashboard"),
-        budgetRequest<{ categories: Funding[] }>(
-          `/api/monthly-funding/${month}-01`,
-        ),
-        budgetRequest<Record<number, number>>(
-          `/api/categories/monthly-spending?month=${month}`,
-        ),
-        budgetRequest<Identity>("/api/budget-accounts"),
-        createClient().auth.getUser(),
-      ]);
-      if (!auth.data.user)
-        throw new Error("Your session has expired. Sign in again.");
-      if (id === requestId.current) {
-        setData({
-          accounts,
-          cards,
-          categories,
-          summary,
-          funding,
-          spending,
-          identity,
-          userId: auth.data.user.id,
-        });
-        setError(null);
-      }
+      const scope = dataRef.current;
+      const params = new URLSearchParams({ month: localDate().slice(0, 7) });
+      if (scope) params.set("budgetId", String(scope.identity.activeAccountId));
+      const next = await budgetRequest<BudgetData>(`/api/new/budget-snapshot?${params}`);
+      if (!next?.identity?.activeAccountId || !next.userId || !next.summary ||
+          !Array.isArray(next.accounts) || !Array.isArray(next.cards) || !Array.isArray(next.categories))
+        throw new Error("Your budget response could not be read. Please retry.");
+      if (scope && scope.userId !== next.userId) throw new BudgetRequestError("Your signed-in account changed. Reload to continue.", 401);
+      if (id !== requestId.current) return;
+      dataRef.current = next;
+      setData(next);
+      setError(null);
+      setLastUpdated(Date.now());
+      setRefreshVersion(value => value + 1);
     } catch (err) {
-      if (id === requestId.current)
-        setError(
-          err instanceof Error ? err.message : "Unable to load your budget.",
-        );
+      if (id === requestId.current) {
+        if (err instanceof BudgetRequestError && [401, 403].includes(err.status)) {
+          dataRef.current = null; setData(null); setLastUpdated(null);
+        }
+        setError(err instanceof Error ? err.message : "Unable to load your budget.");
+      }
       throw err;
-    } finally {
-      if (id === requestId.current) setRefreshing(false);
-    }
-  }, []);
+    } finally { if (id === requestId.current) setRefreshing(false); }
+  });
+  const refresh = useCallback(() => queue.current!(), []);
+  useEffect(() => { void refresh().catch(() => {}); }, [refresh, pathname, today]);
   useEffect(() => {
-    void refresh().catch(() => {});
-  }, [refresh, pathname, today]);
+    let timer: ReturnType<typeof setTimeout>;
+    const wake = () => {
+      setOnline(navigator.onLine);
+      if (document.visibilityState !== "hidden" && navigator.onLine) {
+        clearTimeout(timer);
+        timer = setTimeout(() => void refresh().catch(() => {}), 150);
+      }
+    };
+    const offline = () => setOnline(false);
+    const interval = setInterval(wake, 60_000);
+    window.addEventListener("focus", wake);
+    window.addEventListener("online", wake);
+    window.addEventListener("offline", offline);
+    document.addEventListener("visibilitychange", wake);
+    const { data: authListener } = createClient().auth.onAuthStateChange(event => {
+      if (event === "SIGNED_OUT") {
+        ++requestId.current; dataRef.current = null; setData(null); setLastUpdated(null);
+        setError("Your session ended. Sign in again.");
+      }
+    });
+    setOnline(navigator.onLine);
+    return () => {
+      clearTimeout(timer); clearInterval(interval); ++requestId.current;
+      window.removeEventListener("focus", wake);
+      window.removeEventListener("online", wake);
+      window.removeEventListener("offline", offline);
+      document.removeEventListener("visibilitychange", wake);
+      authListener.subscription.unsubscribe();
+    };
+  }, [refresh]);
+  useBudgetLive(data?.identity.activeAccountId, data?.userId, refresh);
   const role = data?.identity.accounts.find(
     (a) => a.accountId === data.identity.activeAccountId,
   )?.role;
@@ -141,8 +138,8 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         error,
         refreshing,
         refresh,
-        canEdit:
-          !error && !refreshing && (role === "owner" || role === "editor"),
+        lastUpdated, refreshVersion, online,
+        canEdit: !error && online && (role === "owner" || role === "editor"),
       }}
     >
       {children}

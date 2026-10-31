@@ -8,7 +8,7 @@ export function useNetWorth<T extends WorthSummary = WorthReport>(
   details = false,
 ) {
   const features = useFeatures();
-  const { data: budget, today } = useBudget();
+  const { data: budget, today, refreshVersion } = useBudget();
   const accountId = budget?.identity.activeAccountId;
   const enabled =
     features.hasPremium && features.isFeatureEnabled("retirement_planning");
@@ -23,7 +23,7 @@ export function useNetWorth<T extends WorthSummary = WorthReport>(
     const controller = new AbortController();
     setLoading(true);
     setError("");
-    setResult(null);
+
     fetch(`/api/net-worth/summary${details ? "?details=true" : ""}`, {
       cache: "no-store",
       signal: controller.signal,
@@ -48,11 +48,11 @@ export function useNetWorth<T extends WorthSummary = WorthReport>(
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [enabled, accountId, today, attempt, details]);
+  }, [enabled, accountId, today, attempt, details, refreshVersion]);
   return {
     data:
       enabled && result && result.accountId === accountId ? result.data : null,
-    loading,
+    loading: loading && (!result || result.accountId !== accountId),
     error,
     enabled,
     features,

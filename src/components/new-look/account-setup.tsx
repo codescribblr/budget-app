@@ -1,4 +1,6 @@
 "use client";
+import { BudgetRequestError } from "@/lib/budget-request";
+import type { Account, CreditCard } from "@/lib/types";
 import { AccountNavigation } from "./account-navigation";
 import { NativeSelect } from "./native-select";
 import { useState } from "react";
@@ -162,17 +164,27 @@ function AccountSetupContent() {
       {editing && (
         <AccountSetupEditor
           selection={editing}
+          latest={editing.item ? (editing.kind === "card" ? data.cards : data.accounts).find(item => item.id === editing.item!.id) : undefined}
           canEdit={canEdit}
           availableToSave={data.summary.current_savings}
           onClose={() => setEditing(null)}
-          onSave={async (payload) => {
+          onSave={async (payload, revision) => {
+            if (editing.item && !revision) throw new Error("Reload this account before saving safely.");
             const endpoint =
               editing.kind === "card" ? "/api/credit-cards" : "/api/accounts";
-            await budgetRequest(
-              editing.item ? `${endpoint}/${editing.item.id}` : endpoint,
-              payload,
-              editing.item ? "PATCH" : "POST",
-            );
+            try {
+              await budgetRequest(
+                editing.item ? `${endpoint}/${editing.item.id}` : endpoint,
+                editing.item ? { ...payload, expectedRevision: revision, expectedBudgetId: data.identity.activeAccountId } : payload,
+                editing.item ? "PATCH" : "POST",
+              );
+            } catch (error) {
+              // Resolve against the same authoritative version even when the
+              // live channel is unavailable; never rebase onto the old list row.
+              if (error instanceof BudgetRequestError && error.code === "STALE_RECORD")
+                await refresh().catch(() => {});
+              throw error;
+            }
             toast.success(
               editing.item
                 ? "Account details saved."
@@ -194,20 +206,27 @@ function AccountSetupContent() {
 }
 
 function AccountSetupEditor({
-  selection,
+  selection: originalSelection,
+  latest,
   availableToSave,
   canEdit,
   onSave,
   onClose,
 }: {
   selection: AccountSelection;
+  latest?: Account | CreditCard;
   availableToSave: number;
   canEdit: boolean;
   onSave: (
     payload: ReturnType<typeof prepareAccountSetup>["payload"],
+    revision?: string,
   ) => Promise<void>;
   onClose: () => void;
 }) {
+  const [selection, setSelection] = useState(originalSelection);
+  const [serverConflict, setServerConflict] = useState<Account | CreditCard | null>(null);
+  const current = serverConflict || latest;
+  const conflict = !!selection.item && !!current && selection.item.revision !== current.revision;
   const isCard = selection.kind === "card";
   const [initial] = useState<AccountSetupDraft>(() => ({
     name: selection.item?.name || "",
@@ -281,8 +300,38 @@ function AccountSetupEditor({
             : "Add account"
       }
       onClose={onClose}
-      onSave={() => onSave(prepareAccountSetup(selection, draft).payload)}
+      onSave={async () => {
+        if (conflict) throw new Error("Review the changed details below before saving.");
+        if (selection.item && !latest) throw new Error("This account is no longer available.");
+        try { await onSave(prepareAccountSetup(selection, draft).payload, selection.item?.revision); }
+        catch (error) {
+          if (error instanceof BudgetRequestError && error.code === "STALE_RECORD" && error.latest)
+            setServerConflict(error.latest as Account | CreditCard);
+          throw error;
+        }
+      }}
     >
+      {conflict && current && <div className="nl-sync-conflict" role="alert">
+        <strong>These details changed elsewhere</strong>
+        <p>Latest saved: {current.name}. {"credit_limit" in current ? `Limit ${money(current.credit_limit)} · Available credit ${money(current.available_credit)}` : `Balance ${money(current.balance)}`}. {current.include_in_totals ? "Included in budget" : "Tracking only"}.</p>
+        <p>Your entries are still below. Review them before saving.</p>
+        <div className="nl-form-actions">
+          <button type="button" className="nl-secondary" onClick={onClose}>Close without saving</button>
+          <button type="button" className="nl-secondary" onClick={() => {
+            // Carry forward only fields actually edited, not stale untouched values.
+            const previous = selection.item!;
+            setDraft(old => ({ ...old,
+              name: old.name === previous.name ? current.name : old.name,
+              included: old.included === previous.include_in_totals ? current.include_in_totals : old.included,
+              accountType: "account_type" in previous && "account_type" in current && old.accountType === previous.account_type ? current.account_type : old.accountType,
+              limit: "credit_limit" in previous && "credit_limit" in current && Number(old.limit) === previous.credit_limit ? String(current.credit_limit) : old.limit,
+              available: "available_credit" in previous && "available_credit" in current && Number(old.available) === previous.available_credit ? String(current.available_credit) : old.available,
+            }));
+            setSelection("credit_limit" in current ? { kind: "card", item: current } : { kind: "account", item: current });
+            setServerConflict(null);
+          }}>Keep my edits, use latest for the rest</button>
+        </div>
+      </div>}
       <label>
         Account name
         <input

@@ -2555,3 +2555,15 @@ button.nl-activity-link {
   .nl-skeleton-tabs > span { padding: 10px 5px; gap: 6px; font-size: 12px; }
   .nl-available-buffer-actions > .nl-skeleton { height: 44px !important; }
 }
+
+/* Inline conflict feedback keeps the user's draft next to the saved value. */
+.new-look .nl-sync-conflict { display: grid; gap: .65rem; margin-block: .75rem; padding: 1rem; border: 1px solid var(--border); border-radius: .75rem; background: var(--card); text-align: left; font-size: .875rem; white-space: normal; }
+.new-look .nl-sync-conflict .nl-form-actions { flex-wrap: wrap; justify-content: flex-start; }
+
+.new-look .nl-freshness { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .75rem; color: var(--muted-foreground); font-size: .75rem; margin-bottom: 1rem; }
+
+.new-look .nl-balance-conflict-row > td { text-align: left; }
+.new-look .nl-balance-conflict-row .nl-sync-conflict { margin: 0; }
+@media (max-width: 680px) { .new-look .nl-balance-conflict-row, .new-look .nl-balance-conflict-row > td { display: block; grid-column: 1 / -1; } }
+
+.new-look .nl-footer-inline { position: static; }

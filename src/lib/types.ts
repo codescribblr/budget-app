@@ -21,6 +21,8 @@ export interface Category {
 }
 
 export interface Account {
+  /** Opaque database revision; optional only for legacy clients/fixtures. */
+  revision?: string;
   id: number;
   name: string;
   balance: number;
@@ -33,6 +35,8 @@ export interface Account {
 }
 
 export interface CreditCard {
+  /** Opaque database revision; optional only for legacy clients/fixtures. */
+  revision?: string;
   id: number;
   name: string;
   credit_limit: number;

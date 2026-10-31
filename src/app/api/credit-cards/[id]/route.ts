@@ -1,3 +1,4 @@
+import { guardedAccountUpdate } from "@/lib/guarded-account-route";
 import { NextRequest, NextResponse } from 'next/server';
 import { getCreditCardById, updateCreditCard, deleteCreditCard } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
@@ -47,6 +48,8 @@ export async function PATCH(
     if (accessCheck) return accessCheck;
 
     const body = (await request.json()) as UpdateCreditCardRequest;
+    const guarded = await guardedAccountUpdate("card", creditCardId, body);
+    if (guarded) return guarded;
     const creditCard = await updateCreditCard(creditCardId, body);
 
     if (!creditCard) {

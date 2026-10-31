@@ -122,6 +122,7 @@ export function CheckinFooter({
   beforeComplete,
   saveLabel,
   disabled = false,
+  sticky = true,
   children,
 }: {
   task: CheckinTask;
@@ -131,6 +132,7 @@ export function CheckinFooter({
   beforeComplete?: () => Promise<boolean>;
   saveLabel?: string;
   disabled?: boolean;
+  sticky?: boolean;
   children?: React.ReactNode;
 }) {
   const flow = useCheckinFlow(task, defaultCadence);
@@ -194,7 +196,7 @@ export function CheckinFooter({
   }
   return (
     <section
-      className={flow.active ? "nl-checkin-footer" : "nl-savebar"}
+      className={`${flow.active ? "nl-checkin-footer" : "nl-savebar"}${sticky ? "" : " nl-footer-inline"}`}
       aria-label={flow.active ? "Complete this check-in step" : "Save changes"}
     >
       <div>

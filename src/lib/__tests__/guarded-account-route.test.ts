@@ -1,0 +1,20 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+const mocks=vi.hoisted(()=>({auth:vi.fn(),active:vi.fn(),snapshot:vi.fn(),alert:vi.fn()}));
+vi.mock("@/lib/supabase-queries",()=>({getAuthenticatedUser:mocks.auth}));
+vi.mock("@/lib/account-context",()=>({getActiveAccountId:mocks.active}));
+vi.mock("@/lib/audit/account-balance-audit",()=>({createNetWorthSnapshot:mocks.snapshot}));
+vi.mock("@/lib/budget/budget-alert-check",()=>({scheduleLowBalanceCheck:mocks.alert}));
+import { guardedAccountUpdate } from "../guarded-account-route";
+const revision="00000000-0000-0000-0000-000000000001";
+const input={expectedRevision:revision,expectedBudgetId:27,balance:900};
+let rpc:ReturnType<typeof vi.fn>;
+beforeEach(()=>{vi.clearAllMocks();mocks.active.mockResolvedValue(27);mocks.snapshot.mockResolvedValue(undefined);rpc=vi.fn().mockResolvedValue({data:{status:"saved",record:{id:1,balance:900,revision:"new"},previous:{balance:1000}},error:null});mocks.auth.mockResolvedValue({supabase:{rpc}});});
+describe("compatible guarded account API",()=>{
+ it("leaves legacy payloads on the existing route",async()=>{expect(await guardedAccountUpdate("account",1,{balance:900})).toBeNull();expect(rpc).not.toHaveBeenCalled();});
+ it("rejects missing/invalid revision metadata rather than falling back",async()=>{for(const body of [{expectedBudgetId:27,balance:900},{...input,expectedRevision:null},{...input,expectedBudgetId:"27"}])expect((await guardedAccountUpdate("account",1,body))?.status).toBe(400);expect(rpc).not.toHaveBeenCalled();});
+ it("binds the save to the original budget",async()=>{mocks.active.mockResolvedValue(28);expect((await guardedAccountUpdate("account",1,input))?.status).toBe(409);expect(rpc).not.toHaveBeenCalled();});
+ it("separates preconditions from database fields",async()=>{const response=await guardedAccountUpdate("account",1,input);expect(response?.status).toBe(200);expect(rpc).toHaveBeenCalledWith("save_guarded_account",{p_budget_id:27,p_kind:"account",p_id:1,p_revision:revision,p_patch:{balance:900}});expect(mocks.alert).toHaveBeenCalledWith(27,1,1000,900);});
+ it("returns latest details on conflict without post-save effects",async()=>{rpc.mockResolvedValue({data:{status:"conflict",latest:{balance:1250,revision:"new"}}});const response=await guardedAccountUpdate("account",1,input);expect(response?.status).toBe(409);expect(await response?.json()).toMatchObject({code:"STALE_RECORD",latest:{balance:1250}});expect(mocks.snapshot).not.toHaveBeenCalled();});
+ it("distinguishes deletion and lost permissions",async()=>{rpc.mockResolvedValueOnce({data:{status:"missing"}}).mockResolvedValueOnce({error:{code:"42501"}});expect((await guardedAccountUpdate("account",1,input))?.status).toBe(404);expect((await guardedAccountUpdate("card",1,input))?.status).toBe(403);});
+ it("does not report a committed financial save as failed if a snapshot fails",async()=>{const log=vi.spyOn(console,"error").mockImplementation(()=>{});mocks.snapshot.mockRejectedValue(Error("snapshot failed"));expect((await guardedAccountUpdate("account",1,input))?.status).toBe(200);log.mockRestore();});
+});
