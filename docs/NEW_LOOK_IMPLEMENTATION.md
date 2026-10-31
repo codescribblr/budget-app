@@ -2,6 +2,10 @@
 
 The new interface lives at `/new`. Classic remains at its existing URLs. Both use the same authenticated APIs, active household, financial records, subscription, and feature flags. No financial data is copied when switching.
 
+## Cross-device safety and freshness
+
+The proposed next infrastructure work is detailed in [Cross-device freshness and safe editing](NEW_LOOK_SYNC_PLAN.md). It prioritizes guarded account/card saves, draft-aware resume refresh, and a Supabase Free Realtime pilot in the new UI. Shared changes remain backward compatible; classic receives only necessary compatibility updates. The dashboard skeleton pilot remains compatible, and wider skeleton rollout can resume once the shared loading/refresh contract is in place. This is a plan, not implemented sync functionality.
+
 ## Delivery order
 
 1. **Implemented — reversible foundation:** classic/new switch, remembered browser preference, protected routes, shared account selection, responsive navigation, light/dark/system themes, and feedback collection. Feedback review is at `/admin/interface-feedback`.
@@ -27,7 +31,7 @@ This order favors completing the everyday budget before expanding the navigation
 - Daily, weekly, and monthly check-ins guide attention. A numbered progress header and persistent completion action lead through each routine: balances → envelopes; imports → spending → envelopes; reflection → monthly plan → enabled goals/buffer. Completing a review never requires moving money or achieving a perfect budget.
 - The primary action saves pending balance/plan edits and continues only after every save and the authoritative refresh succeed. Save & stay is available separately. Invalid input, partial failures, and refresh errors keep the current step open. Jumping into a later step circles back to unfinished earlier steps instead of claiming completion.
 - Every routine ends at `/new/check-in/complete` with a review summary, recorded available to save, remaining negative envelopes, and a clear Done action. Revisit individual tasks or choose Review again to restart just the review progress. Opening the completion URL with unfinished steps offers Continue instead of claiming success. Monthly completion waits for planning feature availability.
-- Check-in progress is private to this browser, user, and household; it is not financial or import history. It resets by calendar day, Monday-start week, or month. It does not claim that every bank was imported.
+- Check-in progress persists in Supabase per user, household, cadence, and period. It remains complete until the next local calendar day, Sunday-start week, or calendar month. Progress refreshes on focus and signals other local tabs; continuous cross-device push is planned separately. It is not financial or import history and does not claim that every bank was imported.
 - Weekly import links preserve their explicit check-in context through upload, mapping, queue review, and transaction detours. Standalone and classic imports remain standalone.
 - Transactions now use a dedicated new-look workspace. Search matches original bank descriptions and merchant names; filters include multiple envelopes/accounts/merchants, all selected tags, dates, income/expense, and missing envelope/account assignments. The money-in/out totals cover the complete result set, and category-filtered totals use only matching split amounts. Rows link to envelope pages; a side panel shows account, original description, split assignments, tags, and original import details, with previous/next review and existing edit/delete actions. CSV import is primary; manual entry remains available. Batch envelope assignment explicitly replaces splits; partial failures remain selected. Duplicate detection and other bulk tools retain classic links.
 - The transaction review read endpoint scopes both list and summary queries to the active household. Related filters run before pagination; summary totals page all matching records and fail on any incomplete page. This leaves classic queries and money-writing APIs unchanged. Client requests cancel stale results; native browser history keeps filter/search focus and supports transaction deep links and Back. The phone view uses compact filters and readable cards, with the same light/dark theme tokens.
@@ -137,11 +141,11 @@ Stop the dev server before building; both Next commands use `.next`. Restart por
 
 1. Internal/test-project review of this branch, including CSV imports, permissions, financial edits, and failure recovery.
 2. Merge to `main` and use the existing migration/deployment workflow to offer the opt-in new interface. Keep classic as the default, all classic routes, and the return switch. Gather task-specific feedback before adding more surface area. Retain `codex/guided-budget-interface` for further iteration.
-3. Address API atomicity/idempotency below and expand beta based on verified success with shared households, viewers, and premium/free accounts. Add cross-device workflow metadata only after its semantics are settled.
+3. Address API atomicity/idempotency below and expand beta based on verified success with shared households, viewers, and premium/free accounts. Build on persisted check-in metadata using the staged cross-device safety and freshness plan above.
 4. Consider changing the default interface only after critical classic tasks have equivalent coverage and users no longer need to switch back for their regular routine. Retiring classic is a separate decision.
 
 ## Follow-up risks
 
 Existing transfer and allocation APIs perform multiple database updates rather than one transaction. This interface reuses their semantics, does not automatically retry uncertain writes, and refreshes before another action. Atomic RPCs, idempotency keys, and concurrent-edit protection across both interfaces should precede a broad rollout. Monthly funding failure after an allocation must be shown explicitly so the user does not reallocate accidentally.
 
-Check-in progress and interface preference are browser-local initially. Cross-device progress, cohort rollout controls, and feedback triage improvements are separate metadata work; none should alter the shared financial model.
+Check-in progress now persists in Supabase (migration 130); interface preference remains browser-local. Live progress invalidation, guarded financial saves, and background refresh are covered in the cross-device plan. Cohort controls and feedback triage remain separate work.
