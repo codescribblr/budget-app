@@ -1,6 +1,6 @@
 # Cross-device freshness and safe editing in the new interface
 
-Status: stages 1–4 implemented for local testing · 2026-10-31. Skeleton-only commit `1b3bb9d` is deployed. The expanded synchronization work and migrations **131–149 remain local/test-only**; production has not been updated.
+Status: stages 1–4 implemented and verified · 2026-10-31. Production rollout authorized. Migrations 131–149 run before the server release; migration 150 runs only after deployment succeeds.
 
 ## Implementation checkpoint
 
@@ -24,6 +24,8 @@ Status: stages 1–4 implemented for local testing · 2026-10-31. Skeleton-only 
 
 ### Verification completed
 
+- Release sequencing checks pass: the default runner excludes post-deploy migrations, finalization excludes pre-deploy work, and a test-database transaction verifies old/new settings upserts during expansion plus independent household settings after contraction. Migration 150 is applied on the test project.
+
 - 347 Vitest tests across 47 compatible suites pass; TypeScript checking and an isolated production build pass. The repository also contains standalone node/assert scripts, which are not Vitest suites. An earlier indiscriminate Vitest run included those and an unrelated recurring-detection fixture failure; it is not the test command for this change.
 - `node scripts/test-budget-concurrency.cjs`: real account/card races, legacy revision invalidation, unauthorized RPC denial, consistent card calculation and audit rollback.
 - `node scripts/test-envelope-concurrency.cjs`: concurrent allocations against shared available money; transfer revisions and rollback; operation replay and lost-response fencing; transaction split races/deletes; income/loan/asset guards; buffer constraints; preparation/checkpoint/approval replay; import provenance; defaults and remap rollback; feature/integration/Teller guards; cross-household settings isolation; goal setup/linked-plan guards; automatic tagging. Financial fixtures use disposable test households and are cleaned up.
@@ -32,8 +34,8 @@ Status: stages 1–4 implemented for local testing · 2026-10-31. Skeleton-only 
 
 ### Rollout and operational notes
 
-- Apply the migrations and deploy code only after separate production authorization. Migrations 131–149 have been exercised on the test project, not production. Keep the existing production backup process.
-- **Migration 148 changes the settings conflict key** to `(account_id,user_id,key)`. The classic, scenario and external API server writers are updated together without changing their HTTP contracts. Coordinate this migration with the server release; do not apply it alone while leaving old server writers running against the removed unique key. It preserves existing rows and prevents one user's settings from moving between households.
+- Production rollout is authorized. The existing deployment workflow backs up the database before migrations, deploys the application, and then finalizes post-deploy migrations. A concurrency group prevents overlapping releases.
+- **Settings use an expand/deploy/contract rollout.** Migration 148 adds `(account_id,user_id,key)` while preserving the old key for running servers. The classic, scenario and external API writers deploy together without changing their HTTP contracts. Only after a successful deployment does migration 150 remove the old cross-household constraint. Both migrations preserve settings rows. The shell runner defaults to pre-deploy work; `--post-deploy` explicitly selects finalization. Vercel automatic Git deployment is disabled for `main` so it cannot bypass this sequence; branch previews remain available ([Vercel configuration](https://vercel.com/docs/project-configuration/git-configuration)).
 - Disable browser subscriptions with `NEXT_PUBLIC_BUDGET_LIVE_SYNC=false`; disable publication with `budget_sync_config.enabled=false`. Guarded writes, durable resource tokens and HTTP refresh remain active. No paid Supabase service or billing change is required.
 - Inspect actual production connections/messages/egress during the opt-in rollout. Tests demonstrate source batching, not unlimited Free-plan capacity. Operation receipts are retained for replay safety; include their storage in usage monitoring.
 - A revoked member may briefly retain a cached, already-open Broadcast authorization until reconnect; events contain no financial records and every authoritative read/write rechecks access. No data is trusted from a signal. Test real mobile suspension/reconnection and network-loss behavior during the internal live trial, in addition to the database and local UI checks above.

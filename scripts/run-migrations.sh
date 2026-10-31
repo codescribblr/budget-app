@@ -4,13 +4,21 @@
 # This script runs all SQL migration files against Supabase
 #
 # Usage:
-#   ./scripts/run-migrations.sh
+#   ./scripts/run-migrations.sh                # before deploying application code
+#   ./scripts/run-migrations.sh --post-deploy  # only after a successful deployment
 #
 # Environment Variables Required:
 #   SUPABASE_DB_URL - PostgreSQL connection string
 #   Format: postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres
 
 set -e  # Exit on error
+
+MIGRATION_PHASE="pre-deploy"
+case "${1:-}" in
+  "") ;;
+  --post-deploy) MIGRATION_PHASE="post-deploy" ;;
+  *) echo "Usage: $0 [--post-deploy]" >&2; exit 1 ;;
+esac
 
 # Colors for output
 RED='\033[0;31m'
@@ -80,6 +88,13 @@ PENDING_COUNT=0
 # Execute each migration
 for MIGRATION_FILE in $MIGRATION_FILES; do
   MIGRATION_NAME=$(basename "$MIGRATION_FILE")
+  FILE_PHASE="pre-deploy"
+  if grep -q '^-- migration-phase: post-deploy$' "$MIGRATION_FILE"; then
+    FILE_PHASE="post-deploy"
+  fi
+  if [ "$FILE_PHASE" != "$MIGRATION_PHASE" ]; then
+    continue
+  fi
   
   # Check if migration has already been executed
   if echo "$EXECUTED_MIGRATIONS" | grep -q "^$MIGRATION_NAME$"; then

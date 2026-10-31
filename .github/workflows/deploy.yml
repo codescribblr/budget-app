@@ -9,6 +9,11 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Never overlap schema/application transitions from separate pushes.
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
 jobs:
   migrate-and-deploy:
     name: Run Migrations & Deploy
@@ -125,8 +130,8 @@ jobs:
           ./scripts/run-migrations.sh
 
       # v25 bundled an old CLI and often failed with npx exit 1; v42 tracks current Vercel CLI.
-      # If this repo is also connected in the Vercel dashboard, you may get two production deploys
-      # per push unless you disable Git deploys or remove this step.
+      # vercel.json disables the separate main-branch Git deployment so the
+      # production release cannot race ahead of the database migrations.
       - name: 🚀 Deploy to Vercel
         uses: amondnet/vercel-action@v42.2.0
         with:
@@ -134,6 +139,11 @@ jobs:
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           vercel-args: '--prod'
+
+      - name: 🔄 Finalize post-deploy migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: ./scripts/run-migrations.sh --post-deploy
 
       - name: ✅ Deployment complete
         run: |
