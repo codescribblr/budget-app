@@ -1,4 +1,5 @@
 "use client";
+import { useMoneyCommand } from "./use-money-command";
 import { useState } from "react";
 import { bufferMovePreview } from "@/lib/guided-goals";
 import { cents, money } from "@/lib/new-look";
@@ -21,9 +22,9 @@ export function BufferMove({
   onClose: () => void;
   onSaved: (amount: number) => Promise<void>;
 }) {
-  const { refresh } = useBudget();
+  const { refresh, data } = useBudget();
+  const command = useMoneyCommand(data?.identity.activeAccountId);
   const [amount, setAmount] = useState("");
-  const [uncertain, setUncertain] = useState(false);
   let preview: ReturnType<typeof bufferMovePreview> | null = null;
   let validation = "";
   try {
@@ -42,41 +43,47 @@ export function BufferMove({
           : "Return money to Available to save. You can fund envelopes afterward; your bank balances stay the same."
       }
       dirty={amount !== ""}
-      canEdit={canEdit && !uncertain}
-      saveLabel={direction === "add" ? "Add to buffer" : "Use buffer money"}
+      canEdit={canEdit}
+      saveLabel={
+        command.uncertain
+          ? "Check change outcome"
+          : direction === "add"
+            ? "Add to buffer"
+            : "Use buffer money"
+      }
       onClose={onClose}
       onSave={async () => {
         const next = bufferMovePreview(direction, amount, balance, available);
-        const fresh = await budgetRequest<DashboardSummary>("/api/dashboard");
-        if (
-          cents(fresh.buffer_balance) !== cents(balance) ||
-          cents(fresh.current_savings) !== cents(available)
-        ) {
-          await refresh();
-          throw new Error(
-            "Your balances changed. Review the updated preview before saving.",
-          );
-        }
         try {
-          await budgetRequest(
+          await command.run(
             `/api/income-buffer/${direction === "add" ? "add" : "fund-month"}`,
-            { amount: next.amount, expectedBalance: balance },
+            {
+              amount: next.amount,
+              expectedBalance: balance,
+              expectedAvailable: available,
+            },
           );
         } catch (err) {
           // A lost response can hide a completed write. Never silently retry it.
-          setUncertain(true);
           void refresh().catch(() => {});
           throw new Error(
-            `${err instanceof Error ? err.message : "Could not confirm this change."} Close this dialog and review buffer activity before trying again.`,
+            `${err instanceof Error ? err.message : "Could not confirm this change."} If the outcome is uncertain, use Check change outcome to confirm it safely.`,
           );
         }
         await onSaved(next.amount);
       }}
     >
+      {command.uncertain && (
+        <p className="nl-notice">
+          Check the outcome before making another change. The same change will
+          never move money twice.
+        </p>
+      )}
       <label>
         Amount
         <input
           autoFocus
+          disabled={command.uncertain}
           required
           inputMode="decimal"
           value={amount}

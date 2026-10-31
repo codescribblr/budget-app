@@ -1,4 +1,5 @@
 "use client";
+import { useRecordGuard } from "./record-guard";
 import { NativeSelect } from "./native-select";
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
@@ -41,6 +42,7 @@ export function IncomeEditor({
   onSave: (source: CreateIncomeStreamRequest) => Promise<void>;
   onClose: () => void;
 }) {
+  const guard = useRecordGuard(stream);
   const [name, setName] = useState(stream?.name || "");
   const [basis, setBasis] = useState<IncomeBasis>(stream ? "year" : "paycheck");
   const [amount, setAmount] = useState(
@@ -104,7 +106,9 @@ export function IncomeEditor({
     setSaving(true);
     setError(null);
     try {
-      await onSave(source);
+      await guard.save({ ...source }, (payload) =>
+        onSave(payload as unknown as CreateIncomeStreamRequest),
+      );
       onClose();
     } catch (err) {
       setError(
@@ -149,6 +153,7 @@ export function IncomeEditor({
             disabled={saving || !canEdit}
             className="nl-form nl-income-fields"
           >
+            {guard.notice}
             <label>
               Source name
               <input
@@ -297,7 +302,8 @@ export function IncomeEditor({
                               ? {
                                   ...item,
                                   type: e.target.value as
-                                    "fixed" | "percentage",
+                                    | "fixed"
+                                    | "percentage",
                                 }
                               : item,
                           ),

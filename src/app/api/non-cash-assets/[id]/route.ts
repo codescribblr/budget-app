@@ -1,3 +1,4 @@
+import { guardedRecordUpdate, guardedDelete } from "@/lib/guarded-record-route";
 import { NextRequest, NextResponse } from 'next/server';
 import { getNonCashAssetById, updateNonCashAsset, deleteNonCashAsset } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
@@ -47,6 +48,8 @@ export async function PATCH(
     if (accessCheck) return accessCheck;
     
     const body = (await request.json()) as UpdateNonCashAssetRequest;
+    const guarded = await guardedRecordUpdate("non_cash_assets", assetId, body);
+    if (guarded) return guarded;
     const asset = await updateNonCashAsset(assetId, body);
 
     if (!asset) {
@@ -78,6 +81,8 @@ export async function DELETE(
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
     
+    const guarded = await guardedDelete(request, "non_cash_assets", assetId);
+    if (guarded) return guarded;
     await deleteNonCashAsset(assetId);
     return NextResponse.json({ success: true });
   } catch (error: any) {

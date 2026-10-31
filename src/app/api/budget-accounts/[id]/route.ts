@@ -1,3 +1,4 @@
+import { rowPrecondition, staleRowResponse, optionalDeleteBody } from "@/lib/row-precondition";
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
@@ -26,6 +27,8 @@ export async function PUT(
 
     const body = await request.json();
     const { name } = body;
+    const guard = rowPrecondition(body, await getActiveAccountId());
+    if (guard.response) return guard.response;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json(
@@ -57,16 +60,10 @@ export async function PUT(
     }
 
     // Update the account name
-    const { data: updatedAccount, error: updateError } = await supabase
-      .from('budget_accounts')
-      .update({ 
-        name: name.trim(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', accountId)
-      .eq('owner_id', user.id)
-      .select('id, name, owner_id, updated_at')
-      .single();
+    let query=supabase.from('budget_accounts').update({name:name.trim(),updated_at:new Date().toISOString()}).eq('id',accountId).eq('owner_id',user.id).is('deleted_at',null);
+    if (guard.revision) query=query.eq('revision',guard.revision);
+    const {data:updatedAccount,error:updateError}=await query.select('id,name,owner_id,updated_at,revision').maybeSingle();
+    if (!updateError && !updatedAccount && guard.revision) return staleRowResponse();
 
     if (updateError) {
       console.error('Error updating budget account:', updateError);
@@ -157,11 +154,12 @@ export async function DELETE(
     const remainingAccounts = totalAccountsBefore - 1; // After deletion
 
     // Soft delete the budget account by setting deleted_at
-    const { error: deleteError } = await supabase
-      .from('budget_accounts')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', accountId)
-      .eq('owner_id', user.id);
+    const guard=rowPrecondition(await optionalDeleteBody(request),await getActiveAccountId());
+    if (guard.response) return guard.response;
+    let query=supabase.from('budget_accounts').update({deleted_at:new Date().toISOString()}).eq('id',accountId).eq('owner_id',user.id).is('deleted_at',null);
+    if(guard.revision) query=query.eq('revision',guard.revision);
+    const {data:deleted,error:deleteError}=await query.select('id');
+    if (!deleteError && !deleted?.length && guard.revision) return staleRowResponse();
 
     if (deleteError) {
       console.error('Error deleting budget account:', deleteError);

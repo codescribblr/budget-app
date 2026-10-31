@@ -1,3 +1,4 @@
+import { guardedRecordUpdate, guardedDelete } from "@/lib/guarded-record-route";
 import { NextRequest, NextResponse } from 'next/server';
 import { getGoalById, updateGoal, deleteGoal, getAuthenticatedUser } from '@/lib/supabase-queries';
 import { validateUpdateGoal } from '@/lib/goals/validations';
@@ -120,6 +121,9 @@ export async function PATCH(
       );
     }
     
+    const guarded = await guardedRecordUpdate("goals", goalId, data);
+    if (guarded) return guarded;
+
     if (validation.warning) {
       // Return warning but allow update (client can show warning)
       const goal = await updateGoal(goalId, data);
@@ -186,6 +190,8 @@ export async function DELETE(
     const deleteCategoryParam = request.nextUrl.searchParams.get('deleteCategory');
     const deleteCategory = deleteCategoryParam === 'true';
     
+    const guarded = await guardedDelete(request, "goals", goalId);
+    if (guarded) return guarded;
     await deleteGoal(goalId, deleteCategory);
     
     return NextResponse.json({ success: true });

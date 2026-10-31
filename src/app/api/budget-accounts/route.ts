@@ -15,24 +15,7 @@ import { isAdmin } from '@/lib/admin';
  */
 export async function GET() {
   try {
-    let accounts = await getUserAccounts();
-
-    // Only provision for users with truly no accounts (signup edge case).
-    if (accounts.length === 0) {
-      const provisionedId = await provisionDefaultBudgetAccountIfNeeded();
-      if (provisionedId) {
-        accounts = await getUserAccounts();
-      }
-    } else {
-      const ownedCount = accounts.filter((account) => account.isOwner).length;
-      // Auto-recover from accidental duplicate account creation (empty owned accounts)
-      if (ownedCount >= 3) {
-        const cleanup = await cleanupDuplicateEmptyAccounts();
-        if (cleanup.cleaned) {
-          accounts = await getUserAccounts();
-        }
-      }
-    }
+    const accounts = await getUserAccounts();
 
     const activeAccountId = await resolveActiveAccountId(accounts);
     const hasOwnAccount = await userHasOwnAccount();

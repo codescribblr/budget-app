@@ -1,3 +1,5 @@
+import { freshFetch as fetch } from "./view-freshness";
+import { resourceRefresh } from "./resource-refresh";
 /**
  * Shared client-side cache for budget accounts API calls
  * Prevents duplicate calls from AccountSwitcher and AccountSelectionGuard
@@ -28,12 +30,15 @@ let cache: CacheEntry = {
   promise: null,
 };
 
+let version = 0, generation = 0;
 const CACHE_TTL = 5000; // 5 seconds
 
 /**
  * Fetch budget accounts with caching to prevent duplicate calls
  */
 export async function fetchBudgetAccounts(): Promise<BudgetAccountsData> {
+  const currentVersion = resourceRefresh.snapshot(["settings"]);
+  if (version !== currentVersion) { version=currentVersion; clearBudgetAccountsCache(); }
   const now = Date.now();
 
   // Check cache first
@@ -56,6 +61,7 @@ export async function fetchBudgetAccounts(): Promise<BudgetAccountsData> {
   }
 
   // Make the fetch request
+  const requestGeneration = generation;
   const fetchPromise = fetch('/api/budget-accounts')
     .then(async (response) => {
       if (!response.ok) {
@@ -79,7 +85,7 @@ export async function fetchBudgetAccounts(): Promise<BudgetAccountsData> {
       };
 
       // Update cache
-      cache = {
+      if (generation === requestGeneration) cache = {
         data: result,
         timestamp: Date.now(),
         promise: null,
@@ -88,7 +94,7 @@ export async function fetchBudgetAccounts(): Promise<BudgetAccountsData> {
       return result;
     })
     .catch((error) => {
-      cache.promise = null;
+      if (generation === requestGeneration) cache.promise = null;
       throw error;
     });
 
@@ -100,6 +106,7 @@ export async function fetchBudgetAccounts(): Promise<BudgetAccountsData> {
  * Clear the cache (useful after account switching)
  */
 export function clearBudgetAccountsCache(): void {
+  generation++;
   cache = {
     data: null,
     timestamp: 0,

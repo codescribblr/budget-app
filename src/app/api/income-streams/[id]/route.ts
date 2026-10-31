@@ -1,3 +1,4 @@
+import { guardedRecordUpdate, guardedDelete } from "@/lib/guarded-record-route";
 import { NextRequest, NextResponse } from 'next/server';
 import { updateIncomeStream, deleteIncomeStream } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
@@ -18,6 +19,8 @@ export async function PATCH(
     }
 
     const body = (await request.json()) as UpdateIncomeStreamRequest;
+    const guarded = await guardedRecordUpdate("income_streams", streamId, body);
+    if (guarded) return guarded;
     const stream = await updateIncomeStream(streamId, body);
     return NextResponse.json(stream);
   } catch (error: any) {
@@ -30,7 +33,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -43,6 +46,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid stream ID' }, { status: 400 });
     }
 
+    const guarded = await guardedDelete(request, "income_streams", streamId);
+    if (guarded) return guarded;
     await deleteIncomeStream(streamId);
     return NextResponse.json({ success: true });
   } catch (error: any) {

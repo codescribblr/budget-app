@@ -1,8 +1,11 @@
 "use client";
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useInterfacePath } from "@/hooks/use-interface-path";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useResourceVersion } from "@/components/new-look/use-resource-version";
+import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -31,11 +34,17 @@ import { useAccountPermissions } from "@/hooks/use-account-permissions";
 import { clearBudgetAccountsCache } from "@/lib/budget-accounts-cache";
 
 export default function AccountPage() {
+  const modern=usePathname().startsWith("/new");
+  const version=useResourceVersion("settings");
+  const loaded=useRef(false), dirty=useRef(false), sequence=useRef(0);
+  const [revision,setRevision]=useState<string>();
+  const [latestRevision,setLatestRevision]=useState<string>();
   const interfacePath = useInterfacePath();
   const router = useRouter();
   const supabase = createClient();
   const { isOwner, isLoading: permissionsLoading } = useAccountPermissions();
 
+  const deletionRevision=useRef<string|undefined>(undefined);
   const [showDeleteAccountDialog, setShowDeleteAccountDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [accountCount, setAccountCount] = useState<number | null>(null);
@@ -51,16 +60,20 @@ export default function AccountPage() {
 
   useEffect(() => {
     fetchAccountInfo();
-  }, []);
+    return () => { sequence.current++; };
+  }, [version]);
 
   const fetchAccountInfo = async () => {
-    setLoadingAccountInfo(true);
+    const id=++sequence.current;
+    setLoadingAccountInfo(!loaded.current);
     setLoadError(false);
     try {
       const response = await fetch("/api/budget-accounts");
       if (!response.ok) throw new Error("Could not load account");
       {
         const data = await response.json();
+        if(id!==sequence.current)return;
+        loaded.current=true;
         const accounts = data.accounts || [];
         setAccountCount(accounts.length);
         setActiveAccountId(data.activeAccountId);
@@ -73,27 +86,29 @@ export default function AccountPage() {
           );
           if (currentAccount) {
             setAccountName(currentAccount.accountName || "");
-            setNewAccountName(currentAccount.accountName || "");
+            setLatestRevision(currentAccount.revision);
+            if(!dirty.current) {setRevision(currentAccount.revision);setNewAccountName(currentAccount.accountName || "");}
             setAccountPublicId(currentAccount.accountPublicId ?? null);
           }
         }
       }
     } catch (error) {
+      if(id!==sequence.current)return;
       setLoadError(true);
       console.error("Error fetching account info:", error);
     } finally {
-      setLoadingAccountInfo(false);
+      if(id===sequence.current)setLoadingAccountInfo(false);
     }
   };
 
   const handleStartRename = () => {
     setNewAccountName(accountName);
-    setEditingName(true);
+    dirty.current=true; setRevision(latestRevision); setEditingName(true);
   };
 
   const handleCancelRename = () => {
     setNewAccountName(accountName);
-    setEditingName(false);
+    dirty.current=false; setRevision(latestRevision); setEditingName(false);
   };
 
   const handleCopyAccountId = async () => {
@@ -135,7 +150,7 @@ export default function AccountPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name: trimmedName }),
+        body: JSON.stringify({ name: trimmedName, ...(modern ? {expectedRevision:revision,expectedBudgetId:activeAccountId} : {}) }),
       });
 
       if (!response.ok) {
@@ -144,6 +159,7 @@ export default function AccountPage() {
       }
 
       const data = await response.json();
+      dirty.current=false; setRevision(data.account.revision); setLatestRevision(data.account.revision);
       setAccountName(data.account.name);
       setEditingName(false);
       toast.success("Account renamed successfully");
@@ -162,6 +178,7 @@ export default function AccountPage() {
     } catch (error: any) {
       console.error("Error renaming account:", error);
       toast.error(error.message || "Failed to rename account");
+      void fetchAccountInfo();
     } finally {
       setIsRenaming(false);
     }
@@ -178,7 +195,7 @@ export default function AccountPage() {
     try {
       // Delete the current budget account
       const response = await fetch(`/api/budget-accounts/${activeAccountId}`, {
-        method: "DELETE",
+        method: "DELETE", headers:{"Content-Type":"application/json"}, body:JSON.stringify(modern ? {expectedRevision:deletionRevision.current,expectedBudgetId:activeAccountId} : {}),
       });
 
       if (!response.ok) {
@@ -266,7 +283,7 @@ export default function AccountPage() {
     }
   };
 
-  if (loadError)
+  if (loadError && !loaded.current)
     return (
       <div role="alert" className="space-y-4">
         <p>We couldn’t load this budget account.</p>
@@ -319,6 +336,7 @@ export default function AccountPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {editingName && revision!==latestRevision && <div className="nl-notice" role="status"><p>The saved name is now “{accountName}”. Your entry is retained.</p><Button onClick={()=>setRevision(latestRevision)}>Keep my entered name</Button><Button variant="outline" onClick={handleCancelRename}>Use saved name</Button></div>}
             {editingName ? (
               <div className="space-y-4">
                 <div>
@@ -405,7 +423,7 @@ export default function AccountPage() {
             </p>
             <Button
               variant="destructive"
-              onClick={() => setShowDeleteAccountDialog(true)}
+              onClick={() => {deletionRevision.current=revision;setShowDeleteAccountDialog(true);}}
               disabled={!isOwner || permissionsLoading || loadingAccountInfo}
             >
               <Trash2 className="mr-2 h-4 w-4" />

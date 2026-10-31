@@ -35,50 +35,10 @@ export async function POST(
       );
     }
 
-    // Update processing_tasks on the first transaction of the batch
-    // (processing_tasks is stored only on the first transaction)
-    const { error: updateError } = await supabase
-      .from('queued_imports')
-      .update({ processing_tasks: processingTasks })
-      .eq('account_id', accountId)
-      .eq('source_batch_id', batchId)
-      .not('processing_tasks', 'is', null) // Only update records that have processing_tasks
-      .limit(1);
-
-    if (updateError) {
-      console.error('Error updating processing tasks:', updateError);
-      return NextResponse.json(
-        { error: 'Failed to update processing tasks', details: updateError.message },
-        { status: 500 }
-      );
-    }
-
-    // If no records were updated (processing_tasks was null), update the first transaction
-    const { count } = await supabase
-      .from('queued_imports')
-      .select('*', { count: 'exact', head: true })
-      .eq('account_id', accountId)
-      .eq('source_batch_id', batchId)
-      .not('processing_tasks', 'is', null);
-
-    if (count === 0) {
-      // Update the first transaction of the batch
-      const { error: firstUpdateError } = await supabase
-        .from('queued_imports')
-        .update({ processing_tasks: processingTasks })
-        .eq('account_id', accountId)
-        .eq('source_batch_id', batchId)
-        .order('id', { ascending: true })
-        .limit(1);
-
-      if (firstUpdateError) {
-        console.error('Error updating first transaction processing tasks:', firstUpdateError);
-        return NextResponse.json(
-          { error: 'Failed to update processing tasks', details: firstUpdateError.message },
-          { status: 500 }
-        );
-      }
-    }
+    const allowed = ["pdf_to_csv","csv_mapping","duplicate_detection","categorization","import_defaults_assignment"] as const;
+    if(typeof processingTasks !== "object" || Array.isArray(processingTasks) || Object.keys(processingTasks).some(k=>!allowed.includes(k as typeof allowed[number]))) return NextResponse.json({error:"Invalid processing steps"},{status:400});
+    const {persistCompletedTasks} = await import("@/lib/processing-tasks-server");
+    await persistCompletedTasks(supabase,accountId,batchId,allowed.filter(k=>processingTasks[k]===true));
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

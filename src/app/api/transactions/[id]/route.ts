@@ -1,3 +1,4 @@
+import { guardedTransactionUpdate } from "@/lib/guarded-transaction-route";
 import { NextRequest, NextResponse } from 'next/server';
 import { getTransactionById, updateTransaction, deleteTransaction } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
@@ -47,6 +48,8 @@ export async function PATCH(
     if (accessCheck) return accessCheck;
     
     const body = (await request.json()) as UpdateTransactionRequest;
+    const guarded = await guardedTransactionUpdate(transactionId, body);
+    if (guarded) return guarded;
     const transaction = await updateTransaction(transactionId, body);
 
     if (!transaction) {
@@ -78,6 +81,8 @@ export async function DELETE(
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
     
+    const raw = await request.text();
+    if (raw) { const guarded = await guardedTransactionUpdate(transactionId, JSON.parse(raw), true); if (guarded) return guarded; }
     await deleteTransaction(transactionId);
     return NextResponse.json({ success: true });
   } catch (error: any) {

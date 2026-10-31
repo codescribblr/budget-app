@@ -208,6 +208,7 @@ export async function getUserNotificationPreferences(userId: string): Promise<Re
   for (const type of types) {
     const userPref = userPrefsMap.get(type.id);
     preferences[type.id] = {
+      revision: userPref?.revision ?? null,
       emailEnabled: userPref?.email_enabled ?? type.default_email_enabled,
       inAppEnabled: userPref?.in_app_enabled ?? type.default_in_app_enabled,
       settings: userPref?.settings || {},

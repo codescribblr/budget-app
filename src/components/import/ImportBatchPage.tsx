@@ -1,4 +1,6 @@
 'use client';
+import { freshFetch as fetch } from "@/lib/view-freshness";
+import { useResourceVersion } from '@/components/new-look/use-resource-version';
 import { useImportPaths } from './use-import-paths';
 
 import { useState, useEffect, useRef } from 'react';
@@ -32,6 +34,7 @@ import {
 import { toast } from 'sonner';
 
 export default function BatchReviewPage() {
+  const resourceVersion = useResourceVersion("imports");
   const params = useParams();
   const router = useRouter();
   const modern = usePathname().startsWith('/new/');
@@ -66,6 +69,7 @@ export default function BatchReviewPage() {
 
   const [pendingTasks, setPendingTasks] = useState<ProcessingTask[]>([]);
   const loadId = useRef(0);
+  const reviewStarted=useRef(false);
 
   useEffect(() => {
     if (permissionsLoading || !isEditor || !batchId) return;
@@ -74,14 +78,18 @@ export default function BatchReviewPage() {
     sessionStorage.removeItem('queuedProcessedTransactions');
     sessionStorage.removeItem('queuedBatchInfo');
     setShowProcessingDialog(false);
+  }, [batchId]);
+
+  useEffect(() => {
+    if (permissionsLoading || !isEditor || !batchId) return;
     void loadFromDatabase();
     return () => { loadId.current++; };
-  }, [permissionsLoading, isEditor, batchId]);
+  }, [permissionsLoading, isEditor, batchId, resourceVersion]);
 
   const loadFromDatabase = async () => {
     const requestId = ++loadId.current;
     try {
-      setLoading(true);
+      setLoading(transactions.length === 0);
       setError(null);
 
       // Fetch queued imports (lean payload — no heavy csv_data blobs)
@@ -97,7 +105,8 @@ export default function BatchReviewPage() {
       const queuedImports = data.imports || [];
 
       if (queuedImports.length === 0) {
-        setError('No transactions found for this batch');
+        setTransactions([]);setPendingTasks([]);
+        setError('This batch is no longer queued. It may have been imported or deleted on another device.');
         setLoading(false);
         return;
       }
@@ -178,6 +187,8 @@ export default function BatchReviewPage() {
 
         return {
           id: `queued-${qi.id}`,
+          revision: qi.revision,
+          budgetId: qi.account_id,
           date: qi.transaction_date,
           description: qi.description,
           amount: qi.amount,
@@ -207,6 +218,7 @@ export default function BatchReviewPage() {
       const tasks = (firstImport?.processing_tasks as any) || null;
       const incompleteTasks = tasks ? getIncompleteTasks(tasks) : [];
       setPendingTasks(incompleteTasks);
+      if(!incompleteTasks.length)reviewStarted.current=true;
 
       const processedTransactions = initialTransactions;
 
@@ -297,6 +309,7 @@ export default function BatchReviewPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transactionIds: transactionsToDelete,
+          ...(modern ? { expectedBudgetId: transactions[0]?.budgetId, expectedRevisions: Object.fromEntries(transactions.filter(t => transactionsToDelete.includes(t.id)).map(t => [Number(t.id.slice(7)), t.revision ?? null])) } : {}),
         }),
       });
 
@@ -352,7 +365,7 @@ export default function BatchReviewPage() {
     );
   }
 
-  if (error) {
+  if (error && !reviewStarted.current) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
@@ -374,7 +387,7 @@ export default function BatchReviewPage() {
     );
   }
 
-  if (transactions.length === 0) {
+  if (!reviewStarted.current && transactions.length === 0) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
@@ -493,7 +506,7 @@ export default function BatchReviewPage() {
       });
 
       // Update database with duplicate information
-      await fetch('/api/automatic-imports/queue/update-categorization', {
+      if (!modern) await fetch('/api/automatic-imports/queue/update-categorization', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transactions: updatedTransactions }),
@@ -581,7 +594,7 @@ export default function BatchReviewPage() {
       });
 
       // Update database with categorization
-      await fetch('/api/automatic-imports/queue/update-categorization', {
+      if (!modern) await fetch('/api/automatic-imports/queue/update-categorization', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transactions: updatedTransactions }),
@@ -831,7 +844,7 @@ export default function BatchReviewPage() {
           </Button>
         </div>
       )}
-      {transactions.length > 0 && pendingTasks.length === 0 && (
+      {(reviewStarted.current || (transactions.length > 0 && pendingTasks.length === 0)) && (
         <TransactionPreview
           transactions={transactions}
           onImportComplete={handleImportComplete}

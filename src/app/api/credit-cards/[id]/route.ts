@@ -1,3 +1,4 @@
+import { guardedDelete } from "@/lib/guarded-record-route";
 import { guardedAccountUpdate } from "@/lib/guarded-account-route";
 import { NextRequest, NextResponse } from 'next/server';
 import { getCreditCardById, updateCreditCard, deleteCreditCard } from '@/lib/supabase-queries';
@@ -81,6 +82,8 @@ export async function DELETE(
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
 
+    const guarded = await guardedDelete(request, "credit_cards", creditCardId);
+    if (guarded) return guarded;
     await deleteCreditCard(creditCardId);
     return NextResponse.json({ success: true });
   } catch (error: any) {

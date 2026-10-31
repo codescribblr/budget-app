@@ -1,9 +1,10 @@
 "use client";
+import { useMoneyCommand } from "./use-money-command";
 import { EnvelopeRow } from "./envelope-row";
 export { EnvelopeMoney } from "./envelope-row";
 import { NativeSelect } from "./native-select";
 import { useTaskCheckin } from "./checkin-flow";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { envelopeOverview } from "@/lib/envelope-overview";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -50,6 +51,7 @@ function EnvelopesContent() {
   );
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("envelope");
+  const remembered = useRef<Category | undefined>(undefined);
   if (!data) return null;
   const envelopes = ordinaryEnvelopes(data.categories);
   const rows = envelopes.map((category) => ({
@@ -89,7 +91,14 @@ function EnvelopesContent() {
     month: "long",
     year: "numeric",
   });
-  const category = envelopes.find((c) => c.id === selected);
+  const currentCategory = envelopes.find((c) => c.id === selected);
+  if (currentCategory) remembered.current = currentCategory;
+  if (remembered.current?.id !== selected) remembered.current = undefined;
+  const category =
+    currentCategory ??
+    (remembered.current
+      ? { ...remembered.current, recordMissing: true }
+      : undefined);
   return (
     <>
       <TaskReturn task="budget" cadence="daily" />
@@ -274,6 +283,10 @@ export function EnvelopeEditor({
   onClose: () => void;
 }) {
   const { data, canEdit, refresh } = useBudget();
+  const command = useMoneyCommand(data?.identity.activeAccountId);
+  const [reviewed, setReviewed] = useState(
+    () => new Map(data?.categories.map((c) => [c.id, c])),
+  );
   const [direction, setDirection] = useState<"in" | "out">("in");
   const [other, setOther] = useState("");
   const [amount, setAmount] = useState(
@@ -291,6 +304,13 @@ export function EnvelopeEditor({
     (c) => c.id !== category.id,
   );
   const counterpart = others.find((c) => String(c.id) === other);
+  const conflict =
+    mode === "adjust"
+      ? reviewed.get(category.id)?.revision !== category.revision
+      : mode === "transfer" &&
+        [category, counterpart].some(
+          (c) => c && reviewed.get(c.id)?.revision !== c.revision,
+        );
   const transferAmount = parseMoney(amount);
   const newBalance = parseMoney(balance);
   const source = direction === "in" ? counterpart : category;
@@ -326,21 +346,34 @@ export function EnvelopeEditor({
         100
       : data.summary.current_savings;
   async function save() {
-    if (saving || !canEdit || !valid) return;
+    if (
+      saving ||
+      !canEdit ||
+      category.recordMissing ||
+      ((!valid || conflict) && !command.uncertain)
+    )
+      return;
     setSaving(true);
     setError("");
     let succeeded = false;
     try {
       if (mode === "transfer")
-        await budgetRequest("/api/transfers/envelopes", {
+        await command.run("/api/transfers/envelopes", {
           fromCategoryId: source!.id,
           toCategoryId: target!.id,
           amount: transferAmount,
+          expectedRevisions: {
+            [source!.id]: reviewed.get(source!.id)?.revision,
+            [target!.id]: reviewed.get(target!.id)?.revision,
+          },
         });
       else
-        await budgetRequest(
+        await command.run(
           `/api/categories/${category.id}`,
-          { current_balance: newBalance },
+          {
+            current_balance: newBalance,
+            expectedRevision: reviewed.get(category.id)?.revision,
+          },
           "PATCH",
         );
       succeeded = true;
@@ -429,7 +462,7 @@ export function EnvelopeEditor({
                       <NativeSelect
                         aria-label="Direction"
                         value={direction}
-                        disabled={saving || !canEdit}
+                        disabled={saving || !canEdit || command.uncertain}
                         onChange={(e) => {
                           setDirection(e.target.value as "in" | "out");
                           setOther("");
@@ -450,7 +483,7 @@ export function EnvelopeEditor({
                           direction === "in" ? "From envelope" : "To envelope"
                         }
                         value={other}
-                        disabled={saving || !canEdit}
+                        disabled={saving || !canEdit || command.uncertain}
                         onChange={(e) => setOther(e.target.value)}
                       >
                         <option value="">Choose an envelope</option>
@@ -466,7 +499,7 @@ export function EnvelopeEditor({
                       <input
                         inputMode="decimal"
                         value={amount}
-                        disabled={saving || !canEdit}
+                        disabled={saving || !canEdit || command.uncertain}
                         onChange={(e) => setAmount(e.target.value)}
                         placeholder="0.00"
                       />
@@ -490,7 +523,7 @@ export function EnvelopeEditor({
                       <input
                         inputMode="decimal"
                         value={balance}
-                        disabled={saving || !canEdit}
+                        disabled={saving || !canEdit || command.uncertain}
                         onChange={(e) => setBalance(e.target.value)}
                       />
                     </label>
@@ -522,6 +555,52 @@ export function EnvelopeEditor({
                     your recorded balances and commitments before saving.
                   </p>
                 )}
+                {category.recordMissing && (
+                  <p role="alert" className="nl-notice">
+                    This envelope is no longer available. Your entry is retained
+                    here, but it cannot be saved.
+                  </p>
+                )}
+                {conflict && !category.recordMissing && !command.uncertain && (
+                  <div className="nl-notice" role="status">
+                    <strong>This envelope changed elsewhere.</strong>
+                    <p>
+                      Latest balance: {money(category.current_balance)}. Your
+                      entry is still here. Review the current balances before
+                      saving.
+                    </p>
+                    <button
+                      type="button"
+                      className="nl-secondary"
+                      onClick={() => {
+                        setBalance(Number(category.current_balance).toFixed(2));
+                        setReviewed(
+                          new Map(data.categories.map((c) => [c.id, c])),
+                        );
+                      }}
+                    >
+                      Use latest
+                    </button>{" "}
+                    <button
+                      type="button"
+                      className="nl-secondary"
+                      onClick={() =>
+                        setReviewed(
+                          new Map(data.categories.map((c) => [c.id, c])),
+                        )
+                      }
+                    >
+                      Keep my entry · I reviewed the balances
+                    </button>
+                  </div>
+                )}
+                {command.uncertain && (
+                  <p className="nl-notice" role="status">
+                    The result has not been confirmed. Check this change’s
+                    outcome before closing or making another change. This will
+                    not move money twice.
+                  </p>
+                )}
                 {error && (
                   <p className="nl-error" role="alert">
                     {error}
@@ -539,13 +618,21 @@ export function EnvelopeEditor({
                   <button
                     type="submit"
                     className="nl-primary"
-                    disabled={!canEdit || !valid || saving}
+                    disabled={
+                      !canEdit ||
+                      saving ||
+                      category.recordMissing ||
+                      (!command.uncertain &&
+                        (!valid || conflict || !category.revision))
+                    }
                   >
                     {saving
                       ? "Saving…"
-                      : mode === "transfer"
-                        ? "Move money"
-                        : "Save balance adjustment"}
+                      : command.uncertain
+                        ? "Check change outcome"
+                        : mode === "transfer"
+                          ? "Move money"
+                          : "Save balance adjustment"}
                   </button>
                 </div>
               </form>

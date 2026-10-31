@@ -1,3 +1,4 @@
+import { freshFetch as fetch } from "@/lib/view-freshness";
 /**
  * CSV import template management
  * Handles saving and loading column mappings for reuse
@@ -29,6 +30,8 @@ export interface SaveTemplateInput {
 }
 
 export interface CSVImportTemplate {
+  revision?: string;
+  account_id?: number;
   id?: number;
   userId: string;
   templateName?: string;
@@ -48,6 +51,7 @@ export async function saveTemplate(template: SaveTemplateInput): Promise<CSVImpo
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      createOnly: typeof window !== "undefined" && window.location.pathname.startsWith("/new"),
       userId: template.userId,
       templateName: template.templateName,
       fingerprint: template.fingerprint,
@@ -131,6 +135,8 @@ export async function loadTemplateById(
   // Convert database format to our format
   return {
     id: template.id,
+    revision: template.revision,
+    account_id: template.account_id,
     userId: template.user_id,
     templateName: template.template_name,
     fingerprint: template.fingerprint,
@@ -170,6 +176,8 @@ export async function listTemplates(): Promise<CSVImportTemplate[]> {
   // Transform database format to our format
   return templates.map((template: any) => ({
     id: template.id,
+    revision: template.revision,
+    account_id: template.account_id,
     userId: template.user_id,
     templateName: template.template_name,
     fingerprint: template.fingerprint,
@@ -196,9 +204,10 @@ export async function listTemplates(): Promise<CSVImportTemplate[]> {
 /**
  * Delete a template
  */
-export async function deleteTemplate(templateId: number): Promise<void> {
+export async function deleteTemplate(templateId: number, precondition?: {expectedRevision:string;expectedBudgetId:number}): Promise<void> {
   const response = await fetch(`/api/import/templates/${templateId}`, {
     method: 'DELETE',
+    ...(precondition ? {headers:{'Content-Type':'application/json'},body:JSON.stringify(precondition)} : {}),
   });
 
   if (!response.ok) {

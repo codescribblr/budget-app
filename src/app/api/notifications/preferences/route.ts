@@ -12,7 +12,7 @@ export async function GET() {
     const { user } = await getAuthenticatedUser();
     const preferences = await getUserNotificationPreferences(user.id);
 
-    return NextResponse.json({ preferences });
+    return NextResponse.json({ preferences, userId: user.id });
   } catch (error: any) {
     console.error('Error fetching notification preferences:', error);
     if (error.message === 'Unauthorized') {

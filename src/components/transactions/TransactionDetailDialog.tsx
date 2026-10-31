@@ -1,4 +1,6 @@
 'use client';
+import { freshFetch as fetch } from '@/lib/view-freshness';
+import { useResourceVersion } from '@/components/new-look/use-resource-version';
 
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -76,16 +78,18 @@ export default function TransactionDetailDialog({
   onClose,
   transactionId,
 }: TransactionDetailDialogProps) {
+  const resourceVersion=useResourceVersion("transactions");
   const [details, setDetails] = useState<TransactionDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller=new AbortController();
     if (isOpen && transactionId) {
-      setLoading(true);
+      setLoading(!details || details.transaction.id!==transactionId);
       setError(null);
       
-      fetch(`/api/transactions/${transactionId}/details`)
+      fetch(`/api/transactions/${transactionId}/details`,{signal:controller.signal,cache:"no-store"})
         .then(res => {
           if (!res.ok) {
             throw new Error('Failed to fetch transaction details');
@@ -93,10 +97,12 @@ export default function TransactionDetailDialog({
           return res.json();
         })
         .then(data => {
+          if(controller.signal.aborted) return;
           setDetails(data);
           setLoading(false);
         })
         .catch(err => {
+          if(controller.signal.aborted) return;
           console.error('Error fetching transaction details:', err);
           setError(err.message || 'Failed to load transaction details');
           setLoading(false);
@@ -105,7 +111,8 @@ export default function TransactionDetailDialog({
       setDetails(null);
       setError(null);
     }
-  }, [isOpen, transactionId]);
+    return ()=>controller.abort();
+  }, [isOpen, transactionId, resourceVersion]);
 
   const formatDate = (dateStr: string) => {
     const date = parseLocalDate(dateStr);

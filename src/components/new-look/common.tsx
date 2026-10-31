@@ -26,7 +26,13 @@ export function PageHeading({
   );
 }
 export function ReadOnlyNotice() {
-  const { canEdit, refreshing, error } = useBudget();
+  const { canEdit, refreshing, error, online } = useBudget();
+  if (!online)
+    return (
+      <p className="nl-notice">
+        You’re offline. Your edits stay here; reconnect before saving.
+      </p>
+    );
   return canEdit || refreshing || error ? null : (
     <p className="nl-notice">
       You have read-only access to this budget. You can still review it and

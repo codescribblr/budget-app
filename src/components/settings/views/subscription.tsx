@@ -1,4 +1,5 @@
 "use client";
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { PremiumBadge } from "@/components/subscription/PremiumBadge";
 import { useInterfacePath } from "@/hooks/use-interface-path";

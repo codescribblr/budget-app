@@ -1,3 +1,4 @@
+import { guardedPreferenceUpdate } from "@/lib/guarded-preference-route";
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 
@@ -7,7 +8,7 @@ export async function GET() {
     
     const { data: profile, error } = await supabase
       .from('user_profiles')
-      .select('birth_year')
+      .select('birth_year,revision')
       .eq('user_id', user.id)
       .single();
 
@@ -22,6 +23,8 @@ export async function GET() {
     // Return birth_year or null if profile doesn't exist
     return NextResponse.json({
       birth_year: profile?.birth_year || null,
+      revision: profile?.revision ?? null,
+      userId: user.id,
     });
   } catch (error: any) {
     console.error('Error in GET /api/user/profile:', error);
@@ -49,6 +52,9 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    const guarded = await guardedPreferenceUpdate("profile", body);
+    if (guarded) return guarded;
+
     // Upsert user profile (create if doesn't exist, update if it does)
     const { data: profile, error } = await supabase
       .from('user_profiles')
@@ -59,7 +65,7 @@ export async function PATCH(request: NextRequest) {
       }, {
         onConflict: 'user_id',
       })
-      .select('birth_year')
+      .select('birth_year,revision')
       .single();
 
     if (error) {
@@ -72,6 +78,8 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({
       birth_year: profile?.birth_year || null,
+      revision: profile?.revision ?? null,
+      userId: user.id,
     });
   } catch (error: any) {
     console.error('Error in PATCH /api/user/profile:', error);

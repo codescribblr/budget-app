@@ -14,9 +14,10 @@ interface BulkTagDialogProps {
   onClose: () => void;
   transactionIds: number[];
   onSuccess: () => void;
+  onCommit?: (tagIds: number[]) => Promise<void>;
 }
 
-export default function BulkTagDialog({ isOpen, onClose, transactionIds, onSuccess }: BulkTagDialogProps) {
+export default function BulkTagDialog({ isOpen, onClose, transactionIds, onSuccess, onCommit }: BulkTagDialogProps) {
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -52,6 +53,9 @@ export default function BulkTagDialog({ isOpen, onClose, transactionIds, onSucce
 
     try {
       setIsSubmitting(true);
+      if (onCommit) {
+        await onCommit(selectedTagIds); onSuccess(); onClose(); return;
+      }
       const response = await fetch('/api/tags/bulk-assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

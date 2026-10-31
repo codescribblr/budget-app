@@ -1,4 +1,5 @@
 'use client';
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';

@@ -152,7 +152,7 @@ export async function GET() {
 
     const { data: userFlags, error: flagsError } = await supabase
       .from('user_feature_flags')
-      .select('feature_name, enabled, enabled_at, disabled_at')
+      .select('feature_name, enabled, enabled_at, disabled_at, revision')
       .eq('account_id', accountId);
 
     if (flagsError) {
@@ -169,13 +169,14 @@ export async function GET() {
       return {
         key,
         ...metadata,
+        revision: userFlag?.revision ?? null,
         enabled: userFlag?.enabled || false,
         enabledAt: userFlag?.enabled_at || null,
         disabledAt: userFlag?.disabled_at || null,
       };
     });
 
-    return NextResponse.json({ features, hasPremium });
+    return NextResponse.json({ features, hasPremium, accountId });
   } catch (error: any) {
     console.error('Error in GET /api/features:', error);
     return NextResponse.json(
@@ -310,6 +311,15 @@ export async function POST(request: Request) {
         { error: 'No active account. Please select an account first.' },
         { status: 400 }
       );
+    }
+
+    if ("expectedRevision" in body || "expectedBudgetId" in body) {
+      if (body.expectedBudgetId !== accountId) return NextResponse.json({error:"The active budget changed. Reload before saving."},{status:409});
+      if (body.expectedRevision !== null && (typeof body.expectedRevision !== "string" || !/^[0-9a-f-]{36}$/i.test(body.expectedRevision))) return NextResponse.json({error:"Reload features before saving safely."},{status:400});
+      const {data: saved, error: saveError} = await supabase.rpc("save_guarded_feature",{p_budget_id:accountId,p_name:featureName,p_enabled:enabled,p_revision:body.expectedRevision});
+      if (saveError) return NextResponse.json({error:saveError.code === "22023" || saveError.code === "42501" ? saveError.message : "Could not save this feature."},{status:saveError.code === "42501" ? 403 : 400});
+      if (saved.status === "conflict") return NextResponse.json({error:"This feature changed elsewhere. Review its updated status before trying again.",code:"STALE_RECORD"},{status:409});
+      return NextResponse.json({success:true,feature:{key:featureName,...feature,enabled:saved.record.enabled,enabledAt:saved.record.enabled_at,disabledAt:saved.record.disabled_at,revision:saved.record.revision}});
     }
 
     const { data, error } = await supabase

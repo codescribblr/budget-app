@@ -1,4 +1,7 @@
 'use client';
+import { freshFetch as fetch } from "@/lib/view-freshness";
+import { usePathname } from "next/navigation";
+import { useResourceVersion } from "@/components/new-look/use-resource-version";
 import { useImportPaths } from './use-import-paths';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -26,6 +29,8 @@ import type { BatchDuplicateSummary } from '@/lib/import/batch-duplicates';
 
 export interface QueuedImportBatch {
   batch_id: string;
+  budget_id?: number;
+  revisions?: Record<number,string>;
   import_setup_id: number;
   setup_name: string;
   source_type: string;
@@ -47,6 +52,8 @@ interface ImportQueueListProps {
 
 export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
   const { importPath } = useImportPaths();
+  const modern = usePathname().startsWith("/new");
+  const resourceVersion = useResourceVersion("imports");
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [batches, setBatches] = useState<QueuedImportBatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,22 +62,23 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
   const [batchToDelete, setBatchToDelete] = useState<QueuedImportBatch | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchingRef = useRef(false);
+  const request = useRef<AbortController | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   const fetchBatches = useCallback(async () => {
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
+    request.current?.abort();
+    const controller = new AbortController(); request.current = controller;
 
     try {
-      const response = await fetch('/api/automatic-imports/queue?batches=true');
+      const response = await fetch('/api/automatic-imports/queue?batches=true', {signal:controller.signal,cache:'no-store'});
       if (!response.ok) throw new Error('Failed to fetch batches');
       const data = await response.json();
-      setBatches(data.batches || []);
+      if (controller.signal.aborted) return;
+      setLoadError(false); setBatches(data.batches || []);
     } catch (error) {
-      console.error('Error fetching batches:', error);
+      if (!controller.signal.aborted) setLoadError(true);
     } finally {
-      setLoading(false);
-      fetchingRef.current = false;
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, []);
 
@@ -78,7 +86,8 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
     if (!permissionsLoading) {
       fetchBatches();
     }
-  }, [permissionsLoading, fetchBatches, refreshKey]);
+    return () => request.current?.abort();
+  }, [permissionsLoading, fetchBatches, refreshKey, resourceVersion]);
 
   const handleReviewBatch = async (batchId: string, sourceType?: string) => {
     try {
@@ -133,9 +142,10 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
 
     setIsDeleting(true);
     try {
+      if (modern && (!batchToDelete.budget_id || !batchToDelete.revisions || Object.keys(batchToDelete.revisions).length !== batchToDelete.count)) throw new Error("Reload the imports list before deleting safely.");
       const response = await fetch(
         `/api/automatic-imports/queue/batch/${encodeURIComponent(batchToDelete.batch_id)}/delete`,
-        { method: 'DELETE' }
+        { method: 'DELETE', ...(modern ? { headers: {'Content-Type':'application/json'}, body: JSON.stringify({expectedBudgetId:batchToDelete.budget_id,expectedRevisions:batchToDelete.revisions}) } : {}) }
       );
 
       if (!response.ok) {
@@ -201,6 +211,7 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
 
   return (
     <>
+      {loadError && <div role="alert" className="nl-notice">Imports could not refresh. Previously loaded batches are retained. <button type="button" onClick={()=>void fetchBatches()}>Try again</button></div>}
       {processingBatchId && (
         <QueuedImportProcessingDialog
           open={!!processingBatchId}

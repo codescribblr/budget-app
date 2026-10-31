@@ -11,6 +11,7 @@ export interface NotificationData {
 }
 
 export interface NotificationPreferences {
+  revision?: string | null;
   emailEnabled: boolean;
   inAppEnabled: boolean;
   pushEnabled?: boolean;

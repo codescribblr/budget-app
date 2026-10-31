@@ -1,4 +1,6 @@
 'use client';
+import { useResourceVersion } from "@/components/new-look/use-resource-version";
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useAccountPermissions } from "@/hooks/use-account-permissions";
 import { useInterfacePath } from "@/hooks/use-interface-path";
@@ -97,8 +99,9 @@ export default function DataBackup() {
   const [isLoadingDownloadPreview, setIsLoadingDownloadPreview] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  const version=useResourceVersion("settings");
+  const loaded=useRef(false), trailing=useRef(false);
   const fetchingRef = useRef(false);
-  const hasMountedRef = useRef(false);
 
   const isPartialRestore =
     !restorePreview ||
@@ -112,15 +115,16 @@ export default function DataBackup() {
 
   const fetchBackups = async () => {
     if (fetchingRef.current) {
-      return;
+      trailing.current=true; return;
     }
     fetchingRef.current = true;
-    setIsLoading(true);setLoadError(false);
+    setIsLoading(!loaded.current);setLoadError(false);
 
     try {
       const response = await fetch('/api/backups');
       if (!response.ok) throw new Error('Failed to fetch backups');
       const data = await response.json();
+      const firstLoad=!loaded.current; loaded.current=true;
 
       if (data && Array.isArray(data.backups)) {
         setBackups(data.backups);
@@ -139,19 +143,16 @@ export default function DataBackup() {
       setLoadError(true);
       console.error('Error fetching backups:', error);
       toast.error('Failed to load backups');
-      setBackups([]);
     } finally {
       setIsLoading(false);
       fetchingRef.current = false;
+      if(trailing.current){trailing.current=false;void fetchBackups();}
     }
   };
 
   useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      fetchBackups();
-    }
-  }, []);
+    void fetchBackups();
+  }, [version]);
 
   const loadBackupPreview = async (backupId: number): Promise<BackupPreview> => {
     const response = await fetch(`/api/backups/${backupId}/preview`);
@@ -484,7 +485,7 @@ export default function DataBackup() {
     });
   };
 
-  if(loadError) return <div role="alert" className="space-y-4"><p>We couldn’t load your backups.</p><Button onClick={fetchBackups}>Try again</Button></div>;
+  if(loadError && !loaded.current) return <div role="alert" className="space-y-4"><p>We couldn’t load your backups.</p><Button onClick={fetchBackups}>Try again</Button></div>;
 
   return (
     <>

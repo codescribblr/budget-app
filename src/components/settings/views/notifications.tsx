@@ -1,6 +1,7 @@
 "use client";
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Card,
   CardContent,
@@ -18,6 +19,9 @@ import { Bell, Mail, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { useFeature } from "@/contexts/FeatureContext";
+import { usePathname } from "next/navigation";
+import { useResourceVersion } from "@/components/new-look/use-resource-version";
+import { budgetRequest } from "@/lib/budget-request";
 import { PushNotificationSetup } from "@/components/notifications/PushNotificationSetup";
 
 interface NotificationType {
@@ -41,12 +45,19 @@ const IMPLEMENTED_NOTIFICATION_TYPES = new Set([
 ]);
 
 interface NotificationPreference {
+  revision?: string | null;
   emailEnabled: boolean;
   inAppEnabled: boolean;
   settings: Record<string, any>;
 }
 
 export default function NotificationPreferencesPage() {
+  const modern = usePathname().startsWith("/new");
+  const version = useResourceVersion("settings");
+  const loaded = useRef(false), requestId = useRef(0);
+  const dirty = useRef(new Set<string>());
+  const [userId, setUserId] = useState("");
+  const [saveError, setSaveError] = useState("");
   const recurringTransactionsEnabled = useFeature("recurring_transactions");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -60,11 +71,13 @@ export default function NotificationPreferencesPage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    return () => { requestId.current++; };
+  }, [version]);
 
   const fetchData = async () => {
+    const id = ++requestId.current;
     try {
-      setLoading(true);
+      setLoading(!loaded.current);
       setLoadError(false);
       const [typesResponse, prefsResponse] = await Promise.all([
         fetch("/api/notifications/types"),
@@ -77,119 +90,42 @@ export default function NotificationPreferencesPage() {
         const typesData = await typesResponse.json();
         const prefsData = await prefsResponse.json();
 
+        if (id !== requestId.current) return;
+        loaded.current = true;
+        setUserId(prefsData.userId);
         setNotificationTypes(typesData.notificationTypes || []);
-        setPreferences(prefsData.preferences || {});
+        setPreferences(previous => ({ ...prefsData.preferences, ...Object.fromEntries(Object.entries(previous).filter(([key]) => dirty.current.has(key))) }));
       }
     } catch (error) {
+      if (id !== requestId.current) return;
       setLoadError(true);
       console.error("Error fetching notification preferences:", error);
       toast.error("Failed to load notification preferences");
     } finally {
-      setLoading(false);
+      if (id === requestId.current) setLoading(false);
     }
   };
 
-  const handleToggle = async (
-    typeId: string,
-    channel: "email" | "inApp",
-    enabled: boolean,
-  ) => {
-    if (saving) return;
-    setSaving(true);
-    const current = preferences[typeId] || {
-      emailEnabled: true,
-      inAppEnabled: true,
-      settings: {},
-    };
-    const updated = {
-      ...current,
-      [channel === "email" ? "emailEnabled" : "inAppEnabled"]: enabled,
-    };
-
-    setPreferences({
-      ...preferences,
-      [typeId]: updated,
-    });
-
-    // Save immediately
+  const savePreference = async (typeId: string, patch: Record<string, unknown>) => {
+    if (saving || (modern && !userId)) return;
+    const current = preferences[typeId];
+    dirty.current.add(typeId);
+    setSaving(true); setSaveError("");
     try {
-      const response = await fetch(`/api/notifications/preferences/${typeId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          emailEnabled: updated.emailEnabled,
-          inAppEnabled: updated.inAppEnabled,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update preference");
-      }
+      const result = await budgetRequest<{revision?: string}>(`/api/notifications/preferences/${typeId}`, {
+        ...patch, ...(modern ? {expectedRevision: current?.revision ?? null, expectedUserId: userId} : {}),
+      }, "PATCH");
+      dirty.current.delete(typeId);
+      setPreferences(previous => ({ ...previous, [typeId]: { ...previous[typeId], ...patch, revision: result.revision } }));
+      void fetchData();
     } catch (error) {
-      console.error("Error updating preference:", error);
-      toast.error("Failed to update notification preference");
-      // Revert on error
-      setPreferences({
-        ...preferences,
-        [typeId]: current,
-      });
-    } finally {
-      setSaving(false);
-    }
+      setSaveError(error instanceof Error ? error.message : "Your preference could not be saved.");
+    } finally { setSaving(false); }
   };
-
-  const handleSettingChange = async (
-    typeId: string,
-    key: string,
-    value: any,
-  ) => {
-    if (saving) return;
-    setSaving(true);
-    const current = preferences[typeId] || {
-      emailEnabled: true,
-      inAppEnabled: true,
-      settings: {},
-    };
-    const updated = {
-      ...current,
-      settings: {
-        ...current.settings,
-        [key]: value,
-      },
-    };
-
-    setPreferences({
-      ...preferences,
-      [typeId]: updated,
-    });
-
-    // Save immediately
-    try {
-      const response = await fetch(`/api/notifications/preferences/${typeId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          emailEnabled: updated.emailEnabled,
-          inAppEnabled: updated.inAppEnabled,
-          settings: updated.settings,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update preference");
-      }
-    } catch (error) {
-      console.error("Error updating preference:", error);
-      toast.error("Failed to update notification preference");
-      // Revert on error
-      setPreferences({
-        ...preferences,
-        [typeId]: current,
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
+  const handleToggle = (typeId: string, channel: "email" | "inApp", enabled: boolean) =>
+    savePreference(typeId, { [channel === "email" ? "emailEnabled" : "inAppEnabled"]: enabled });
+  const handleSettingChange = (typeId: string, key: string, value: number) =>
+    savePreference(typeId, { settings: { ...preferences[typeId]?.settings, [key]: value } });
 
   // Filter out recurring transaction notifications if feature is disabled
   // Also filter out the missed recurring transaction notification (removed feature)
@@ -224,7 +160,7 @@ export default function NotificationPreferencesPage() {
     );
   }
 
-  if (loadError)
+  if (loadError && !loaded.current)
     return (
       <div role="alert" className="space-y-4">
         <p>We couldn’t load your notification preferences.</p>
@@ -241,6 +177,10 @@ export default function NotificationPreferencesPage() {
         </p>
       </div>
 
+      {(saveError || loadError) && <div className="nl-notice" role="alert">
+        <p>{saveError || "Could not refresh your saved preferences. Your last loaded settings are still shown."}</p>
+        <Button variant="outline" onClick={() => { dirty.current.clear(); setSaveError(""); void fetchData(); }}>Reload saved preferences</Button>
+      </div>}
       <PushNotificationSetup />
 
       {Object.entries(groupedTypes).map(([category, types]) => (
@@ -344,7 +284,8 @@ export default function NotificationPreferencesPage() {
                               pref.settings?.reminder_days_before ?? 2
                             }
                             disabled={saving}
-                            onBlur={(e) => {
+                            onFocus={() => dirty.current.add(type.id)}
+                          onBlur={(e) => {
                               if (
                                 !e.target.validity.valid ||
                                 e.target.value === ""
@@ -385,6 +326,7 @@ export default function NotificationPreferencesPage() {
                             pref.settings?.low_balance_threshold ?? 100
                           }
                           disabled={saving}
+                          onFocus={() => dirty.current.add(type.id)}
                           onBlur={(e) => {
                             if (
                               !e.target.validity.valid ||

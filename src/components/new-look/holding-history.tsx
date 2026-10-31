@@ -1,4 +1,7 @@
 "use client";
+import { SkeletonLine } from "./home-skeleton";
+import { freshFetch as fetch } from "@/lib/view-freshness";
+import { useResourceVersion } from "./use-resource-version";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ResponsiveContainer,
@@ -35,10 +38,13 @@ export function HoldingHistory({
   id: number;
   revision: number;
 }) {
+  const resourceVersion = useResourceVersion("planning");
   const [records, setRecords] = useState<RecordEntry[]>([]),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [more, setMore] = useState(false);
+  const loadedCount = useRef(20),
+    loadedKey = useRef("");
   const generation = useRef(0),
     inFlight = useRef(false);
   const load = useCallback(
@@ -49,7 +55,7 @@ export function HoldingHistory({
       setError("");
       try {
         const response = await fetch(
-          `${holdingEndpoint(kind)}/${id}/audit?limit=20&offset=${offset}`,
+          `${holdingEndpoint(kind)}/${id}/audit?limit=${offset ? 20 : loadedCount.current}&offset=${offset}`,
           { cache: "no-store" },
         );
         if (!response.ok) throw new Error("History could not be loaded.");
@@ -57,6 +63,7 @@ export function HoldingHistory({
         if (!Array.isArray(result.records))
           throw new Error("History could not be read.");
         if (token === generation.current) {
+          loadedCount.current = Math.max(20, offset + result.records.length);
           setRecords((prev) =>
             offset
               ? [
@@ -82,21 +89,24 @@ export function HoldingHistory({
     [kind, id],
   );
   useEffect(() => {
+    const key = `${kind}:${id}`;
+    if (loadedKey.current !== key) {
+      loadedKey.current = key;
+      loadedCount.current = 20;
+      setRecords([]);
+    }
     const token = ++generation.current;
     inFlight.current = false;
-    setRecords([]);
-    setMore(false);
+
     void load(0, token);
     return () => {
       generation.current++;
     };
-  }, [load, revision]);
-  const chart = [...records]
-    .reverse()
-    .map((r) => ({
-      time: new Date(r.created_at).getTime(),
-      value: Number(kind === "loans" ? r.new_balance : r.new_value),
-    }));
+  }, [load, revision, resourceVersion, kind, id]);
+  const chart = [...records].reverse().map((r) => ({
+    time: new Date(r.created_at).getTime(),
+    value: Number(kind === "loans" ? r.new_balance : r.new_value),
+  }));
   return (
     <section
       className="nl-panel nl-holding-history"
@@ -239,9 +249,10 @@ export function HoldingHistory({
           </button>
         </p>
       )}
-      {loading && (
+      {loading && !records.length && (
         <p role="status" className="nl-muted">
-          Loading history…
+          <SkeletonLine width="70%" />
+          <SkeletonLine width="50%" />
         </p>
       )}
       {more && !error && (

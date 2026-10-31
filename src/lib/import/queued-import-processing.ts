@@ -1,3 +1,4 @@
+import { freshFetch as fetch } from "@/lib/view-freshness";
 import { processTransactions } from "../csv-parser-helpers";
 import type { ParsedTransaction } from "../import-types";
 import type { ProcessingTasksStatus } from "../processing-tasks";
@@ -70,6 +71,8 @@ export async function loadQueuedImport(
       }
       return {
         id: `queued-${qi.id}`,
+          revision: qi.revision,
+          budgetId: qi.account_id,
         date: qi.transaction_date,
         description: qi.description,
         amount: qi.amount,
@@ -151,6 +154,8 @@ export function prepareQueuedImport(
         { task: "pdf_to_csv" },
       );
       tasks.pdf_to_csv = true;
+      // Completing a checkpoint also advances the first queue row revision.
+      batch.transactions = (await loadQueuedImport(batchId)).transactions;
     }
     if (tasks.csv_mapping === false) {
       throw new Error(
@@ -183,10 +188,11 @@ export function prepareQueuedImport(
             import_defaults_assignment: true,
           },
           onStepComplete: async (task, transactions) => {
-            await request(
+            const saved = await request<{revisions: Record<string,string>}>(
               "/api/automatic-imports/queue/update-categorization",
-              { batchId, transactions, completedTasks: [task] },
+              { batchId, transactions, completedTasks: [task], expectedBudgetId: batch.transactions[0]?.budgetId },
             );
+            for (const transaction of transactions) transaction.revision = saved.revisions?.[transaction.id] ?? transaction.revision;
             tasks[task] = true;
             report({
               progress: task === "duplicate_detection" ? 50 : 95,
@@ -199,7 +205,7 @@ export function prepareQueuedImport(
     }
     batch.status = { ...batch.status, processingTasks: tasks };
     report({ progress: 100, stage: "Ready to review", tasks: { ...tasks } });
-    return batch;
+    return await loadQueuedImport(batchId);
   };
   // Web Locks also serialize this batch across tabs. Read checkpoints inside the lock.
   run.promise = Promise.resolve()

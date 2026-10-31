@@ -1,3 +1,4 @@
+import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
@@ -21,6 +22,18 @@ export async function GET(
     }
 
     const { batchId } = await params;
+    // Capture preconditions before reading the mapping content, never afterwards.
+    const revisions = await fetchAllPages(async (from,to) => {
+      const {data,error}=await supabase.from('queued_imports').select('id,revision,import_setup_id,status').eq('account_id',accountId).eq('source_batch_id',batchId).order('id').range(from,to);
+      if(error)throw error;return data??[];
+    });
+    if(revisions.some(row=>row.status==='imported')) return NextResponse.json({error:'Part of this batch has already been imported. Upload a new file to change its mapping.'},{status:409});
+    const [{data:templates,error:templateError},{data:setup,error:setupError}]=await Promise.all([
+      supabase.from('csv_import_templates').select('id,revision').eq('account_id',accountId).eq('user_id',user.id),
+      supabase.from('automatic_import_setups').select('revision').eq('id',revisions[0]?.import_setup_id??0).eq('account_id',accountId).maybeSingle(),
+    ]);
+    if(templateError||setupError)throw templateError||setupError;
+
 
     // Get all queued imports from batch to check for CSV data or API data
     const { data: queuedImports, error: fetchError } = await supabase
@@ -132,6 +145,10 @@ export async function GET(
     }
 
     return NextResponse.json({
+      expectedBudgetId:accountId,
+      expectedRevisions:Object.fromEntries(revisions.map(row=>[row.id,row.revision])),
+      expectedTemplateRevisions:Object.fromEntries((templates??[]).map(row=>[row.id,row.revision])),
+      expectedSetupRevision:setup?.revision,
       csvData,
       csvAnalysis,
       csvFileName,

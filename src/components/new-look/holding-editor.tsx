@@ -1,4 +1,5 @@
 "use client";
+import { useRecordGuard } from "./record-guard";
 import { useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { NON_CASH_ASSET_TYPE_OPTIONS } from "@/lib/non-cash-asset-types";
@@ -30,6 +31,7 @@ export function HoldingEditor({
   onClose: () => void;
   onSave: (payload: Record<string, unknown>) => Promise<void>;
 }) {
+  const guard = useRecordGuard(item);
   const [initial] = useState(() => holdingDraft(item));
   const [draft, setDraft] = useState(initial);
   const loan = kind === "loans";
@@ -88,10 +90,16 @@ export function HoldingEditor({
       }
       onClose={onClose}
       onSave={async () => {
-        const payload = prepareHolding(kind, draft, item, balanceOnly);
-        if (Object.keys(payload).length) await onSave(payload);
+        const payload = prepareHolding(
+          kind,
+          draft,
+          guard.original ?? undefined,
+          balanceOnly,
+        );
+        if (Object.keys(payload).length) await guard.save(payload, onSave);
       }}
     >
+      {guard.notice}
       {!balanceOnly &&
         field(
           "name",

@@ -1,5 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { PageSkeleton } from "./page-skeleton";
+import { useResourceVersion } from "./use-resource-version";
+import { guardedMetadata } from "./record-guard";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Plus, Wallet } from "lucide-react";
@@ -33,6 +36,7 @@ export function GuidedIncome() {
 }
 
 function IncomeContent() {
+  const resourceVersion = useResourceVersion("planning");
   const { data, canEdit, refresh } = useBudget();
   const params = useSearchParams();
   const planHref =
@@ -49,18 +53,20 @@ function IncomeContent() {
   const [removing, setRemoving] = useState<IncomeStream | null>(null);
   const [removingBusy, setRemovingBusy] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const loaded = useRef(false);
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    setLoading(!loaded.current);
     setError(null);
     void Promise.allSettled([
       budgetRequest<IncomeStream[]>("/api/income-streams"),
       budgetRequest<NonCashAsset[]>("/api/non-cash-assets"),
     ]).then(([income, assetList]) => {
       if (!active) return;
-      if (income.status === "fulfilled" && Array.isArray(income.value))
+      if (income.status === "fulfilled" && Array.isArray(income.value)) {
+        loaded.current = true;
         setStreams(income.value);
-      else
+      } else
         setError(
           income.status === "rejected" && income.reason instanceof Error
             ? income.reason.message
@@ -75,7 +81,7 @@ function IncomeContent() {
     return () => {
       active = false;
     };
-  }, [attempt]);
+  }, [attempt, resourceVersion]);
   const totals = incomeSummary(streams);
   const target = ordinaryEnvelopes(data?.categories || []).reduce(
     (sum, c) =>
@@ -122,17 +128,24 @@ function IncomeContent() {
     setRemovingBusy(true);
     setRemoveError(null);
     try {
-      // Retain the last record: the shared API otherwise re-creates legacy income on the next read.
+      // Keep an excluded last source available for users who want to resume their plan.
       if (streams.length === 1) {
         const updated = await budgetRequest<IncomeStream>(
           `/api/income-streams/${removing.id}`,
-          { include_in_budget: false },
+          {
+            include_in_budget: false,
+            ...guardedMetadata(removing, data!.identity.activeAccountId),
+          },
           "PATCH",
         );
         setStreams([updated]);
         toast.success("Income source excluded from your monthly plan.");
       } else {
-        await budgetRequest(`/api/income-streams/${removing.id}`, {}, "DELETE");
+        await budgetRequest(
+          `/api/income-streams/${removing.id}`,
+          guardedMetadata(removing, data!.identity.activeAccountId),
+          "DELETE",
+        );
         setStreams((previous) => previous.filter((s) => s.id !== removing.id));
         toast.success("Income source removed.");
       }
@@ -238,10 +251,8 @@ function IncomeContent() {
       </PageHeading>
       <ReadOnlyNotice />
       {loading ? (
-        <div className="nl-panel" role="status">
-          Loading your income…
-        </div>
-      ) : error ? (
+        <PageSkeleton heading={false} />
+      ) : error && !loaded.current ? (
         <div className="nl-panel" role="alert">
           <h2>Income couldn’t be loaded</h2>
           <p>{error}</p>
@@ -376,7 +387,14 @@ function IncomeContent() {
       )}
       {editing && (
         <IncomeEditor
-          stream={editing === "new" ? null : editing}
+          stream={
+            editing === "new"
+              ? null
+              : (streams.find((s) => s.id === editing.id) ?? {
+                  ...editing,
+                  recordMissing: true,
+                })
+          }
           assets={assets}
           assetsError={assetsError}
           canEdit={canEdit}

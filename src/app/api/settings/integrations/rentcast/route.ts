@@ -1,3 +1,4 @@
+import { staleRowResponse, optionalDeleteBody } from "@/lib/row-precondition";
 import { NextRequest, NextResponse } from 'next/server';
 import { getActiveAccountId } from '@/lib/account-context';
 import { checkOwnerAccess } from '@/lib/api-helpers';
@@ -41,7 +42,7 @@ export async function GET() {
     const row = await getRentCastIntegrationRow(supabase, accountId);
 
     return NextResponse.json({
-      integration: toPublicRentCastIntegration(row),
+      integration: {...toPublicRentCastIntegration(row),account_id:accountId},
     });
   } catch (error: any) {
     if (error.message === 'Unauthorized') {
@@ -67,7 +68,7 @@ export async function PATCH(request: NextRequest) {
     const existing = await getRentCastIntegrationRow(supabase, accountId);
 
     const nextConfig = body.config !== undefined
-      ? normalizeConfigInput(body.config)
+      ? normalizeConfigInput({...(existing?.config??{}),...body.config})
       : normalizeConfigInput(existing?.config);
 
     const updatePayload: Record<string, unknown> = {
@@ -100,6 +101,17 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    if("expectedRevision" in body || "expectedBudgetId" in body){
+      if(body.expectedBudgetId!==accountId)return NextResponse.json({error:"The active budget changed."},{status:409});
+      if(body.expectedRevision!==null && (typeof body.expectedRevision!=="string" || !/^[0-9a-f-]{36}$/i.test(body.expectedRevision)))return NextResponse.json({error:"Reload this integration before saving."},{status:400});
+      const {account_id: ignoredAccount,integration_type: ignoredType,updated_at: ignoredTime,...patch}=updatePayload;
+      const {data:saved,error}=await supabase.rpc('save_guarded_integration',{p_budget_id:accountId,p_revision:body.expectedRevision,p_patch:patch});
+      if(error)throw error;
+      if(saved.status==='conflict')return staleRowResponse();
+      const row={...saved.record,encrypted_api_key:saved.record.has_api_key?"present":null};
+      return NextResponse.json({integration:{...toPublicRentCastIntegration(row),account_id:accountId}});
+    }
+
     const { data, error } = await supabase
       .from('integration_settings')
       .upsert(updatePayload, { onConflict: 'account_id,integration_type' })
@@ -120,7 +132,7 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
     const ownerCheck = await checkOwnerAccess();
     if (ownerCheck) return ownerCheck;
@@ -131,6 +143,15 @@ export async function DELETE() {
     }
 
     const { supabase } = await getAuthenticatedUser();
+
+    const body=await optionalDeleteBody(request);
+    if("expectedRevision" in body || "expectedBudgetId" in body){
+      if(body.expectedBudgetId!==accountId)return NextResponse.json({error:"The active budget changed."},{status:409});
+      const {data:saved,error}=await supabase.rpc('save_guarded_integration',{p_budget_id:accountId,p_revision:body.expectedRevision,p_patch:{},p_delete:true});
+      if(error)throw error;
+      if(saved.status==='conflict')return staleRowResponse();
+      return NextResponse.json({success:true});
+    }
 
     await supabase
       .from('integration_settings')

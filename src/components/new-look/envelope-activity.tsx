@@ -1,4 +1,7 @@
 "use client";
+import { SkeletonLine } from "./home-skeleton";
+import { freshFetch as fetch } from "@/lib/view-freshness";
+import { useResourceVersion } from "./use-resource-version";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -40,6 +43,7 @@ export function EnvelopeActivity({
   funded: number;
   spent: number;
 }) {
+  const resourceVersion = useResourceVersion("envelopes", "transactions");
   const searchParams = useSearchParams();
   const [page, setPage] = useState<ActivityPage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,21 +51,23 @@ export function EnvelopeActivity({
   const [transactionId, setTransactionId] = useState<number | null>(null);
   const request = useRef<AbortController | null>(null);
   const scrollArea = useRef<HTMLDivElement>(null);
+  const loadedCount = useRef(20);
+  const loadedKey = useRef("");
 
   const load = useCallback(
-    async (offset: number) => {
+    async (offset: number, background = false) => {
       request.current?.abort();
       const controller = new AbortController();
       request.current = controller;
       setLoading(true);
       setError(false);
-      if (offset === 0) {
+      if (offset === 0 && !background) {
         setPage(null);
         scrollArea.current?.scrollTo({ top: 0 });
       }
       try {
         const response = await fetch(
-          `/api/categories/${categoryId}/audit?limit=20&offset=${offset}&group=${group}`,
+          `/api/categories/${categoryId}/audit?limit=${background ? loadedCount.current : 20}&offset=${offset}&group=${group}`,
           {
             cache: "no-store",
             signal: controller.signal,
@@ -77,6 +83,7 @@ export function EnvelopeActivity({
           throw new Error("Invalid activity response");
         }
         if (controller.signal.aborted) return;
+        loadedCount.current = Math.max(20, offset + data.records.length);
         setPage((previous) => ({
           // An entry inserted while paging can repeat at the next offset.
           records: [
@@ -101,12 +108,18 @@ export function EnvelopeActivity({
   );
 
   useEffect(() => {
-    void load(0);
+    const key = `${categoryId}:${group}`;
+    const background = loadedKey.current === key;
+    loadedKey.current = key;
+    if (!background) loadedCount.current = 20;
+    void load(0, background);
     return () => request.current?.abort();
-  }, [load, currentBalance]);
+  }, [load, resourceVersion, currentBalance, categoryId, group]);
 
   return (
-    <div className={variant === "page" ? "nl-activity-page" : "nl-activity-dialog"}>
+    <div
+      className={variant === "page" ? "nl-activity-page" : "nl-activity-dialog"}
+    >
       {variant === "dialog" && (
         <>
           <div className="nl-envelope-month">
@@ -146,7 +159,9 @@ export function EnvelopeActivity({
       >
         {loading && !page && (
           <p className="nl-activity-state" role="status">
-            Loading activity…
+            <SkeletonLine width="70%" height={22} />
+            <SkeletonLine width="45%" />
+            <SkeletonLine width="80%" />
           </p>
         )}
         {page?.records.length === 0 && !loading && (
@@ -251,7 +266,11 @@ export function EnvelopeActivity({
           </div>
         )}
       </div>
-      {variant === "page" && <p className="nl-footnote">Some older changes may predate this activity history.</p>}
+      {variant === "page" && (
+        <p className="nl-footnote">
+          Some older changes may predate this activity history.
+        </p>
+      )}
       {variant === "dialog" && (
         <div className="nl-activity-footer">
           <Link

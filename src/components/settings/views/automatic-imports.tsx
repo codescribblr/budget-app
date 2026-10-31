@@ -1,5 +1,7 @@
 "use client";
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
+import { useResourceVersion } from "@/components/new-look/use-resource-version";
 import { useState, useEffect, useRef } from "react";
 import {
   Card,
@@ -31,6 +33,8 @@ interface AutomaticImportSetup {
 }
 
 export default function AutomaticImportsPage() {
+  const version = useResourceVersion("imports", "settings");
+  const loaded = useRef(false), request = useRef<AbortController | null>(null);
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [setups, setSetups] = useState<AutomaticImportSetup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,46 +42,21 @@ export default function AutomaticImportsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
-  // Track if fetch is in progress to prevent duplicate calls
-  const fetchingRef = useRef(false);
-  const hasMountedRef = useRef(false);
-
   useEffect(() => {
-    if (!permissionsLoading && !hasMountedRef.current) {
-      hasMountedRef.current = true;
-      fetchSetups();
-    }
-  }, [permissionsLoading]);
-
+    if (!permissionsLoading) void fetchSetups();
+    return () => request.current?.abort();
+  }, [permissionsLoading, version]);
   const fetchSetups = async () => {
-    // Prevent duplicate calls
-    if (fetchingRef.current) {
-      return;
-    }
-    fetchingRef.current = true;
-    setLoading(true);
-    setLoadError(false);
-
+    request.current?.abort(); const controller = new AbortController(); request.current = controller;
+    setLoading(!loaded.current); setLoadError(false);
     try {
-      const response = await fetch("/api/automatic-imports/setups");
-      if (!response.ok) throw new Error("Failed to fetch setups");
+      const response = await fetch("/api/automatic-imports/setups",{signal:controller.signal,cache:"no-store"});
+      if (!response.ok) throw new Error("Could not load import connections.");
       const data = await response.json();
-
-      // Ensure setups is always an array
-      if (data && Array.isArray(data.setups)) {
-        setSetups(data.setups);
-      } else {
-        console.error("Invalid setups data:", data);
-        setSetups([]);
-      }
-    } catch (error) {
-      setLoadError(true);
-      console.error("Error fetching import setups:", error);
-      setSetups([]); // Set empty array on error
-    } finally {
-      setLoading(false);
-      fetchingRef.current = false;
-    }
+      if (!Array.isArray(data.setups)) throw new Error("Could not read import connections.");
+      if (!controller.signal.aborted) {loaded.current = true; setSetups(data.setups);}
+    } catch (error) {if (!controller.signal.aborted) setLoadError(true);}
+    finally {if (!controller.signal.aborted) setLoading(false);}
   };
 
   const handleSetupCreated = () => {
@@ -151,7 +130,7 @@ export default function AutomaticImportsPage() {
     );
   }
 
-  if (loadError)
+  if (loadError && !loaded.current)
     return (
       <div role="alert" className="space-y-4">
         <p>We couldn’t load your import setups.</p>

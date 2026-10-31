@@ -1,4 +1,5 @@
 "use client";
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
@@ -130,7 +131,7 @@ export default function QueuedImportProcessingDialog({
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ batchId, isHistorical: historical }),
+          body: JSON.stringify({ batchId, isHistorical: historical, ...(modern ? {expectedBudgetId:batch?.transactions[0]?.budgetId,expectedRevisions:Object.fromEntries((batch?.transactions ?? []).map(t=>[t.id.slice(7),t.revision ?? null]))} : {}) }),
         },
       );
       if (!response.ok) {

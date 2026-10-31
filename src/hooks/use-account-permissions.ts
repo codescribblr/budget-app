@@ -1,5 +1,7 @@
 'use client';
 
+import { useResourceVersion } from '@/components/new-look/use-resource-version';
+import { fetchBudgetAccounts, clearBudgetAccountsCache } from '@/lib/budget-accounts-cache';
 import { useState, useEffect } from 'react';
 
 export interface AccountPermissions {
@@ -14,6 +16,7 @@ export interface AccountPermissions {
  * Hook to get the current user's role and permissions for the active account
  */
 export function useAccountPermissions(): AccountPermissions {
+  const version = useResourceVersion("settings");
   const [permissions, setPermissions] = useState<AccountPermissions>({
     role: null,
     isOwner: false,
@@ -23,14 +26,11 @@ export function useAccountPermissions(): AccountPermissions {
   });
 
   useEffect(() => {
+    let active = true;
     async function fetchPermissions() {
       try {
-        const response = await fetch('/api/budget-accounts');
-        if (!response.ok) {
-          throw new Error('Failed to fetch account permissions');
-        }
-
-        const data = await response.json();
+        const data = await fetchBudgetAccounts();
+        if (!active) return;
         const activeAccount = data.accounts?.find(
           (acc: any) => acc.accountId === data.activeAccountId
         );
@@ -54,6 +54,7 @@ export function useAccountPermissions(): AccountPermissions {
           });
         }
       } catch (error) {
+        if (!active) return;
         console.error('Error fetching account permissions:', error);
         setPermissions({
           role: null,
@@ -66,7 +67,8 @@ export function useAccountPermissions(): AccountPermissions {
     }
 
     fetchPermissions();
-  }, []);
+    return () => { active = false; };
+  }, [version]);
 
   return permissions;
 }

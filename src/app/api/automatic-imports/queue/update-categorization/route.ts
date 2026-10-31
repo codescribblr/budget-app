@@ -78,6 +78,7 @@ export async function POST(request: Request) {
 
       return {
         id: queuedImportId,
+        revision: txn.revision,
         suggested_category_id: suggestedCategoryId,
         status: 'reviewing' as const, // Keep as 'reviewing' so duplicates can be reviewed
         original_data: updatedOriginalData,
@@ -85,6 +86,15 @@ export async function POST(request: Request) {
     }).filter((update): update is NonNullable<typeof update> => update !== null);
     if (updates.length !== transactions.length) {
       return NextResponse.json({ error: 'Invalid queued transaction ID' }, { status: 400 });
+    }
+
+    if (body.expectedBudgetId !== undefined) {
+      if (body.expectedBudgetId !== accountId) return NextResponse.json({ error: 'The active budget changed. Reload this batch.' }, { status: 409 });
+      if (!batchId || completedTasks?.length !== 1 || updates.some(row => !row.revision)) return NextResponse.json({error:'Reload before preparing this batch.'},{status:400});
+      const { data: saved, error } = await supabase.rpc('save_import_preparation', { p_budget_id: accountId, p_batch_id: batchId, p_rows: updates, p_task: completedTasks[0] });
+      if (error) throw error;
+      if (saved.status !== 'saved') return NextResponse.json({error:'This batch changed on another device. Reload it before continuing.'},{status:409});
+      return NextResponse.json({success:true,updated:updates.length,revisions:saved.revisions});
     }
 
     // Batch update queued imports in parallel chunks

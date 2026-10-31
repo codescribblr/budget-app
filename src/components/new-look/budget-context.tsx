@@ -1,5 +1,6 @@
 "use client";
 import {
+  Fragment,
   createContext,
   useCallback,
   useContext,
@@ -10,6 +11,9 @@ import {
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { createRefreshQueue } from "@/lib/refresh-queue";
+import { PageSkeleton } from "./page-skeleton";
+import { viewFreshness } from "@/lib/view-freshness";
+import { resourceRefresh } from "@/lib/resource-refresh";
 import { BudgetRequestError } from "@/lib/budget-request";
 import type {
   Account,
@@ -31,6 +35,7 @@ interface Identity {
   accounts: { accountId: number; accountName: string; role: string }[];
 }
 export interface BudgetData {
+  resourceTokens?: Record<string, string>;
   accounts: Account[];
   cards: CreditCard[];
   categories: Category[];
@@ -65,60 +70,131 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
   const [online, setOnline] = useState(true);
   const pathname = usePathname();
   const queue = useRef<ReturnType<typeof createRefreshQueue> | null>(null);
-  if (!queue.current) queue.current = createRefreshQueue(async () => {
-    const id = ++requestId.current;
-    setRefreshing(true);
-    try {
-      const scope = dataRef.current;
-      const params = new URLSearchParams({ month: localDate().slice(0, 7) });
-      if (scope) params.set("budgetId", String(scope.identity.activeAccountId));
-      const next = await budgetRequest<BudgetData>(`/api/new/budget-snapshot?${params}`);
-      if (!next?.identity?.activeAccountId || !next.userId || !next.summary ||
-          !Array.isArray(next.accounts) || !Array.isArray(next.cards) || !Array.isArray(next.categories))
-        throw new Error("Your budget response could not be read. Please retry.");
-      if (scope && scope.userId !== next.userId) throw new BudgetRequestError("Your signed-in account changed. Reload to continue.", 401);
-      if (id !== requestId.current) return;
-      dataRef.current = next;
-      setData(next);
-      setError(null);
-      setLastUpdated(Date.now());
-      setRefreshVersion(value => value + 1);
-    } catch (err) {
-      if (id === requestId.current) {
-        if (err instanceof BudgetRequestError && [401, 403].includes(err.status)) {
-          dataRef.current = null; setData(null); setLastUpdated(null);
+  if (!queue.current)
+    queue.current = createRefreshQueue(async () => {
+      const id = ++requestId.current;
+      setRefreshing(true);
+      try {
+        const scope = dataRef.current;
+        const params = new URLSearchParams({ month: localDate().slice(0, 7) });
+        if (scope)
+          params.set("budgetId", String(scope.identity.activeAccountId));
+        const next = await budgetRequest<BudgetData>(
+          `/api/new/budget-snapshot?${params}`,
+        );
+        if (
+          !next?.identity?.activeAccountId ||
+          !next.userId ||
+          !next.summary ||
+          !Array.isArray(next.accounts) ||
+          !Array.isArray(next.cards) ||
+          !Array.isArray(next.categories)
+        )
+          throw new Error(
+            "Your budget response could not be read. Please retry.",
+          );
+        if (scope && scope.userId !== next.userId)
+          throw new BudgetRequestError(
+            "Your signed-in account changed. Reload to continue.",
+            401,
+          );
+        if (id !== requestId.current) return;
+        resourceRefresh.setScope(
+          `${next.userId}:${next.identity.activeAccountId}`,
+        );
+        resourceRefresh.reconcile(next.resourceTokens ?? {});
+        dataRef.current = next;
+        setData(next);
+        setError(null);
+        setLastUpdated(Date.now());
+        setRefreshVersion((value) => value + 1);
+      } catch (err) {
+        if (id === requestId.current) {
+          if (
+            err instanceof BudgetRequestError &&
+            ([401, 403].includes(err.status) || err.code === "BUDGET_CHANGED")
+          ) {
+            viewFreshness.clear();
+            resourceRefresh.setScope("");
+            dataRef.current = null;
+            setData(null);
+            setLastUpdated(null);
+          }
+          setError(
+            err instanceof Error ? err.message : "Unable to load your budget.",
+          );
         }
-        setError(err instanceof Error ? err.message : "Unable to load your budget.");
+        throw err;
+      } finally {
+        if (id === requestId.current) setRefreshing(false);
       }
-      throw err;
-    } finally { if (id === requestId.current) setRefreshing(false); }
-  });
+    });
   const refresh = useCallback(() => queue.current!(), []);
-  useEffect(() => { void refresh().catch(() => {}); }, [refresh, pathname, today]);
+  useEffect(() => {
+    void refresh().catch(() => {});
+  }, [refresh, pathname, today]);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const wake = () => {
       setOnline(navigator.onLine);
       if (document.visibilityState !== "hidden" && navigator.onLine) {
         clearTimeout(timer);
-        timer = setTimeout(() => void refresh().catch(() => {}), 150);
+        timer = setTimeout(() => {
+          resourceRefresh.invalidate();
+          void refresh().catch(() => {});
+        }, 150);
       }
     };
+    const mutation = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void refresh().catch(() => {}), 150);
+    };
     const offline = () => setOnline(false);
-    const interval = setInterval(wake, 60_000);
+    let disposed = false;
+    let failures = 0;
+    let poll: ReturnType<typeof setTimeout>;
+    const reconcile = async () => {
+      if (document.visibilityState !== "hidden" && navigator.onLine) {
+        try {
+          await refresh();
+          failures = 0;
+        } catch {
+          failures++;
+        }
+      }
+      if (!disposed)
+        poll = setTimeout(
+          reconcile,
+          Math.min(900_000, 60_000 * 2 ** Math.min(failures, 4)) +
+            Math.random() * 10_000,
+        );
+    };
+    poll = setTimeout(reconcile, 60_000 + Math.random() * 10_000);
+    window.addEventListener("budget-mutated", mutation);
     window.addEventListener("focus", wake);
     window.addEventListener("online", wake);
     window.addEventListener("offline", offline);
     document.addEventListener("visibilitychange", wake);
-    const { data: authListener } = createClient().auth.onAuthStateChange(event => {
-      if (event === "SIGNED_OUT") {
-        ++requestId.current; dataRef.current = null; setData(null); setLastUpdated(null);
-        setError("Your session ended. Sign in again.");
-      }
-    });
+    const { data: authListener } = createClient().auth.onAuthStateChange(
+      (event) => {
+        if (event === "SIGNED_OUT") {
+          ++requestId.current;
+          viewFreshness.clear();
+          resourceRefresh.setScope("");
+          dataRef.current = null;
+          setData(null);
+          setLastUpdated(null);
+          setError("Your session ended. Sign in again.");
+        }
+      },
+    );
     setOnline(navigator.onLine);
     return () => {
-      clearTimeout(timer); clearInterval(interval); ++requestId.current;
+      disposed = true;
+      clearTimeout(timer);
+      clearTimeout(poll);
+      ++requestId.current;
+      window.removeEventListener("budget-mutated", mutation);
       window.removeEventListener("focus", wake);
       window.removeEventListener("online", wake);
       window.removeEventListener("offline", offline);
@@ -138,7 +214,9 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         error,
         refreshing,
         refresh,
-        lastUpdated, refreshVersion, online,
+        lastUpdated,
+        refreshVersion,
+        online,
         canEdit: !error && online && (role === "owner" || role === "editor"),
       }}
     >
@@ -151,6 +229,18 @@ export function useBudget() {
   if (!context) throw new Error("BudgetProvider is required");
   return context;
 }
+export function BudgetScope({ children }: { children: React.ReactNode }) {
+  const { data, error } = useBudget();
+  if (!data) return <DataBoundary>{null}</DataBoundary>;
+  return (
+    <Fragment
+      key={data ? `${data.userId}:${data.identity.activeAccountId}` : "loading"}
+    >
+      {children}
+    </Fragment>
+  );
+}
+
 export function DataBoundary({
   children,
   fallback,
@@ -172,14 +262,7 @@ export function DataBoundary({
     </div>
   ) : null;
   if (error && !data) return failure;
-  if (!data)
-    return (
-      fallback ?? (
-        <div className="nl-panel" role="status">
-          Loading your budget…
-        </div>
-      )
-    );
+  if (!data) return fallback ?? <PageSkeleton />;
   return (
     <>
       {failure}

@@ -1,4 +1,6 @@
 "use client";
+import { PageSkeleton } from "./page-skeleton";
+import { useResourceVersion } from "./use-resource-version";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -49,8 +51,8 @@ export function GuidedHoldings({
     <DataBoundary>
       <AccountNavigation />
       {features.loading ? (
-        <p role="status">Loading account tools…</p>
-      ) : features.error ? (
+        <PageSkeleton heading={false} />
+      ) : features.error && !features.features.length ? (
         <div className="nl-panel" role="alert">
           <h2>Your account settings could not load</h2>
           <button
@@ -79,6 +81,11 @@ export function GuidedHoldings({
   );
 }
 function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
+  const resourceVersion = useResourceVersion(
+    "planning",
+    "balances",
+    "envelopes",
+  );
   const { data, canEdit, refresh } = useBudget();
   const features = useFeatures();
   const params = useSearchParams();
@@ -98,9 +105,10 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
     features.hasPremium && features.isFeatureEnabled("goals");
   const loanEnabled = features.hasPremium && features.isFeatureEnabled("loans");
   const assetEnabled = features.isFeatureEnabled("non_cash_assets");
+  const loaded = useRef(false);
   const load = useCallback(async () => {
     const token = ++generation.current;
-    setLoading(true);
+    setLoading(!loaded.current);
     setError("");
     setRelatedError(false);
     const result = await Promise.allSettled([
@@ -117,6 +125,7 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
     if (token !== generation.current) return;
     const primary = result[0];
     if (primary.status === "fulfilled" && Array.isArray(primary.value)) {
+      loaded.current = true;
       setItems(primary.value);
       if (kind === "loans") setLoans(primary.value as Loan[]);
       else setAssets(primary.value as NonCashAsset[]);
@@ -153,8 +162,17 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
     return () => {
       generation.current++;
     };
-  }, [load, data?.identity.activeAccountId]);
-  const selected = items.find((i) => i.id === id);
+  }, [load, data?.identity.activeAccountId, resourceVersion]);
+  const savedSelection = useRef<Holding | undefined>(undefined);
+  const currentSelection = items.find((i) => i.id === id);
+  if (currentSelection) savedSelection.current = currentSelection;
+  if (savedSelection.current?.id !== id) savedSelection.current = undefined;
+  const selected = currentSelection;
+  const editableSelection =
+    currentSelection ??
+    (savedSelection.current
+      ? { ...savedSelection.current, recordMissing: true }
+      : undefined);
   const action = params.get("action");
   const listPath = `/new/${kind}`;
   const path = id ? `${listPath}/${id}` : listPath;
@@ -172,11 +190,11 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
     action === "new"
       ? undefined
       : action === "edit" || action === "balance"
-        ? selected
+        ? editableSelection
         : undefined;
   const editing =
     action === "new" ||
-    (!!selected && (action === "edit" || action === "balance"));
+    (!!editableSelection && (action === "edit" || action === "balance"));
   const sum = (values: Holding[]) =>
     values.reduce((s, i) => s + cents(holdingValue(i)), 0) / 100;
   const total = sum(items);
@@ -236,10 +254,8 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
       )}
       <ReadOnlyNotice />
       {loading ? (
-        <div className="nl-panel" role="status">
-          Loading {loan ? "loans" : "investments & assets"}…
-        </div>
-      ) : error ? (
+        <PageSkeleton heading={false} />
+      ) : error && !loaded.current ? (
         <div className="nl-panel" role="alert">
           <h2>Unable to load your records</h2>
           <p>{error}</p>
@@ -523,7 +539,7 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
           )}
         </>
       )}
-      {editing && !loading && !error && (
+      {editing && !loading && (
         <HoldingEditor
           key={`${action}:${selection?.id || "new"}`}
           kind={kind}

@@ -530,7 +530,7 @@ export async function getQueuedImports(options?: {
   if (!accountId) throw new Error('No active account');
 
   const reviewFields = [
-    'id',
+    'id', 'revision', 'account_id',
     'import_setup_id',
     'transaction_date',
     'description',
@@ -725,6 +725,8 @@ export async function getQueuedImportBatches() {
     
     return {
       batch_id: batchId,
+      budget_id: firstItem.account_id,
+      revisions: Object.fromEntries(items.map(item => [item.id, item.revision])),
       import_setup_id: firstItem.import_setup_id,
       setup_name: firstItem.automatic_import_setups?.integration_name || 'Unknown',
       source_type: firstItem.automatic_import_setups?.source_type || 'email',
@@ -817,6 +819,8 @@ export async function convertQueuedImportToParsedTransaction(queuedImport: any):
 
   return {
     id: `queued-${queuedImport.id}`,
+    revision: queuedImport.revision,
+    budgetId: queuedImport.account_id,
     date: queuedImport.transaction_date,
     description: queuedImport.description,
     merchant: queuedImport.merchant,

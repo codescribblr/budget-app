@@ -34,11 +34,30 @@ const channel=(client,topic,events)=>new Promise((resolve,reject)=>{
  sql(`begin; insert into accounts(user_id,account_id,name,balance,account_type,include_in_totals) values('${owner.id}',27,'Sync QA broadcast',0,'cash',false),('${owner.id}',27,'Sync QA broadcast',0,'cash',false); delete from accounts where account_id=27 and name='Sync QA broadcast'; commit;`);
  const deadline=Date.now()+10000;while(Date.now()<deadline && (a.length===initialA||b.length===initialB))await new Promise(r=>setTimeout(r,100));
  await new Promise(r=>setTimeout(r,500));
- assert.deepEqual(a.slice(initialA).map(e=>e.resource),['accounts']);assert.deepEqual(b.slice(initialB).map(e=>e.resource),['accounts']);assert.ok(a.slice(initialA).every(e=>Object.keys(e).every(k=>['resource','id'].includes(k))));
+ assert.deepEqual(a.slice(initialA).map(e=>e.resource),['balances']);assert.deepEqual(b.slice(initialB).map(e=>e.resource),['balances']);assert.ok(a.slice(initialA).every(e=>Object.keys(e).every(k=>['resource','id'].includes(k))));
  console.log('PASS two devices receive one redacted invalidation for multiple committed row changes');
  const personal=phone; const own=[];await channel(personal,`budget-sync:27:user:${owner.id}`,own);
  sql(`begin; insert into budget_checkins(user_id,account_id,cadence,period_start,items) values('${owner.id}',27,'daily','2099-01-01','{}'); delete from budget_checkins where user_id='${owner.id}' and account_id=27 and period_start='2099-01-01'; commit;`);
  const until=Date.now()+10000;while(Date.now()<until&&!own.length)await new Promise(r=>setTimeout(r,100));assert.deepEqual(own.map(e=>e.resource),['budget_checkins']);
  console.log('PASS personal check-in event delivery and transaction coalescing');
+ const beforeBulkA=a.length,beforeBulkB=b.length,start=Date.now();
+ sql(`begin; update budget_resource_versions set published_at=null where account_id=27 and resource='imports'; with setup as(insert into automatic_import_setups(account_id,user_id,source_type,source_identifier) values(27,'${owner.id}','manual','sync-volume-qa') returning id) insert into queued_imports(account_id,import_setup_id,transaction_date,description,merchant,amount,transaction_type,hash,source_batch_id) select 27,setup.id,'2099-01-01','Volume QA','QA',1,'expense',gen_random_uuid()::text,'sync-volume-qa' from setup,generate_series(1,1000); delete from automatic_import_setups where account_id=27 and source_identifier='sync-volume-qa'; commit;`);
+ const bulkDeadline=Date.now()+10000;while(Date.now()<bulkDeadline&&(a.length===beforeBulkA||b.length===beforeBulkB))await new Promise(r=>setTimeout(r,100));
+ await new Promise(r=>setTimeout(r,500));
+ assert.deepEqual(a.slice(beforeBulkA).map(e=>e.resource),['imports']);assert.deepEqual(b.slice(beforeBulkB).map(e=>e.resource),['imports']);
+ const firstToken=sql("select revision from budget_resource_versions where account_id=27 and resource='imports'");
+ // Source throttling may suppress a second transaction, but its durable token always advances.
+ sql(`begin; insert into automatic_import_setups(account_id,user_id,source_type,source_identifier) values(27,'${owner.id}','manual','sync-volume-token-qa'); delete from automatic_import_setups where account_id=27 and source_identifier='sync-volume-token-qa'; commit;`);
+ assert.notEqual(sql("select revision from budget_resource_versions where account_id=27 and resource='imports'"),firstToken);
+ console.log(`PASS 1,000 imported-row changes produce one signal per subscriber; observed within ${Date.now()-start}ms; catch-up token advances for later commits`);
+ const balancesBefore=a.filter(e=>e.resource==='balances').length;
+ const offlineToken=sql("select revision from budget_resource_versions where account_id=27 and resource='balances'");
+ sql(`begin; select set_config('request.jwt.claim.sub','${owner.id}',true); do $$ declare enabled_before boolean; fixture public.accounts; result jsonb; begin select enabled into enabled_before from budget_sync_config where id; update budget_sync_config set enabled=false where id; insert into accounts(user_id,account_id,name,balance,account_type,include_in_totals) values('${owner.id}',27,'Sync disabled QA',0,'cash',false) returning * into fixture; result:=save_guarded_account(27,'account',fixture.id,fixture.revision,'{"balance":1}'); if result->>'status'<>'saved' then raise exception 'Guarded save unavailable without live delivery'; end if; delete from accounts where id=fixture.id; update budget_sync_config set enabled=enabled_before where id; end $$; commit;`);
+ await new Promise(r=>setTimeout(r,600));
+ assert.equal(a.filter(e=>e.resource==='balances').length,balancesBefore);
+ assert.notEqual(sql("select revision from budget_resource_versions where account_id=27 and resource='balances'"),offlineToken);
+ console.log('PASS disabling live publication leaves guarded saves and durable HTTP catch-up tokens active');
+
+
  }finally{await Promise.all(clients.map(c=>c.removeAllChannels()));}
 })().catch(e=>{console.error(e.stderr?.toString()||e.message);process.exitCode=1}).finally(()=>setTimeout(()=>process.exit(process.exitCode||0),100));

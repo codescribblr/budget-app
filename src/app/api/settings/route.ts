@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const { supabase } = await getAuthenticatedUser();
     const accountId = await getActiveAccountId();
@@ -10,6 +10,9 @@ export async function GET() {
       return NextResponse.json({ error: 'No active account. Please select an account first.' }, { status: 400 });
     }
 
+    const versioned = new URL(request.url).searchParams.get("versioned") === "true";
+    const token = versioned ? await supabase.from("budget_resource_versions").select("revision").eq("account_id",accountId).eq("resource","settings").maybeSingle() : null;
+    if (token?.error) throw token.error;
     const { data: settings, error } = await supabase
       .from('settings')
       .select('*')
@@ -26,7 +29,7 @@ export async function GET() {
       settingsObj[setting.key] = setting.value;
     });
 
-    return NextResponse.json(settingsObj);
+    return NextResponse.json(versioned ? { values: settingsObj, revision: token?.data?.revision ?? null, budgetId: accountId } : settingsObj);
   } catch (error) {
     console.error('Error in GET /api/settings:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -53,6 +56,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 
+    if ("expectedRevision" in body || "expectedBudgetId" in body) {
+      if (body.expectedBudgetId !== accountId) return NextResponse.json({error:"The active budget changed. Reload before saving."},{status:409});
+      if (body.expectedRevision !== null && (typeof body.expectedRevision !== "string" || !/^[0-9a-f-]{36}$/i.test(body.expectedRevision))) return NextResponse.json({error:"Reload before saving safely."},{status:400});
+      const {data, error} = await supabase.rpc("save_guarded_budget_settings", {p_budget_id:accountId,p_revision:body.expectedRevision,p_values:settings});
+      if(error) throw error;
+      if(data.status !== "saved") return NextResponse.json({error:"These settings changed elsewhere. Reload and review them before saving."},{status:409});
+      return NextResponse.json(data);
+    }
     // Upsert each setting
     for (const setting of settings) {
       const { error } = await supabase
@@ -64,7 +75,7 @@ export async function POST(request: Request) {
           value: setting.value,
           updated_at: new Date().toISOString(),
         }, {
-          onConflict: 'user_id,key',
+          onConflict: 'account_id,user_id,key',
         });
 
       if (error) {

@@ -57,7 +57,7 @@ export const POST = withExternalApiService('reports', async (request, context) =
         value: stored,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'user_id,key' }
+      { onConflict: 'account_id,user_id,key' }
     );
     if (error) throw error;
   }

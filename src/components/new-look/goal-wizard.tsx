@@ -82,6 +82,7 @@ export function GoalWizard({
     };
   });
   const [step, setStep] = useState(0);
+  const reviewedSources = useRef<Record<string, string>>({});
   const heading = useRef<HTMLHeadingElement>(null);
   const submission = useRef<{ signature: string; key: string } | null>(null);
   const change = <K extends keyof GoalDraft>(key: K, value: GoalDraft[K]) =>
@@ -123,6 +124,20 @@ export function GoalWizard({
   const asset = investments.find((c) => draft.source === `asset:${c.id}`);
   const envelope = envelopes.find((c) => String(c.id) === draft.envelope);
   const payment = envelopes.find((c) => String(c.id) === draft.payment);
+  const currentSources: Record<string, string> = {};
+  for (const [table, record] of [
+    ["accounts", account],
+    ["credit_cards", card],
+    ["loans", loan],
+    ["non_cash_assets", asset],
+    ["categories", envelope],
+    ["categories", payment],
+  ] as const) {
+    if (record) currentSources[`${table}:${record.id}`] = record.revision ?? "";
+  }
+  const sourceChanged =
+    step === 3 &&
+    JSON.stringify(currentSources) !== JSON.stringify(reviewedSources.current);
   const debt = draft.type === "debt-paydown";
   const monthly = parseMoney(draft.monthly) ?? 0;
   const planBefore = (data?.categories ?? [])
@@ -228,13 +243,20 @@ export function GoalWizard({
               if (!draft.purpose)
                 throw new Error("Choose what you want to work toward.");
               if (step >= 1) validateSource();
-              if (step === 2) prepareGoal(draft);
+              if (step === 2) {
+                prepareGoal(draft);
+                reviewedSources.current = { ...currentSources };
+              }
               go(step + 1);
             }
           : undefined
       }
       onClose={onClose}
       onSave={async () => {
+        if (sourceChanged)
+          throw new Error(
+            "A linked record changed. Go back to review the latest setup before creating your goal.",
+          );
         validateSource();
         const payload = prepareGoal(draft);
         const signature = JSON.stringify(payload);
@@ -242,12 +264,23 @@ export function GoalWizard({
           submission.current = { signature, key: crypto.randomUUID() };
         const result = await budgetRequest<GoalWithDetails>(
           "/api/goals",
-          { ...payload, creation_key: submission.current.key },
+          {
+            ...payload,
+            creation_key: submission.current.key,
+            expectedBudgetId: data?.identity.activeAccountId,
+            expectedSourceRevisions: reviewedSources.current,
+          },
           "POST",
         );
         await onSaved(result.id);
       }}
     >
+      {sourceChanged && (
+        <div className="nl-notice" role="status">
+          A linked balance or envelope changed. Your entries are kept. Go back,
+          review the updated setup, then continue.
+        </div>
+      )}
       <ol className="nl-goal-steps" aria-label="Goal setup">
         {steps.map((label, i) => (
           <li

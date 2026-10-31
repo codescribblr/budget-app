@@ -1,6 +1,8 @@
 'use client';
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useResourceVersion } from '@/components/new-look/use-resource-version';
 import type { UserSubscription } from '@/lib/subscription-utils';
 
 interface SubscriptionContextType {
@@ -16,13 +18,16 @@ interface SubscriptionContextType {
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
+  const version = useResourceVersion("settings");
+  const loaded = useRef(false), sequence = useRef(0);
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchSubscription = useCallback(async () => {
+    const id = ++sequence.current;
     try {
-      setLoading(true);
+      setLoading(!loaded.current);
       setError(null);
       
       const response = await fetch('/api/subscription/status');
@@ -32,19 +37,21 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       }
       
       const data = await response.json();
-      setSubscription(data.subscription);
+      if (id !== sequence.current) return;
+      loaded.current = true; setSubscription(data.subscription);
     } catch (err: any) {
+      if (id !== sequence.current) return;
       console.error('Error fetching subscription:', err);
       setError(err.message);
-      setSubscription(null);
+      if (!loaded.current) setSubscription(null);
     } finally {
-      setLoading(false);
+      if (id === sequence.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchSubscription();
-  }, [fetchSubscription]);
+  }, [fetchSubscription, version]);
 
   // Helper functions moved inline to avoid server-side imports
   const isPremium = subscription?.tier === 'premium' &&

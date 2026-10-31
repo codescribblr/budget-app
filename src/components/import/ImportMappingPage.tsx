@@ -1,8 +1,9 @@
 'use client';
+import { freshFetch as fetch } from "@/lib/view-freshness";
 import { useImportPaths } from './use-import-paths';
 
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -209,6 +210,15 @@ export default function MapColumnsPage() {
   const [transactionTypeColumn, setTransactionTypeColumn] = useState<number | null>(null);
   const [statusColumn, setStatusColumn] = useState<number | null>(null);
   const [amountSignConvention, setAmountSignConvention] = useState<'positive_is_expense' | 'positive_is_income' | 'separate_column' | 'separate_debit_credit'>('positive_is_expense');
+  const modern=usePathname().startsWith('/new');
+  const [remapGuard,setRemapGuard]=useState<Record<string,unknown>|null>(null);
+  const remapOperation=useRef<string|null>(null);
+  const getRemapGuard=()=>{
+    if(!modern)return {};
+    if(!remapGuard)throw new Error('Reload this mapping before saving safely.');
+    remapOperation.current??=crypto.randomUUID();
+    return {...remapGuard,operationId:remapOperation.current};
+  };
   const [remapBatchId, setRemapBatchId] = useState<string | null>(null);
   const [currentTemplateId, setCurrentTemplateId] = useState<number | null>(null);
   const [currentTemplateName, setCurrentTemplateName] = useState<string | null>(null);
@@ -269,6 +279,7 @@ export default function MapColumnsPage() {
           }
 
           const remapData = await response.json();
+          setRemapGuard({expectedBudgetId:remapData.expectedBudgetId,expectedRevisions:remapData.expectedRevisions,expectedTemplateRevisions:remapData.expectedTemplateRevisions,expectedSetupRevision:remapData.expectedSetupRevision});
           analysisData = remapData.csvAnalysis;
           csvData = remapData.csvData;
           fileNameStr = remapData.csvFileName;
@@ -578,7 +589,7 @@ export default function MapColumnsPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             mapping,
-            saveAsTemplate: false,
+            saveAsTemplate: false, ...getRemapGuard(),
           }),
         });
 
@@ -1505,7 +1516,7 @@ export default function MapColumnsPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       mapping,
-                      saveAsTemplate: true,
+                      saveAsTemplate: true, ...getRemapGuard(),
                       templateName: templateSaveMode === 'new' ? (templateName || undefined) : undefined,
                       overwriteTemplateId: templateSaveMode === 'overwrite' ? (currentTemplateId || undefined) : undefined,
                       deleteOldTemplate: deleteOldTemplate,

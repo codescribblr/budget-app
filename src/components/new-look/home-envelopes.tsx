@@ -1,4 +1,6 @@
 "use client";
+import { freshFetch as fetch } from "@/lib/view-freshness";
+import { useResourceVersion } from "./use-resource-version";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ordinaryEnvelopes } from "@/lib/new-look";
@@ -9,7 +11,13 @@ import { HomeEnvelopesSkeleton } from "./home-skeleton";
 
 type RecentEnvelope = { category_id: number; transaction_date: string };
 export function HomeEnvelopes() {
-  const { data, refreshVersion } = useBudget();
+  const resourceVersion = useResourceVersion(
+    "balances",
+    "envelopes",
+    "transactions",
+    "planning",
+  );
+  const { data } = useBudget();
   const accountId = data?.identity.activeAccountId;
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{
@@ -36,7 +44,7 @@ export function HomeEnvelopes() {
           setResult({ accountId, error: error.message });
       });
     return () => controller.abort();
-  }, [accountId, attempt, refreshVersion]);
+  }, [accountId, attempt, resourceVersion]);
   if (!data) return null;
   const envelopes = ordinaryEnvelopes(data.categories);
   const current = result?.accountId === accountId ? result : null;

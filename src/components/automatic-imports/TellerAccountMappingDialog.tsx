@@ -1,6 +1,8 @@
 'use client';
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -52,6 +54,8 @@ interface TellerAccountMappingDialogProps {
   accounts: TellerAccount[];
   onSuccess: () => void;
   existingMappings?: AccountMapping[]; // For editing existing setups
+  expectedRevision?: string;
+  expectedBudgetId?: number;
   setupId?: number; // For updating existing setups
 }
 
@@ -65,7 +69,12 @@ export default function TellerAccountMappingDialog({
   onSuccess,
   existingMappings,
   setupId,
+  expectedRevision,
+  expectedBudgetId,
 }: TellerAccountMappingDialogProps) {
+  const modern = usePathname().startsWith("/new");
+  const busy = useRef(false);
+  const [saveError,setSaveError] = useState("");
   const [loading, setLoading] = useState(false);
   const [budgetAccounts, setBudgetAccounts] = useState<Array<{ id: number; name: string }>>([]);
   const [budgetCreditCards, setBudgetCreditCards] = useState<Array<{ id: number; name: string }>>([]);
@@ -152,6 +161,8 @@ export default function TellerAccountMappingDialog({
   };
 
   const handleSave = async () => {
+    if(busy.current) return;
+    if(modern && setupId && (!expectedRevision || !expectedBudgetId)) {setSaveError("Close and reopen these mappings before saving safely.");return;}
     // Validate that at least one account is enabled
     const enabledCount = Object.values(mappings).filter(m => m.enabled).length;
     if (enabledCount === 0) {
@@ -184,6 +195,7 @@ export default function TellerAccountMappingDialog({
       }
     }
 
+    busy.current = true; setSaveError("");
     setLoading(true);
     try {
       let response;
@@ -195,6 +207,7 @@ export default function TellerAccountMappingDialog({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             accountMappings: Object.values(mappings),
+            ...(modern ? {expectedBudgetId,expectedRevision} : {}),
           }),
         });
       } else {
@@ -221,8 +234,9 @@ export default function TellerAccountMappingDialog({
       onOpenChange(false);
     } catch (error: any) {
       console.error('Error saving account mappings:', error);
-      toast.error(error.message || 'Failed to save account mappings');
+      setSaveError(error.message || 'Could not confirm this change. Close and reopen the mappings to check the saved result before submitting again.');
     } finally {
+      busy.current = false;
       setLoading(false);
     }
   };
@@ -247,6 +261,7 @@ export default function TellerAccountMappingDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {saveError && <div className="nl-notice" role="alert">{saveError}</div>}
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

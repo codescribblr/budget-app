@@ -1,6 +1,10 @@
 "use client";
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useEffect, useState, useRef } from "react";
+import { usePathname } from "next/navigation";
+import { useResourceVersion } from "@/components/new-look/use-resource-version";
+import { guardedMetadata } from "@/components/new-look/record-guard";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +48,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 // Note: getActiveAccountId is server-only, we'll get accountId from API
 
 interface Member {
+  revision?: string;
   userId: string;
   email: string;
   role: "owner" | "editor" | "viewer";
@@ -60,6 +65,8 @@ interface Invitation {
 }
 
 export default function CollaboratorsPage() {
+  const modern=usePathname().startsWith("/new");
+  const version=useResourceVersion("settings");
   const router = useRouter();
   const [accountId, setAccountId] = useState<number | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -82,18 +89,16 @@ export default function CollaboratorsPage() {
 
   // Track if fetch is in progress to prevent duplicate calls
   const fetchingRef = useRef(false);
-  const hasMountedRef = useRef(false);
+  const trailingRefresh=useRef(false);
 
   useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      loadData();
-    }
-  }, []);
+    void loadData();
+  }, [version]);
 
   const loadData = async () => {
     // Prevent duplicate calls
     if (fetchingRef.current) {
+      trailingRefresh.current=true;
       return;
     }
     fetchingRef.current = true;
@@ -118,6 +123,7 @@ export default function CollaboratorsPage() {
     } finally {
       setLoading(false);
       fetchingRef.current = false;
+      if(trailingRefresh.current){trailingRefresh.current=false;void loadData();}
     }
   };
 
@@ -223,13 +229,14 @@ export default function CollaboratorsPage() {
       const response = await fetch(
         `/api/budget-accounts/${accountId}/members/${userId}`,
         {
-          method: "DELETE",
+          method: "DELETE", headers:{"Content-Type":"application/json"},body:JSON.stringify(modern ? guardedMetadata(members.find(m=>m.userId===userId)??{},accountId) : {}),
         },
       );
 
       if (!response.ok) {
         const data = await response.json();
         toast.error(data.error || "Failed to remove member");
+        await loadMembers(accountId);
         return;
       }
 
@@ -256,13 +263,14 @@ export default function CollaboratorsPage() {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: newRole }),
+          body: JSON.stringify({ role: newRole, ...(modern ? guardedMetadata(members.find(m=>m.userId===userId)??{},accountId) : {}) }),
         },
       );
 
       if (!response.ok) {
         const data = await response.json();
         toast.error(data.error || "Failed to update role");
+        await loadMembers(accountId);
         return;
       }
 

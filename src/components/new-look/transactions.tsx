@@ -1,4 +1,7 @@
 "use client";
+import { PageSkeleton } from "./page-skeleton";
+import { freshFetch as fetch } from "@/lib/view-freshness";
+import { useResourceVersion } from "./use-resource-version";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -64,7 +67,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import AddTransactionDialog from "@/components/transactions/AddTransactionDialog";
-import EditTransactionDialog from "@/components/transactions/EditTransactionDialog";
+import { GuardedTransactionEditor } from "./transaction-editor";
+import { useMoneyCommand } from "./use-money-command";
+import { guardedMetadata } from "./record-guard";
 import BulkTagDialog from "@/components/tags/BulkTagDialog";
 import { DataBoundary, budgetRequest, useBudget } from "./budget-context";
 import { PageHeading, ReadOnlyNotice } from "./common";
@@ -91,6 +96,8 @@ function TransactionReview() {
     latestSearch.current = search;
     renderedSearch.current = search;
   }
+  const createCommand = useMoneyCommand(data?.identity.activeAccountId);
+  const resourceVersion = useResourceVersion("transactions", "envelopes");
   const tagsEnabled = useFeature("tags");
   const [result, setResult] = useState<{
     key: string;
@@ -108,6 +115,7 @@ function TransactionReview() {
   const [selecting, setSelecting] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const selectedSnapshots = useRef(new Map<number, TransactionWithSplits>());
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<TransactionWithSplits | null>(null);
   const [deleting, setDeleting] = useState<TransactionWithSplits | null>(null);
@@ -187,7 +195,7 @@ function TransactionReview() {
   }, [query]);
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
+    setLoading(!result || result.key !== query);
     setError(null);
     fetch(`/api/transactions/review?${query}`, {
       signal: controller.signal,
@@ -225,7 +233,7 @@ function TransactionReview() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [query, attempt]);
+  }, [query, attempt, resourceVersion]);
   useEffect(() => {
     const controller = new AbortController();
     setOptionsError(false);
@@ -297,10 +305,11 @@ function TransactionReview() {
     if (!deleting || deletingBusy || !canEdit) return;
     setDeletingBusy(true);
     try {
-      const response = await fetch(`/api/transactions/${deleting.id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Could not delete the transaction.");
+      await budgetRequest(
+        `/api/transactions/${deleting.id}`,
+        guardedMetadata(deleting, data!.identity.activeAccountId),
+        "DELETE",
+      );
       toast.success("Transaction deleted");
       setDeleting(null);
       saved();
@@ -324,6 +333,13 @@ function TransactionReview() {
         errors?: { transactionId: number; error: string }[];
       }>("/api/transactions/bulk-update", {
         transactionIds: [...selected],
+        expectedBudgetId: data!.identity.activeAccountId,
+        expectedRevisions: Object.fromEntries(
+          [...selected].map((id) => [
+            id,
+            selectedSnapshots.current.get(id)?.revision ?? null,
+          ]),
+        ),
         updates: { categoryId: Number(batchCategory) },
       });
       if (!Number.isFinite(result.updated))
@@ -405,6 +421,11 @@ function TransactionReview() {
     filters.attention !== "all" ||
     filterError
   );
+  for (const row of rows)
+    if (selected.has(row.id) && !selectedSnapshots.current.has(row.id))
+      selectedSnapshots.current.set(row.id, row);
+  for (const id of selectedSnapshots.current.keys())
+    if (!selected.has(id)) selectedSnapshots.current.delete(id);
   const selectedRows = rows.filter((t) => selected.has(t.id));
   const amountScope = filters.categories.length
     ? "Amounts in selected envelopes"
@@ -664,7 +685,9 @@ function TransactionReview() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/transactions">More bulk tools in classic ↗</Link>
+                  <Link href="/transactions">
+                    More bulk tools in classic ↗
+                  </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -765,10 +788,7 @@ function TransactionReview() {
             </button>
           </div>
         ) : loading ? (
-          <div className="nl-tx-empty" role="status">
-            <RefreshCw size={24} className="animate-spin" />
-            <p>Loading your transaction history…</p>
-          </div>
+          <PageSkeleton heading={false} />
         ) : !rows.length ? (
           <div className="nl-tx-empty">
             <ReceiptText size={28} />
@@ -1043,16 +1063,28 @@ function TransactionReview() {
       )}
       {adding && (
         <AddTransactionDialog
+          uncertain={createCommand.uncertain}
+          onCommit={async (payload) => {
+            await createCommand.run("/api/transactions", payload);
+          }}
           isOpen
-          onClose={() => setAdding(false)}
+          onClose={() => {
+            if (createCommand.uncertain) {
+              toast.info(
+                "Check the transaction outcome before closing this editor.",
+              );
+              return;
+            }
+            setAdding(false);
+          }}
           categories={categories}
           onSuccess={saved}
         />
       )}
       {editing && (
-        <EditTransactionDialog
+        <GuardedTransactionEditor
           isOpen
-          transaction={editing}
+          transaction={rows.find((t) => t.id === editing.id) ?? editing}
           categories={categories}
           merchantGroups={merchants}
           onClose={() => {
@@ -1066,6 +1098,36 @@ function TransactionReview() {
         <BulkTagDialog
           isOpen
           transactionIds={[...selected]}
+          onCommit={async (tagIds) => {
+            const failures: number[] = [];
+            for (const id of selected) {
+              const row = selectedSnapshots.current.get(id);
+              try {
+                if (!row) throw new Error("Selection changed");
+                await budgetRequest(
+                  `/api/transactions/${id}`,
+                  {
+                    tag_ids: [
+                      ...new Set([
+                        ...(row.tags ?? []).map((t) => t.id),
+                        ...tagIds,
+                      ]),
+                    ],
+                    ...guardedMetadata(row, data!.identity.activeAccountId),
+                  },
+                  "PATCH",
+                );
+              } catch {
+                failures.push(id);
+              }
+            }
+            setSelected(new Set(failures));
+            saved();
+            if (failures.length)
+              throw new Error(
+                `${failures.length} transactions changed or could not be saved. They remain selected; review them before retrying. The other tags were saved.`,
+              );
+          }}
           onClose={() => setBatchTags(false)}
           onSuccess={() => {
             setSelected(new Set());

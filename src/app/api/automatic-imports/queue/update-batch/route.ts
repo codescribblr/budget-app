@@ -50,6 +50,14 @@ export async function PUT(request: Request) {
       updateData.is_historical = isHistorical;
     }
 
+    if ("expectedBudgetId" in body || "expectedRevisions" in body) {
+      if(body.expectedBudgetId !== accountId) return NextResponse.json({error:"The active budget changed. Reload this review.",code:"BUDGET_CHANGED"},{status:409});
+      const {data,error} = await supabase.rpc("save_import_defaults",{p_budget_id:accountId,p_batch_id:batchId,p_revisions:body.expectedRevisions ?? null,p_patch:updateData});
+      if(error) return NextResponse.json({error:error.code==="42501"?"You no longer have edit access.":"Could not save import settings. Reload the batch before trying again."},{status:error.code==="42501"?403:400});
+      if(data.status!=="saved") return NextResponse.json({error:"This batch changed elsewhere. Your settings were not saved. Close this dialog and reopen the batch to review the latest settings.",code:"STALE_RECORD"},{status:409});
+      return NextResponse.json(data);
+    }
+
     // Update all queued imports in this batch
     const { data, error } = await supabase
       .from('queued_imports')

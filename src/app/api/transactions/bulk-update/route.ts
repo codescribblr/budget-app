@@ -1,3 +1,4 @@
+import { guardedTransactionUpdate } from "@/lib/guarded-transaction-route";
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
@@ -93,6 +94,17 @@ export async function POST(request: Request) {
           updateData.credit_card_id = null;
         }
 
+        if ("expectedBudgetId" in body || "expectedRevisions" in body) {
+          if (updates.isHistorical !== undefined) Object.assign(updateData, { is_historical: updates.isHistorical });
+          const guarded = await guardedTransactionUpdate(transactionId, {
+            ...updateData, expectedBudgetId: body.expectedBudgetId, expectedRevision: body.expectedRevisions?.[transactionId] ?? null,
+          });
+          if (!guarded) throw new Error("Missing transaction revision");
+          const result = await guarded.json();
+          if (!guarded.ok) errors.push({ transactionId, error: result.error });
+          else updatedTransactions.push(result);
+          continue;
+        }
         const updated = await updateTransaction(transactionId, updateData);
         if (updated) {
           // Handle is_historical separately since updateTransaction doesn't support it yet

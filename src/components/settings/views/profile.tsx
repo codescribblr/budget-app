@@ -1,6 +1,9 @@
 "use client";
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useResourceVersion } from "@/components/new-look/use-resource-version";
+import { useEffect, useState, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -16,6 +19,13 @@ import { toast } from "sonner";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 export default function ProfileSettingsPage() {
+  const modern = usePathname().startsWith("/new");
+  const resourceVersion = useResourceVersion("settings");
+  const dirty = useRef(false);
+  const loaded = useRef(false);
+  type Profile = {birth_year:number|null; revision:string|null; userId:string};
+  const [baseline,setBaseline] = useState<Profile|null>(null);
+  const [latest,setLatest] = useState<Profile|null>(null);
   const [birthYear, setBirthYear] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -23,17 +33,19 @@ export default function ProfileSettingsPage() {
 
   useEffect(() => {
     fetchProfile();
-  }, []);
+  }, [resourceVersion]);
 
   const fetchProfile = async () => {
     try {
-      setLoading(true);
+      setLoading(!loaded.current);
       setLoadError(false);
       const response = await fetch("/api/user/profile");
       if (!response.ok) throw new Error("Could not load profile");
       {
         const data = await response.json();
-        setBirthYear(data.birth_year);
+        setLatest(data);
+        if (!dirty.current) { setBirthYear(data.birth_year);setBaseline(data); }
+        loaded.current = true;
       }
     } catch (error) {
       setLoadError(true);
@@ -45,7 +57,7 @@ export default function ProfileSettingsPage() {
   };
 
   const handleSave = async () => {
-    if (saving || loadError) return;
+    if (saving || loadError || (modern && !baseline)) return;
     if (
       birthYear !== null &&
       (!Number.isInteger(birthYear) ||
@@ -60,14 +72,17 @@ export default function ProfileSettingsPage() {
       const response = await fetch("/api/user/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ birth_year: birthYear }),
+        body: JSON.stringify({ birth_year: birthYear, ...(modern ? {expectedRevision:baseline!.revision,expectedUserId:baseline!.userId} : {}) }),
       });
 
       if (!response.ok) {
         const error = await response.json();
+        if (error.code === "STALE_RECORD") setLatest({...error.latest,userId:baseline!.userId});
         throw new Error(error.error || "Failed to save profile");
       }
 
+      const saved = await response.json();
+      setBaseline(saved);setLatest(saved);dirty.current=false;
       toast.success("Profile updated successfully");
     } catch (error: any) {
       console.error("Error saving profile:", error);
@@ -88,7 +103,7 @@ export default function ProfileSettingsPage() {
     );
   }
 
-  if (loadError)
+  if (loadError && !loaded.current)
     return (
       <div role="alert" className="space-y-4">
         <p>We couldn’t load your profile.</p>
@@ -108,6 +123,11 @@ export default function ProfileSettingsPage() {
         </p>
       </div>
 
+      {modern && baseline && latest && baseline.revision !== latest.revision && <div className="nl-notice" role="status">
+        <p>Your saved birth year changed to {latest.birth_year ?? "not specified"}. Your entry is retained.</p>
+        <button className="nl-secondary" onClick={() => {setBirthYear(latest.birth_year);setBaseline(latest);dirty.current=false;}}>Use latest</button>{" "}
+        <button className="nl-secondary" onClick={() => setBaseline(latest)}>Keep my entry · reviewed</button>
+      </div>}
       <Card>
         <CardHeader>
           <CardTitle>Personal Information</CardTitle>
@@ -125,6 +145,7 @@ export default function ProfileSettingsPage() {
               max={currentYear}
               value={birthYear ?? ""}
               onChange={(e) => {
+                dirty.current = true;
                 const value = e.target.value;
                 setBirthYear(value ? Number(value) : null);
               }}

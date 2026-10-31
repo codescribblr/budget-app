@@ -45,6 +45,7 @@ function wasSyncedThisUtcMonth(lastSyncAt: string | null | undefined): boolean {
 }
 
 interface IntegrationRow {
+  revision?: string;
   id: number;
   account_id: number;
   integration_type: 'rentcast';
@@ -458,6 +459,7 @@ export function toPublicRentCastIntegration(
   const effectiveCount = row ? getEffectiveRequestCount(row) : 0;
 
   return {
+    revision: row?.revision ?? null,
     id: row?.id,
     account_id: row?.account_id,
     integration_type: 'rentcast',

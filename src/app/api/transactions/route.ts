@@ -1,3 +1,4 @@
+import { guardedTransactionUpdate } from "@/lib/guarded-transaction-route";
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllTransactions, createTransaction, getTransactionsPaginated } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
@@ -279,6 +280,8 @@ export async function POST(request: NextRequest) {
     if (accessCheck) return accessCheck;
 
     const body = (await request.json()) as CreateTransactionRequest;
+    const guarded = await guardedTransactionUpdate(null, body);
+    if (guarded) return guarded;
     const transaction = await createTransaction(body);
     return NextResponse.json(transaction, { status: 201 });
   } catch (error: any) {

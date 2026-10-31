@@ -1,4 +1,5 @@
 'use client';
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';

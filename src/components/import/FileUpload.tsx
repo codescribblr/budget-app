@@ -1,4 +1,5 @@
 'use client';
+import { freshFetch as fetch } from "@/lib/view-freshness";
 import { useImportPaths } from './use-import-paths';
 
 import { useState, useRef, useEffect } from 'react';

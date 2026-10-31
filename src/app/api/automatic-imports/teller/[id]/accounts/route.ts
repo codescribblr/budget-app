@@ -1,3 +1,4 @@
+import { rowPrecondition, staleRowResponse } from "@/lib/row-precondition";
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
@@ -89,6 +90,8 @@ export async function GET(
         institution: acc.institution,
       })),
       currentMappings: accountMappings,
+      revision: setup.revision,
+      budgetId: accountId,
     });
   } catch (error: any) {
     console.error('Error in GET /api/automatic-imports/teller/[id]/accounts:', error);
@@ -164,6 +167,17 @@ export async function PUT(
         { error: 'At least one account must be enabled' },
         { status: 400 }
       );
+    }
+
+    const guard = rowPrecondition(body,accountId);
+    if(guard.response) return guard.response;
+    if(guard.revision) {
+      const {data,error} = await supabase.rpc("save_teller_mapping",{p_budget_id:accountId,p_id:setupId,p_revision:guard.revision,p_mappings:accountMappings});
+      if(error) return NextResponse.json({error:error.code==="42501"?"You no longer have edit access.":"Could not save mappings. Check the selected accounts and reload before trying again."},{status:error.code==="42501"?403:400});
+      if(data.status!=="saved") return staleRowResponse();
+      // The normal Fetch transactions action performs provider I/O separately.
+      // A provider outage cannot turn a committed mapping into a failed save.
+      return NextResponse.json({setup:data.setup});
     }
 
     // Process account mappings and create accounts if needed

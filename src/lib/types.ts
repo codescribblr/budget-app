@@ -1,5 +1,7 @@
 // Database types
 export interface Category {
+  recordMissing?: boolean;
+  revision?: string;
   id: number;
   name: string;
   monthly_amount: number;
@@ -62,6 +64,8 @@ export type RentCastPropertyType =
   | 'Land';
 
 export interface NonCashAsset {
+  recordMissing?: boolean;
+  revision?: string;
   id: number;
   name: string;
   asset_type: 'investment' | 'real_estate' | 'vehicle' | 'art' | 'insurance' | 'collectibles' | 'cryptocurrency' | 'other';
@@ -122,6 +126,8 @@ export interface UpdateNonCashAssetRequest {
 }
 
 export interface RentCastIntegrationSettingsResponse {
+  revision?: string | null;
+  account_id?: number;
   integration_type: 'rentcast';
   is_enabled: boolean;
   has_api_key: boolean;
@@ -148,6 +154,8 @@ export interface RentCastValuationSummary {
 }
 
 export interface Loan {
+  recordMissing?: boolean;
+  revision?: string;
   id: number;
   user_id: string;
   name: string;
@@ -167,6 +175,7 @@ export interface Loan {
 }
 
 export interface Transaction {
+  revision?: string;
   id: number;
   date: string;
   description: string;
@@ -271,6 +280,7 @@ export interface TransactionSplit {
 }
 
 export interface PendingCheck {
+  revision?: string;
   id: number;
   description: string;
   amount: number;
@@ -297,6 +307,8 @@ export interface PreTaxDeductionItem {
 export type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly' | 'quarterly' | 'annually';
 
 export interface IncomeStream {
+  recordMissing?: boolean;
+  revision?: string;
   id: number;
   account_id: number;
   name: string;
@@ -543,6 +555,8 @@ export interface DashboardSummary {
 export type GoalPurpose = 'purchase' | 'reserve' | 'retirement' | 'debt';
 
 export interface Goal {
+  recordMissing?: boolean;
+  revision?: string;
   id: number;
   user_id: string;
   name: string;

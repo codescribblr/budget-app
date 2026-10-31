@@ -25,12 +25,23 @@ export async function DELETE(
 
     const { batchId } = await params;
     
+    const rawBody = await request.text();
+    let parsedBody;
+    try { parsedBody = rawBody ? JSON.parse(rawBody) : {}; }
+    catch { return NextResponse.json({ error: 'Invalid delete request' }, { status: 400 }); }
+    if ('expectedBudgetId' in parsedBody || 'expectedRevisions' in parsedBody) {
+      if (parsedBody.expectedBudgetId !== accountId) return NextResponse.json({ error: 'The active budget changed. Reload before deleting.' }, { status: 409 });
+      const { data: result, error } = await supabase.rpc('delete_import_review_rows', { p_budget_id: accountId, p_batch_id: batchId, p_revisions: parsedBody.expectedRevisions });
+      if (error) throw error;
+      if (result.status !== 'saved') return NextResponse.json({ error: 'This batch changed elsewhere. Reload and review the remaining transactions before deleting.' }, { status: 409 });
+      return NextResponse.json(result);
+    }
     // Parse request body to get optional transaction IDs
     // Note: DELETE requests can have a body, but we need to check if it exists
     let transactionIds: number[] | null = null;
     try {
       // Read the request body
-      const body = await request.json();
+      const body = parsedBody;
       if (body && body.transactionIds && Array.isArray(body.transactionIds) && body.transactionIds.length > 0) {
         // Extract numeric IDs from "queued-{id}" format
         transactionIds = body.transactionIds

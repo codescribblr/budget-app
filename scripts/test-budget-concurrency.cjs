@@ -36,7 +36,7 @@ const save=(kind,id,revision,patch)=>`select save_guarded_account(27,'${kind}',$
   assert.equal(next.record.current_balance,1500);
   assert.equal(sql(`select count(*) from credit_card_balance_audit where credit_card_id=${c.id}`),'1');
   console.log('PASS concurrent card limit and available credit remain consistent');
-  let denied=false; try{sql(auth(save('account',a.id,stale.latest.revision,{balance:3000}),'00000000-0000-0000-0000-000000000001'));}catch(e){denied=e.stderr.toString().includes('No write access');}
+  let denied=false; try{sql(auth(save('account',a.id,stale.latest.revision,{balance:3000}),'00000000-0000-0000-0000-000000000001'));}catch(e){denied=e.stderr.toString().includes('edit access') || e.stderr.toString().includes('No write access');}
   assert.equal(denied,true); console.log('PASS unauthorized RPC denied');
   const latest=JSON.parse(sql(`select row_to_json(a) from accounts a where id=${a.id}`));
   const rollback=sql(`begin; alter table account_balance_audit add constraint sync_qa_failure check (account_id<>${a.id}) not valid; set local role authenticated; set local request.jwt.claim.sub='${owner}'; do $$ begin perform save_guarded_account(27,'account',${a.id},'${latest.revision}','{"balance":1777}'::jsonb); raise exception 'expected audit failure'; exception when check_violation then null; end $$; select balance from accounts where id=${a.id}; rollback;`);

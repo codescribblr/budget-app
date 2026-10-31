@@ -1,4 +1,7 @@
 "use client";
+import { useResourceVersion } from "./use-resource-version";
+import { PageSkeleton } from "./page-skeleton";
+import { useRecordGuard, guardedMetadata } from "./record-guard";
 import { NativeSelect } from "./native-select";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -37,6 +40,9 @@ export function GuidedEnvelopeSetup() {
   );
 }
 function EnvelopeSetupContent() {
+  const resourceVersion = useResourceVersion("envelopes");
+  const remembered = useRef<Category | undefined>(undefined);
+  const loadedArchive = useRef(false);
   const { data, canEdit, refresh } = useBudget();
   const {
     hasPremium,
@@ -58,14 +64,16 @@ function EnvelopeSetupContent() {
   const request = useRef(0);
   const loadArchived = useCallback(async () => {
     const id = ++request.current;
-    setArchiveLoading(true);
+    setArchiveLoading(!loadedArchive.current);
     setArchiveError("");
     try {
       const result = await budgetRequest<Category[]>(
         "/api/categories?includeArchived=only",
       );
-      if (id === request.current)
+      if (id === request.current) {
+        loadedArchive.current = true;
         setArchived(result.filter((c) => !c.is_buffer && !c.is_system));
+      }
     } catch (err) {
       if (id === request.current)
         setArchiveError(
@@ -82,13 +90,22 @@ function EnvelopeSetupContent() {
     return () => {
       request.current++;
     };
-  }, [loadArchived, data?.identity.activeAccountId]);
+  }, [loadArchived, data?.identity.activeAccountId, resourceVersion]);
   if (!data) return null;
   const active = ordinaryEnvelopes(data.categories);
   const all = [...active, ...archived];
   const editParam = params.get("edit");
+  const currentEditing = all.find((c) => String(c.id) === editParam);
+  if (currentEditing) remembered.current = currentEditing;
+  if (String(remembered.current?.id) !== editParam)
+    remembered.current = undefined;
   const editing =
-    editParam === "new" ? null : all.find((c) => String(c.id) === editParam);
+    editParam === "new"
+      ? null
+      : (currentEditing ??
+        (remembered.current
+          ? { ...remembered.current, recordMissing: true }
+          : undefined));
   const editable = canEdit && !featuresLoading && !featureError;
   const shown = (filter === "archived" ? archived : active).filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()),
@@ -184,7 +201,7 @@ function EnvelopeSetupContent() {
           </button>
         </div>
       ) : filter === "archived" && archiveLoading ? (
-        <p role="status">Loading archived envelopes…</p>
+        <PageSkeleton heading={false} />
       ) : (
         <div className="nl-setup-list">
           {shown.map((category) => (
@@ -218,7 +235,10 @@ function EnvelopeSetupContent() {
               </div>
               <div className="nl-setup-row-actions">
                 {category.is_goal ? (
-                  <Link className="nl-secondary" href={`/new/goals?category=${category.id}`}>
+                  <Link
+                    className="nl-secondary"
+                    href={`/new/goals?category=${category.id}`}
+                  >
                     Manage linked goal →
                   </Link>
                 ) : (
@@ -336,17 +356,16 @@ function EnvelopeSetupContent() {
           canEdit={!!editable}
           onClose={() => setArchiveTarget(null)}
           onSave={async () => {
-            // Recheck the current balance rather than hiding money after another update.
-            const latest = await budgetRequest<Category>(
-              `/api/categories/${archiveTarget.id}`,
-            );
-            const block = envelopeArchiveBlock(latest);
+            const block = envelopeArchiveBlock(archiveTarget);
             if (block) throw new Error(block);
             await budgetRequest(
-              "/api/categories/bulk-archive",
+              `/api/categories/${archiveTarget.id}`,
               {
-                categoryIds: [latest.id],
                 is_archived: !archiveTarget.is_archived,
+                ...guardedMetadata(
+                  archiveTarget,
+                  data.identity.activeAccountId,
+                ),
               },
               "PATCH",
             );
@@ -379,9 +398,10 @@ export function EnvelopeSetupEditor({
   canEdit: boolean;
   monthlyTotal: number;
   netIncome: number;
-  onSave: (payload: ReturnType<typeof prepareEnvelopeSetup>) => Promise<void>;
+  onSave: (payload: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
 }) {
+  const guard = useRecordGuard(category);
   const [initial] = useState<EnvelopeSetupDraft>(() => ({
     name: category?.name || "",
     purpose: category?.category_type || "monthly_expense",
@@ -430,9 +450,18 @@ export function EnvelopeSetupEditor({
       saveLabel={category ? "Save envelope plan" : "Create envelope"}
       onClose={onClose}
       onSave={() =>
-        onSave(prepareEnvelopeSetup(draft, category, advanced, priorityEnabled))
+        guard.save(
+          prepareEnvelopeSetup(
+            draft,
+            guard.original ?? null,
+            advanced,
+            priorityEnabled,
+          ),
+          onSave,
+        )
       }
     >
+      {guard.notice}
       <label>
         Envelope name
         <input

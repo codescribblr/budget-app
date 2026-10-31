@@ -28,6 +28,8 @@ interface EditTransactionDialogProps {
   categories: Category[];
   merchantGroups?: MerchantGroup[];
   onSuccess: () => void;
+  onCommit?: (payload: Record<string, unknown>) => Promise<void>;
+  conflictNotice?: React.ReactNode;
 }
 
 interface Split {
@@ -42,6 +44,7 @@ export default function EditTransactionDialog({
   categories,
   merchantGroups: parentMerchantGroups,
   onSuccess,
+  onCommit, conflictNotice,
 }: EditTransactionDialogProps) {
   const [date, setDate] = useState<Date>(getTodayLocal());
   const [description, setDescription] = useState('');
@@ -250,10 +253,7 @@ export default function EditTransactionDialog({
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`/api/transactions/${transaction.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const payload = {
           date: formatLocalDate(date),
           description,
           transaction_type: transactionType,
@@ -266,19 +266,21 @@ export default function EditTransactionDialog({
             category_id: s.category_id,
             amount: parseFloat(s.amount),
           })),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorMessage = await handleApiError(response, 'Failed to update transaction');
-        throw new Error(errorMessage || 'Failed to update transaction');
+        };
+      if (onCommit) await onCommit(payload);
+      else {
+        const response = await fetch(`/api/transactions/${transaction.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!response.ok) {
+          const errorMessage = await handleApiError(response, 'Failed to update transaction');
+          throw new Error(errorMessage || 'Failed to update transaction');
+        }
       }
-
       setIsSubmitting(false);
       onSuccess();
       onClose();
     } catch (error) {
       console.error('Error updating transaction:', error);
+      if (onCommit) toast.error(error instanceof Error ? error.message : 'Could not save. Your edits are still here.');
       setIsSubmitting(false);
       // Error toast already shown by handleApiError
       // Button will be re-enabled so user can try again
@@ -330,6 +332,7 @@ export default function EditTransactionDialog({
         <DialogHeader>
           <DialogTitle>Edit Transaction</DialogTitle>
         </DialogHeader>
+          {conflictNotice}
         <div className="space-y-4 pt-4">
           <div className="grid grid-cols-2 gap-4">
             <div>

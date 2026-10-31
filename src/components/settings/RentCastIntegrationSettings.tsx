@@ -1,4 +1,7 @@
 'use client';
+import { usePathname } from "next/navigation";
+import { useResourceVersion } from "@/components/new-look/use-resource-version";
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -15,6 +18,10 @@ import type { RentCastIntegrationSettingsResponse } from '@/lib/types';
 import { DEFAULT_RENTCAST_MONTHLY_LIMIT, RENTCAST_AFFILIATE_URL, RENTCAST_PROMO_CODE, RENTCAST_PROMO_DISCOUNT } from '@/lib/integrations/rentcast/types';
 
 export default function RentCastIntegrationSettings() {
+  const modern=usePathname().startsWith("/new"), version=useResourceVersion("settings");
+  const original=useRef<RentCastIntegrationSettingsResponse|null>(null);
+  const dirty=useRef(false),loaded=useRef(false),requestId=useRef(0);
+  const [baseline,setBaseline]=useState<RentCastIntegrationSettingsResponse|null>(null);
   const [integration, setIntegration] = useState<RentCastIntegrationSettingsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError,setLoadError] = useState(false);
@@ -30,9 +37,8 @@ export default function RentCastIntegrationSettings() {
   const fetchingRef = useRef(false);
 
   const fetchIntegration = async () => {
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
-    setIsLoading(true);setLoadError(false);
+    const id=++requestId.current;
+    setIsLoading(!loaded.current);setLoadError(false);
 
     try {
       const response = await fetch('/api/settings/integrations/rentcast');
@@ -43,23 +49,29 @@ export default function RentCastIntegrationSettings() {
 
       const data = await response.json();
       const nextIntegration = data.integration as RentCastIntegrationSettingsResponse;
+      if(id!==requestId.current)return;
+      loaded.current=true;
       setIntegration(nextIntegration);
+      if(!dirty.current) {original.current=nextIntegration;setBaseline(nextIntegration);
       setIsEnabled(nextIntegration.is_enabled);
       setEnforceLimit(nextIntegration.config.enforce_monthly_limit);
       setMonthlyLimit(String(nextIntegration.config.monthly_request_limit));
+      }
     } catch (error: any) {
+      if(id!==requestId.current)return;
       setLoadError(true);
       console.error(error);
       toast.error(error.message || 'Failed to load RentCast integration');
     } finally {
-      setIsLoading(false);
+      if(id===requestId.current)setIsLoading(false);
       fetchingRef.current = false;
     }
   };
 
   useEffect(() => {
-    fetchIntegration();
-  }, []);
+    void fetchIntegration();
+    return ()=>{requestId.current++;};
+  }, [version]);
 
   const handleTestKey = async () => {
     if (!apiKey.trim()) {
@@ -97,6 +109,7 @@ export default function RentCastIntegrationSettings() {
     setIsSaving(true);
     try {
       const payload: Record<string, unknown> = {
+        ...(modern ? {expectedRevision:baseline?.revision??null,expectedBudgetId:baseline?.account_id} : {}),
         is_enabled: isEnabled,
         config: {
           enforce_monthly_limit: enforceLimit,
@@ -104,6 +117,13 @@ export default function RentCastIntegrationSettings() {
         },
       };
 
+      if(modern && original.current) {
+        if(isEnabled===original.current.is_enabled)delete payload.is_enabled;
+        const config=payload.config as Record<string,unknown>;
+        if(enforceLimit===original.current.config.enforce_monthly_limit)delete config.enforce_monthly_limit;
+        if(Number(monthlyLimit)===original.current.config.monthly_request_limit)delete config.monthly_request_limit;
+        if(!Object.keys(config).length)delete payload.config;
+      }
       if (apiKey.trim()) {
         payload.api_key = apiKey.trim();
       }
@@ -120,11 +140,13 @@ export default function RentCastIntegrationSettings() {
       }
 
       const data = await response.json();
-      setIntegration(data.integration);
+      dirty.current=false;original.current=data.integration;setBaseline(data.integration);setIntegration(data.integration);
+      setIsEnabled(data.integration.is_enabled);setEnforceLimit(data.integration.config.enforce_monthly_limit);setMonthlyLimit(String(data.integration.config.monthly_request_limit));
       setApiKey('');
       toast.success('RentCast integration saved');
     } catch (error: any) {
       toast.error(error.message || 'Failed to save RentCast integration');
+      void fetchIntegration();
     } finally {
       setIsSaving(false);
     }
@@ -134,7 +156,7 @@ export default function RentCastIntegrationSettings() {
     setIsRemoving(true);
     try {
       const response = await fetch('/api/settings/integrations/rentcast', {
-        method: 'DELETE',
+        method: 'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify(modern?{expectedRevision:baseline?.revision??null,expectedBudgetId:baseline?.account_id}:{}),
       });
 
       if (!response.ok) {
@@ -142,7 +164,7 @@ export default function RentCastIntegrationSettings() {
         throw new Error(message || 'Failed to remove RentCast integration');
       }
 
-      setIntegration(null);
+      dirty.current=false; void fetchIntegration();
       setApiKey('');
       setIsEnabled(false);
       setEnforceLimit(true);
@@ -164,7 +186,7 @@ export default function RentCastIntegrationSettings() {
     );
   }
 
-  if(loadError) return <div role="alert" className="space-y-4"><p>We couldn’t load the RentCast connection.</p><Button onClick={fetchIntegration}>Try again</Button></div>;
+  if(loadError && !loaded.current) return <div role="alert" className="space-y-4"><p>We couldn’t load the RentCast connection.</p><Button onClick={fetchIntegration}>Try again</Button></div>;
 
   const usageLabel = integration
     ? `${integration.requests_this_month} / ${integration.config.monthly_request_limit} requests this month`
@@ -172,6 +194,7 @@ export default function RentCastIntegrationSettings() {
 
   return (
     <div className="space-y-6 rounded-lg border p-4">
+      {modern && baseline?.revision!==integration?.revision && <div className="nl-notice" role="status"><p>Saved integration settings changed. Latest: {integration?.is_enabled?'enabled':'disabled'}, monthly limit {integration?.config.monthly_request_limit}. Your entries are retained.</p><Button variant="outline" onClick={()=>setBaseline(integration)}>Keep my settings</Button><Button variant="outline" onClick={()=>{dirty.current=false;void fetchIntegration();}}>Use saved settings</Button></div>}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -251,7 +274,7 @@ export default function RentCastIntegrationSettings() {
             id="rentcast-api-key"
             type="password"
             value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
+            onChange={(e) => {dirty.current=true;setApiKey(e.target.value);}}
             placeholder={integration?.has_api_key ? `Saved key ending in ${integration.api_key_hint}` : 'Enter your RentCast API key'}
           />
           <div className="flex gap-2">
@@ -302,7 +325,7 @@ export default function RentCastIntegrationSettings() {
               min={1}
               max={1000}
               value={monthlyLimit}
-              onChange={(e) => setMonthlyLimit(e.target.value)}
+              onChange={(e) => {dirty.current=true;setMonthlyLimit(e.target.value);}}
               disabled={!enforceLimit}
             />
           </div>

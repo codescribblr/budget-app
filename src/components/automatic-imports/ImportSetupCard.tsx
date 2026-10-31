@@ -1,8 +1,9 @@
 'use client';
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useInterfacePath } from "@/hooks/use-interface-path";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,8 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Trash2, Mail, AlertCircle, CheckCircle2, RefreshCw, CreditCard, Settings, Loader2, ExternalLink } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { guardedMetadata } from '@/components/new-look/record-guard';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import TellerConnect from './providers/TellerConnect';
@@ -37,6 +40,8 @@ interface AccountMapping {
 }
 
 interface ImportSetup {
+  revision?: string;
+  account_id?: number;
   id: number;
   source_type: string;
   integration_name: string | null;
@@ -61,6 +66,10 @@ interface ImportSetupCardProps {
 
 export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportSetupCardProps) {
   const interfacePath = useInterfacePath();
+  const modern = usePathname().startsWith("/new");
+  const deleteSnapshot = useRef<ImportSetup | null>(null);
+  const metadata = (record: ImportSetup) => modern ? guardedMetadata(record, record.account_id!) : {};
+  useEffect(() => { setIsActive(setup.is_active); }, [setup.is_active]);
   const router = useRouter();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isActive, setIsActive] = useState(setup.is_active);
@@ -75,6 +84,8 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
     accessToken: string;
     accounts: any[];
     currentMappings: any[];
+    revision?: string;
+    budgetId?: number;
   } | null>(null);
   const [accountNames, setAccountNames] = useState<Record<number, string>>({});
   const [creditCardNames, setCreditCardNames] = useState<Record<number, string>>({});
@@ -139,15 +150,15 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
       const response = await fetch(`/api/automatic-imports/setups/${setup.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: checked }),
+        body: JSON.stringify({ is_active: checked, ...metadata(setup) }),
       });
 
-      if (!response.ok) throw new Error('Failed to update setup');
+      if (!response.ok) { onUpdated(); throw new Error((await response.json()).error || 'Failed to update setup'); }
       setIsActive(checked);
       onUpdated();
     } catch (error) {
       console.error('Error updating setup:', error);
-      alert('Failed to update setup');
+      toast.error(error instanceof Error ? error.message : 'Failed to update setup');
     } finally {
       setUpdating(false);
     }
@@ -157,15 +168,15 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
   const handleDelete = async () => {
     try {
       const response = await fetch(`/api/automatic-imports/setups/${setup.id}`, {
-        method: 'DELETE',
+        method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify(metadata(deleteSnapshot.current ?? setup)),
       });
 
-      if (!response.ok) throw new Error('Failed to delete setup');
+      if (!response.ok) { onUpdated(); throw new Error((await response.json()).error || 'Failed to delete setup'); }
       setShowDeleteDialog(false);
       onDeleted();
     } catch (error) {
       console.error('Error deleting setup:', error);
-      alert('Failed to delete setup');
+      toast.error(error instanceof Error ? error.message : 'Failed to delete setup');
     }
   };
 
@@ -537,7 +548,7 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setShowDeleteDialog(true)}
+                onClick={() => { deleteSnapshot.current = setup; setShowDeleteDialog(true); }}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -766,6 +777,8 @@ export default function ImportSetupCard({ setup, onDeleted, onUpdated }: ImportS
             onSuccess={handleMappingUpdateSuccess}
             existingMappings={mappingData.currentMappings}
             setupId={setup.id}
+            expectedRevision={mappingData.revision}
+            expectedBudgetId={mappingData.budgetId}
           />
       )}
     </>

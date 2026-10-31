@@ -64,7 +64,7 @@ export async function GET(
     const categoriesWithFunding = categories.map(category => {
       const funding = fundingRecords?.find(f => f.category_id === category.id);
       const targetAmount = funding?.target_amount || category.monthly_amount || 0;
-      const fundedAmount = funding?.funded_amount || 0;
+      const fundedAmount = (fundingRecords ?? []).filter(f => f.category_id === category.id).reduce((sum, f) => sum + Number(f.funded_amount), 0);
       const fundingPercentage = targetAmount > 0 
         ? Math.round((fundedAmount / targetAmount) * 100)
         : 0;

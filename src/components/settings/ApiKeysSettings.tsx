@@ -1,4 +1,6 @@
 'use client';
+import { useResourceVersion } from "@/components/new-look/use-resource-version";
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useAccountPermissions } from "@/hooks/use-account-permissions";
 import { useEffect, useRef, useState } from 'react';
@@ -105,13 +107,14 @@ export default function ApiKeysSettings() {
   const [logs, setLogs] = useState<ApiKeyUsageLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
 
+  const version=useResourceVersion("settings");
+  const loaded=useRef(false), trailing=useRef(false);
   const fetchingRef = useRef(false);
-  const hasMountedRef = useRef(false);
 
   const fetchKeys = async () => {
-    if (fetchingRef.current) return;
+    if (fetchingRef.current) {trailing.current=true;return;}
     fetchingRef.current = true;
-    setIsLoading(true); setLoadError(false);
+    setIsLoading(!loaded.current); setLoadError(false);
 
     try {
       const response = await fetch('/api/settings/api-keys');
@@ -121,6 +124,7 @@ export default function ApiKeysSettings() {
       }
 
       const data = await response.json();
+      const firstLoad=!loaded.current; loaded.current=true;
       setKeys(data.keys ?? []);
       setSections(data.scopes ?? []);
       setPresets(data.presets ?? []);
@@ -128,7 +132,7 @@ export default function ApiKeysSettings() {
       setApiDisabledMessage(data.apiDisabledMessage ?? null);
 
       const defaultPreset = (data.presets ?? []).find((p: ScopePreset) => p.id === 'read_only_assistant');
-      if (defaultPreset) {
+      if (defaultPreset && firstLoad) {
         setSelectedPermissions(new Set(defaultPreset.permissions));
       }
     } catch (error) {
@@ -138,15 +142,15 @@ export default function ApiKeysSettings() {
     } finally {
       setIsLoading(false);
       fetchingRef.current = false;
+      if(trailing.current){trailing.current=false;void fetchKeys();}
     }
   };
 
   useEffect(() => {
-    if (!permissionsLoading && isOwner && !hasMountedRef.current) {
-      hasMountedRef.current = true;
+    if (!permissionsLoading && isOwner) {
       fetchKeys();
     }
-  }, [permissionsLoading, isOwner]);
+  }, [permissionsLoading, isOwner, version]);
 
   const applyPreset = (presetId: string) => {
     setSelectedPreset(presetId);
@@ -276,7 +280,7 @@ export default function ApiKeysSettings() {
 
   if (permissionsLoading) return <Loader2 className="animate-spin" aria-label="Loading permissions"/>;
   if (!isOwner) return <p className="text-muted-foreground">Only the budget owner can manage API access.</p>;
-  if (loadError) return <div role="alert" className="space-y-4"><p>We couldn’t load API access settings.</p><Button onClick={fetchKeys}>Try again</Button></div>;
+  if (loadError && !loaded.current) return <div role="alert" className="space-y-4"><p>We couldn’t load API access settings.</p><Button onClick={fetchKeys}>Try again</Button></div>;
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">

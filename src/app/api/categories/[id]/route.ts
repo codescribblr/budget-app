@@ -1,3 +1,5 @@
+import { guardedRecordUpdate, guardedDelete } from "@/lib/guarded-record-route";
+import { executeEnvelopeCommand } from "@/lib/envelope-command-route";
 import { NextRequest, NextResponse } from 'next/server';
 import { getCategoryById, updateCategory, deleteCategory } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
@@ -47,6 +49,12 @@ export async function PATCH(
     if (accessCheck) return accessCheck;
     
     const body = (await request.json()) as UpdateCategoryRequest;
+    if ("expectedRevision" in body && "current_balance" in body && Object.keys(body).every(key => ["current_balance", "expectedRevision", "expectedBudgetId", "operationId"].includes(key))) {
+      const guarded = body as UpdateCategoryRequest & { expectedRevision: string; expectedBudgetId: number; operationId: string };
+      return executeEnvelopeCommand({ ...guarded, amount: guarded.current_balance, categoryId, expectedRevisions: { [categoryId]: guarded.expectedRevision } }, "set-balance");
+    }
+    const guarded = await guardedRecordUpdate("categories", categoryId, body);
+    if (guarded) return guarded;
     const category = await updateCategory(categoryId, body);
 
     if (!category) {
@@ -78,6 +86,8 @@ export async function DELETE(
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
     
+    const guarded = await guardedDelete(request, "categories", categoryId);
+    if (guarded) return guarded;
     await deleteCategory(categoryId);
     return NextResponse.json({ success: true });
   } catch (error: any) {

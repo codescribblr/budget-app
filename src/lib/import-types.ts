@@ -1,4 +1,6 @@
 export interface ParsedTransaction {
+  revision?: string;
+  budgetId?: number;
   id: string; // Temporary ID for UI
   date: string;
   description: string;

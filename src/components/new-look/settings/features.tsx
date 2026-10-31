@@ -45,7 +45,7 @@ export function SettingsFeatures() {
     busy.current = true;
     setPending(feature.key);
     try {
-      await toggleFeature(feature.key, enabled);
+      await toggleFeature(feature.key, enabled, feature.revision ?? null);
       toast.success(`${feature.name} ${enabled ? "enabled" : "disabled"}`);
       setConfirm(null);
     } catch (error) {
@@ -58,7 +58,7 @@ export function SettingsFeatures() {
     }
   }
   if (loading || isLoading) return <LoadingSpinner />;
-  if (error)
+  if (error && !features.length)
     return (
       <div className="nl-settings-panel" role="alert">
         <p>We couldn’t load your budget tools.</p>
@@ -109,9 +109,7 @@ export function SettingsFeatures() {
                     <div>
                       <div className="nl-feature-title">
                         <h3 id={`feature-${feature.key}`}>{feature.name}</h3>
-                        {feature.requiresPremium && (
-                          <PremiumBadge />
-                        )}
+                        {feature.requiresPremium && <PremiumBadge />}
                       </div>
                       <p id={`feature-description-${feature.key}`}>
                         {feature.description}

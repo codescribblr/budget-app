@@ -170,6 +170,21 @@ export async function POST(
       );
     }
 
+    if ("expectedBudgetId" in body) {
+      if(body.expectedBudgetId!==accountId)return NextResponse.json({error:'The active budget changed. Reload this mapping.'},{status:409});
+      if(!body.expectedRevisions || !body.operationId || !body.expectedSetupRevision)return NextResponse.json({error:'Reload this mapping before saving safely.'},{status:400});
+      const uniqueTransactions=[...new Map(transactions.map(t=>[t.hash,t])).values()];
+      const command={mapping,templateName:providedTemplateName,overwriteTemplateId:overwriteTemplateId??(!saveAsTemplate?oldTemplateId:null),deleteOldTemplate,
+        templateRevisions:body.expectedTemplateRevisions,setupRevision:body.expectedSetupRevision,columnCount:csvData[0]?.length??0,csvData,csvAnalysis,csvFileName,
+        tasks:resetTasksAfterRemap((firstQueuedImport.processing_tasks as any)||{}),
+        transactions:uniqueTransactions.map(t=>({...t,originalData:typeof t.originalData==='string'?JSON.parse(t.originalData):t.originalData})),
+        template:{date_column:mapping.dateColumn,amount_column:mapping.amountColumn,description_column:mapping.descriptionColumn,debit_column:mapping.debitColumn,credit_column:mapping.creditColumn,transaction_type_column:mapping.transactionTypeColumn,status_column:mapping.statusColumn,amount_sign_convention:mapping.amountSignConvention||'positive_is_expense',date_format:mapping.dateFormat,has_headers:mapping.hasHeaders,skip_rows:mapping.skipRows||0}};
+      const {data:saved,error}=await supabase.rpc('remap_import_batch',{p_budget_id:accountId,p_batch_id:batchId,p_revisions:body.expectedRevisions,p_command:command,p_operation_id:body.operationId});
+      if(error)return NextResponse.json({error:error.code==='23505'?'A mapping with these details already exists. Reload and choose its template.':'Could not save this mapping. The original batch is unchanged.'},{status:['22023','22P02','23505'].includes(error.code)?400:500});
+      if(saved.status==='conflict')return NextResponse.json({error:'This batch, connection, or saved template changed elsewhere. Your mapping is retained. Reload to review the changes before replacing it.',code:'STALE_RECORD'},{status:409});
+      return NextResponse.json(saved);
+    }
+
     // Handle template save/update
     let newTemplateId: number | undefined;
     let mappingName: string | undefined;

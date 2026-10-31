@@ -22,6 +22,7 @@ export interface RentCastIntegrationConfig {
 }
 
 export interface RentCastIntegrationSettings {
+  revision?: string | null;
   id: number;
   account_id: number;
   integration_type: 'rentcast';

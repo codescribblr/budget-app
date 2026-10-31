@@ -1,3 +1,4 @@
+import { guardedRecordUpdate, guardedDelete } from "@/lib/guarded-record-route";
 import { NextResponse } from 'next/server';
 import { getLoanById, updateLoan, deleteLoan, getAuthenticatedUser } from '@/lib/supabase-queries';
 import { requirePremiumSubscription, PremiumRequiredError } from '@/lib/subscription-utils';
@@ -85,6 +86,8 @@ export async function PATCH(
 
     const body: UpdateLoanRequest = await request.json();
 
+    const guarded = await guardedRecordUpdate("loans", loanId, body);
+    if (guarded) return guarded;
     const loan = await updateLoan(loanId, body);
     return NextResponse.json(loan);
   } catch (error) {
@@ -131,6 +134,8 @@ export async function DELETE(
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
 
+    const guarded = await guardedDelete(request, "loans", loanId);
+    if (guarded) return guarded;
     await deleteLoan(loanId);
     return NextResponse.json({ success: true });
   } catch (error) {

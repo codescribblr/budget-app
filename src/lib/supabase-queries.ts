@@ -1168,6 +1168,7 @@ function parseIncomeStreamFromRow(row: any): IncomeStream {
   return {
     id: row.id,
     account_id: row.account_id,
+    revision: row.revision,
     name: row.name,
     annual_income: Number(row.annual_income),
     tax_rate: Number(row.tax_rate),
@@ -1200,39 +1201,6 @@ export async function getAllIncomeStreams(): Promise<IncomeStream[]> {
   }
 
   const streams = (data || []).map(parseIncomeStreamFromRow);
-
-  // Migration: if no streams but legacy settings exist, create default stream from settings
-  if (streams.length === 0) {
-    const { data: settings } = await supabase
-      .from('settings')
-      .select('*')
-      .eq('account_id', accountId);
-
-    const settingsObj: Record<string, string> = {};
-    settings?.forEach((s: any) => { settingsObj[s.key] = s.value; });
-
-    const annualIncome = parseFloat(settingsObj.annual_income || settingsObj.annual_salary || '0');
-    if (annualIncome > 0 || settingsObj.tax_rate || settingsObj.pay_frequency) {
-      let deductionItems: any[] = [];
-      if (settingsObj.pre_tax_deduction_items) {
-        try {
-          deductionItems = JSON.parse(settingsObj.pre_tax_deduction_items);
-        } catch {
-          deductionItems = [];
-        }
-      }
-      const newStream = await createIncomeStream({
-        name: 'Primary Income',
-        annual_income: annualIncome,
-        tax_rate: parseFloat(settingsObj.tax_rate || '0'),
-        pay_frequency: (settingsObj.pay_frequency || 'monthly') as any,
-        include_extra_paychecks: settingsObj.include_extra_paychecks === 'true',
-        pre_tax_deduction_items: deductionItems,
-        include_in_budget: true,
-      });
-      return [newStream];
-    }
-  }
 
   return streams;
 }

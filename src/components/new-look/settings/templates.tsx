@@ -1,5 +1,8 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useResourceVersion } from "../use-resource-version";
+import { guardedMetadata } from "../record-guard";
+import { useBudget } from "../budget-context";
+import { useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { FileSpreadsheet, Trash2 } from "lucide-react";
 import {
@@ -21,6 +24,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 export function SettingsTemplates() {
+  const version = useResourceVersion("imports");
+  const { data } = useBudget();
+  const loaded = useRef(false),
+    sequence = useRef(0);
   const { isEditor, isLoading } = useAccountPermissions();
   const [templates, setTemplates] = useState<CSVImportTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,29 +35,45 @@ export function SettingsTemplates() {
   const [selected, setSelected] = useState<CSVImportTemplate | null>(null);
   const [deleting, setDeleting] = useState(false);
   const load = useCallback(async () => {
-    setLoading(true);
+    const id = ++sequence.current;
+    setLoading(!loaded.current);
     setError(false);
     try {
-      setTemplates(await listTemplates());
+      const next = await listTemplates();
+      if (id === sequence.current) {
+        loaded.current = true;
+        setTemplates(next);
+      }
     } catch {
-      setError(true);
+      if (id === sequence.current) setError(true);
     } finally {
-      setLoading(false);
+      if (id === sequence.current) setLoading(false);
     }
   }, []);
   useEffect(() => {
     if (!isLoading && isEditor) void load();
-  }, [isLoading, isEditor, load]);
+    return () => {
+      sequence.current++;
+    };
+  }, [isLoading, isEditor, load, version]);
   async function remove() {
     if (!selected?.id || deleting) return;
     setDeleting(true);
     try {
-      await deleteTemplate(selected.id);
+      await deleteTemplate(
+        selected.id,
+        guardedMetadata(selected, data!.identity.activeAccountId),
+      );
       setTemplates((items) => items.filter((t) => t.id !== selected.id));
       setSelected(null);
       toast.success("Template deleted");
-    } catch {
-      toast.error("Could not delete this template. Please try again.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not delete this template.",
+      );
+      void load();
     } finally {
       setDeleting(false);
     }
@@ -63,7 +86,7 @@ export function SettingsTemplates() {
       </p>
     );
   if (loading) return <LoadingSpinner />;
-  if (error)
+  if (error && !loaded.current)
     return (
       <div className="nl-settings-panel" role="alert">
         <p>We couldn’t load your templates.</p>

@@ -49,7 +49,7 @@ export async function GET(
     // Get all members
     const { data: members, error } = await supabase
       .from('account_users')
-      .select('user_id, role, status, accepted_at, created_at')
+      .select('user_id, role, status, accepted_at, created_at, revision')
       .eq('account_id', accountId)
       .eq('status', 'active')
       .order('created_at', { ascending: true });
@@ -91,7 +91,8 @@ export async function GET(
       email: userEmailMap.get(member.user_id) || 'Unknown',
       role: member.role,
       isOwner: account?.owner_id === member.user_id,
-      joinedAt: member.accepted_at || member.created_at,
+      revision: member.revision,
+        joinedAt: member.accepted_at || member.created_at,
     }));
 
     // Add owner if not in members list
@@ -103,6 +104,7 @@ export async function GET(
           email: userEmailMap.get(account.owner_id) || 'Unknown',
           role: 'owner',
           isOwner: true,
+          revision: undefined,
           joinedAt: account.created_at,
         });
       }

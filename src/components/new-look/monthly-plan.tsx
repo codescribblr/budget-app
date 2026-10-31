@@ -1,4 +1,5 @@
 "use client";
+import { guardedMetadata } from "./record-guard";
 import { useTaskCheckin } from "./checkin-flow";
 import { useState } from "react";
 import Link from "next/link";
@@ -31,6 +32,7 @@ function PlanContent() {
   const { hasPremium, isFeatureEnabled } = useFeatures();
   const canEditAdvanced = hasPremium && isFeatureEnabled("category_types");
   const [draft, setDraft] = useState<Record<number, string>>({});
+  const [revisions, setRevisions] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<number, string>>({});
   const envelopes = ordinaryEnvelopes(data?.categories || []);
@@ -78,8 +80,23 @@ function PlanContent() {
               monthly_amount: amount,
             };
       try {
-        await budgetRequest(`/api/categories/${c.id}`, body, "PATCH");
+        await budgetRequest(
+          `/api/categories/${c.id}`,
+          {
+            ...body,
+            ...guardedMetadata(
+              { revision: revisions[c.id] },
+              data!.identity.activeAccountId,
+            ),
+          },
+          "PATCH",
+        );
         saved++;
+        setRevisions((prev) => {
+          const next = { ...prev };
+          delete next[c.id];
+          return next;
+        });
         setDraft((prev) => {
           const next = { ...prev };
           delete next[c.id];
@@ -233,7 +250,10 @@ function PlanContent() {
                 </td>
                 <td data-label="Funding target" className="nl-right">
                   {c.is_goal ? (
-                    <Link href={`/new/goals?category=${c.id}&edit=true&from=plan${checkin ? "&checkin=monthly" : ""}`} className="nl-secondary">
+                    <Link
+                      href={`/new/goals?category=${c.id}&edit=true&from=plan${checkin ? "&checkin=monthly" : ""}`}
+                      className="nl-secondary"
+                    >
                       Edit goal →
                     </Link>
                   ) : (
@@ -250,10 +270,52 @@ function PlanContent() {
                             !!c.category_type &&
                             c.category_type !== "monthly_expense")
                         }
-                        onChange={(e) =>
-                          setDraft({ ...draft, [c.id]: e.target.value })
-                        }
+                        onChange={(e) => {
+                          setRevisions((previous) => ({
+                            ...previous,
+                            [c.id]: previous[c.id] ?? c.revision ?? "",
+                          }));
+                          setDraft({ ...draft, [c.id]: e.target.value });
+                        }}
                       />
+                      {draft[c.id] !== undefined &&
+                        revisions[c.id] !== c.revision && (
+                          <div className="nl-notice" role="status">
+                            <p>
+                              Latest target: {money(baseAmount(c))}. Your entry
+                              is retained.
+                            </p>
+                            <button
+                              type="button"
+                              className="nl-secondary"
+                              onClick={() => {
+                                setDraft((p) => {
+                                  const next = { ...p };
+                                  delete next[c.id];
+                                  return next;
+                                });
+                                setRevisions((p) => ({
+                                  ...p,
+                                  [c.id]: c.revision ?? "",
+                                }));
+                              }}
+                            >
+                              Use latest
+                            </button>{" "}
+                            <button
+                              type="button"
+                              className="nl-secondary"
+                              onClick={() =>
+                                setRevisions((p) => ({
+                                  ...p,
+                                  [c.id]: c.revision ?? "",
+                                }))
+                              }
+                            >
+                              Keep my entry · reviewed
+                            </button>
+                          </div>
+                        )}
                       <span className="nl-subtext">
                         {c.category_type === "accumulation"
                           ? "per year"
@@ -308,6 +370,7 @@ function PlanContent() {
               disabled={saving}
               onClick={() => {
                 setDraft({});
+                setRevisions({});
                 setErrors({});
               }}
             >

@@ -1,3 +1,4 @@
+import { rowPrecondition, staleRowResponse, optionalDeleteBody } from "@/lib/row-precondition";
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { getActiveAccountId } from '@/lib/account-context';
@@ -79,6 +80,8 @@ export async function PUT(
     }
 
     const body = await request.json();
+    const guard = rowPrecondition(body, accountId);
+    if (guard.response) return guard.response;
     const updateData: any = {
       updated_at: new Date().toISOString(),
     };
@@ -93,13 +96,10 @@ export async function PUT(
     if (body.bank_name !== undefined) updateData.bank_name = body.bank_name;
     if (body.account_numbers !== undefined) updateData.account_numbers = body.account_numbers;
 
-    const { data, error } = await supabase
-      .from('automatic_import_setups')
-      .update(updateData)
-      .eq('id', setupId)
-      .eq('account_id', accountId)
-      .select()
-      .single();
+    let query = supabase.from('automatic_import_setups').update(updateData).eq('id', setupId).eq('account_id', accountId);
+    if (guard.revision) query = query.eq('revision', guard.revision);
+    const {data,error} = await query.select().maybeSingle();
+    if (!error && !data && guard.revision) return staleRowResponse();
 
     if (error) {
       if (error.code === 'PGRST116') {
@@ -144,11 +144,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid setup ID' }, { status: 400 });
     }
 
-    const { error } = await supabase
-      .from('automatic_import_setups')
-      .delete()
-      .eq('id', setupId)
-      .eq('account_id', accountId);
+    const guard = rowPrecondition(await optionalDeleteBody(request), accountId);
+    if (guard.response) return guard.response;
+    let query = supabase.from('automatic_import_setups').delete().eq('id',setupId).eq('account_id',accountId);
+    if (guard.revision) query = query.eq('revision',guard.revision);
+    const {data,error} = await query.select('id');
+    if (!error && !data?.length && guard.revision) return staleRowResponse();
 
     if (error) {
       console.error('Error deleting import setup:', error);

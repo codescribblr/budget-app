@@ -1,3 +1,6 @@
+"use client";
+import { usePathname } from "next/navigation";
+import { PageSkeleton } from "@/components/new-look/page-skeleton";
 interface LoadingSpinnerProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg';
@@ -5,6 +8,8 @@ interface LoadingSpinnerProps {
 }
 
 export function LoadingSpinner({ className = '', size = 'md', showText = true }: LoadingSpinnerProps = {}) {
+  const modern = usePathname()?.startsWith("/new");
+  if (modern && !className && size !== "sm") return <PageSkeleton heading={false} />;
   const sizeClasses = {
     sm: 'h-4 w-4',
     md: 'h-12 w-12',

@@ -1,3 +1,5 @@
+import { getActiveAccountId } from "@/lib/account-context";
+import { rowPrecondition, staleRowResponse, optionalDeleteBody } from "@/lib/row-precondition";
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { CSVImportTemplate, ColumnMapping } from '@/lib/mapping-templates';
@@ -29,8 +31,10 @@ export async function PUT(
       return NextResponse.json({ error: 'Invalid template ID' }, { status: 400 });
     }
 
-    const body = await request.json() as { templateName?: string; mapping?: ColumnMapping };
+    const body = await request.json() as { templateName?: string; mapping?: ColumnMapping; expectedRevision?: string; expectedBudgetId?: number };
     const { templateName, mapping } = body;
+    const budgetId=await getActiveAccountId();
+    const guard=rowPrecondition(body,budgetId);if(guard.response)return guard.response;
 
     // Verify template belongs to user
     const { data: existingTemplate, error: fetchError } = await supabase
@@ -64,13 +68,10 @@ export async function PUT(
     }
     updateData.last_used = new Date().toISOString();
 
-    const { data: updated, error } = await supabase
-      .from('csv_import_templates')
-      .update(updateData)
-      .eq('id', templateId)
-      .eq('user_id', user.id)
-      .select()
-      .single();
+    let query=supabase.from('csv_import_templates').update(updateData).eq('id',templateId).eq('user_id',user.id);
+    if(guard.revision)query=query.eq('account_id',budgetId).eq('revision',guard.revision);
+    const {data:updated,error}=await query.select().maybeSingle();
+    if(!error && !updated && guard.revision)return staleRowResponse();
 
     if (error) throw error;
 
@@ -111,11 +112,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid template ID' }, { status: 400 });
     }
 
-    const { error } = await supabase
-      .from('csv_import_templates')
-      .delete()
-      .eq('id', templateId)
-      .eq('user_id', user.id);
+    const budgetId=await getActiveAccountId();
+    const guard=rowPrecondition(await optionalDeleteBody(request),budgetId);if(guard.response)return guard.response;
+    let query=supabase.from('csv_import_templates').delete().eq('id',templateId).eq('user_id',user.id);
+    if(guard.revision)query=query.eq('account_id',budgetId).eq('revision',guard.revision);
+    const {data:removed,error}=await query.select('id');
+    if(!error && !removed?.length && guard.revision)return staleRowResponse();
 
     if (error) throw error;
 

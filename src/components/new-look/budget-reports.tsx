@@ -1,5 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { PageSkeleton } from "./page-skeleton";
+import { freshFetch as fetch } from "@/lib/view-freshness";
+import { useResourceVersion } from "./use-resource-version";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -60,6 +63,11 @@ export function GuidedBudgetReports() {
   );
 }
 function BudgetReportsContent() {
+  const resourceVersion = useResourceVersion(
+    "transactions",
+    "envelopes",
+    "planning",
+  );
   const { data } = useBudget();
   const params = useSearchParams();
   const checkin = useTaskCheckin("reports");
@@ -102,11 +110,20 @@ function BudgetReportsContent() {
       `/new/reports${next.size ? `?${next}` : ""}`,
     );
   }
+  const loadedKey = useRef<string | null>(null);
   useEffect(() => {
+    const key = JSON.stringify([
+      start,
+      end,
+      categoryId,
+      includeSystem,
+      view,
+      data?.identity.activeAccountId,
+    ]);
     const controller = new AbortController();
-    setLoading(true);
+    setLoading(loadedKey.current !== key);
     setError("");
-    setReport(null);
+    if (loadedKey.current !== key) setReport(null);
     const query = new URLSearchParams({ asOf: localDate() });
     if (view === "plan") {
       const months = completedReportMonths(localDate());
@@ -143,7 +160,10 @@ function BudgetReportsContent() {
           !Array.isArray(body.months)
         )
           throw new Error("Report data could not be read.");
-        if (!controller.signal.aborted) setReport(body);
+        if (!controller.signal.aborted) {
+          loadedKey.current = key;
+          setReport(body);
+        }
       })
       .catch((err) => {
         if (!controller.signal.aborted)
@@ -160,6 +180,7 @@ function BudgetReportsContent() {
     includeSystem,
     view,
     attempt,
+    resourceVersion,
     data?.identity.activeAccountId,
   ]);
   const options = (data?.categories || []).filter(
@@ -293,11 +314,8 @@ function BudgetReportsContent() {
         </div>
       )}
       {loading ? (
-        <div className="nl-panel nl-report-loading" role="status">
-          <ChartNoAxesCombined size={24} />
-          Preparing your budget review…
-        </div>
-      ) : error ? (
+        <PageSkeleton heading={false} />
+      ) : error && !report ? (
         <div className="nl-panel" role="alert">
           <h2>Your report could not load</h2>
           <p>{error}</p>

@@ -41,7 +41,7 @@ export const POST = withExternalApi('settings', async (request, context) => {
         value: setting.value,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'user_id,key' }
+      { onConflict: 'account_id,user_id,key' }
     );
     if (error) throw error;
   }

@@ -1,8 +1,11 @@
 'use client';
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useInterfacePath } from "@/hooks/use-interface-path";
 
-import { useCallback, useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { useResourceVersion } from '@/components/new-look/use-resource-version';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -28,6 +31,10 @@ import { toast } from 'sonner';
 
 export default function DashboardSettingsForm() {
   const interfacePath = useInterfacePath();
+  const modern = usePathname().startsWith('/new');
+  const resourceVersion = useResourceVersion('settings');
+  const loaded = useRef(false);
+  const [baseline,setBaseline] = useState<{revision:string|null;budgetId:number}|null>(null);
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const { isFeatureEnabled, features, loading: featuresLoading } = useFeatures();
   const { isPremium, loading: subscriptionLoading } = useSubscription();
@@ -40,10 +47,13 @@ export default function DashboardSettingsForm() {
 
   const load = useCallback(async () => {
     try {
-      setLoading(true); setLoadError(false);
-      const res = await fetch('/api/settings');
+      setLoading(!loaded.current); setLoadError(false);
+      const res = await fetch(modern ? '/api/settings?versioned=true' : '/api/settings');
       if (!res.ok) throw new Error('Failed to load settings');
-      const data = (await res.json()) as Record<string, string>;
+      const response = await res.json();
+      const data = modern ? response.values : response;
+      if (modern) setBaseline(response);
+      loaded.current = true;
       const raw = data[DASHBOARD_CARD_VISIBILITY_KEY];
       setVisibility(parseDashboardCardVisibility(raw));
     } catch {
@@ -53,11 +63,11 @@ export default function DashboardSettingsForm() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [modern]);
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, resourceVersion]);
 
   const persist = async (next: DashboardCardVisibility) => {
     setSaving(true);
@@ -66,6 +76,7 @@ export default function DashboardSettingsForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          ...(modern ? {expectedRevision:baseline?.revision ?? null,expectedBudgetId:baseline?.budgetId} : {}),
           settings: [
             {
               key: DASHBOARD_CARD_VISIBILITY_KEY,
@@ -79,11 +90,15 @@ export default function DashboardSettingsForm() {
           toast.error('You do not have permission to change settings.');
           return;
         }
-        throw new Error('Save failed');
+        const failed = await res.json();
+        await load();
+        throw new Error(failed.error || 'Save failed');
       }
+      const saved = await res.json();
+      if(modern && baseline) setBaseline({...baseline,revision:saved.revision});
       setVisibility(next);
-    } catch {
-      toast.error('Could not save dashboard layout');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save dashboard layout');
     } finally { setSaving(false); }
   };
 

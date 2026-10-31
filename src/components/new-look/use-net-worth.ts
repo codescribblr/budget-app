@@ -1,4 +1,6 @@
 "use client";
+import { freshFetch as fetch } from "@/lib/view-freshness";
+import { useResourceVersion } from "./use-resource-version";
 import { useEffect, useState } from "react";
 import { useFeatures } from "@/contexts/FeatureContext";
 import type { WorthReport, WorthSummary } from "@/lib/net-worth-report";
@@ -7,8 +9,14 @@ import { useBudget } from "./budget-context";
 export function useNetWorth<T extends WorthSummary = WorthReport>(
   details = false,
 ) {
+  const resourceVersion = useResourceVersion(
+    "balances",
+    "envelopes",
+    "transactions",
+    "planning",
+  );
   const features = useFeatures();
-  const { data: budget, today, refreshVersion } = useBudget();
+  const { data: budget, today } = useBudget();
   const accountId = budget?.identity.activeAccountId;
   const enabled =
     features.hasPremium && features.isFeatureEnabled("retirement_planning");
@@ -48,7 +56,7 @@ export function useNetWorth<T extends WorthSummary = WorthReport>(
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [enabled, accountId, today, attempt, details, refreshVersion]);
+  }, [enabled, accountId, today, attempt, details, resourceVersion]);
   return {
     data:
       enabled && result && result.accountId === accountId ? result.data : null,

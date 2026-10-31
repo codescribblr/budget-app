@@ -1,4 +1,6 @@
 'use client';
+import { useResourceVersion } from "@/components/new-look/use-resource-version";
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,26 +43,25 @@ export default function MerchantGroupsSettings() {
   const [isLoadingCount, setIsLoadingCount] = useState(true);
 
   // Track if fetch is in progress to prevent duplicate calls
+  const version=useResourceVersion("transactions");
   const fetchingRef = useRef(false);
-  const hasMountedRef = useRef(false);
+  const trailingRefresh=useRef(false);
 
   // Fetch unlinked transaction count on mount
   useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      fetchUnlinkedCount();
-    }
-  }, []);
+    void fetchUnlinkedCount();
+  }, [version]);
 
   const fetchUnlinkedCount = async () => {
     // Prevent duplicate calls
     if (fetchingRef.current) {
+      trailingRefresh.current=true;
       return;
     }
     fetchingRef.current = true;
 
     try {
-      setIsLoadingCount(true);
+      if(unlinkedCount===null)setIsLoadingCount(true);
       const response = await fetch('/api/merchant-groups/unlinked-count');
 
       if (!response.ok) {
@@ -83,6 +84,7 @@ export default function MerchantGroupsSettings() {
     } finally {
       setIsLoadingCount(false);
       fetchingRef.current = false;
+      if(trailingRefresh.current){trailingRefresh.current=false;void fetchUnlinkedCount();}
     }
   };
 

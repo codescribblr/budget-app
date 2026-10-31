@@ -1,6 +1,7 @@
+import { rowPrecondition, staleRowResponse, optionalDeleteBody } from "@/lib/row-precondition";
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
-import { userHasAccountAccess } from '@/lib/account-context';
+import { userHasAccountAccess, getActiveAccountId } from '@/lib/account-context';
 
 /**
  * PATCH /api/budget-accounts/[id]/members/[userId]
@@ -55,6 +56,8 @@ export async function PATCH(
 
     const body = await request.json();
     const { role } = body;
+    const guard=rowPrecondition(body,await getActiveAccountId());
+    if(guard.response)return guard.response;
 
     if (!role || !['editor', 'viewer'].includes(role)) {
       return NextResponse.json(
@@ -64,12 +67,10 @@ export async function PATCH(
     }
 
     // Update member role
-    const { error: updateError } = await supabase
-      .from('account_users')
-      .update({ role, updated_at: new Date().toISOString() })
-      .eq('account_id', accountId)
-      .eq('user_id', userId)
-      .eq('status', 'active');
+    let query=supabase.from('account_users').update({role,updated_at:new Date().toISOString()}).eq('account_id',accountId).eq('user_id',userId).eq('status','active');
+    if(guard.revision)query=query.eq('revision',guard.revision);
+    const {data:saved,error:updateError}=await query.select('id');
+    if(!updateError && !saved?.length && guard.revision)return staleRowResponse();
 
     if (updateError) throw updateError;
 
@@ -138,11 +139,12 @@ export async function DELETE(
     }
 
     // Remove member
-    const { error: deleteError } = await supabase
-      .from('account_users')
-      .delete()
-      .eq('account_id', accountId)
-      .eq('user_id', userId);
+    const guard=rowPrecondition(await optionalDeleteBody(request),await getActiveAccountId());
+    if(guard.response)return guard.response;
+    let query=supabase.from('account_users').delete().eq('account_id',accountId).eq('user_id',userId);
+    if(guard.revision)query=query.eq('revision',guard.revision);
+    const {data:removed,error:deleteError}=await query.select('id');
+    if(!deleteError && !removed?.length && guard.revision)return staleRowResponse();
 
     if (deleteError) throw deleteError;
 

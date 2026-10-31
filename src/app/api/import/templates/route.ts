@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No active account' }, { status: 400 });
     }
 
-    const body = await request.json() as Omit<CSVImportTemplate, 'id' | 'createdAt'> & { targetAccountId?: number | null; targetCreditCardId?: number | null };
+    const body = await request.json() as Omit<CSVImportTemplate, 'id' | 'createdAt'> & { targetAccountId?: number | null; targetCreditCardId?: number | null; createOnly?: boolean };
     const { mapping, targetAccountId, targetCreditCardId, ...templateData } = body;
 
     // Validate: at most one of targetAccountId or targetCreditCardId
@@ -173,6 +173,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       // Handle unique constraint violation (template already exists)
       if (error.code === '23505') {
+        if(body.createOnly) return NextResponse.json({error:'A saved mapping already exists for this format and account. Use Re-map Fields to review and change it.',code:'STALE_RECORD'},{status:409});
         // Update existing template instead (match by unique key)
         let query = supabase
           .from('csv_import_templates')

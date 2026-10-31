@@ -1,4 +1,6 @@
 "use client";
+import { SkeletonLine } from "./home-skeleton";
+import { useResourceVersion } from "./use-resource-version";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -42,6 +44,11 @@ export function GuidedGoals() {
   );
 }
 function GoalsContent() {
+  const resourceVersion = useResourceVersion(
+    "planning",
+    "balances",
+    "envelopes",
+  );
   const checkin = useTaskCheckin("goals");
   const { data, canEdit, refresh } = useBudget();
   const {
@@ -62,9 +69,10 @@ function GoalsContent() {
   const router = useRouter();
   const params = useSearchParams();
   const request = useRef(0);
+  const loaded = useRef(false);
   const load = useCallback(async () => {
     const id = ++request.current;
-    setLoading(true);
+    setLoading(!loaded.current);
     setError("");
     try {
       const [nextGoals, nextLoans, nextAssets] = await Promise.all(
@@ -77,6 +85,7 @@ function GoalsContent() {
           : [Promise.resolve([]), Promise.resolve([]), Promise.resolve([])],
       );
       if (request.current === id) {
+        loaded.current = true;
         setGoals(nextGoals);
         setLoans(nextLoans);
         setAssets(nextAssets);
@@ -97,7 +106,7 @@ function GoalsContent() {
     return () => {
       request.current++;
     };
-  }, [load, featuresLoading, data?.identity.activeAccountId]);
+  }, [load, featuresLoading, data?.identity.activeAccountId, resourceVersion]);
   function openGoal(id: number | "new" | null, edit = false) {
     if (id === null && params.get("from") === "plan") {
       router.push(`/new/plan${checkin ? "?checkin=monthly" : ""}`);
@@ -112,12 +121,24 @@ function GoalsContent() {
     if (edit) next.set("edit", "true");
     router.push(`/new/goals${next.size ? `?${next}` : ""}`, { scroll: false });
   }
-  const selected = goals.find(
+  const currentSelection = goals.find(
     (g) =>
       String(g.id) === params.get("goal") ||
       (g.linked_category_id !== null &&
         String(g.linked_category_id) === params.get("category")),
   );
+  const remembered = useRef<{ key: string; goal: GoalWithDetails } | null>(
+    null,
+  );
+  const selectionKey = `${params.get("goal")}:${params.get("category")}`;
+  if (currentSelection)
+    remembered.current = { key: selectionKey, goal: currentSelection };
+  if (remembered.current?.key !== selectionKey) remembered.current = null;
+  const selected =
+    currentSelection ??
+    (params.get("edit") === "true" && remembered.current
+      ? { ...remembered.current.goal, recordMissing: true }
+      : undefined);
   const creating = params.get("goal") === "new";
   const editing = creating || params.get("edit") === "true";
   const matches = (g: GoalWithDetails, value: string) =>
@@ -167,7 +188,7 @@ function GoalsContent() {
         )}
       </PageHeading>
       <ReadOnlyNotice />
-      {featureError ? (
+      {featureError && !loaded.current ? (
         <div className="nl-panel" role="alert">
           <p>We couldn’t load your planning settings.</p>
           <button
@@ -213,8 +234,16 @@ function GoalsContent() {
                 ))}
               </div>
               {loading ? (
-                <p role="status">Loading goals…</p>
-              ) : error ? (
+                <div role="status" aria-label="Loading goals">
+                  {[0, 1, 2].map((n) => (
+                    <div className="nl-panel" key={n}>
+                      <SkeletonLine width="45%" height={20} />
+                      <SkeletonLine width="80%" />
+                      <SkeletonLine width="65%" />
+                    </div>
+                  ))}
+                </div>
+              ) : error && !loaded.current ? (
                 <div className="nl-panel" role="alert">
                   <p>{error}</p>
                   <button className="nl-secondary" onClick={() => void load()}>
@@ -300,8 +329,8 @@ function GoalsContent() {
       {goalsEnabled &&
         (!creating || !loading) &&
         !featuresLoading &&
-        !featureError &&
-        !error &&
+        (!featureError || loaded.current) &&
+        (!error || loaded.current) &&
         (creating || selected) &&
         (editing ? (
           <GoalEditor

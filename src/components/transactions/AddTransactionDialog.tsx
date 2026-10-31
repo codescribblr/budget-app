@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,8 @@ interface AddTransactionDialogProps {
   onClose: () => void;
   categories: Category[];
   onSuccess: () => void;
+  onCommit?: (payload: Record<string, unknown>) => Promise<void>;
+  uncertain?: boolean;
 }
 
 interface Split {
@@ -35,7 +38,7 @@ export default function AddTransactionDialog({
   isOpen,
   onClose,
   categories,
-  onSuccess,
+  onSuccess, onCommit, uncertain,
 }: AddTransactionDialogProps) {
   const [date, setDate] = useState<Date>(getTodayLocal());
   const [description, setDescription] = useState('');
@@ -163,10 +166,7 @@ export default function AddTransactionDialog({
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const payload = {
           date: formatLocalDate(date),
           description,
           transaction_type: transactionType,
@@ -177,14 +177,12 @@ export default function AddTransactionDialog({
             category_id: s.category_id,
             amount: parseFloat(s.amount),
           })),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorMessage = await handleApiError(response, 'Failed to add transaction');
-        throw new Error(errorMessage || 'Failed to add transaction');
+        };
+      if (onCommit) await onCommit(payload);
+      else {
+        const response = await fetch('/api/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!response.ok) { const message = await handleApiError(response, 'Failed to add transaction'); throw new Error(message || 'Failed to add transaction'); }
       }
-
       // Reset form
       setDate(getTodayLocal());
       setDescription('');
@@ -197,6 +195,7 @@ export default function AddTransactionDialog({
       onClose();
     } catch (error) {
       console.error('Error adding transaction:', error);
+      if (onCommit) toast.error(error instanceof Error ? error.message : 'Could not confirm this transaction.');
       setIsSubmitting(false);
       // Error toast already shown by handleApiError
       // Button will be re-enabled so user can try again
@@ -210,6 +209,8 @@ export default function AddTransactionDialog({
           <DialogTitle>Add Transaction</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-4">
+          {uncertain && <p role="status" className="nl-notice">Check the outcome before creating another transaction. The same operation cannot be added twice.</p>}
+          <fieldset disabled={uncertain} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="date">Date</Label>
@@ -366,12 +367,13 @@ export default function AddTransactionDialog({
             </div>
           </div>
 
+          </fieldset>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
             <Button onClick={handleSubmit} disabled={isSubmitting}>
-              {isSubmitting ? 'Adding...' : 'Add Transaction'}
+              {isSubmitting ? 'Saving…' : uncertain ? 'Check transaction outcome' : 'Add Transaction'}
             </Button>
           </div>
         </div>

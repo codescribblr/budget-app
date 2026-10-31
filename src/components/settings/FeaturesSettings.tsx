@@ -1,4 +1,5 @@
 'use client';
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useInterfacePath } from "@/hooks/use-interface-path";
 
@@ -77,7 +78,7 @@ export default function FeaturesSettings() {
   const performToggle = async (feature: Feature, enabled: boolean) => {
     setTogglingFeature(feature.key);
     try {
-      await toggleFeature(feature.key, enabled);
+      await toggleFeature(feature.key, enabled, feature.revision ?? null);
       toast.success(
         enabled
           ? `${feature.name} enabled successfully`

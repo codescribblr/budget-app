@@ -1,4 +1,5 @@
 "use client";
+import { PageSkeleton } from "./page-skeleton";
 import { useId, useState } from "react";
 import Link from "next/link";
 import {
@@ -92,10 +93,8 @@ function NetWorthContent() {
         </Link>
       </nav>
       {features.loading ? (
-        <div className="nl-panel" role="status">
-          Loading report access…
-        </div>
-      ) : features.error ? (
+        <PageSkeleton heading={false} variant="report" />
+      ) : features.error && !features.features.length ? (
         <div className="nl-panel" role="alert">
           <h2>Your account settings could not load</h2>
           <button
@@ -118,10 +117,8 @@ function NetWorthContent() {
           </Link>
         </section>
       ) : loading ? (
-        <div className="nl-panel" role="status">
-          Bringing your balances and history together…
-        </div>
-      ) : error || !data ? (
+        <PageSkeleton heading={false} variant="report" />
+      ) : !data ? (
         <div className="nl-panel" role="alert">
           <h2>Net worth could not load</h2>
           <p>{error || "Please try again."}</p>

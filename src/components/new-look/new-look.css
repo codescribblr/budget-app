@@ -614,6 +614,7 @@
   flex-direction: column;
 }
 .nl-income-fields {
+  position: relative;
   overflow-y: auto;
   min-height: 0;
   padding: 0 24px 24px;
@@ -662,6 +663,8 @@
   padding: 8px;
 }
 .nl-income-editor-footer {
+  position: relative;
+  z-index: 1;
   padding: 18px 24px 24px;
   border-top: 1px solid var(--border);
   background: var(--card);
@@ -2567,3 +2570,14 @@ button.nl-activity-link {
 @media (max-width: 680px) { .new-look .nl-balance-conflict-row, .new-look .nl-balance-conflict-row > td { display: block; grid-column: 1 / -1; } }
 
 .new-look .nl-footer-inline { position: static; }
+
+/* Initial placeholders share the loaded view's hierarchy; refresh keeps content. */
+.new-look .nl-page-skeleton { display:grid; gap:20px; }
+.new-look .nl-skeleton-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.new-look .nl-skeleton-metrics .nl-panel { display:grid; gap:16px; }
+.new-look .nl-skeleton-toolbar { display:flex; justify-content:space-between; gap:20px; margin-bottom:20px; }
+.new-look .nl-skeleton-record { display:grid; grid-template-columns:minmax(0,1fr) minmax(90px,22%); gap:24px; padding:20px 0; border-top:1px solid var(--border); }
+.new-look .nl-skeleton-record > div { display:grid; gap:10px; }
+.new-look .nl-skeleton-record > div:last-child { justify-items:end; }
+.new-look .nl-skeleton-chart > div { display:flex; align-items:end; justify-content:space-between; height:220px; margin-top:24px; }
+@media(max-width:600px) { .new-look .nl-skeleton-metrics { gap:8px; } .new-look .nl-skeleton-metrics .nl-panel { padding:14px 10px; } .new-look .nl-skeleton-record { padding:17px 0; } }

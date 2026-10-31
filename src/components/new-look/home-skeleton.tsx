@@ -10,7 +10,7 @@ export function SkeletonLine({
   className = "",
 }: {
   width?: string | number;
-  height?: number;
+  height?: number | string;
   className?: string;
 }) {
   return (

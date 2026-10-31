@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
+    if(error.code === '40001') return NextResponse.json({error:error.message,code:'STALE_RECORD'},{status:409});
     console.error('Error creating goal:', error);
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

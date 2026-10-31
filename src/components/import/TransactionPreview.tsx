@@ -1,4 +1,5 @@
 'use client';
+import { freshFetch as fetch } from "@/lib/view-freshness";
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -209,9 +210,21 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
   );
 
   // Sync items state with transactions prop when it changes
+  const previousIncoming = useRef(transactions);
   useEffect(() => {
-    setItems(transactions);
-  }, [transactions]);
+    if (!modern) setItems(transactions);
+    else setItems(current => {
+      const previous = new Map(previousIncoming.current.map(t => [t.id, t]));
+      const fresh = new Map(transactions.map(t => [t.id, t]));
+      const merged = current.map(t => {
+        const clean = JSON.stringify(t) === JSON.stringify(previous.get(t.id));
+        return clean ? fresh.get(t.id) : t;
+      }).filter((t): t is ParsedTransaction => !!t);
+      const known = new Set(current.map(t => t.id));
+      return [...merged, ...transactions.filter(t => !known.has(t.id))];
+    });
+    previousIncoming.current = transactions;
+  }, [transactions, modern]);
 
   useEffect(() => {
     fetchCategories();
@@ -395,6 +408,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
 
   // Helper function to save queued import changes to database
   const saveQueuedImportChange = async (transactionId: string, updates: any) => {
+    if (modern) return; // Reviewed edits commit atomically at approval.
     // Check if this is a queued import
     if (typeof transactionId === 'string' && transactionId.startsWith('queued-')) {
       const queuedImportId = parseInt(transactionId.replace('queued-', ''));
@@ -427,6 +441,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
     }
 
     try {
+      if (!modern) {
       // Update database
       const response = await fetch('/api/automatic-imports/queue/bulk-update', {
         method: 'POST',
@@ -444,6 +459,8 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
 
       if (!response.ok) {
         throw new Error('Failed to update transactions');
+      }
+
       }
 
       // Update local state
@@ -606,7 +623,9 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
     }
   };
 
+  const changedRows = modern ? items.filter(item => item.revision && transactions.find(fresh=>fresh.id===item.id)?.revision !== item.revision) : [];
   const handleImportClick = () => {
+    if(changedRows.length){toast.error('Review the changed transactions above before importing.');return;}
     // Show confirmation dialog
     setShowConfirmation(true);
   };
@@ -626,7 +645,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
 
     try {
       // Use different endpoint based on whether these are queued imports
-      const endpoint = isQueuedImport 
+      const endpoint = !modern && isQueuedImport
         ? '/api/import/ai-categorize-queued'
         : '/api/import/ai-categorize';
       
@@ -702,6 +721,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
 
   const handleConfirmImport = async () => {
     if (importInFlight.current) return;
+    if(changedRows.length){toast.error("Review changes from the other device before importing.");return;}
     setShowConfirmation(false);
 
     // Only import categorized transactions (have splits)
@@ -739,11 +759,13 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
       
       if (isQueuedImport && batchId) {
         // Use queued import approval endpoint
+        if (modern && (!toImport[0]?.budgetId || toImport.some(t => !t.revision || t.budgetId !== toImport[0]?.budgetId))) throw new Error("Reload this batch before importing safely. Your review needs current transaction revisions.");
         response = await fetch('/api/automatic-imports/queue/approve-batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             batchId,
+            ...(modern ? { expectedBudgetId: toImport[0]?.budgetId } : {}),
             transactions: toImport.map(txn => ({
               ...txn,
               // Ensure hash is included (should already be in txn.hash from queued import)
@@ -754,6 +776,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
           }),
         });
       } else {
+        if(modern) throw new Error("This older review does not have a saved batch. Return to Import & review and upload the file again to review it safely.");
         // Use regular import endpoint
         response = await fetch('/api/import/transactions', {
           method: 'POST',
@@ -901,6 +924,7 @@ export default function TransactionPreview({ transactions, onImportComplete, onS
 
   return (
     <div className="space-y-4 max-w-full overflow-hidden">
+      {changedRows.length>0 && <div className="nl-notice" role="alert"><strong>{changedRows.length} reviewed transactions changed elsewhere</strong><p>Your entries are retained. Review each saved transaction before importing.</p>{changedRows.map(item=>{const latest=transactions.find(t=>t.id===item.id);return <div key={item.id} className="space-y-2 py-3"><p><strong>{item.description}</strong></p><p>{latest ? `Latest: ${latest.date} · ${latest.description} · ${latest.amount} · ${latest.splits.map(s=>s.categoryName).join(', ')||'No envelope'}` : 'This transaction was removed or imported on another device.'}</p><Button variant="outline" onClick={()=>setItems(current=>current.flatMap(t=>t.id!==item.id?[t]:latest?[latest]:[]))}>{latest?'Use saved transaction':'Remove from my review'}</Button>{latest && <Button variant="outline" onClick={()=>setItems(current=>current.map(t=>t.id===item.id?{...t,revision:latest.revision}:t))}>Keep my reviewed entries</Button>}</div>;})}</div>}
       {/* Keep the mobile editor mounted so rotation cannot discard its draft. */}
       {modern && <div className={mobileReview ? undefined : 'hidden'}>
         <MobileImportReview

@@ -65,7 +65,7 @@ export async function PUT(request: NextRequest) {
           value: JSON.stringify(scenario),
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'user_id,key' }
+        { onConflict: 'account_id,user_id,key' }
       );
 
     if (error) throw error;

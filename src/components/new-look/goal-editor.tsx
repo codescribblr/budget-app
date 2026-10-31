@@ -1,4 +1,5 @@
 "use client";
+import { useRecordGuard } from "./record-guard";
 import { NativeSelect } from "./native-select";
 import { useState } from "react";
 import Link from "next/link";
@@ -40,6 +41,7 @@ function ExistingGoalEditor({
   onSaved,
 }: Props & { goal: GoalWithDetails }) {
   const { data } = useBudget();
+  const guard = useRecordGuard(goal);
   const [initial] = useState(() => goalDraft(goal));
   const [draft, setDraft] = useState(initial);
   const change = <K extends keyof GoalDraft>(key: K, value: GoalDraft[K]) =>
@@ -70,14 +72,14 @@ function ExistingGoalEditor({
       saveLabel="Save goal"
       onClose={onClose}
       onSave={async () => {
-        await budgetRequest(
-          `/api/goals/${goal.id}`,
-          prepareGoal(draft, goal),
-          "PATCH",
+        await guard.save(
+          { ...prepareGoal(draft, guard.original!) },
+          (payload) => budgetRequest(`/api/goals/${goal.id}`, payload, "PATCH"),
         );
         await onSaved();
       }}
     >
+      {guard.notice}
       <label>
         Goal name
         <input

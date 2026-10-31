@@ -1,4 +1,7 @@
 "use client";
+import { SkeletonLine } from "./home-skeleton";
+import { freshFetch as fetch } from "@/lib/view-freshness";
+import { useResourceVersion } from "./use-resource-version";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -43,13 +46,14 @@ export function TransactionReviewDetail({
   onEdit: (t: TransactionWithSplits) => void;
   onDelete: (t: TransactionWithSplits) => void;
 }) {
+  const resourceVersion = useResourceVersion("transactions");
   const known = transactions.find((t) => t.id === id);
   const [loaded, setLoaded] = useState<TransactionWithSplits | null>(null);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [technical, setTechnical] = useState(false);
   useEffect(() => {
-    setLoaded(null);
+    setLoaded((previous) => (previous?.id === id ? previous : null));
     setError(false);
     setTechnical(false);
     if (known) return;
@@ -68,7 +72,7 @@ export function TransactionReviewDetail({
         if (!controller.signal.aborted) setError(true);
       });
     return () => controller.abort();
-  }, [id, known, attempt]);
+  }, [id, known, attempt, resourceVersion]);
   const transaction = known || loaded;
   const index = transactions.findIndex((t) => t.id === id);
   return (
@@ -90,7 +94,7 @@ export function TransactionReviewDetail({
             Review the purchase, its account, and where it belongs.
           </DialogDescription>
         </div>
-        {error ? (
+        {error && !transaction ? (
           <div className="nl-tx-detail-body" role="alert">
             <p>This transaction could not be loaded.</p>
             <button
@@ -102,7 +106,9 @@ export function TransactionReviewDetail({
           </div>
         ) : !transaction ? (
           <p className="nl-tx-detail-body" role="status">
-            Loading transaction…
+            <SkeletonLine width="55%" height={32} />
+            <SkeletonLine width="80%" />
+            <SkeletonLine width="65%" />
           </p>
         ) : (
           <>

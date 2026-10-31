@@ -1,4 +1,6 @@
 "use client";
+import { freshFetch as fetch } from "@/lib/view-freshness";
+import { useResourceVersion } from "./use-resource-version";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -46,10 +48,18 @@ export function GuidedEnvelopeDetail({ categoryId }: { categoryId: number }) {
 function EnvelopeDetailContent({ categoryId }: { categoryId: number }) {
   const { data } = useBudget();
   const params = useSearchParams();
+  const remembered = useRef<Category | undefined>(undefined);
   if (!data) return null;
-  const category = data.categories.find(
+  const currentCategory = data.categories.find(
     (c) => c.id === categoryId && !c.is_system && !c.is_buffer,
   );
+  if (currentCategory) remembered.current = currentCategory;
+  if (remembered.current?.id !== categoryId) remembered.current = undefined;
+  const category =
+    currentCategory ??
+    (params.has("action") && remembered.current
+      ? { ...remembered.current, recordMissing: true }
+      : undefined);
   if (!category)
     return (
       <div className="nl-panel">
@@ -78,6 +88,7 @@ function EnvelopeDetailBody({
   category: Category;
   search: string;
 }) {
+  const resourceVersion = useResourceVersion("envelopes", "transactions");
   const { data, canEdit, refresh } = useBudget();
   const features = useFeatures();
   const router = useRouter();
@@ -97,7 +108,7 @@ function EnvelopeDetailBody({
       ?.fundedAmount ?? 0;
   useEffect(() => {
     const controller = new AbortController();
-    setInsightsLoading(true);
+    setInsightsLoading(!insights);
     setInsightsError(false);
     fetch(`/api/categories/${category.id}/insights?month=${month}`, {
       cache: "no-store",
@@ -124,6 +135,7 @@ function EnvelopeDetailBody({
     month,
     funded,
     attempt,
+    resourceVersion,
   ]);
   if (!data) return null;
   const overview = envelopeOverview(category, funded);

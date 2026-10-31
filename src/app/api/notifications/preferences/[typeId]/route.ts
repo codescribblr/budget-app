@@ -1,3 +1,4 @@
+import { guardedPreferenceUpdate } from "@/lib/guarded-preference-route";
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/supabase-queries';
 import { NotificationService } from '@/lib/notifications/notification-service';
@@ -44,6 +45,8 @@ export async function PATCH(
     const { user } = await getAuthenticatedUser();
     const { typeId } = await params;
     const body = await request.json();
+    const guarded = await guardedPreferenceUpdate("notification", body, typeId);
+    if (guarded) return guarded;
     const { emailEnabled, inAppEnabled, settings } = body as {
       emailEnabled?: boolean;
       inAppEnabled?: boolean;

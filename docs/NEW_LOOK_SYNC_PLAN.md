@@ -1,23 +1,43 @@
 # Cross-device freshness and safe editing in the new interface
 
-Status: initial working pilot implemented locally · 2026-10-30. Skeleton-only commit `1b3bb9d` is deployed. Sync work remains on the guided-interface branch and test Supabase project.
+Status: stages 1–4 implemented for local testing · 2026-10-31. Skeleton-only commit `1b3bb9d` is deployed. The expanded synchronization work and migrations **131–149 remain local/test-only**; production has not been updated.
 
 ## Implementation checkpoint
 
-Implemented for local review:
+### Protected new-interface workflows
 
-- Guarded cash-account and card saves in the daily balance pass and account/card setup, using opaque database UUID revisions. Both precondition metadata and the expected household are required by these editors; legacy requests keep their existing contract.
-- Transactional financial update/card calculation/audit insertion; typed conflicts; draft retention; explicit latest-versus-mine review; missing-record handling. Post-commit snapshot/notification failures cannot report a successful financial save as failed.
-- One request scopes the shared budget snapshot to a single authenticated household. Resume/focus/online and visible-page periodic refresh preserve loaded data and drafts; background refresh no longer removes edit permission.
-- Private, database-originated signals for accounts, cards, and personal check-in progress, with one shared client, explicit auth-before-subscribe, catch-up reads, hidden-tab cleanup, and transaction-level event coalescing. The current reconciliation interval is 60 seconds while visible/online; adaptive backoff and resource-specific read scheduling remain follow-up work.
-- Shared balance/envelope summaries plus dashboard recent envelopes and net worth refresh. The status deliberately says **Balances checked**, not that every independent page query is current.
+- Account/card balances and setup edits keep their original UUID revision and only submit changed fields. Stored card debt and authoritative balance audit entries commit together.
+- Envelope transfers, direct balance changes, buffer movements and paycheck allocations share a budget lock. Balances, funding history, audit entries and operation receipts commit together. Available-to-save is rechecked under that lock; two commands cannot allocate the same available money. Relevant legacy direct financial writers acquire the same budget lock, while their unversioned absolute edits retain the accepted classic limitation below.
+- Transaction create/edit/delete and bulk edits use scoped revisions and transactional split, tag, envelope and audit updates. Automatic tag rules remain active. New transaction and money commands have immutable operation IDs. An uncertain outcome can be checked after navigation/reload; checking an unapplied operation fences out a delayed original request.
+- Import review preserves dirty rows and selections during background reads. Changed or removed rows need explicit review. Queue approval commits transaction, import provenance and queue receipt together in resumable chunks; duplicate approvals do not create another transaction. Preparation results and checkpoints commit together. Defaults, deletion and remapping check the reviewed revisions; remapping cannot delete a batch unless its replacement succeeds. Old in-memory reviews without a durable batch ask the user to re-upload through the saved-batch workflow.
+- Monthly targets, income, goal edits/setup, loans and assets use guarded writes. Goal setup verifies source revisions shown at the final review and updates linked records atomically. Open record editors retain their entries if the record changes or disappears.
+- Consequential existing settings edits are versioned: profile, notification preferences, dashboard settings, feature flags, household name/deletion, collaborator role/removal, import setup/template edits/deletion, existing Teller mappings and RentCast settings. New CSV templates cannot silently overwrite an existing mapping. Additive/create-only actions and explicit commands (scan, backup, restore, connect, revoke, password change, subscription checkout) retain their action semantics; these are not stale autofilled record replacements. Classic-only tools remain outside the new editor rollout.
 
-Not yet covered: guarded envelope money commands, allocations, transactions/imports, loan/asset/goal/income/settings editors; independent page queries on all remaining screens; resource-specific freshness/error indicators; bulk-import event batching and volume measurements; broader skeleton rollout. These remain required for the complete two-part outcome. Do not describe the pilot as app-wide stale-write protection or app-wide live freshness.
+### Freshness and loading
 
-Test-only migrations: `131_guarded_account_edits.sql` and `132_budget_sync_pilot.sql`. Production has neither migration yet. Disable client subscriptions with `NEXT_PUBLIC_BUDGET_LIVE_SYNC=false`; disable publication with an administrative update of `budget_sync_config.enabled`. Revision checks and HTTP refresh stay active when live delivery is disabled.
+- One shared snapshot and resource coordinator covers balances, envelopes, transactions, imports, planning and settings. Mounted reports, activity/detail views, lists and settings subscribe only to relevant families. Personal check-ins retain their separate user/household/period scope.
+- One Supabase browser client uses two private topics per visible tab. Signals contain resource names, not records. Database transactions coalesce each resource family once, with a one-second source publication bound across transactions and explicit import-completion signals. Durable tokens preserve catch-up when a trailing signal is suppressed or missed.
+- Initial join/rejoin, focus, visibility, online, navigation, mutation and manual retry refresh the view. Visible, online reconciliation runs every 60–70 seconds, backing off on repeated failure to about 15 minutes. Hidden/offline tabs do no polling or live subscription work. No money mutation is queued offline or retried automatically.
+- Read ordering/generation checks protect scope changes and filters. Background reads retain content, editor drafts and focus. The shared status shows checked time, pending reads, failed refreshes and offline state; it does not equate a connected socket with current data.
+- Page/list/report/settings/detail skeletons replace generic initial loading in new views, including shared loading components when used under `/new`. Inline action progress (saving, scanning, processing a file) remains explicit action progress. A background refresh does not replace usable content with a skeleton.
+- Financial reads are read-only. Legacy income initialization moved into a one-time migration; household GET requests no longer provision or clean up budgets.
 
-Verification: 55 focused tests; real test-database races, legacy invalidation, derived card balances, unauthorized writes, and audit rollback; two authenticated sessions receive compact events, unrelated budgets/personal channels are rejected, and multiple committed rows produce one signal. Browser verification covers a retained draft conflicting with a real second save, explicit resolution, account-details merge without replacing a newer balance, and light/dark mobile layout with keyboard-accessible conflict choices. Type checking and an isolated production build pass. Repeatable test-project-only checks are `node scripts/test-budget-concurrency.cjs` and `node scripts/test-budget-realtime.cjs`; both assert the synthetic test project/household and remove their disposable financial records.
+### Verification completed
 
+- 347 Vitest tests across 47 compatible suites pass; TypeScript checking and an isolated production build pass. The repository also contains standalone node/assert scripts, which are not Vitest suites. An earlier indiscriminate Vitest run included those and an unrelated recurring-detection fixture failure; it is not the test command for this change.
+- `node scripts/test-budget-concurrency.cjs`: real account/card races, legacy revision invalidation, unauthorized RPC denial, consistent card calculation and audit rollback.
+- `node scripts/test-envelope-concurrency.cjs`: concurrent allocations against shared available money; transfer revisions and rollback; operation replay and lost-response fencing; transaction split races/deletes; income/loan/asset guards; buffer constraints; preparation/checkpoint/approval replay; import provenance; defaults and remap rollback; feature/integration/Teller guards; cross-household settings isolation; goal setup/linked-plan guards; automatic tagging. Financial fixtures use disposable test households and are cleaned up.
+- `node scripts/test-budget-realtime.cjs`: two authenticated subscribers, unrelated-budget and other-user personal-topic denial, personal check-in delivery, transaction coalescing, source volume, durable token catch-up, and guarded writes with live publication disabled. A synthetic 1,000-row batch produced **one signal per subscriber**, observed within roughly **2.2 seconds** in the recorded run. This measures the test project, not a guaranteed production SLA.
+- Browser verification: the daily-balance pilot was checked on mobile and in both themes. The expanded income editor received a real second-session change while retaining a typed draft and focus, blocked an unresolved save, and saved only after explicit review. The expanded conflict editor was also checked at a 390px phone breakpoint; its footer stacking was corrected so scrolling inputs cannot cover the actions. The dashboard and income view loaded successfully with the new refresh/skeleton behavior.
+
+### Rollout and operational notes
+
+- Apply the migrations and deploy code only after separate production authorization. Migrations 131–149 have been exercised on the test project, not production. Keep the existing production backup process.
+- **Migration 148 changes the settings conflict key** to `(account_id,user_id,key)`. The classic, scenario and external API server writers are updated together without changing their HTTP contracts. Coordinate this migration with the server release; do not apply it alone while leaving old server writers running against the removed unique key. It preserves existing rows and prevents one user's settings from moving between households.
+- Disable browser subscriptions with `NEXT_PUBLIC_BUDGET_LIVE_SYNC=false`; disable publication with `budget_sync_config.enabled=false`. Guarded writes, durable resource tokens and HTTP refresh remain active. No paid Supabase service or billing change is required.
+- Inspect actual production connections/messages/egress during the opt-in rollout. Tests demonstrate source batching, not unlimited Free-plan capacity. Operation receipts are retained for replay safety; include their storage in usage monitoring.
+- A revoked member may briefly retain a cached, already-open Broadcast authorization until reconnect; events contain no financial records and every authoritative read/write rechecks access. No data is trusted from a signal. Test real mobile suspension/reconnection and network-loss behavior during the internal live trial, in addition to the database and local UI checks above.
+- Accepted boundary: classic/external unversioned edits can still overwrite newer values. New-interface preconditions protect against changes made by any writer, but do not make unguarded classic callers concurrency-safe. Password, payment-provider and explicit restore flows retain their existing authorization/confirmation mechanisms.
 
 ## Outcome and scope
 
@@ -30,7 +50,7 @@ A user should be able to leave the budget open on a phone and desktop, return to
 - Keep the dashboard skeleton pilot. Resume the broader skeleton rollout after the shared loading/refresh contract is implemented.
 - No offline mutation queue, automatic financial-write retry, collaborative typing, or classic UI redesign.
 
-## What the code already does
+## Original baseline (before this implementation)
 
 The daily balance page saves only edited rows; untouched autofilled accounts are already omitted. However, it does not retain an edit's original server revision or check that revision when saving. Returning to the page on the same day does not reliably refresh the shared budget data. A second device can therefore submit a stale edit.
 
