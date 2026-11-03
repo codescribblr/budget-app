@@ -15,7 +15,6 @@ import {
   X,
   MessageSquare,
   CircleHelp,
-  ArrowUpRight,
   Mail,
   Banknote,
   Settings,
@@ -35,6 +34,7 @@ import { BudgetProvider, BudgetScope } from "./budget-context";
 import { FeedbackDialog } from "./feedback-dialog";
 import "./new-look.css";
 import "./planning.css";
+import "./cash-accounts.css";
 
 const navigation = [
   { href: "/new", label: "Home", icon: Home },
@@ -86,7 +86,9 @@ export function NewLookLayout({ children }: { children: React.ReactNode }) {
     (link) =>
       (link.href === "/new/accounts" &&
         (pathname.startsWith("/new/loans") ||
-          pathname.startsWith("/new/investments"))) ||
+          pathname.startsWith("/new/investments") ||
+          pathname.startsWith("/new/credit-cards") ||
+          pathname.startsWith("/new/pending-checks"))) ||
       pathname === link.href ||
       (link.href !== "/new" && pathname.startsWith(`${link.href}/`)),
   );
@@ -182,10 +184,6 @@ export function NewLookLayout({ children }: { children: React.ReactNode }) {
                 >
                   <Settings size={17} />
                   Settings
-                </Link>
-                <Link href="/dashboard">
-                  <ArrowUpRight size={17} />
-                  All classic tools
                 </Link>
                 <Link href="/help">
                   <CircleHelp size={17} />

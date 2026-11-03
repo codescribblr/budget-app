@@ -1,0 +1,43 @@
+BEGIN;
+DO $$
+DECLARE owner uuid; p public.pending_checks; a public.accounts; c public.credit_cards; r jsonb; before_money numeric; original_revision uuid; snapshot jsonb;
+BEGIN
+  SELECT owner_id INTO owner FROM public.budget_accounts WHERE id=27;
+  IF owner IS NULL OR NOT EXISTS(SELECT 1 FROM auth.users WHERE id=owner AND email LIKE '%@example.invalid') THEN RAISE EXCEPTION 'Expected disposable preview budget'; END IF;
+  PERFORM set_config('request.jwt.claim.sub',owner::text,true);
+  SELECT public.budget_available_money(27) INTO before_money;
+  SELECT jsonb_agg(jsonb_build_array(id,current_balance)) INTO snapshot FROM public.categories WHERE account_id=27;
+  INSERT INTO public.pending_checks(user_id,account_id,description,amount,type) VALUES(owner,27,'Rollback-only payment test',42.12,'expense') RETURNING * INTO p;
+  IF public.budget_available_money(27)<>before_money-42.12 THEN RAISE EXCEPTION 'Payment effect incorrect'; END IF;
+  original_revision:=p.revision;
+  r:=public.save_guarded_record(27,'pending_checks',p.id,p.revision,'{"amount":44.25}',false);
+  IF r->>'status'<>'saved' OR public.budget_available_money(27)<>before_money-44.25 THEN RAISE EXCEPTION 'Guarded edit failed'; END IF;
+  IF (public.save_guarded_record(27,'pending_checks',p.id,original_revision,'{"amount":99}',false))->>'status'<>'conflict' THEN RAISE EXCEPTION 'Stale edit accepted'; END IF;
+  IF (public.save_guarded_record(27,'pending_checks',p.id,original_revision,'{}',true))->>'status'<>'conflict' THEN RAISE EXCEPTION 'Stale removal accepted'; END IF;
+  SELECT * INTO p FROM public.pending_checks WHERE id=p.id;
+  r:=public.save_guarded_record(27,'pending_checks',p.id,p.revision,'{"type":"income"}',false);
+  IF public.budget_available_money(27)<>before_money+44.25 THEN RAISE EXCEPTION 'Deposit effect incorrect'; END IF;
+  SELECT * INTO p FROM public.pending_checks WHERE id=p.id;
+  r:=public.save_guarded_record(27,'pending_checks',p.id,p.revision,'{}',true);
+  IF public.budget_available_money(27)<>before_money THEN RAISE EXCEPTION 'Clearing changed baseline'; END IF;
+  IF snapshot IS DISTINCT FROM (SELECT jsonb_agg(jsonb_build_array(id,current_balance)) FROM public.categories WHERE account_id=27) THEN RAISE EXCEPTION 'Pending changed envelope balances'; END IF;
+  INSERT INTO public.accounts(user_id,account_id,name,balance,account_type,include_in_totals,sort_order) VALUES(owner,27,'Rollback cash',100,'checking',true,999) RETURNING * INTO a;
+  r:=public.save_guarded_account(27,'account',a.id,a.revision,'{"balance":125.25}');
+  IF NOT EXISTS(SELECT 1 FROM public.account_balance_audit WHERE account_id=a.id AND old_balance=100 AND new_balance=125.25) THEN RAISE EXCEPTION 'Cash audit not saved'; END IF;
+  IF (public.save_guarded_account(27,'account',a.id,a.revision,'{"balance":999}'))->>'status'<>'conflict' THEN RAISE EXCEPTION 'Stale cash overwrite'; END IF;
+  INSERT INTO public.credit_cards(user_id,account_id,name,credit_limit,available_credit,current_balance,include_in_totals,sort_order) VALUES(owner,27,'Rollback card',1000,800,200,true,999) RETURNING * INTO c;
+  r:=public.save_guarded_account(27,'card',c.id,c.revision,'{"available_credit":750}');
+  IF (r->'record'->>'current_balance')::numeric<>250 OR NOT EXISTS(SELECT 1 FROM public.credit_card_balance_audit WHERE credit_card_id=c.id AND old_available_credit=800 AND new_available_credit=750) THEN RAISE EXCEPTION 'Card balance/audit incorrect'; END IF;
+  SELECT * INTO c FROM public.credit_cards WHERE id=c.id;
+  SELECT public.budget_available_money(27) INTO before_money;
+  r:=public.save_guarded_account(27,'card',c.id,c.revision,'{"statement_balance":190,"statement_balance_as_of":"2026-10-31"}');
+  IF public.budget_available_money(27)<>before_money OR (r->'record'->>'current_balance')::numeric<>250 THEN RAISE EXCEPTION 'Statement changed live money'; END IF;
+  PERFORM set_config('request.jwt.claim.sub',gen_random_uuid()::text,true);
+  BEGIN
+    PERFORM public.save_guarded_record(27,'accounts',a.id,(SELECT revision FROM public.accounts WHERE id=a.id),'{}',true);
+    RAISE EXCEPTION 'Unauthorized deletion accepted';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  RAISE NOTICE 'PASS pending add/edit/clear effects, stale edit/removal, unchanged envelopes, cash/card balance audit, statement separation, unauthorized deletion';
+END $$;
+ROLLBACK;

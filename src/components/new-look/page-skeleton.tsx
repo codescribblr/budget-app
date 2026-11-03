@@ -19,6 +19,9 @@ export type SkeletonView =
   | "envelope-detail"
   | "envelope-setup"
   | "accounts"
+  | "cash-detail"
+  | "card-detail"
+  | "pending-checks"
   | "account-setup"
   | "transactions"
   | "imports"
@@ -53,6 +56,21 @@ const headings: Record<SkeletonView, [string, string, string]> = {
     "One balance pass. All your accounts.",
     "Check your bank balances, then copy the available credit shown for each card. We’ll calculate what’s owed. Import transactions separately to update spending in your envelopes.",
   ],
+  "cash-detail": [
+    "Your account",
+    "Account details",
+    "Know what’s here, keep the balance current, and review its history.",
+  ],
+  "card-detail": [
+    "Your credit card",
+    "Credit card details",
+    "Keep what you owe clear, review changes, and find the purchases behind them.",
+  ],
+  "pending-checks": [
+    "Accounts · between balances",
+    "Pending checks & deposits",
+    "Keep track of money that isn’t reflected in your recorded bank balances yet.",
+  ],
   "account-setup": [
     "Accounts · setup",
     "Choose what belongs in your budget",
@@ -66,7 +84,7 @@ const headings: Record<SkeletonView, [string, string, string]> = {
   imports: [
     "Import & review",
     "Bring your spending into focus",
-    "Upload a CSV from each bank and card, then review the queued transactions. Keep the original merchant and description; check the categories before approving.",
+    "Upload bank or card CSVs, then review transactions before importing.",
   ],
   "import-review": ["Import & review", "Review transactions", ""],
   "import-mapping": ["Import & review", "Map CSV Columns", ""],
@@ -120,7 +138,7 @@ const headings: Record<SkeletonView, [string, string, string]> = {
   settings: [
     "Your workspace",
     "A budget that fits you",
-    "A few thoughtful choices can make your routine easier.",
+    "Manage your budget tools, connections, and account.",
   ],
 };
 export function skeletonViewForPath(path: string): SkeletonView {
@@ -132,7 +150,12 @@ export function skeletonViewForPath(path: string): SkeletonView {
         ? "envelope-detail"
         : "envelopes";
   if (area === "accounts")
-    return detail === "manage" ? "account-setup" : "accounts";
+    return detail === "manage"
+      ? "account-setup"
+      : detail
+        ? "cash-detail"
+        : "accounts";
+  if (area === "credit-cards") return "card-detail";
   if (area === "imports")
     return detail === "map-columns"
       ? "import-mapping"
@@ -282,6 +305,92 @@ function ViewContent({
           </section>
         </>
       );
+    case "cash-detail":
+    case "card-detail":
+      return (
+        <div className="nl-cash-detail-grid">
+          <div className="nl-cash-main">
+            <section className="nl-panel nl-cash-hero">
+              <div className="nl-cash-hero-top">
+                <SkeletonLine width={48} height={48} />
+                <SkeletonLine width={132} height={24} />
+              </div>
+              <p className="nl-eyebrow">
+                {view === "card-detail"
+                  ? "Calculated amount owed"
+                  : "Recorded balance"}
+              </p>
+              <div className="nl-cash-amount">
+                <SkeletonLine width={220} height={58} />
+              </div>
+              <SkeletonLine width="90%" height={18} />
+              <div style={{ marginTop: 18 }}>
+                <SkeletonLine
+                  width={view === "card-detail" ? 220 : 170}
+                  height={40}
+                />
+              </div>
+              {view === "card-detail" && (
+                <div className="nl-cash-credit">
+                  {["Available credit", "Credit limit"].map((label) => (
+                    <div key={label}>
+                      <span>{label}</span>
+                      <SkeletonLine width={120} height={24} />
+                    </div>
+                  ))}
+                  <div className="nl-credit-track">
+                    <SkeletonLine width="100%" height={7} />
+                  </div>
+                  <p>
+                    <SkeletonLine width="60%" height={16} />
+                  </p>
+                </div>
+              )}
+            </section>
+            <Panel title="Account activity">
+              <SkeletonToolbar />
+              <SkeletonChart />
+              <SkeletonRows kind="activity" count={4} />
+            </Panel>
+          </div>
+          <aside className="nl-cash-aside">
+            <Panel title="In your budget">
+              <SkeletonRows count={2} />
+            </Panel>
+            {view === "card-detail" && (
+              <Panel title="Last statement">
+                <SkeletonLine width={120} height={26} />
+                <SkeletonLine width="80%" />
+              </Panel>
+            )}
+            {view === "card-detail" && (
+              <Panel title="Carried balance to repay">
+                <SkeletonRows count={2} />
+              </Panel>
+            )}
+            <Panel title="Keep this account current">
+              <SkeletonRows count={3} />
+            </Panel>
+          </aside>
+        </div>
+      );
+    case "pending-checks":
+      return (
+        <>
+          <div className="nl-pending-intro nl-panel">
+            How pending money affects your budget
+          </div>
+          <SkeletonSummary
+            labels={[
+              "Payments not yet in balances",
+              "Deposits not yet in balances",
+              "Available to save",
+            ]}
+          />
+          <SkeletonToolbar />
+          <SkeletonRows kind="activity" count={4} />
+        </>
+      );
     case "account-setup":
     case "envelope-setup":
       return (
@@ -341,12 +450,21 @@ function ViewContent({
         </>
       );
     case "import-review":
-      return <>
-        <div className="nl-category-intro"><div><h2>A place for every purchase</h2><p>Confirm the uncertain ones. Your choices are saved as you go.</p></div></div>
-        <SkeletonToolbar />
-        <SkeletonRows kind="transactions" count={6} />
-        <SkeletonLine width="100%" height={72} />
-      </>;
+      return (
+        <>
+          <div className="nl-category-intro">
+            <div>
+              <h2>A place for every purchase</h2>
+              <p>
+                Confirm the uncertain ones. Your choices are saved as you go.
+              </p>
+            </div>
+          </div>
+          <SkeletonToolbar />
+          <SkeletonRows kind="transactions" count={6} />
+          <SkeletonLine width="100%" height={72} />
+        </>
+      );
     case "import-mapping":
       return (
         <>
@@ -514,12 +632,22 @@ export function PageSkeleton({
   const sectionId = kind === "settings" ? route.split("/")[3] : undefined;
   const section = settingsSections.find((item) => item.id === sectionId);
   const [eyebrow, title, description] = headings[kind];
-  const dynamicTitle = kind === "envelope-detail" || kind === "holding-detail";
+  const cashDetail = kind === "cash-detail" || kind === "card-detail";
+  const dynamicTitle =
+    kind === "envelope-detail" || kind === "holding-detail" || cashDetail;
   return (
     <SkeletonRegion
       label={`Loading ${section?.title ?? kind.replaceAll("-", " ")}`}
       className={`nl-page-skeleton nl-page-skeleton-${kind}`}
     >
+      {heading && (cashDetail || kind === "pending-checks") && (
+        <SkeletonToolbar />
+      )}
+      {heading && cashDetail && (
+        <div className="nl-cash-back">
+          <SkeletonLine width={120} height={18} />
+        </div>
+      )}
       {heading && (
         <div className="nl-page-heading">
           <div>

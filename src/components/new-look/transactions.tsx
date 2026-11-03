@@ -600,7 +600,13 @@ function TransactionReview() {
               Money out
             </span>
             <strong>
-              {loading ? <SkeletonLine width={92} height={26} /> : error ? "—" : money(loaded?.summary.expenses || 0)}
+              {loading ? (
+                <SkeletonLine width={92} height={26} />
+              ) : error ? (
+                "—"
+              ) : (
+                money(loaded?.summary.expenses || 0)
+              )}
             </strong>
             <small>Recorded expenses</small>
           </div>
@@ -610,7 +616,13 @@ function TransactionReview() {
               Money in
             </span>
             <strong>
-              {loading ? <SkeletonLine width={92} height={26} /> : error ? "—" : money(loaded?.summary.income || 0)}
+              {loading ? (
+                <SkeletonLine width={92} height={26} />
+              ) : error ? (
+                "—"
+              ) : (
+                money(loaded?.summary.income || 0)
+              )}
             </strong>
             <small>Income & refunds</small>
           </div>
@@ -620,7 +632,13 @@ function TransactionReview() {
               Records
             </span>
             <strong>
-              {loading ? <SkeletonLine width={92} height={26} /> : error ? "—" : (loaded?.total || 0).toLocaleString()}
+              {loading ? (
+                <SkeletonLine width={92} height={26} />
+              ) : error ? (
+                "—"
+              ) : (
+                (loaded?.total || 0).toLocaleString()
+              )}
             </strong>
             <small>{amountScope}</small>
           </div>
@@ -680,14 +698,14 @@ function TransactionReview() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild>
-                  <Link href="/transactions/duplicates">
+                  <Link href="/new/settings/duplicates">
                     <Copy size={15} />
-                    Find duplicates in classic ↗
+                    Find duplicates
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/transactions">
-                    More bulk tools in classic ↗
+                    Bulk date & account edits (classic) ↗
                   </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -789,7 +807,11 @@ function TransactionReview() {
             </button>
           </div>
         ) : loading ? (
-          <SkeletonRows kind="transactions" count={6} label="Loading transactions" />
+          <SkeletonRows
+            kind="transactions"
+            count={6}
+            label="Loading transactions"
+          />
         ) : !rows.length ? (
           <div className="nl-tx-empty">
             <ReceiptText size={28} />

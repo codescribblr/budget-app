@@ -108,6 +108,7 @@ export type RentCastValuePreference = 'estimate' | 'low' | 'high';
 export const RENTCAST_VALUE_PREFERENCES = ['estimate', 'low', 'high'] as const;
 
 export interface RentCastAssetFields {
+  revision: string;
   id: number;
   account_id: number;
   name: string;

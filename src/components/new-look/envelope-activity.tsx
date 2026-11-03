@@ -158,7 +158,11 @@ export function EnvelopeActivity({
         aria-busy={loading}
       >
         {loading && !page && (
-          <SkeletonRows kind="activity" count={4} label="Loading envelope activity" />
+          <SkeletonRows
+            kind="activity"
+            count={4}
+            label="Loading envelope activity"
+          />
         )}
         {page?.records.length === 0 && !loading && (
           <p className="nl-activity-state">
@@ -274,9 +278,6 @@ export function EnvelopeActivity({
             className="nl-activity-link"
           >
             Open envelope page →
-          </Link>
-          <Link href={`/categories/${categoryId}`} className="nl-activity-link">
-            Full category details in classic ↗
           </Link>
         </div>
       )}

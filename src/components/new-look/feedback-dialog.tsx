@@ -64,9 +64,8 @@ export function FeedbackDialog({
         <DialogHeader>
           <DialogTitle>Help shape the new look</DialogTitle>
           <DialogDescription>
-            What helped, felt confusing, or sent you back to classic? Your
-            feedback includes this page and your budget account, without
-            attaching balances or transactions.
+            What’s working, and what could be better? We include this page and
+            budget account, without attaching balances or transactions.
           </DialogDescription>
         </DialogHeader>
         <form className="nl-form" onSubmit={submit}>

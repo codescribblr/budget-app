@@ -1,0 +1,681 @@
+.new-look .nl-cash-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 18px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.new-look .nl-account-name {
+  color: var(--foreground);
+  text-decoration: none;
+}
+.new-look .nl-account-name:hover {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.new-look .nl-cash-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  align-items: start;
+  gap: 24px;
+}
+.new-look .nl-cash-main,
+.new-look .nl-cash-aside {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+.new-look .nl-cash-hero {
+  padding: 30px;
+  background: linear-gradient(
+    125deg,
+    color-mix(in srgb, var(--primary) 7%, var(--card)),
+    var(--card) 70%
+  );
+}
+.new-look .nl-cash-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+.new-look .nl-account-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+.new-look .nl-cash-amount {
+  font-size: clamp(32px, 4.5vw, 48px);
+  letter-spacing: -1.8px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  margin: 10px 0;
+}
+.new-look .nl-cash-hero > .nl-primary {
+  margin-top: 18px;
+}
+.new-look .nl-cash-credit {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 17px 24px;
+  padding-top: 26px;
+  margin-top: 26px;
+  border-top: 1px solid var(--border);
+}
+.new-look .nl-cash-credit > div:not(.nl-credit-track) {
+  display: grid;
+  gap: 5px;
+}
+.new-look .nl-cash-credit span {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.new-look .nl-cash-credit strong {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.new-look .nl-credit-track {
+  grid-column: 1/-1;
+  height: 7px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--muted);
+}
+.new-look .nl-credit-track > span {
+  display: block;
+  height: 100%;
+  background: var(--chart-2);
+  border-radius: 9px;
+}
+.new-look .nl-cash-credit > p {
+  grid-column: 1/-1;
+  margin: -8px 0 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.new-look .nl-cash-aside .nl-panel {
+  padding: 22px;
+}
+.new-look .nl-cash-aside h2 {
+  font-size: 16px;
+  margin: 0 0 14px;
+}
+.new-look .nl-cash-aside p {
+  font-size: 12px;
+  line-height: 1.75;
+  margin: 12px 0;
+}
+.new-look .nl-cash-facts > div {
+  display: grid;
+  gap: 6px;
+  padding: 15px 0;
+  border-top: 1px solid var(--border);
+}
+.new-look .nl-cash-facts dt {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.new-look .nl-cash-facts dd {
+  font-size: 23px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.new-look .nl-cash-aside .nl-section-title {
+  margin: 0 0 10px;
+}
+.new-look .nl-cash-aside .nl-section-title h2 {
+  margin: 0;
+}
+.new-look .nl-statement-amount {
+  display: block;
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.new-look .nl-cash-shortcuts > a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 0;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.new-look .nl-account-manage summary {
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.new-look .nl-account-manage button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 9px 0 0;
+  font-size: 12px;
+}
+.new-look .nl-cash-activity {
+  padding: 24px;
+  min-width: 0;
+}
+.new-look .nl-account-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.new-look .nl-account-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-weight: 600;
+}
+.new-look .nl-account-tabs button[aria-pressed="true"] {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+.new-look .nl-account-tabs button:hover {
+  background: var(--muted);
+}
+.new-look .nl-account-tabs button > span {
+  font-size: 10px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.new-look .nl-account-explainer {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 18px 0;
+}
+.new-look .nl-account-explainer a {
+  display: inline-block;
+  margin-top: 8px;
+}
+.new-look .nl-cash-chart {
+  height: 205px;
+  margin: 25px -5px 20px;
+}
+.new-look .nl-history-count {
+  font-size: 11px;
+  padding: 6px 0;
+}
+.new-look .nl-cash-history article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+}
+.new-look .nl-cash-history article > div {
+  min-width: 0;
+}
+.new-look .nl-cash-history h3 {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.new-look .nl-cash-history p {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+.new-look .nl-cash-history-values {
+  display: grid;
+  gap: 5px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.new-look .nl-cash-history-values strong {
+  font-size: 16px;
+  font-weight: 600;
+}
+.new-look .nl-cash-history-values :is(span, small) {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.new-look .nl-account-empty {
+  padding: 35px 20px;
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+.new-look .nl-account-empty h2 {
+  font-size: 20px;
+  margin: 0;
+}
+.new-look .nl-account-empty h3 {
+  font-size: 16px;
+}
+.new-look .nl-account-empty p {
+  font-size: 13px;
+  color: var(--muted-foreground);
+  line-height: 1.8;
+  max-width: 600px;
+}
+.new-look .nl-account-transactions > a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 0;
+  border-top: 1px solid var(--border);
+  color: var(--foreground);
+  text-decoration: none;
+}
+.new-look .nl-account-transactions > a:hover {
+  background: var(--muted);
+}
+.new-look .nl-account-transactions > a > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.new-look .nl-account-transactions strong {
+  font-size: 14px;
+}
+.new-look .nl-account-transactions :is(span, small) {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.new-look .nl-account-transactions > a > div:first-child > * {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.new-look .nl-pending-intro {
+  display: flex;
+  gap: 20px;
+  align-items: start;
+  padding: 24px;
+  margin-bottom: 22px;
+}
+.new-look .nl-pending-intro h2 {
+  font-size: 17px;
+  margin-bottom: 10px;
+}
+.new-look .nl-pending-intro p {
+  font-size: 13px;
+  line-height: 1.8;
+  max-width: 850px;
+}
+.new-look .nl-pending-intro p + p {
+  margin-top: 8px;
+}
+.new-look .nl-pending-summary small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.6;
+  display: block;
+  margin-top: 6px;
+}
+.new-look .nl-pending-toolbar {
+  margin: 28px 0 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.new-look .nl-pending-list {
+  display: grid;
+  gap: 12px;
+}
+.new-look .nl-pending-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 20px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 23px;
+  border-radius: 12px;
+}
+.new-look .nl-pending-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.new-look .nl-pending-description {
+  min-width: 0;
+}
+.new-look .nl-pending-description h3 {
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.new-look .nl-pending-description p {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin: 5px 0;
+}
+.new-look .nl-pending-description small {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.new-look .nl-pending-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.new-look .nl-pending-actions .nl-secondary {
+  min-height: 40px;
+  font-size: 12px;
+}
+.new-look .nl-clearing-guide {
+  padding: 24px;
+  margin-top: 30px;
+}
+.new-look .nl-clearing-guide h2 {
+  font-size: 17px;
+}
+.new-look .nl-clearing-guide ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 25px;
+  list-style: decimal;
+  padding-left: 18px;
+  margin-top: 20px;
+}
+.new-look .nl-clearing-guide li {
+  font-size: 12px;
+  line-height: 1.9;
+  padding-left: 5px;
+  color: var(--muted-foreground);
+}
+.new-look .nl-clearing-guide strong {
+  display: block;
+  color: var(--foreground);
+}
+.new-look .nl-pending-home-link {
+  display: inline-flex;
+  font-size: 12px;
+  margin-top: 12px;
+}
+@media (max-width: 1100px) {
+  .new-look .nl-cash-detail-grid {
+    grid-template-columns: minmax(0, 1fr) 270px;
+    gap: 18px;
+  }
+  .new-look .nl-pending-row {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 14px;
+  }
+  .new-look .nl-pending-actions {
+    grid-column: 2/-1;
+  }
+}
+@media (max-width: 760px) {
+  .new-look .nl-cash-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .new-look .nl-cash-hero,
+  .new-look .nl-cash-activity {
+    padding: 22px 18px;
+  }
+  .new-look .nl-cash-aside {
+    gap: 16px;
+  }
+  .new-look .nl-pending-intro {
+    padding: 20px;
+    gap: 14px;
+  }
+  .new-look .nl-pending-intro .nl-account-icon {
+    display: none;
+  }
+  .new-look .nl-pending-summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .new-look .nl-pending-summary > .nl-panel {
+    padding: 16px 20px;
+  }
+  .new-look .nl-pending-row {
+    padding: 18px 15px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .new-look .nl-pending-icon {
+    display: none;
+  }
+  .new-look .nl-pending-actions {
+    grid-column: 1/-1;
+  }
+  .new-look .nl-clearing-guide ol {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+  .new-look .nl-cash-history article {
+    align-items: start;
+    gap: 12px;
+  }
+  .new-look .nl-cash-history-values {
+    max-width: 48%;
+    flex-shrink: 1;
+  }
+  .new-look .nl-cash-history-values span {
+    overflow-wrap: anywhere;
+  }
+  .new-look .nl-cash-chart {
+    height: 180px;
+  }
+}
+
+.new-look .nl-pending-intro {
+  display: block;
+  padding: 16px 22px;
+}
+.new-look .nl-pending-intro summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.new-look .nl-pending-intro[open] > div {
+  margin-top: 14px;
+}
+@media (max-width: 760px) {
+  .new-look .nl-pending-summary > .nl-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 14px;
+  }
+  .new-look .nl-pending-summary small {
+    grid-column: 1/-1;
+    margin-top: 0;
+  }
+}
+
+.new-look .nl-carried-overview {
+  margin: 22px 0;
+  padding: 24px;
+}
+.new-look .nl-carried-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+}
+.new-look .nl-carried-row h2 {
+  font-size: 14px;
+  margin: 0 0 9px;
+}
+.new-look .nl-carried-row .nl-statement-amount {
+  font-size: 19px;
+}
+.new-look .nl-carried-row p {
+  font-size: 12px;
+  margin: 6px 0 0;
+  max-width: 540px;
+}
+.new-look .nl-carried-row > button {
+  flex: none;
+}
+.new-look .nl-debt-choices {
+  display: grid;
+  gap: 10px;
+}
+.new-look .nl-debt-choices button {
+  text-align: left;
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.new-look .nl-debt-choices button[aria-pressed="true"] {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+}
+.new-look .nl-debt-choices span {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+.new-look .nl-property-panel {
+  margin: 24px 0;
+  padding: 26px;
+}
+.new-look .nl-property-address {
+  margin: 20px 0 14px;
+}
+.new-look .nl-property-address p {
+  font-size: 13px;
+  color: var(--muted-foreground);
+  margin-top: 7px;
+}
+.new-look .nl-property-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.new-look .nl-property-values {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 22px 0 16px;
+}
+.new-look .nl-property-values button,
+.new-look .nl-property-values .nl-value-skeleton {
+  display: grid;
+  text-align: left;
+  gap: 13px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  border-radius: 12px;
+}
+.new-look .nl-property-values button[aria-pressed="true"] {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+}
+.new-look .nl-property-values button:disabled {
+  opacity: 0.6;
+}
+.new-look .nl-property-values span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.new-look .nl-property-values strong {
+  font-size: clamp(20px, 2.2vw, 28px);
+  letter-spacing: -0.6px;
+  overflow-wrap: anywhere;
+}
+.new-look .nl-property-values small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--primary);
+  font-size: 11px;
+}
+.new-look .nl-property-panel > p {
+  font-size: 13px;
+  line-height: 1.75;
+  margin: 16px 0;
+}
+.new-look .nl-property-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+.new-look .nl-property-comparables {
+  margin: 22px 0;
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+  font-size: 13px;
+}
+.new-look .nl-property-comparables summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.new-look .nl-property-comparables > div {
+  max-height: 360px;
+  overflow: auto;
+  margin-top: 14px;
+}
+.new-look .nl-property-comparables article {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.new-look .nl-property-comparables article p,
+.new-look .nl-property-comparables article small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-top: 5px;
+}
+@media (max-width: 640px) {
+  .new-look .nl-property-panel,
+  .new-look .nl-carried-overview {
+    padding: 18px;
+  }
+  .new-look .nl-property-panel .nl-section-title,
+  .new-look .nl-carried-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .new-look .nl-property-values {
+    grid-template-columns: 1fr;
+  }
+  .new-look .nl-property-values button,
+  .new-look .nl-property-values .nl-value-skeleton {
+    grid-template-columns: 1fr auto;
+    padding: 16px;
+    gap: 9px;
+  }
+  .new-look .nl-property-values small {
+    grid-column: 1/-1;
+  }
+  .new-look .nl-property-comparables article {
+    flex-direction: column;
+    gap: 8px;
+  }
+}

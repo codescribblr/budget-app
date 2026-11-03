@@ -314,7 +314,10 @@ function BudgetReportsContent() {
         </div>
       )}
       {loading ? (
-        <PageSkeleton heading={false} view={view === "plan" ? "plan-report" : "reports"} />
+        <PageSkeleton
+          heading={false}
+          view={view === "plan" ? "plan-report" : "reports"}
+        />
       ) : error && !report ? (
         <div className="nl-panel" role="alert">
           <h2>Your report could not load</h2>
@@ -590,10 +593,15 @@ function BudgetReportsContent() {
           </>
         )
       )}
-      <p className="nl-footnote">
-        Specialized tag reports and retirement projections remain in{" "}
-        <Link href="/reports">classic reports ↗</Link>.
-      </p>
+      <details className="nl-more-tools">
+        <summary>More reports</summary>
+        <div>
+          <Link href="/reports/tags">Tag reports (classic) ↗</Link>
+          <Link href="/reports/retirement-planning">
+            Retirement forecast (classic) ↗
+          </Link>
+        </div>
+      </details>
       <CheckinFooter
         task="reports"
         cadence="weekly"

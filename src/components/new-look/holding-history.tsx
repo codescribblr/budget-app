@@ -33,10 +33,12 @@ export function HoldingHistory({
   kind,
   id,
   revision,
+  property = false,
 }: {
   kind: HoldingKind;
   id: number;
   revision: number;
+  property?: boolean;
 }) {
   const resourceVersion = useResourceVersion("planning");
   const [records, setRecords] = useState<RecordEntry[]>([]),
@@ -122,7 +124,9 @@ export function HoldingHistory({
       <p className="nl-muted">
         {kind === "loans"
           ? "Balance changes include payments, interest, fees, or corrections. They are not a payment ledger."
-          : "Recorded values include contributions, withdrawals, and market movements. This chart does not calculate investment returns."}
+          : property
+            ? "A history of the property values you’ve recorded. These are estimates, not sale proceeds or investment returns."
+            : "Recorded values include contributions, withdrawals, and market movements. This chart does not calculate investment returns."}
       </p>
       {chart.length > 1 && (
         <div
@@ -250,7 +254,11 @@ export function HoldingHistory({
         </p>
       )}
       {loading && !records.length && (
-        <SkeletonRows kind="activity" count={3} label="Loading balance history" />
+        <SkeletonRows
+          kind="activity"
+          count={3}
+          label="Loading balance history"
+        />
       )}
       {more && !error && (
         <button

@@ -97,7 +97,7 @@ function AccountSetupContent() {
                 return (
                   <article key={item.id} className="nl-setup-row">
                     <div>
-                      <h3>{item.name}</h3>
+                      <h3><Link href={`/new/${isCard ? "credit-cards" : "accounts"}/${item.id}`}>{item.name} →</Link></h3>
                       <p>
                         {isCard
                           ? `Credit limit ${money(item.credit_limit)}`
@@ -156,11 +156,6 @@ function AccountSetupContent() {
           </section>
         );
       })}
-      <p className="nl-footnote">
-        Need balance history, statement balances, or account removal?{" "}
-        <Link href="/accounts">Bank account tools in classic ↗</Link> ·{" "}
-        <Link href="/credit-cards">Card tools in classic ↗</Link>
-      </p>
       {editing && (
         <AccountSetupEditor
           selection={editing}
@@ -205,7 +200,7 @@ function AccountSetupContent() {
   );
 }
 
-function AccountSetupEditor({
+export function AccountSetupEditor({
   selection: originalSelection,
   latest,
   availableToSave,

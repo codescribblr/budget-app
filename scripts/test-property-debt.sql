@@ -1,0 +1,47 @@
+BEGIN;
+DO $$ DECLARE owner uuid; a public.non_cash_assets; c public.credit_cards; r jsonb; before_money numeric; orig uuid; v jsonb; linked_loan bigint; linked_goal bigint;
+BEGIN
+ SELECT owner_id INTO owner FROM public.budget_accounts WHERE id=27;
+ IF NOT EXISTS(SELECT 1 FROM auth.users WHERE id=owner AND email LIKE '%@example.invalid') THEN RAISE EXCEPTION 'Expected disposable budget'; END IF;
+ PERFORM set_config('request.jwt.claim.sub',owner::text,true);
+ INSERT INTO public.credit_cards(user_id,account_id,name,credit_limit,available_credit,current_balance) VALUES(owner,27,'Rollback debt test',10000,7500,2500) RETURNING * INTO c;
+ SELECT public.budget_available_money(27) INTO before_money;
+ r:=public.save_guarded_account(27,'card',c.id,c.revision,jsonb_build_object('carried_debt_balance',800,'carried_debt_as_of',current_date));
+ IF (r->'record'->>'current_balance')::numeric<>2500 OR public.budget_available_money(27)<>before_money THEN RAISE EXCEPTION 'Carried debt changed current liability or budget'; END IF;
+ IF (public.save_guarded_account(27,'card',c.id,c.revision,jsonb_build_object('carried_debt_balance',900)))->>'status'<>'conflict' THEN RAISE EXCEPTION 'Stale debt edit accepted'; END IF;
+ SELECT * INTO c FROM public.credit_cards WHERE id=c.id;
+ r:=public.save_guarded_account(27,'card',c.id,c.revision,'{"carried_debt_balance":0}');
+ IF (r->'record'->>'current_balance')::numeric<>2500 OR (r->'record'->>'carried_debt_balance')::numeric<>0 THEN RAISE EXCEPTION 'Paid in full lost current balance'; END IF;
+ INSERT INTO public.non_cash_assets(account_id,name,asset_type,current_value,estimated_return_percentage,is_rmd_qualified,is_liquid,rentcast_enabled,address) VALUES(27,'Rollback property test','real_estate',200000,0,false,false,false,'Synthetic property') RETURNING * INTO a;
+ r:=public.save_guarded_record(27,'non_cash_assets',a.id,a.revision,'{"rentcast_enabled":true,"property_type":"Single Family","bedrooms":3,"rentcast_value_preference":"low"}');
+ SELECT * INTO a FROM public.non_cash_assets WHERE id=a.id; orig:=a.revision;
+ v:='{"price":300000,"priceRangeLow":280000,"priceRangeHigh":320000,"subjectProperty":{"formattedAddress":"Synthetic property"},"comparables":[]}';
+ r:=public.apply_rentcast_estimate(27,a.id,a.revision,v);
+ IF r->>'status'<>'saved' OR (r->>'newValue')::numeric<>280000 OR NOT EXISTS(SELECT 1 FROM public.asset_value_audit WHERE asset_id=a.id AND new_value=280000 AND old_value=200000) THEN RAISE EXCEPTION 'Valuation/audit failed'; END IF;
+ IF (public.apply_rentcast_estimate(27,a.id,orig,v))->>'status'<>'conflict' THEN RAISE EXCEPTION 'Stale provider result accepted'; END IF;
+ IF (SELECT count(*) FROM public.rentcast_valuations WHERE asset_id=a.id)<>1 THEN RAISE EXCEPTION 'Stale estimate recorded'; END IF;
+ SELECT * INTO a FROM public.non_cash_assets WHERE id=a.id;
+ r:=public.save_guarded_record(27,'non_cash_assets',a.id,a.revision,'{"current_value":320000,"rentcast_value_preference":"high"}');
+ IF public.budget_available_money(27)<>before_money THEN RAISE EXCEPTION 'Property value altered spendable money'; END IF;
+ PERFORM set_config('request.jwt.claim.sub',gen_random_uuid()::text,true);
+ BEGIN PERFORM public.save_guarded_record(27,'non_cash_assets',a.id,(SELECT revision FROM public.non_cash_assets WHERE id=a.id),' {"current_value":1}'); RAISE EXCEPTION 'Unauthorized value accepted'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ IF has_function_privilege('authenticated','public.apply_rentcast_estimate(bigint,bigint,uuid,jsonb)','execute') THEN RAISE EXCEPTION 'Provider RPC exposed to users'; END IF;
+ PERFORM set_config('request.jwt.claim.sub',owner::text,true);
+ SELECT * INTO a FROM public.non_cash_assets WHERE id=a.id;
+ IF (public.save_guarded_record(27,'non_cash_assets',a.id,orig,'{}',true))->>'status'<>'conflict' THEN RAISE EXCEPTION 'Stale property removal accepted'; END IF;
+ INSERT INTO public.loans(user_id,account_id,name,balance,linked_non_cash_asset_id) VALUES(owner,27,'Rollback linked mortgage',120000,a.id) RETURNING id INTO linked_loan;
+ INSERT INTO public.goals(user_id,account_id,name,target_amount,goal_type,purpose,linked_non_cash_asset_id) VALUES(owner,27,'Rollback linked goal',400000,'asset-linked','retirement',a.id) RETURNING id INTO linked_goal;
+ BEGIN
+   PERFORM public.save_guarded_record(27,'non_cash_assets',a.id,a.revision,'{}',true);
+   RAISE EXCEPTION 'Property used by a goal was removed';
+ EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+ DELETE FROM public.goals WHERE id=linked_goal;
+ r:=public.save_guarded_record(27,'non_cash_assets',a.id,a.revision,'{}',true);
+ IF r->>'status'<>'saved' OR EXISTS(SELECT 1 FROM public.non_cash_assets WHERE id=a.id) OR EXISTS(SELECT 1 FROM public.asset_value_audit WHERE asset_id=a.id) OR EXISTS(SELECT 1 FROM public.rentcast_valuations WHERE asset_id=a.id) THEN RAISE EXCEPTION 'Property removal did not clean up its history'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.loans WHERE id=linked_loan AND balance=120000 AND linked_non_cash_asset_id IS NULL) THEN RAISE EXCEPTION 'Removal changed linked mortgage balance'; END IF;
+ IF public.budget_available_money(27)<>before_money THEN RAISE EXCEPTION 'Property removal changed spendable money'; END IF;
+ RAISE NOTICE 'PASS guarded removal, goal protection, loan preservation, history cleanup';
+ RAISE NOTICE 'PASS carried debt isolation, stale edits, atomic valuation/audit, stale provider response, property settings, authorization';
+END $$;
+
+ROLLBACK;

@@ -44,6 +44,7 @@ describe("interface navigation", () => {
     );
     expect(interfaceRoute("/new/imports/abc", "classic")).toBe("/imports/abc");
     expect(interfaceRoute("/settings", "new")).toBe("/new/settings");
+    expect(interfaceRoute("/transactions/duplicates", "new")).toBe("/new/settings/duplicates");
     for (const section of ["features", "dashboard", "account", "collaborators", "profile", "password", "notifications", "subscription", "automatic-imports", "import-templates", "duplicates", "merchants", "backup", "integrations", "api-keys"]) {
       expect(interfaceRoute(`/settings/${section}`, "new")).toBe(`/new/settings/${section}`);
       expect(interfaceRoute(`/new/settings/${section}`, "classic")).toBe(`/settings/${section}`);

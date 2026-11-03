@@ -3,7 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { NativeSelect } from "../native-select";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft, ArrowUpRight, ChevronRight, Search } from "lucide-react";
+import { ArrowLeft, ChevronRight, Search } from "lucide-react";
 import { settingsGroups, settingsSections, settingsHref } from "./catalog";
 import { PageHeading } from "../common";
 import "./settings.css";
@@ -87,7 +87,7 @@ export function SettingsOverview() {
       <PageHeading
         eyebrow="Your workspace"
         title="A budget that fits you"
-        description="A few thoughtful choices can make your routine easier. Find your tools, preferences, and account settings here."
+        description="Manage your budget tools, connections, and account."
       />
       <div className="nl-settings-search">
         <Search size={18} />
@@ -102,21 +102,6 @@ export function SettingsOverview() {
       <p className="sr-only" role="status">
         {matches.length} settings found
       </p>
-      {!search && (
-        <div className="nl-settings-start">
-          <div>
-            <p className="nl-eyebrow">A little setup goes a long way</p>
-            <h2>Keep your budget as simple as you need.</h2>
-            <p>
-              Optional tools are yours to choose. Settings for your budget
-              follow the account selected in the sidebar.
-            </p>
-          </div>
-          <Link className="nl-secondary" href={settingsHref("features")}>
-            Choose your tools <ArrowUpRight size={16} />
-          </Link>
-        </div>
-      )}
       <div className="nl-settings-groups">
         {settingsGroups.map((group) => {
           const items = matches.filter((item) => item.group === group.id);

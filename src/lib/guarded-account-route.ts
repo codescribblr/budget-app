@@ -22,7 +22,7 @@ export async function guardedAccountUpdate(kind: "account" | "card", id: number,
   });
   if (error) {
     if (error.code === "42501") return NextResponse.json({ error: "You no longer have edit access." }, { status: 403 });
-    if (["22023", "22P02", "22003", "23502", "23514"].includes(error.code))
+    if (["22023", "22P02", "22003", "22007", "22008", "23502", "23514"].includes(error.code))
       return NextResponse.json({ error: "Check the account details and amounts." }, { status: 400 });
     throw error;
   }

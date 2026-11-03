@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { money } from "@/lib/new-look";
 import { useBudget } from "./budget-context";
 export { CheckinHeader as TaskReturn, CheckinFooter } from "./checkin-flow";
@@ -61,7 +62,7 @@ export function AvailableCalculation() {
           <dd>− {money(s.total_credit_card_balances)}</dd>
         </div>
         <div>
-          <dt>Pending checks, net</dt>
+          <dt><Link href="/new/pending-checks">Pending checks & deposits</Link></dt>
           <dd>{money(s.total_pending_checks)}</dd>
         </div>
         <div>

@@ -311,12 +311,16 @@ function EnvelopeSetupContent() {
           )}
         </div>
       )}
-      <p className="nl-footnote">
-        For a quick pass over all funding amounts, use{" "}
-        <Link href="/new/plan">Monthly plan →</Link>. Goal-linked envelopes,
-        system categories, ordering, and permanent removal still use{" "}
-        <Link href="/categories">classic category tools ↗</Link>.
-      </p>
+      <details className="nl-more-tools">
+        <summary>More envelope tools</summary>
+        <div>
+          <Link href="/new/plan">Monthly plan →</Link>
+          <Link href="/new/goals">Goal envelopes →</Link>
+          <Link href="/categories">
+            Custom order, system categories & deletion (classic) ↗
+          </Link>
+        </div>
+      </details>
       {editParam && editing === undefined && !archiveLoading && (
         <p role="alert" className="nl-notice">
           That envelope is unavailable.{" "}
@@ -587,8 +591,7 @@ export function EnvelopeSetupEditor({
                 ))}
               </NativeSelect>
               <small>
-                Used by Smart Allocation in classic. A lower number is funded
-                first.
+                Lower numbers are funded first when suggesting allocations.
               </small>
             </label>
           )}

@@ -656,11 +656,12 @@ function GoalDetails({
               )}
             </>
           )}
-          <p className="nl-footnote">
-            <Link href={`/goals/${goal.id}`}>
-              Advanced goal tools in classic ↗
-            </Link>
-          </p>
+          <details className="nl-more-tools">
+            <summary>More goal tools</summary>
+            <div>
+              <Link href="/goals">Delete a goal (classic) ↗</Link>
+            </div>
+          </details>
         </div>
         <div className="nl-goal-detail-actions">
           <button className="nl-secondary" disabled={!canEdit} onClick={onEdit}>

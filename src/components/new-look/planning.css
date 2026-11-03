@@ -169,3 +169,14 @@
   .new-look .nl-plan-comparison .nl-section-title { flex-wrap:wrap; gap:10px; }
   .new-look .nl-month-history>a { grid-template-columns:78px 1fr auto; gap:7px 10px; }
 }
+
+.new-look .nl-property-equity dl { display:grid; gap:14px; margin:20px 0; }
+.new-look .nl-property-equity dl>div { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.new-look .nl-property-equity dt { color:var(--muted-foreground); }
+.new-look .nl-property-equity dd { margin:0; font-weight:650; font-variant-numeric:tabular-nums; }
+.new-look .nl-property-equity .nl-equity-total { border-top:1px solid var(--border); padding-top:14px; }
+.new-look .nl-property-equity .nl-equity-total dt { color:var(--foreground); }
+.new-look .nl-property-equity small { display:block; color:var(--muted-foreground); }
+.new-look .nl-property-equity>.nl-text-button { display:block; margin-top:16px; }
+
+.new-look .nl-asset-remove { display:inline-flex; align-items:center; gap:8px; text-align:left; }

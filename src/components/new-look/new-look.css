@@ -2759,3 +2759,9 @@ button.nl-activity-link {
 .nl-mobile-transaction-heading > .nl-transaction-flow { margin-bottom:4px; }
 .nl-mobile-transaction-heading .nl-transaction-flow-value { font-size:32px; line-height:1.2; font-weight:550; letter-spacing:-.7px; }
 .nl-category-suggestions li > .nl-transaction-flow { min-width:max-content; }
+
+.new-look .nl-more-tools { margin-top:20px; color:var(--muted-foreground); font-size:13px; }
+.new-look .nl-more-tools>summary { cursor:pointer; width:fit-content; }
+.new-look .nl-more-tools>summary:focus-visible { outline:2px solid var(--ring); outline-offset:4px; border-radius:3px; }
+.new-look .nl-more-tools>div { display:flex; flex-wrap:wrap; gap:12px 20px; padding-top:12px; }
+.new-look .nl-more-tools a { color:var(--primary); text-decoration:underline; text-underline-offset:3px; }

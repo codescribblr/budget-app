@@ -58,11 +58,11 @@ export const settingsSections = [
     id: "dashboard",
     group: "budget",
     title: "Appearance",
-    description: "Choose a theme and manage classic dashboard cards.",
+    description: "Choose light, dark, or system mode.",
     detail: "Make your workspace comfortable in light, dark, or system mode.",
     icon: Palette,
     keywords: "light dark theme layout dashboard",
-    scope: "This device · classic cards shared with your budget",
+    scope: "This device",
   },
   {
     id: "collaborators",

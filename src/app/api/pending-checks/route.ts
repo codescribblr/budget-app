@@ -1,7 +1,8 @@
+import { pendingCheckCreate } from "@/lib/pending-checks";
+import { getActiveAccountId } from "@/lib/account-context";
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllPendingChecks, createPendingCheck } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
-import type { CreatePendingCheckRequest } from '@/lib/types';
 
 export async function GET() {
   try {
@@ -24,7 +25,10 @@ export async function POST(request: NextRequest) {
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
 
-    const body = (await request.json()) as CreatePendingCheckRequest;
+    const parsed = pendingCheckCreate.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ error: "Enter a description, a positive amount with at most two decimal places, and a valid type." }, { status: 400 });
+    const { expectedBudgetId, ...body } = parsed.data;
+    if (expectedBudgetId !== undefined && expectedBudgetId !== await getActiveAccountId()) return NextResponse.json({ error: "The active budget changed. Reload before saving.", code: "BUDGET_CHANGED" }, { status: 409 });
     const pendingCheck = await createPendingCheck(body);
     return NextResponse.json(pendingCheck, { status: 201 });
   } catch (error: any) {

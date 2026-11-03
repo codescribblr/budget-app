@@ -12,8 +12,8 @@ export function SettingsAppearance() {
       <section className="nl-settings-panel">
         <h2>Choose your theme</h2>
         <p>
-          Applies to both interfaces on this device. System follows your
-          device’s appearance.
+          System follows your device’s appearance. Your choice saves
+          automatically.
         </p>
         <div className="nl-theme-options" role="group" aria-label="Color theme">
           {[
@@ -32,17 +32,11 @@ export function SettingsAppearance() {
             </button>
           ))}
         </div>
-        <p className="nl-footnote">Your choice is saved automatically.</p>
       </section>
       <details className="nl-settings-panel nl-classic-cards">
         <summary>
-          Classic dashboard cards{" "}
-          <span>Only applies when you switch to classic</span>
+          Classic dashboard cards <span>Current budget · classic only</span>
         </summary>
-        <p>
-          The new home is organized around check-ins. These card visibility
-          settings only change the classic dashboard.
-        </p>
         <DashboardSettingsForm />
       </details>
     </>

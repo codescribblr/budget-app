@@ -64,9 +64,11 @@ export async function guardedRecordUpdate(
       return NextResponse.json(
         {
           error:
-            error.code === "22023"
-              ? error.message
-              : "Check the details and linked records.",
+            remove && table === "non_cash_assets" && error.code === "23503"
+              ? "A goal still uses this asset. Keep it and update its value, or remove the goal’s asset link before deleting it."
+              : error.code === "22023"
+                ? error.message
+                : "Check the details and linked records.",
         },
         { status: 400 },
       );

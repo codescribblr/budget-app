@@ -11,9 +11,11 @@ export function safeReturnPath(value: string | null, fallback = "/dashboard") {
 }
 const routes = [
   ["/new/reports/net-worth", "/net-worth"],
+  ["/new/settings/duplicates", "/transactions/duplicates"],
   ["/new/loans", "/loans"],
   ["/new/investments", "/non-cash-assets"],
   ["/new/accounts", "/accounts"],
+  ["/new/pending-checks", "/pending-checks"],
   ["/new/budget", "/categories"],
   ["/new/imports", "/imports"],
   ["/new/transactions", "/transactions"],
@@ -26,6 +28,9 @@ const routes = [
 ] as const;
 
 export function interfaceRoute(pathname: string, target: "new" | "classic") {
+  if (target === "new" && /^\/(accounts|credit-cards)\/\d+$/.test(pathname)) return `/new${pathname}`;
+  if (target === "classic" && /^\/new\/(accounts|credit-cards)\/\d+$/.test(pathname)) return pathname.slice(4);
+  if (target === "new" && /^\/pending-checks\/\d+$/.test(pathname)) return "/new/pending-checks";
   if (target === "new" && (pathname === "/settings" || pathname.startsWith("/settings/"))) return `/new${pathname}`;
   if (target === "classic" && (pathname === "/new/settings" || pathname.startsWith("/new/settings/"))) return pathname.slice(4);
   if (target === "new" && /^\/(loans|non-cash-assets)\/\d+$/.test(pathname)) return pathname.replace("/loans/", "/new/loans/").replace("/non-cash-assets/", "/new/investments/");

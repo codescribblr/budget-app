@@ -28,6 +28,7 @@ export async function GET(
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000 || !Number.isSafeInteger(offset) || offset < 0) return NextResponse.json({ error: 'Invalid history page' }, { status: 400 });
 
     // Fetch audit records
     const { data: auditRecords, error: auditError } = await supabase
@@ -36,6 +37,7 @@ export async function GET(
       .eq('account_id', accountId)
       .eq('budget_account_id', budgetAccountId)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (auditError) {

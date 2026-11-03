@@ -63,12 +63,12 @@ function PaydayContent() {
   const invalid = allocations.some((a) => a.amount === null || a.amount < 0);
   const valid = Boolean(
     data &&
-      cap !== null &&
-      cap > 0 &&
-      !invalid &&
-      total > 0 &&
-      cents(total) <= cents(cap) &&
-      cents(total) <= cents(data.summary.current_savings),
+    cap !== null &&
+    cap > 0 &&
+    !invalid &&
+    total > 0 &&
+    cents(total) <= cents(cap) &&
+    cents(total) <= cents(data.summary.current_savings),
   );
   useUnsavedChanges(
     Object.values(draft).some(
@@ -133,9 +133,15 @@ function PaydayContent() {
       {receipt && (
         <div className="nl-notice" role="status">
           <strong>{money(receipt.amount)} allocated.</strong>{" "}
-          {receipt.tracked
-            ? "Envelope balances and this month’s funding have been updated."
-            : "Envelope balances changed, but monthly funding could not be recorded. Review the funding history in classic before making another allocation; do not submit this amount again."}
+          {receipt.tracked ? (
+            "Envelope balances and this month’s funding have been updated."
+          ) : (
+            <>
+              Monthly funding could not be recorded.{" "}
+              <Link href="/new/budget">Review envelope activity</Link> before
+              allocating again. Do not submit this amount again.
+            </>
+          )}
         </div>
       )}
       {error && (
@@ -146,8 +152,8 @@ function PaydayContent() {
       {command.uncertain && (
         <div className="nl-notice" role="status">
           <p>
-            The allocation has not been confirmed. Checking its outcome uses the
-            same operation ID and cannot allocate twice.
+            This allocation is unconfirmed. Check its status before continuing;
+            checking will not allocate the money again.
           </p>
           <button
             className="nl-primary"
@@ -325,8 +331,9 @@ function PaydayContent() {
         </div>
         {!envelopes.length && (
           <p className="nl-notice">
-            Create envelopes in classic before allocating.{" "}
-            <Link href="/categories">Manage envelopes →</Link>
+            <Link href="/new/budget/manage?edit=new">
+              Add your first envelope →
+            </Link>
           </p>
         )}
         <div className="nl-savebar">

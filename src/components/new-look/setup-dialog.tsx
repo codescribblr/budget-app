@@ -22,6 +22,8 @@ export function SetupDialog({
   onBack,
   onContinue,
   closeOnSave = true,
+  destructive = false,
+  allowUnchanged = false,
 }: {
   title: string;
   description: string;
@@ -34,6 +36,8 @@ export function SetupDialog({
   onBack?: () => void;
   onContinue?: () => void | Promise<void>;
   closeOnSave?: boolean;
+  destructive?: boolean;
+  allowUnchanged?: boolean;
 }) {
   const [saving, setSaving] = useState(false);
   const [discard, setDiscard] = useState(false);
@@ -157,8 +161,12 @@ export function SetupDialog({
                 )}
                 <button
                   type="submit"
-                  className="nl-primary"
-                  disabled={saving || !canEdit || (!dirty && !onContinue)}
+                  className={destructive ? "nl-danger" : "nl-primary"}
+                  disabled={
+                    saving ||
+                    !canEdit ||
+                    (!dirty && !onContinue && !allowUnchanged)
+                  }
                 >
                   {saving
                     ? onContinue

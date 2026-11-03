@@ -1,7 +1,8 @@
+import { guardedRecordUpdate, guardedDelete } from "@/lib/guarded-record-route";
+import { pendingCheckUpdate } from "@/lib/pending-checks";
 import { NextRequest, NextResponse } from 'next/server';
 import { getPendingCheckById, updatePendingCheck, deletePendingCheck } from '@/lib/supabase-queries';
 import { checkWriteAccess } from '@/lib/api-helpers';
-import type { UpdatePendingCheckRequest } from '@/lib/types';
 
 export async function GET(
   request: NextRequest,
@@ -46,7 +47,11 @@ export async function PATCH(
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
 
-    const body = (await request.json()) as UpdatePendingCheckRequest;
+    const parsed = pendingCheckUpdate.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ error: "Check the description, amount, and type." }, { status: 400 });
+    const body = parsed.data;
+    const guarded = await guardedRecordUpdate("pending_checks", pendingCheckId, body);
+    if (guarded) return guarded;
     const pendingCheck = await updatePendingCheck(pendingCheckId, body);
 
     if (!pendingCheck) {
@@ -78,6 +83,8 @@ export async function DELETE(
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
 
+    const guarded = await guardedDelete(request, "pending_checks", pendingCheckId);
+    if (guarded) return guarded;
     await deletePendingCheck(pendingCheckId);
     return NextResponse.json({ success: true });
   } catch (error: any) {

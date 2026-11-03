@@ -144,6 +144,7 @@ function HomeContent({ cadence }: { cadence: Cadence }) {
           </div>
           <p>Unallocated funds · based on recorded balances</p>
           <AvailableCalculation />
+          <Link className="nl-pending-home-link" href="/new/pending-checks">Review pending checks & deposits →</Link>
           <AvailableBuffer key={data.identity.activeAccountId} />
         </div>
         <div className="nl-hero-next">

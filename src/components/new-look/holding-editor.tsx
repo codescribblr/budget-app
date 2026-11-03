@@ -133,7 +133,9 @@ export function HoldingEditor({
         <p>
           {loan
             ? "Loan balances track debt separately from your everyday budget. Record loan payments in the appropriate envelope when you import spending."
-            : "A value change can include contributions, withdrawals, and market changes. It is not a measure of investment return."}
+            : draft.type === "real_estate"
+              ? "Use your estimate of the property’s current value. You can review RentCast estimates and property details on its page after saving."
+              : "A value change can include contributions, withdrawals, and market changes. It is not a measure of investment return."}
         </p>
       </div>
       {!balanceOnly && loan && (

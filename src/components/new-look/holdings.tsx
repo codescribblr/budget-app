@@ -1,9 +1,13 @@
 "use client";
+import { CarriedDebt } from "./carried-debt";
+import { carriedDebtTotal } from "@/lib/carried-debt";
+import { Switch } from "@/components/ui/switch";
+import { PropertyValuation } from "./property-valuation";
 import { PageSkeleton } from "./page-skeleton";
 import { useResourceVersion } from "./use-resource-version";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
@@ -13,6 +17,8 @@ import {
   Sprout,
   Target,
   RefreshCw,
+  Building2,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFeatures } from "@/contexts/FeatureContext";
@@ -32,6 +38,7 @@ import { DataBoundary, budgetRequest, useBudget } from "./budget-context";
 import { PageHeading, ReadOnlyNotice } from "./common";
 import { AccountNavigation } from "./account-navigation";
 import { HoldingEditor } from "./holding-editor";
+import { AssetRemoval } from "./asset-removal";
 import { HoldingHistory } from "./holding-history";
 import { NativeSelect } from "./native-select";
 
@@ -89,6 +96,8 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
   const { data, canEdit, refresh } = useBudget();
   const features = useFeatures();
   const params = useSearchParams();
+  const router = useRouter();
+  const [removing, setRemoving] = useState<NonCashAsset | null>(null);
   const [items, setItems] = useState<Holding[]>([]),
     [assets, setAssets] = useState<NonCashAsset[]>([]),
     [loans, setLoans] = useState<Loan[]>([]),
@@ -167,7 +176,11 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
   const currentSelection = items.find((i) => i.id === id);
   if (currentSelection) savedSelection.current = currentSelection;
   if (savedSelection.current?.id !== id) savedSelection.current = undefined;
-  const selected = currentSelection;
+  const selected =
+    currentSelection ??
+    (savedSelection.current
+      ? { ...savedSelection.current, recordMissing: true }
+      : undefined);
   const editableSelection =
     currentSelection ??
     (savedSelection.current
@@ -197,7 +210,21 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
     (!!editableSelection && (action === "edit" || action === "balance"));
   const sum = (values: Holding[]) =>
     values.reduce((s, i) => s + cents(holdingValue(i)), 0) / 100;
-  const total = sum(items);
+  const includeCards = params.get("cards") === "carried";
+  function setIncludeCards(value: boolean) {
+    const next = new URLSearchParams(params.toString());
+    if (value) next.set("cards", "carried");
+    else next.delete("cards");
+    window.history.replaceState(
+      null,
+      "",
+      `${path}${next.size ? `?${next}` : ""}`,
+    );
+  }
+  const cardDebt = carriedDebtTotal(data?.cards ?? []);
+  const unreviewedCards =
+    data?.cards.filter((c) => c.carried_debt_balance == null).length ?? 0;
+  const total = sum(items) + (loan && includeCards ? cardDebt : 0);
   const activeLoans = loans.filter((l) => Number(l.balance) > 0);
   const goalsFor = (item: Holding) =>
     goals.filter((g) =>
@@ -281,6 +308,12 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
               </button>
             </div>
           )}
+          {selected?.recordMissing && (
+            <p className="nl-notice" role="alert">
+              This record was removed elsewhere. Open drafts are retained, but
+              saving is disabled.
+            </p>
+          )}
           {selected ? (
             <HoldingDetail
               kind={kind}
@@ -288,8 +321,12 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
               goals={goalsFor(selected)}
               assets={assets}
               loans={loans}
-              canEdit={canEdit}
+              canEdit={canEdit && !selected.recordMissing}
               goalsEnabled={goalsEnabled}
+              loansEnabled={loanEnabled}
+              onRemove={() => {
+                if ("current_value" in selected) setRemoving(selected);
+              }}
               relatedError={relatedError}
               revision={revision}
               onAction={setAction}
@@ -302,12 +339,14 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
               >
                 <div>
                   <p className="nl-eyebrow">
-                    {loan ? "Total remaining debt" : "Total recorded value"}
+                    {loan ? "Tracked debt to repay" : "Total recorded value"}
                   </p>
                   <strong className="nl-position-total">{money(total)}</strong>
                   <p>
                     {loan
-                      ? "Across your loans. Credit cards are on Cash & cards."
+                      ? includeCards
+                        ? `Loans plus ${money(cardDebt)} of explicitly recorded carried card debt. New card spending is excluded.`
+                        : "Across your loans. Include carried card debt below for a broader payoff picture."
                       : "Investments and other assets. None of this is included in available to save."}
                   </p>
                 </div>
@@ -366,6 +405,51 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
                   </div>
                 </div>
               </section>
+              {loan && (
+                <section className="nl-panel nl-carried-overview">
+                  <label className="nl-toggle-row">
+                    <Switch
+                      checked={includeCards}
+                      onCheckedChange={setIncludeCards}
+                    />
+                    <span>
+                      Include carried card debt
+                      <small>
+                        Only balances you’ve reviewed as carried debt. Never the
+                        current or statement balance.
+                      </small>
+                    </span>
+                  </label>
+                  {includeCards && (
+                    <>
+                      <p className="nl-muted">
+                        This is a payoff view. Net worth continues to include
+                        full card liabilities separately. Loan minimums above do
+                        not include card payments.
+                      </p>
+                      {unreviewedCards > 0 && (
+                        <p className="nl-notice">
+                          {unreviewedCards}{" "}
+                          {unreviewedCards === 1
+                            ? "card hasn’t"
+                            : "cards haven’t"}{" "}
+                          been reviewed and{" "}
+                          {unreviewedCards === 1 ? "is" : "are"} excluded from
+                          this total.
+                        </p>
+                      )}
+                      {data?.cards.map((card) => (
+                        <CarriedDebt key={card.id} card={card} compact />
+                      ))}
+                      {!data?.cards.length && (
+                        <Link href="/new/accounts/manage">
+                          Add a card to review its carried debt →
+                        </Link>
+                      )}
+                    </>
+                  )}
+                </section>
+              )}
               <div className="nl-holdings-toolbar">
                 <label className="nl-search">
                   <input
@@ -539,6 +623,21 @@ function HoldingsContent({ kind, id }: { kind: HoldingKind; id?: number }) {
           )}
         </>
       )}
+      {removing && (
+        <AssetRemoval
+          original={removing}
+          latest={assets.find((asset) => asset.id === removing.id)}
+          goals={goals.filter(
+            (goal) => goal.linked_non_cash_asset_id === removing.id,
+          )}
+          onClose={() => setRemoving(null)}
+          onRefresh={load}
+          onRemoved={() => {
+            setRemoving(null);
+            router.replace("/new/investments");
+          }}
+        />
+      )}
       {editing && !loading && (
         <HoldingEditor
           key={`${action}:${selection?.id || "new"}`}
@@ -588,6 +687,8 @@ function HoldingDetail({
   loans,
   canEdit,
   goalsEnabled,
+  loansEnabled,
+  onRemove,
   relatedError,
   revision,
   onAction,
@@ -599,6 +700,8 @@ function HoldingDetail({
   loans: Loan[];
   canEdit: boolean;
   goalsEnabled: boolean;
+  loansEnabled: boolean;
+  onRemove: () => void;
   relatedError: boolean;
   revision: number;
   onAction: (action: string) => void;
@@ -612,6 +715,12 @@ function HoldingDetail({
   const securedLoans = asset
     ? loans.filter((l) => l.linked_non_cash_asset_id === asset.id)
     : [];
+  const property = asset?.asset_type === "real_estate";
+  const canCreateGoal =
+    goalsEnabled && (loan || asset?.asset_type === "investment");
+  const linkedDebt =
+    securedLoans.reduce((sum, loan) => sum + cents(Number(loan.balance)), 0) /
+    100;
   return (
     <>
       <header className="nl-detail-heading">
@@ -690,14 +799,33 @@ function HoldingDetail({
                 <small>This value is outside your spendable budget.</small>
               </div>
               <div>
-                <span>What changes the value?</span>
-                <strong>Money in, money out, markets</strong>
-                <small>The recorded balance alone cannot separate these.</small>
+                <span>
+                  {asset?.asset_type === "real_estate"
+                    ? "Property valuation"
+                    : "What changes the value?"}
+                </span>
+                <strong>
+                  {asset?.asset_type === "real_estate"
+                    ? "Your estimate of today’s value"
+                    : "Money in, money out, markets"}
+                </strong>
+                <small>
+                  {asset?.asset_type === "real_estate"
+                    ? "Review RentCast estimates below or enter your own value."
+                    : "The recorded balance alone cannot separate these."}
+                </small>
               </div>
             </>
           )}
         </div>
       </section>
+      {asset?.asset_type === "real_estate" && (
+        <PropertyValuation
+          asset={asset}
+          canEdit={canEdit}
+          onManual={() => onAction("balance")}
+        />
+      )}
       {reduction && (
         <section className="nl-loan-progress">
           <div>
@@ -727,67 +855,155 @@ function HoldingDetail({
         </section>
       )}
       <div className="nl-position-detail-grid">
-        <HoldingHistory kind={kind} id={item.id} revision={revision} />
+        <HoldingHistory
+          kind={kind}
+          id={item.id}
+          revision={revision}
+          property={asset?.asset_type === "real_estate"}
+        />
         <aside className="nl-position-aside">
-          <section className="nl-panel">
-            <h2 className="nl-icon-heading">
-              <Target size={18} />
-              Connect this to your plan
-            </h2>
-            {goals.map((g) => (
-              <div className="nl-linked-goal" key={g.id}>
-                <Link href={`/new/goals?goal=${g.id}`}>
-                  {g.name}
-                  <ArrowRight size={15} />
-                </Link>
-                <p>
-                  {loan
-                    ? "Debt progress follows this recorded balance."
-                    : "Goal progress follows this recorded asset value."}
+          {(goals.length > 0 || canCreateGoal) && (
+            <section className="nl-panel">
+              <h2 className="nl-icon-heading">
+                <Target size={18} />
+                {goals.length
+                  ? "Linked goals"
+                  : loan
+                    ? "Plan your payoff"
+                    : "Set an investment goal"}
+              </h2>
+              {goals.map((g) => (
+                <div className="nl-linked-goal" key={g.id}>
+                  <Link href={`/new/goals?goal=${g.id}`}>
+                    {g.name}
+                    <ArrowRight size={15} />
+                  </Link>
+                  <p>
+                    {loan
+                      ? "Debt progress follows this recorded balance."
+                      : "Goal progress follows this recorded asset value."}
+                  </p>
+                  {g.funding_category && (
+                    <>
+                      <Link href={`/new/budget/${g.funding_category.id}`}>
+                        {g.funding_category.name}
+                      </Link>
+                      <strong>
+                        {money(Number(g.funding_category.current_balance))} set
+                        aside
+                      </strong>
+                      <p>
+                        {loan
+                          ? "Envelope cash is ready for a future payment. It does not reduce your debt until the lender records it."
+                          : "Envelope cash is set aside for a future contribution. It is separate from this asset’s recorded value."}
+                      </p>
+                    </>
+                  )}
+                </div>
+              ))}
+              {!goals.length && !relatedError && (
+                <>
+                  <p>
+                    {loan
+                      ? "Add a payoff goal to track progress and optionally connect an envelope for future payments."
+                      : asset?.asset_type === "investment"
+                        ? "Connect a retirement goal to track this account’s value toward a target."
+                        : "This asset contributes to your longer-term financial picture."}
+                  </p>
+                  {goalsEnabled &&
+                    (loan || asset?.asset_type === "investment") && (
+                      <Link
+                        className="nl-secondary"
+                        href={`/new/goals?goal=new&source=${loan ? "loan" : "asset"}:${item.id}`}
+                      >
+                        Set up a goal <ArrowRight size={15} />
+                      </Link>
+                    )}
+                </>
+              )}
+              {relatedError && (
+                <p className="nl-muted">
+                  Linked goals are temporarily unavailable.
                 </p>
-                {g.funding_category && (
+              )}
+            </section>
+          )}
+          {property && (
+            <section className="nl-panel nl-property-equity">
+              <h2 className="nl-icon-heading">
+                <Building2 size={18} />
+                Property value & equity
+              </h2>
+              <dl>
+                <div>
+                  <dt>Recorded property value</dt>
+                  <dd>{money(Number(asset.current_value))}</dd>
+                </div>
+                {relatedError ? (
+                  <div>
+                    <dt>Linked loans</dt>
+                    <dd>Unavailable</dd>
+                  </div>
+                ) : (
                   <>
-                    <Link href={`/new/budget/${g.funding_category.id}`}>
-                      {g.funding_category.name}
-                    </Link>
-                    <strong>
-                      {money(Number(g.funding_category.current_balance))} set
-                      aside
-                    </strong>
-                    <p>
-                      Envelope cash is ready for a future payment. It does not
-                      reduce your debt until the lender records it.
-                    </p>
+                    <div>
+                      <dt>Linked loans</dt>
+                      <dd>
+                        {!loansEnabled
+                          ? "Tracking is off"
+                          : securedLoans.length
+                            ? money(linkedDebt)
+                            : "None linked"}
+                      </dd>
+                    </div>
+                    {securedLoans.length > 0 && (
+                      <div className="nl-equity-total">
+                        <dt>Recorded equity</dt>
+                        <dd>
+                          {money(
+                            (cents(Number(asset.current_value)) -
+                              cents(linkedDebt)) /
+                              100,
+                          )}
+                        </dd>
+                      </div>
+                    )}
                   </>
                 )}
-              </div>
-            ))}
-            {!goals.length && !relatedError && (
-              <>
-                <p>
-                  {loan
-                    ? "Add a payoff goal to track progress and optionally connect an envelope for future payments."
-                    : asset?.asset_type === "investment"
-                      ? "Connect a retirement goal to track this account’s value toward a target."
-                      : "This asset contributes to your longer-term financial picture."}
+              </dl>
+              {relatedError && (
+                <p className="nl-muted">
+                  Retry linked information above to see equity.
                 </p>
-                {goalsEnabled &&
-                  (loan || asset?.asset_type === "investment") && (
-                    <Link
-                      className="nl-secondary"
-                      href={`/new/goals?goal=new&source=${loan ? "loan" : "asset"}:${item.id}`}
-                    >
-                      Set up a goal <ArrowRight size={15} />
-                    </Link>
+              )}
+              {securedLoans.map((loan) => (
+                <p key={loan.id}>
+                  <Link href={`/new/loans/${loan.id}`}>{loan.name} →</Link>
+                  {!loan.include_in_net_worth && (
+                    <small>Excluded from net worth</small>
                   )}
-              </>
-            )}
-            {relatedError && (
-              <p className="nl-muted">
-                Linked goals are temporarily unavailable.
+                </p>
+              ))}
+              <p>
+                {securedLoans.length
+                  ? "Equity is the property value minus the linked loans shown here, before selling costs or taxes."
+                  : "If you have a mortgage, link it in the loan’s Edit details → Financed asset field to see your equity here."}
               </p>
-            )}
-          </section>
+              <p>
+                Net worth includes this property’s value and separately deducts
+                loans marked for inclusion.
+              </p>
+              <Link className="nl-secondary" href="/new/reports/net-worth">
+                View net worth report <ArrowRight size={15} />
+              </Link>
+              <Link
+                className="nl-text-button"
+                href={loansEnabled ? "/new/loans" : "/new/settings/features"}
+              >
+                {loansEnabled ? "Manage loans →" : "Enable loan tracking →"}
+              </Link>
+            </section>
+          )}
           {linkedAsset && (
             <section className="nl-panel">
               <h2>What this loan finances</h2>
@@ -799,7 +1015,7 @@ function HoldingDetail({
               </p>
             </section>
           )}
-          {asset && securedLoans.length > 0 && (
+          {asset && !property && securedLoans.length > 0 && (
             <section className="nl-panel">
               <h2>Debt linked to this asset</h2>
               {securedLoans.map((l) => (
@@ -843,16 +1059,37 @@ function HoldingDetail({
             </p>
             <Link href="/new/imports">Import & review →</Link>
           </section>
-          <p className="nl-footnote">
-            {asset
-              ? "Property valuations, specialized asset settings, and removal"
-              : "Amortization, specialized loan tools, and removal"}{" "}
-            remain in{" "}
-            <Link href={`${loan ? "/loans" : "/non-cash-assets"}/${item.id}`}>
-              classic ↗
-            </Link>
-            .
-          </p>
+          {asset ? (
+            <details className="nl-editor-details">
+              <summary>Manage this asset</summary>
+              <p>
+                Keep its history by updating its value when you sell or close
+                it. Permanent removal is also available.
+              </p>
+              <button
+                className="nl-text-button nl-negative nl-asset-remove"
+                disabled={!canEdit || relatedError}
+                onClick={onRemove}
+              >
+                <Trash2 size={14} />
+                Remove asset permanently
+              </button>
+              {asset.asset_type === "vehicle" && (
+                <Link href={`/non-cash-assets/${asset.id}`}>
+                  Edit VIN (classic) ↗
+                </Link>
+              )}
+            </details>
+          ) : (
+            <details className="nl-more-tools">
+              <summary>More loan tools</summary>
+              <div>
+                <Link href="/dashboard">
+                  Loan removal (classic dashboard) ↗
+                </Link>
+              </div>
+            </details>
+          )}
         </aside>
       </div>
     </>

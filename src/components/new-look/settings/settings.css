@@ -38,30 +38,10 @@
   outline: none;
   box-shadow: none;
 }
-.nl-settings-start {
-  display: flex;
-  gap: 24px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 26px 28px;
-  background: var(--accent);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  margin-bottom: 36px;
-}
-.nl-settings-start h2 {
-  font-size: 21px;
-  letter-spacing: -0.4px;
-  font-weight: 600;
-  margin: 6px 0;
-}
-.nl-settings-start p:not(.nl-eyebrow) {
-  color: var(--muted-foreground);
-  max-width: 580px;
-}
-.nl-settings-start > a {
-  flex-shrink: 0;
-}
+
+
+
+
 .nl-settings-groups {
   display: grid;
   gap: 32px;
@@ -418,10 +398,7 @@
     min-width: 0;
     max-width: 400px;
   }
-  .nl-settings-start {
-    align-items: flex-start;
-    flex-direction: column;
-  }
+
 }
 @media (max-width: 700px) {
   .nl-settings-grid {
@@ -436,9 +413,7 @@
   .nl-settings-search {
     margin-top: 18px;
   }
-  .nl-settings-start {
-    padding: 22px;
-  }
+
   .nl-settings-mobile {
     flex-direction: column;
     align-items: stretch;

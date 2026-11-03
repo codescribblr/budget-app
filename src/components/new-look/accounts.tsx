@@ -239,7 +239,7 @@ function AccountsContent() {
                         return (
                           <Fragment key={row.key}><tr>
                             <td>
-                              <strong>{row.name}</strong>
+                              <Link className="nl-account-name" href={`/new/${row.kind === "card" ? "credit-cards" : "accounts"}/${row.id}`}><strong>{row.name}</strong><span aria-hidden="true"> ↗</span></Link>
                               <span className="nl-subtext">
                                 {row.kind === "card"
                                   ? row.included

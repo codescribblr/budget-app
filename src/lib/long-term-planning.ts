@@ -156,7 +156,7 @@ export function prepareHolding(
         draft.type !== original.asset_type
       )
         throw new Error(
-          "Turn off automatic property valuations in classic before changing this asset’s type.",
+          "Turn off automatic property valuations in this property’s details before changing this asset’s type.",
         );
       const rate = Number(draft.returnRate);
       if (

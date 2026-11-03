@@ -37,6 +37,9 @@ export interface Account {
 }
 
 export interface CreditCard {
+  /** Explicitly reviewed carried debt; null/absent means not yet reviewed. */
+  carried_debt_balance?: number | null;
+  carried_debt_as_of?: string | null;
   /** Opaque database revision; optional only for legacy clients/fixtures. */
   revision?: string;
   id: number;

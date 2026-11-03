@@ -7,6 +7,7 @@ export function AccountNavigation() {
   const { isFeatureEnabled, hasPremium } = useFeatures();
   const links = [
     { href: "/new/accounts", label: "Cash & cards" },
+    { href: "/new/pending-checks", label: "Pending checks & deposits" },
     ...(hasPremium && isFeatureEnabled("loans")
       ? [{ href: "/new/loans", label: "Loans" }]
       : []),
@@ -20,7 +21,7 @@ export function AccountNavigation() {
         <Link
           key={link.href}
           href={link.href}
-          aria-current={pathname.startsWith(link.href) ? "page" : undefined}
+          aria-current={(pathname.startsWith(link.href) || (link.href === "/new/accounts" && pathname.startsWith("/new/credit-cards"))) ? "page" : undefined}
         >
           {link.label}
         </Link>
