@@ -23,11 +23,11 @@ All new-interface views use layout-matched skeletons for initial data, route/Sus
 
 ### Next design priorities
 
-1. **Recurring bills and subscriptions — on hold:** do not port or refine the existing recurring-bill experience. First plan a replacement with useful, trustworthy workflows; the user finds the current feature cumbersome and inaccurate.
-2. **Pending checks and reserved cash:** surface money already committed without confusing it with posted spending, using the existing budget semantics.
-3. **Net worth and specialized reports:** build on the loan/investment foundation when needed. Retirement projections, property tools, amortization, and tag reports retain explicit classic links for now. Household/settings workflows follow, with clear permissions and contextual entry points.
+The current source of truth is [Remaining new-interface work](NEW_LOOK_REMAINING_WORK.md), updated November 2, 2026. It distinguishes missing workflows from existing tools that only need better links. Net worth and settings are already available in the new interface.
 
-This order favors completing the everyday budget before expanding the navigation. Setup remains separate from review, imports remain separate from balance updates, and no new screen silently moves money.
+[Categorization and import review](NEW_LOOK_CATEGORIZATION_PLAN.md) is implemented for `/new`: durable complete review decisions and splits; budget-specific history; contextual AI suggestions; visible disagreements; Always ask; sequential/bulk review; partial import; and revision-safe persistence. Global merchants remain admin-managed, with no Category Rules page. Migration 151 must precede deployment. Automatic Ready promotion is disabled until validated on explicit outcomes; the configured live AI smoke test and production trigger/job audit passed on November 2. The linked plan records verification and rollout requirements.
+
+Pending checks, cash/card details, and remaining bulk transaction corrections follow. Recurring bills remain on hold pending a replacement plan; income scenarios remain intentionally omitted. Keep setup separate from routine review and never silently move money.
 
 ## Interaction contract
 
@@ -87,7 +87,7 @@ Goal workflow contracts:
 
 Workflow acceptance (2026-10-20): focused tests cover purpose-specific progress, reserve reopening, contribution/refund treatment, legacy compatibility, source validation, and debt baseline preservation. Local API/database checks cover each workflow, envelope reuse, investment value changes, cash exclusion, independent debt/payment balances, existing payment-envelope linking, viewer denial at both API and RPC, duplicate-source rejection, repeat-submit idempotency, and transaction rollback. Browser checks cover the creation-to-review flow and responsive/themed dialogs. Test records are disposable and removed after QA.
 
-Branch: `codex/guided-budget-interface`, based on `origin/main` (this repository has no `master`). Use the isolated attached checkout. `.env.local` points to the existing testing Supabase project; secrets are never committed. Run `npm run dev -- --port 3010`.
+Branch: `codex/guided-budget-interface`, based on `origin/main` (this repository has no `master`). Use the isolated attached checkout. `.env.local` points to the existing testing Supabase project; secrets are never committed. Run `npm run dev -- --port 3010`. For a background preview, give the launcher an explicit `PATH` containing the selected Node binary's directory. A macOS `launchctl` job can start Next using an absolute Node path yet fail when Turbopack spawns `node` for PostCSS if that directory is absent from `PATH`. This produces `spawning node pooled process: No such file or directory`, not a confirmed Node-major incompatibility. Restart the preview after replacing its Node installation, and wait for a removed launchctl job to disappear before resubmitting the same label. Verify a compiled page and its assets, not only the login redirect. Keep `/favicon.ico` in `public`; a second `src/app/favicon.ico` conflicts with that route.
 
 Migration `121_interface_feedback.sql` has been applied to the test project. It adds only interface feedback metadata and RLS, not financial tables. The existing **Deploy to Production** GitHub workflow backs up the production database when migrations are pending, applies them, and then deploys to Vercel when `main` is pushed. Use that workflow for the authorized opt-in release and verify its migration and deployment steps. Do not reset or seed over existing households. Local acceptance used a dedicated synthetic household and separate owner/viewer accounts, not existing users' budgets.
 

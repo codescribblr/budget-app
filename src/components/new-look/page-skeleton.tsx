@@ -341,23 +341,12 @@ function ViewContent({
         </>
       );
     case "import-review":
-      return (
-        <>
-          <SkeletonToolbar />
-          <div className="nl-skeleton-review-desktop">
-            <Panel>
-              <SkeletonRows kind="transactions" count={6} />
-            </Panel>
-          </div>
-          <div className="nl-skeleton-review-mobile">
-            <Panel>
-              <SkeletonToolbar />
-              <SkeletonLine width="65%" height={28} />
-              <SkeletonFields count={3} label="Loading transaction to review" />
-            </Panel>
-          </div>
-        </>
-      );
+      return <>
+        <div className="nl-category-intro"><div><h2>A place for every purchase</h2><p>Confirm the uncertain ones. Your choices are saved as you go.</p></div></div>
+        <SkeletonToolbar />
+        <SkeletonRows kind="transactions" count={6} />
+        <SkeletonLine width="100%" height={72} />
+      </>;
     case "import-mapping":
       return (
         <>

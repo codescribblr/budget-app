@@ -56,6 +56,36 @@ beforeEach(() => {
       }
       if (url === "/api/import/link-merchants") return response({ linked: 0 });
       if (url === "/api/categories") return response([{ id: 7, name: "Food" }]);
+      if (url === "/api/import/review") {
+        rows = rows.map((row) => ({
+          ...row,
+          category_suggestion: {
+            version: 1,
+            fingerprint: "test",
+            merchantId: null,
+            merchantName: "Test cafe",
+            historyVersion: "v1",
+            generatedAt: "now",
+            alwaysAsk: false,
+            history: {
+              candidates: [],
+              confirmedCount: 0,
+              otherCount: 0,
+              splitCount: 0,
+              recent: [],
+              eligible: false,
+              reason: "Choose an envelope",
+            },
+            outcome: "ask",
+            source: null,
+            categoryId: null,
+            reason: "Choose an envelope",
+          },
+        }));
+        return response({
+          results: body.rows.map((r: any) => ({ id: r.id, status: "saved" })),
+        });
+      }
       if (url === "/api/categorize") {
         expect(body.batchId).toBeUndefined();
         return response({ suggestions: [{ categoryId: 7 }] });
@@ -165,4 +195,17 @@ describe("queued import checkpoints", () => {
     expect(tasks?.pdf_to_csv).toBe(true);
     expect(tasks?.categorization).toBe(true);
   });
+});
+
+it("uses the new history service once during new-interface preparation and resumes without rerunning it", async () => {
+  vi.stubGlobal("window", {
+    location: { pathname: "/new/imports/sample", search: "" },
+  });
+  await run();
+  expect(count("/api/import/review")).toBe(1);
+  expect(count("/api/categorize")).toBe(0);
+  expect(tasks?.categorization).toBe(true);
+  const loaded = await run();
+  expect(count("/api/import/review")).toBe(1);
+  expect(loaded.transactions[0].categorization?.outcome).toBe("ask");
 });

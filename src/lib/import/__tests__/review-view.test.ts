@@ -1,0 +1,74 @@
+import { describe, expect, it } from "vitest";
+import type { ParsedTransaction } from "@/lib/import-types";
+import { reviewViewIds } from "../review-view";
+import { reviewPatch } from "../categorization";
+
+const tx = (
+  id: string,
+  changes: Partial<ParsedTransaction> = {},
+): ParsedTransaction => ({
+  id,
+  date: "2026-10-27",
+  merchant: "Market",
+  description: "Purchase",
+  amount: 20,
+  transaction_type: "expense",
+  hash: id,
+  originalData: "{}",
+  status: "pending",
+  isDuplicate: false,
+  splits: [{ categoryId: 1, categoryName: "Groceries", amount: 20 }],
+  ...changes,
+});
+const ready = (t: ParsedTransaction): ParsedTransaction => ({
+  ...t,
+  categoryReview: {
+    state: "reviewed",
+    patch: reviewPatch(t),
+    merchant: t.merchant,
+    forceImport: false,
+  },
+});
+
+describe("stable import review workspace", () => {
+  it("keeps completed rows in place, including when every row is ready", () => {
+    const rows = [tx("1"), tx("2"), tx("3")];
+    const ids = reviewViewIds(rows, "attention", "");
+    expect(
+      reviewViewIds([ready(rows[0]), rows[1], rows[2]], "attention", "", ids),
+    ).toEqual(ids);
+    expect(reviewViewIds(rows.map(ready), "attention", "", ids)).toEqual(ids);
+  });
+  it("preserves order during refresh and appends new matching rows", () => {
+    const first = tx("1");
+    const second = tx("2");
+    const ids = reviewViewIds([first, second], "attention", "");
+    expect(
+      reviewViewIds([tx("3"), second, ready(first)], "attention", "", ids),
+    ).toEqual(["1", "2", "3"]);
+  });
+  it("retains a result after changing the envelope that matched its search", () => {
+    const original = tx("1");
+    const ids = reviewViewIds([original], "attention", "groceries");
+    const changed = ready({
+      ...original,
+      splits: [{ categoryId: 2, categoryName: "Dining out", amount: 20 }],
+    });
+    expect(reviewViewIds([changed], "attention", "groceries", ids)).toEqual([
+      "1",
+    ]);
+    expect(reviewViewIds([changed], "attention", "groceries")).toEqual([]);
+  });
+  it("reapplies filters when explicitly chosen again", () => {
+    const rows = [ready(tx("1")), tx("2"), tx("3", { isDuplicate: true })];
+    expect(reviewViewIds(rows, "attention", "")).toEqual(["2"]);
+    expect(reviewViewIds(rows, "ready", "")).toEqual(["1"]);
+    expect(reviewViewIds(rows, "duplicates", "")).toEqual(["3"]);
+  });
+  it("removes genuinely deleted/imported records but retains skipped and undone rows", () => {
+    const ids = ["1", "2", "3"];
+    const rows = [tx("2", { reviewSkipped: true }), tx("3")];
+    expect(reviewViewIds(rows, "attention", "", ids)).toEqual(["2", "3"]);
+    expect(reviewViewIds(rows, "ready", "", ids)).toEqual(["2", "3"]);
+  });
+});

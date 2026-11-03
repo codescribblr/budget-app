@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency } from "@/lib/utils";
+import { TransactionFlowAmount } from "@/components/new-look/transaction-flow-amount";
 import type { Account, Category, CreditCard } from "@/lib/types";
 import type { ParsedTransaction } from "@/lib/import-types";
 import {
@@ -237,14 +238,10 @@ export default function MobileImportReview(props: Props) {
               >
                 <span className="nl-mobile-card-top">
                   <strong>{item.merchant || item.description}</strong>
-                  <strong
-                    className={
-                      item.transaction_type === "income" ? "nl-accent" : ""
-                    }
-                  >
-                    {item.transaction_type === "income" ? "+" : "−"}
-                    {formatCurrency(item.amount)}
-                  </strong>
+                  <TransactionFlowAmount
+                    amount={item.amount}
+                    transactionType={item.transaction_type}
+                  />
                 </span>
                 <span className="nl-mobile-card-description">
                   {item.description}

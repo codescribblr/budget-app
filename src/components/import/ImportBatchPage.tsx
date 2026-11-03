@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
+import { hydrateCategoryReview } from '@/lib/import/categorization';
 import TransactionPreview from '@/components/import/TransactionPreview';
 import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -185,7 +186,7 @@ export default function BatchReviewPage() {
           transactionStatus = 'excluded';
         }
 
-        return {
+        const transaction: ParsedTransaction = {
           id: `queued-${qi.id}`,
           revision: qi.revision,
           budgetId: qi.account_id,
@@ -212,6 +213,7 @@ export default function BatchReviewPage() {
             : JSON.stringify(qi.original_data || {}),
           hash: qi.hash || '',
         };
+        return modern || qi.category_review ? hydrateCategoryReview(transaction, qi, categories) : transaction;
       });
 
       // Check if processing is needed
@@ -529,6 +531,7 @@ export default function BatchReviewPage() {
   };
 
   const handleRerunCategorization = async () => {
+    if (modern) { toast.info('Use Suggest from history in the review tools below. Reviewed choices are preserved.'); return; }
     if (!batchId || transactions.length === 0) return;
 
     setIsRerunningCategorization(true);
@@ -632,7 +635,7 @@ export default function BatchReviewPage() {
               <DropdownMenuContent align="end">
                 {hasCsvData && <DropdownMenuItem onClick={() => router.push(importPath(`/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`))}>Re-map fields</DropdownMenuItem>}
                 <DropdownMenuItem disabled={pendingTasks.length > 0 || isRerunningDuplicates || isRerunningCategorization || !transactions.length} onClick={handleRerunDuplicateCheck}>{isRerunningDuplicates ? 'Checking…' : 'Re-check duplicates'}</DropdownMenuItem>
-                <DropdownMenuItem disabled={pendingTasks.length > 0 || isRerunningDuplicates || isRerunningCategorization || !transactions.length} onClick={handleRerunCategorization}>{isRerunningCategorization ? 'Categorizing…' : 'Re-run categorization'}</DropdownMenuItem>
+                <DropdownMenuItem className={modern ? "hidden" : undefined} disabled={pendingTasks.length > 0 || isRerunningDuplicates || isRerunningCategorization || !transactions.length} onClick={handleRerunCategorization}>{isRerunningCategorization ? 'Categorizing…' : 'Re-run categorization'}</DropdownMenuItem>
                 <DropdownMenuItem variant="destructive" onClick={() => setDeleteDialogOpen(true)}>{selectedTransactionIds.size ? `Delete ${selectedTransactionIds.size} selected` : 'Delete import batch'}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -649,11 +652,11 @@ export default function BatchReviewPage() {
         </header>
       )}
       <div className={modern ? 'hidden md:block space-y-6' : 'space-y-6'}>
-      <div className="flex items-center gap-4">
+      <div className={modern ? "flex flex-wrap items-start gap-4" : "flex items-center gap-4"}>
         <Button variant="ghost" size="icon" onClick={() => router.push(importPath())}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1">
+        <div className={modern ? "min-w-0 flex-1 basis-80 break-words" : "flex-1"}>
           <h1 className="text-3xl font-bold">Review Import Batch</h1>
           {batchInfo && (
             <div className="mt-2 space-y-2">
@@ -757,6 +760,7 @@ export default function BatchReviewPage() {
           {/* Re-run Categorization button */}
           <Button
             variant="outline"
+            className={modern ? "hidden" : undefined}
             onClick={handleRerunCategorization}
             disabled={pendingTasks.length > 0 || isRerunningCategorization || isRerunningDuplicates || transactions.length === 0}
           >
@@ -823,6 +827,7 @@ export default function BatchReviewPage() {
               {isRerunningDuplicates ? 'Checking...' : 'Re-check Duplicates'}
             </DropdownMenuItem>
             <DropdownMenuItem
+              className={modern ? "hidden" : undefined}
               onClick={handleRerunCategorization}
               disabled={pendingTasks.length > 0 || isRerunningCategorization || isRerunningDuplicates || transactions.length === 0}
             >
@@ -848,6 +853,7 @@ export default function BatchReviewPage() {
         <TransactionPreview
           transactions={transactions}
           onImportComplete={handleImportComplete}
+          onRefresh={loadFromDatabase}
           onSelectionChange={setSelectedTransactionIds}
         />
       )}

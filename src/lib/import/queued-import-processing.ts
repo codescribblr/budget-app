@@ -1,4 +1,5 @@
 import { freshFetch as fetch } from "@/lib/view-freshness";
+import { hydrateCategoryReview } from "./categorization";
 import { processTransactions } from "../csv-parser-helpers";
 import type { ParsedTransaction } from "../import-types";
 import type { ProcessingTasksStatus } from "../processing-tasks";
@@ -69,10 +70,10 @@ export async function loadQueuedImport(
       } catch {
         /* Older imports may not have valid source data. */
       }
-      return {
+      const transaction: ParsedTransaction = {
         id: `queued-${qi.id}`,
-          revision: qi.revision,
-          budgetId: qi.account_id,
+        revision: qi.revision,
+        budgetId: qi.account_id,
         date: qi.transaction_date,
         description: qi.description,
         amount: qi.amount,
@@ -100,6 +101,7 @@ export async function loadQueuedImport(
         originalData: JSON.stringify(original),
         hash: qi.hash || "",
       };
+      return hydrateCategoryReview(transaction, qi, []);
     }),
   };
 }
@@ -142,6 +144,9 @@ export function prepareQueuedImport(
   const process = async () => {
     const batch = await loadQueuedImport(batchId);
     const tasks = { ...batch.status.processingTasks };
+    const modern =
+      typeof window !== "undefined" &&
+      window.location.pathname.startsWith("/new/");
     report({
       progress: 10,
       stage: "Checking saved steps…",
@@ -184,15 +189,22 @@ export function prepareQueuedImport(
           processingTasks: {
             ...tasks,
             duplicate_detection: tasks.duplicate_detection !== false,
-            categorization: tasks.categorization !== false,
+            categorization: modern || tasks.categorization !== false,
             import_defaults_assignment: true,
           },
           onStepComplete: async (task, transactions) => {
-            const saved = await request<{revisions: Record<string,string>}>(
+            const saved = await request<{ revisions: Record<string, string> }>(
               "/api/automatic-imports/queue/update-categorization",
-              { batchId, transactions, completedTasks: [task], expectedBudgetId: batch.transactions[0]?.budgetId },
+              {
+                batchId,
+                transactions,
+                completedTasks: [task],
+                expectedBudgetId: batch.transactions[0]?.budgetId,
+              },
             );
-            for (const transaction of transactions) transaction.revision = saved.revisions?.[transaction.id] ?? transaction.revision;
+            for (const transaction of transactions)
+              transaction.revision =
+                saved.revisions?.[transaction.id] ?? transaction.revision;
             tasks[task] = true;
             report({
               progress: task === "duplicate_detection" ? 50 : 95,
@@ -202,6 +214,41 @@ export function prepareQueuedImport(
           },
         },
       );
+    }
+    if (modern && tasks.categorization === false) {
+      report({
+        progress: 70,
+        stage: "Suggesting envelopes from your history…",
+        tasks: { ...tasks },
+      });
+      const fresh = await loadQueuedImport(batchId);
+      for (let offset = 0; offset < fresh.transactions.length; offset += 100) {
+        const rows = fresh.transactions
+          .slice(offset, offset + 100)
+          .filter((t) => !t.categorization && !t.categoryReview);
+        if (!rows.length) continue;
+        const result = await request<{ results: { status: string }[] }>(
+          "/api/import/review",
+          {
+            action: "history",
+            budgetId: rows[0].budgetId,
+            batchId,
+            rows: rows.map((t) => ({
+              id: Number(t.id.slice(7)),
+              revision: t.revision,
+            })),
+          },
+        );
+        if (result.results.some((r) => r.status !== "saved"))
+          throw new Error(
+            "This batch changed during preparation. Reload saved progress to continue.",
+          );
+      }
+      await request(
+        `/api/import/queue/${encodeURIComponent(batchId)}/mark-task-complete`,
+        { task: "categorization" },
+      );
+      tasks.categorization = true;
     }
     batch.status = { ...batch.status, processingTasks: tasks };
     report({ progress: 100, stage: "Ready to review", tasks: { ...tasks } });

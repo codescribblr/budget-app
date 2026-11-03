@@ -1,4 +1,7 @@
+import type { CategoryReview, CategorySuggestion } from "./import/categorization";
 export interface ParsedTransaction {
+  categoryReview?: CategoryReview;
+  categorization?: CategorySuggestion;
   revision?: string;
   budgetId?: number;
   id: string; // Temporary ID for UI

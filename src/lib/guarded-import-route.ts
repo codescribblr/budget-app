@@ -58,6 +58,7 @@ export async function guardedImportApproval(body: Record<string, unknown>) {
       id: t.id,
       queuedId: Number(t.id.slice(7)),
       expectedRevision: t.revision,
+      requireCategoryReview: body.requireCategoryReview === true,
       forceImport: t.forceImport === true,
       patch: {
         merchant_group_id: merchantGroups[offset + index],

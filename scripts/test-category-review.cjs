@@ -1,0 +1,10 @@
+const {execFileSync}=require('node:child_process');
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const root=path.resolve(__dirname,'..');
+require(root+'/node_modules/@next/env').loadEnvConfig(root);
+assert.equal(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname,'nmqlddimigebtlaophbv.supabase.co','This integration suite is test-project only');
+const url=new URL(process.env.SUPABASE_DB_URL);
+assert.ok(decodeURIComponent(url.username).endsWith('.nmqlddimigebtlaophbv') || url.hostname==='db.nmqlddimigebtlaophbv.supabase.co');
+Object.assign(process.env,{PGHOST:url.hostname,PGPORT:url.port||'5432',PGUSER:decodeURIComponent(url.username),PGPASSWORD:decodeURIComponent(url.password),PGDATABASE:decodeURIComponent(url.pathname.slice(1)),PGSSLMODE:'require'});
+execFileSync('/opt/homebrew/opt/postgresql@17/bin/psql',['-X','-v','ON_ERROR_STOP=1','-f',path.join(__dirname,'test-category-review.sql')],{stdio:'inherit'});

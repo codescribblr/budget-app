@@ -33,6 +33,7 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useFeature } from '@/contexts/FeatureContext';
 import { useRouter, usePathname } from 'next/navigation';
 import { useIsMobile } from '@/hooks/use-mobile';
+import NewImportReview from './NewImportReview';
 import MobileImportReview from './MobileImportReview';
 import { reviewBucket } from '@/lib/import/mobile-review';
 import { Crown } from 'lucide-react';
@@ -48,6 +49,7 @@ import {
 interface TransactionPreviewProps {
   transactions: ParsedTransaction[];
   onImportComplete: () => void;
+  onRefresh?: () => Promise<void>;
   onSelectionChange?: (selectedIds: Set<string>) => void;
 }
 
@@ -121,7 +123,11 @@ function DatePickerWrapper({
   );
 }
 
-export default function TransactionPreview({ transactions, onImportComplete, onSelectionChange }: TransactionPreviewProps) {
+export default function TransactionPreview(props: TransactionPreviewProps) {
+  const pathname = usePathname();
+  return pathname.startsWith('/new/') ? <NewImportReview {...props} /> : <ClassicTransactionPreview {...props} />;
+}
+function ClassicTransactionPreview({ transactions, onImportComplete, onSelectionChange }: TransactionPreviewProps) {
   const router = useRouter();
   const pathname = usePathname();
   const modern = pathname.startsWith('/new/');

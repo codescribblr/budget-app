@@ -1,5 +1,6 @@
 'use client';
 import { PageSkeleton } from "@/components/new-look/page-skeleton";
+import { TransactionFlowAmount } from "@/components/new-look/transaction-flow-amount";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 import { useImportPaths } from './use-import-paths';
 
@@ -1184,7 +1185,7 @@ export default function MapColumnsPage() {
                           <TableHead className="whitespace-nowrap">Date</TableHead>
                           <TableHead className="whitespace-nowrap">Description</TableHead>
                           <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
-                          <TableHead className="whitespace-nowrap">Type</TableHead>
+                          {!modern && <TableHead className="whitespace-nowrap">Type</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1211,6 +1212,8 @@ export default function MapColumnsPage() {
                             } ${preview.amount === 'No amount' ? 'text-red-600 theme-text-danger dark:text-red-400' : ''}`}>
                               {preview.amount === 'No amount' ? (
                                 <span className="italic text-muted-foreground">Not mapped</span>
+                              ) : modern ? (
+                                <TransactionFlowAmount amount={preview.amountValue} transactionType={preview.transactionType} />
                               ) : preview.amount.includes('(') ? (
                                 // Show full amount with type column value in parentheses
                                 <span>
@@ -1235,11 +1238,11 @@ export default function MapColumnsPage() {
                                 </>
                               )}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap">
+                            {!modern && <TableCell className="whitespace-nowrap">
                               <Badge variant={preview.transactionType === 'income' ? 'default' : 'secondary'} className="text-xs">
                                 {preview.transactionType === 'income' ? 'Income' : 'Expense'}
                               </Badge>
-                            </TableCell>
+                            </TableCell>}
                           </TableRow>
                         ))}
                       </TableBody>

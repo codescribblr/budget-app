@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -21,7 +21,10 @@ import { OptionToggle } from "@/components/ui/option-toggle";
 import { NativeSelect } from "@/components/new-look/native-select";
 import TagSelector from "@/components/tags/TagSelector";
 import { useFeature } from "@/contexts/FeatureContext";
+import CategorySuggestionPanel from "./CategorySuggestionPanel";
+import type { CategorySuggestion } from "@/lib/import/categorization";
 import { formatCurrency } from "@/lib/utils";
+import { TransactionFlowAmount } from "@/components/new-look/transaction-flow-amount";
 import type { Account, Category, CreditCard } from "@/lib/types";
 import type { ParsedTransaction } from "@/lib/import-types";
 import {
@@ -45,6 +48,10 @@ export default function MobileTransactionReview({
   onClose,
   onMove,
   onFinish,
+  suggestion,
+  onAI,
+  aiBusy,
+  onPreference,
 }: {
   categories: Category[];
   accounts: Account[];
@@ -54,8 +61,24 @@ export default function MobileTransactionReview({
   total: number;
   onClose: () => void;
   onMove: (direction: -1 | 1) => void;
-  onFinish: (item: ParsedTransaction) => void;
+  onFinish: (item: ParsedTransaction) => void | Promise<void>;
+  suggestion?: CategorySuggestion;
+  onAI?: () => void;
+  aiBusy?: boolean;
+  onPreference?: (value: boolean) => void;
 }) {
+  const [saving, setSaving] = useState(false);
+  async function finish(item: ParsedTransaction) {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onFinish(item);
+    } catch (e: any) {
+      setError(e.message || "Could not save. Your changes are still here.");
+    } finally {
+      setSaving(false);
+    }
+  }
   const tagsEnabled = useFeature("tags");
   const [draft, setDraft] = useState<ParsedTransaction>(() => ({
     ...transaction,
@@ -63,6 +86,9 @@ export default function MobileTransactionReview({
       ? transaction.splits.map((split) => ({ ...split }))
       : [{ categoryId: 0, categoryName: "", amount: transaction.amount }],
   }));
+  useEffect(() => {
+    setDraft((previous) => ({ ...previous, revision: transaction.revision }));
+  }, [transaction.revision]);
   const [dirty, setDirty] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [error, setError] = useState("");
@@ -78,6 +104,7 @@ export default function MobileTransactionReview({
     setError("");
   }
   function close() {
+    if (saving) return;
     if (dirty) setDiscarding(true);
     else onClose();
   }
@@ -112,7 +139,7 @@ export default function MobileTransactionReview({
       setError("Confirm this is a separate transaction, or keep it left out.");
       return;
     }
-    onFinish(includeReviewedTransaction(draft, duplicate && separate));
+    void finish(includeReviewedTransaction(draft, duplicate && separate));
   }
   const categoryChoices = sortCategoriesForTransactionSelect(
     filterCategoriesForTransactionSelect(categories, {
@@ -155,18 +182,21 @@ export default function MobileTransactionReview({
             transaction.
           </DialogDescription>
         </DialogHeader>
-        <div className="nl-mobile-review-body" key={transaction.id}>
+        <fieldset
+          disabled={saving}
+          className="nl-mobile-review-body"
+          key={transaction.id}
+        >
           <div className="nl-mobile-transaction-heading">
             <p>
               {formatReviewDate(draft.date)} · {accountName}
             </p>
             <h2>{draft.merchant || draft.description}</h2>
-            <strong
-              className={draft.transaction_type === "income" ? "nl-accent" : ""}
-            >
-              {draft.transaction_type === "income" ? "+" : "−"}
-              {formatCurrency(draft.amount)}
-            </strong>
+            <TransactionFlowAmount
+              amount={draft.amount}
+              transactionType={draft.transaction_type}
+              align="start"
+            />
             <p className="nl-mobile-full-description">{draft.description}</p>
           </div>
           {duplicate && (
@@ -192,6 +222,28 @@ export default function MobileTransactionReview({
               )}
             </div>
           )}
+          <CategorySuggestionPanel
+            reviewed={transaction.categoryReview?.state === "reviewed"}
+            suggestion={suggestion}
+            onAI={dirty ? undefined : onAI}
+            aiBusy={aiBusy}
+            onPreference={dirty ? undefined : onPreference}
+            busy={saving}
+            onChoose={(candidate) => {
+              const next = {
+                ...draft,
+                splits: [
+                  {
+                    categoryId: candidate.categoryId,
+                    categoryName: candidate.categoryName,
+                    amount: draft.amount,
+                  },
+                ],
+              };
+              if (duplicate || dirty) change({ splits: next.splits });
+              else void finish(includeReviewedTransaction(next));
+            }}
+          />
           <section
             className="nl-mobile-envelope-choice"
             aria-label="Transaction envelopes"
@@ -457,7 +509,7 @@ export default function MobileTransactionReview({
               Historical · won’t change your current envelope balances.
             </p>
           )}
-        </div>
+        </fieldset>
         <div className="nl-mobile-review-footer">
           {error && (
             <p className="nl-error" role="alert">
@@ -484,7 +536,7 @@ export default function MobileTransactionReview({
               <div className="nl-mobile-review-navigation">
                 <button
                   aria-label="Previous transaction"
-                  disabled={position === 1 || dirty}
+                  disabled={position === 1 || dirty || saving}
                   onClick={() => onMove(-1)}
                 >
                   <ArrowLeft size={17} />
@@ -495,7 +547,7 @@ export default function MobileTransactionReview({
                 </span>
                 <button
                   aria-label="Next transaction"
-                  disabled={position === total || dirty}
+                  disabled={position === total || dirty || saving}
                   onClick={() => onMove(1)}
                 >
                   Next
@@ -510,8 +562,9 @@ export default function MobileTransactionReview({
               <div className="nl-mobile-review-decisions">
                 <button
                   className="nl-secondary"
+                  disabled={saving}
                   onClick={() =>
-                    onFinish({
+                    finish({
                       ...draft,
                       splits: draft.splits.filter(
                         (split) => split.categoryId > 0,
@@ -526,16 +579,18 @@ export default function MobileTransactionReview({
                 </button>
                 <button
                   className="nl-primary"
-                  disabled={duplicate && !separate}
+                  disabled={saving || (duplicate && !separate)}
                   onClick={include}
                 >
-                  {ready
-                    ? position === total
-                      ? "Ready · done"
-                      : "Ready & next"
-                    : position === total
-                      ? "Mark ready"
-                      : "Mark ready & next"}
+                  {saving
+                    ? "Saving…"
+                    : ready
+                      ? position === total
+                        ? "Ready · done"
+                        : "Ready & next"
+                      : position === total
+                        ? "Mark ready"
+                        : "Mark ready & next"}
                   <Check size={16} />
                 </button>
               </div>

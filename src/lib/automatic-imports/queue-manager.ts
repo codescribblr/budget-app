@@ -530,7 +530,7 @@ export async function getQueuedImports(options?: {
   if (!accountId) throw new Error('No active account');
 
   const reviewFields = [
-    'id', 'revision', 'account_id',
+    'id', 'revision', 'account_id', 'category_review', 'category_suggestion',
     'import_setup_id',
     'transaction_date',
     'description',
