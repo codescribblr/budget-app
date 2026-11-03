@@ -26,6 +26,7 @@ import { money, parseMoney } from "@/lib/new-look";
 import { getCreditCardBalanceOwed } from "@/lib/credit-card-balance";
 import { budgetRequest, useBudget } from "./budget-context";
 import { SetupDialog } from "./setup-dialog";
+import { DebtPaymentChoice } from "./debt-payment-choice";
 
 const icons = {
   debt: ArrowDownRight,
@@ -206,10 +207,12 @@ export function GoalWizard({
     if (draft.type === "envelope" && draft.envelope !== "new" && !envelope)
       throw new Error("Choose an available envelope.");
     if (debt && draft.payment !== "none" && draft.payment !== "new" && !payment)
-      throw new Error("Choose an available payment envelope.");
+      throw new Error(
+        "Choose your payment envelope, or select “Just track my payoff” to continue without one.",
+      );
     if (debt && draft.payment === "new" && card?.include_in_totals)
       throw new Error(
-        "This card already reserves its full balance in budget totals.",
+        "This card’s debt already reduces Available to save. Choose “Just track my payoff” or connect an existing payment envelope.",
       );
   }
   const setupSummary =
@@ -551,41 +554,13 @@ export function GoalWizard({
                       you update the recorded balance.
                     </small>
                   </div>
-                  <label>
-                    Money waiting for payments
-                    <NativeSelect
-                      value={draft.payment}
-                      onChange={(e) => change("payment", e.target.value)}
-                    >
-                      <option value="none">
-                        {card?.include_in_totals
-                          ? "Use the card balance already reserved in my budget"
-                          : "Track debt without a payment envelope"}
-                      </option>
-                      {!card?.include_in_totals && (
-                        <option value="new">
-                          Create an empty payment envelope
-                        </option>
-                      )}
-                      {envelopes.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          Use {c.name} · {money(c.current_balance)} reserved
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </label>
-                  <p className="nl-setup-callout">
-                    {card?.include_in_totals
-                      ? `This card already deducts ${money(getCreditCardBalanceOwed(card))} from Available to save. An envelope is not required. You can connect one you already use, but its money is an additional earmark: the debt and the envelope both reduce Available to save.`
-                      : "This debt is not deducted from Available to save. A payment envelope can reserve cash until you make a payment. The full debt still belongs in your longer-term planning."}
-                  </p>
-                  {payment && (
-                    <p className="nl-setup-help">
-                      We’ll show this envelope’s balance and activity alongside
-                      your debt. Linking keeps its money and monthly target
-                      unchanged. Money in it never counts as debt paid off.
-                    </p>
-                  )}
+                  <DebtPaymentChoice
+                    value={draft.payment}
+                    onChange={(value) => change("payment", value)}
+                    envelopes={envelopes}
+                    card={card}
+                    allowCreate
+                  />
                 </>
               )}
             </>

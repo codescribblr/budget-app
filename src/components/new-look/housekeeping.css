@@ -1,0 +1,109 @@
+/* Infrequent envelope/goal maintenance: evidence stays next to the action. */
+.new-look .nl-housekeeping-selection { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:18px 0; min-height:42px; }
+.new-look .nl-housekeeping-selection>span { flex:1; color:var(--muted-foreground); font-size:13px; }
+.new-look .nl-housekeeping-list { border:1px solid var(--border); border-radius:16px; background:var(--card); overflow:hidden; }
+.new-look .nl-housekeeping-row { display:flex; align-items:center; gap:14px; padding:12px 16px; border-bottom:1px solid var(--border); }
+.new-look .nl-housekeeping-row:last-child { border-bottom:0; }
+.new-look .nl-housekeeping-row[data-selected=true] { background:var(--secondary); }
+.new-look .nl-housekeeping-check { display:grid; flex-shrink:0; place-items:center; width:28px; height:28px; border:1px solid var(--input); background:var(--background); border-radius:50%; }
+.new-look .nl-housekeeping-check[aria-pressed=true] { background:var(--primary); color:var(--primary-foreground); border-color:var(--primary); }
+.new-look .nl-housekeeping-check:disabled { opacity:.3; }
+.new-look .nl-housekeeping-name { min-width:0; flex:1; }
+.new-look .nl-housekeeping-name h3 { font-size:14px; margin:0; overflow-wrap:anywhere; }
+.new-look .nl-housekeeping-name p { margin:4px 0; font-size:12px; color:var(--muted-foreground); }
+.new-look .nl-housekeeping-name a { display:inline-block; font-size:12px; margin:4px 8px 0 0; color:var(--primary); }
+.new-look .nl-housekeeping-money { display:grid; gap:4px; text-align:right; font-variant-numeric:tabular-nums; }
+.new-look .nl-housekeeping-money small { color:var(--muted-foreground); font-size:11px; }
+.new-look .nl-housekeeping-actions { display:flex; align-items:center; gap:8px; }
+.new-look .nl-housekeeping-review { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+.new-look .nl-housekeeping-review-row { display:flex; align-items:center; gap:18px; justify-content:space-between; padding:16px; border-bottom:1px solid var(--border); }
+.new-look .nl-housekeeping-review-row:last-child { border:0; }
+.new-look .nl-housekeeping-review-row>div:first-child { min-width:0; }
+.new-look .nl-housekeeping-review-row strong { overflow-wrap:anywhere; }
+.new-look .nl-housekeeping-review-row small { display:block; font-size:12px; margin-top:4px; color:var(--muted-foreground); }
+.new-look .nl-housekeeping-fields { display:grid; gap:18px; border:0; min-width:0; padding:0; margin:0; }
+.new-look .nl-housekeeping-fields>label { display:grid; gap:8px; }
+.new-look .nl-housekeeping-current { display:grid; gap:6px; padding:18px 20px; border:1px solid var(--border); border-radius:12px; background:var(--muted); }
+.new-look .nl-housekeeping-current span { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted-foreground); }
+.new-look .nl-housekeeping-current strong { font-size:19px; }
+.new-look .nl-housekeeping-current small { font-size:12px; color:var(--muted-foreground); }
+.new-look .nl-housekeeping-next { background:var(--secondary); }
+.new-look .nl-housekeeping-effects { display:grid; gap:14px; font-size:13px; line-height:1.65; }
+.new-look .nl-housekeeping-effects p { margin:0; }
+@media(max-width:600px) {
+ .new-look .nl-housekeeping-row { flex-wrap:wrap; padding:12px; gap:10px; }
+ .new-look .nl-housekeeping-name { flex-basis:calc(100% - 45px); }
+ .new-look .nl-housekeeping-money { text-align:left; margin-left:42px; margin-right:auto; }
+ .new-look .nl-housekeeping-actions { margin-left:auto; }
+ .new-look .nl-housekeeping-selection>span { flex-basis:100%; order:-1; }
+ .new-look .nl-housekeeping-review-row { padding:12px; gap:10px; }
+}
+
+/* Dense, multi-select envelope ordering. The destination picker never grows with the list. */
+.new-look .nl-order-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px 18px; position:sticky; top:0; z-index:10; padding:12px 0; background:var(--background); border-bottom:1px solid var(--border); }
+.new-look .nl-order-selection, .new-look .nl-order-actions, .new-look .nl-order-save { display:flex; align-items:center; gap:8px; }
+.new-look .nl-order-selection { font-size:12px; }
+.new-look .nl-order-save { margin-left:auto; }
+.new-look .nl-order-toolbar .nl-primary, .new-look .nl-order-toolbar .nl-secondary { padding:8px 12px; min-height:36px; font-size:12px; }
+.new-look .nl-order-clear { font-size:12px; color:var(--primary); padding:8px 4px; }
+.new-look .nl-order-guidance { margin:10px 0; min-height:18px; font-size:12px; color:var(--muted-foreground); }
+.new-look .nl-order-row { display:flex; align-items:stretch; border-bottom:1px solid var(--border); }
+.new-look .nl-order-row:last-child { border-bottom:0; }
+.new-look .nl-order-row[data-selected=true] { background:var(--secondary); }
+.new-look .nl-order-row-select { display:flex; align-items:center; gap:12px; padding:10px 14px; flex:1; min-width:0; text-align:left; color:var(--foreground); border:0; background:transparent; }
+.new-look .nl-order-row-select:hover:not(:disabled) { background:var(--muted); }
+.new-look .nl-order-row-select:focus-visible { outline:2px solid var(--ring); outline-offset:-2px; }
+.new-look .nl-order-row-select[aria-pressed=true] .nl-housekeeping-check { background:var(--primary); color:var(--primary-foreground); border-color:var(--primary); }
+.new-look .nl-order-position { width:24px; flex-shrink:0; color:var(--muted-foreground); font-size:11px; font-variant-numeric:tabular-nums; text-align:right; }
+.new-look .nl-order-name { flex:1; min-width:0; }
+.new-look .nl-order-name strong { font-size:14px; font-weight:550; overflow-wrap:anywhere; }
+.new-look .nl-order-name small, .new-look .nl-order-balance small { display:block; margin-top:2px; font-size:11px; color:var(--muted-foreground); }
+.new-look .nl-order-balance { flex-shrink:0; text-align:right; font-variant-numeric:tabular-nums; }
+.new-look .nl-order-balance strong { font-size:13px; font-weight:550; }
+.new-look .nl-order-move { width:44px; height:auto; border:0; border-left:1px solid var(--border); border-radius:0; margin:0; padding:0; }
+.new-look .nl-move-selection { max-height:52px; overflow:auto; font-size:12px; color:var(--muted-foreground); margin:0; }
+.new-look .nl-move-shortcuts { display:flex; gap:8px; }
+.new-look .nl-move-shortcuts>button { flex:1; font-size:13px; padding:10px; }
+.new-look .nl-move-relative { display:flex; align-items:center; gap:12px; font-size:13px; }
+.new-look .nl-move-search { display:flex; align-items:center; gap:8px; border:1px solid var(--input); border-radius:8px; padding:0 12px; }
+.new-look .nl-move-search input { width:100%; min-width:0; border:0; background:transparent; padding:10px 0; }
+.new-look .nl-move-search:focus-within { outline:2px solid var(--ring); }
+.new-look .nl-move-search input:focus { outline:0; box-shadow:none; }
+.new-look .nl-move-destinations { height:216px; overflow-y:auto; overscroll-behavior:contain; border:1px solid var(--border); border-radius:10px; scrollbar-gutter:stable; }
+.new-look .nl-move-destinations button { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:10px 12px; min-height:44px; font-size:13px; border-bottom:1px solid var(--border); }
+.new-look .nl-move-destinations button>span:nth-child(2) { flex:1; overflow-wrap:anywhere; }
+.new-look .nl-move-destinations button[aria-pressed=true] { background:var(--secondary); color:var(--primary); }
+.new-look .nl-move-destinations button:hover { background:var(--muted); }
+.new-look .nl-move-destinations .nl-footnote { padding:12px; }
+.new-look .nl-move-preview { font-size:12px; color:var(--muted-foreground); margin:0; }
+@media(max-width:600px) {
+ .new-look .nl-order-toolbar { gap:8px; }
+ .new-look .nl-order-selection { width:100%; }
+ .new-look .nl-order-toolbar .nl-primary, .new-look .nl-order-toolbar .nl-secondary { padding:8px 10px; min-height:40px; }
+ .new-look .nl-order-row-select { gap:8px; padding:10px; }
+ .new-look .nl-order-row-select .nl-housekeeping-check { width:22px; height:22px; }
+ .new-look .nl-order-row-select .nl-order-position { display:none; }
+ .new-look .nl-order-name strong { font-size:13px; }
+ .new-look .nl-order-balance strong { font-size:12px; }
+ .new-look .nl-order-move { width:40px; flex-shrink:0; }
+ .new-look .nl-move-destinations { height:176px; }
+}
+
+.new-look .nl-order-loading .nl-skeleton-record { padding:12px 14px; gap:12px; }
+.new-look .nl-order-loading .nl-skeleton-record>div { gap:5px; }
+.new-look .nl-housekeeping-resolution { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; font-size:12px; color:var(--primary); }
+
+/* Explain debt tracking and payment money as separate, concrete choices. */
+.new-look .nl-debt-payment-choice { display:grid; gap:14px; min-width:0; }
+.new-look .nl-debt-payment-choice legend { font-size:15px; font-weight:600; }
+.new-look .nl-debt-payment-intro { margin-bottom:6px; }
+.new-look .nl-debt-payment-option-title { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; }
+.new-look .nl-debt-payment-option-title .nl-tag { color:var(--primary); background:var(--secondary); font-size:10px; font-weight:500; }
+.new-look .nl-debt-payment-result { display:grid; gap:12px; padding:16px; background:var(--muted); border:1px solid var(--border); border-radius:10px; font-size:13px; line-height:1.65; }
+.new-look .nl-debt-payment-result>label { display:grid; gap:8px; }
+.new-look .nl-debt-payment-result p { margin:0; }
+.new-look .nl-debt-payment-facts { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:0; }
+.new-look .nl-debt-payment-facts dt { font-size:11px; color:var(--muted-foreground); overflow-wrap:anywhere; }
+.new-look .nl-debt-payment-facts dd { margin:2px 0 0; font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; }
+.new-look .nl-debt-payment-caution { display:grid; gap:6px; padding-top:12px; border-top:1px solid var(--border); }
+.new-look .nl-debt-payment-progress { margin:0; font-size:12px; line-height:1.6; color:var(--muted-foreground); }

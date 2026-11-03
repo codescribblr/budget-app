@@ -34,6 +34,7 @@ import { BudgetProvider, BudgetScope } from "./budget-context";
 import { FeedbackDialog } from "./feedback-dialog";
 import "./new-look.css";
 import "./planning.css";
+import "./housekeeping.css";
 import "./cash-accounts.css";
 
 const navigation = [

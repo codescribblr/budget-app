@@ -24,6 +24,7 @@ export function SetupDialog({
   closeOnSave = true,
   destructive = false,
   allowUnchanged = false,
+  saveDisabled = false,
 }: {
   title: string;
   description: string;
@@ -38,6 +39,7 @@ export function SetupDialog({
   closeOnSave?: boolean;
   destructive?: boolean;
   allowUnchanged?: boolean;
+  saveDisabled?: boolean;
 }) {
   const [saving, setSaving] = useState(false);
   const [discard, setDiscard] = useState(false);
@@ -50,7 +52,7 @@ export function SetupDialog({
     else onClose();
   }
   async function save() {
-    if (inFlight.current || !canEdit) return;
+    if (inFlight.current || !canEdit || saveDisabled) return;
     inFlight.current = true;
     setSaving(true);
     setError("");
@@ -165,6 +167,7 @@ export function SetupDialog({
                   disabled={
                     saving ||
                     !canEdit ||
+                    saveDisabled ||
                     (!dirty && !onContinue && !allowUnchanged)
                   }
                 >

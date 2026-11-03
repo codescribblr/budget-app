@@ -140,6 +140,9 @@ function EnvelopeSetupContent() {
           <Link href={back.href} className="nl-secondary">
             {back.label}
           </Link>
+          <Link href="/new/budget/organize" className="nl-secondary">
+            Organize envelopes
+          </Link>
           <button
             className="nl-primary"
             disabled={!editable}
@@ -316,8 +319,8 @@ function EnvelopeSetupContent() {
         <div>
           <Link href="/new/plan">Monthly plan →</Link>
           <Link href="/new/goals">Goal envelopes →</Link>
-          <Link href="/categories">
-            Custom order, system categories & deletion (classic) ↗
+          <Link href="/new/budget/organize">
+            Order, archive & restore envelopes →
           </Link>
         </div>
       </details>

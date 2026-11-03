@@ -217,19 +217,25 @@ export function goalWorkflow(
 ) {
   if (goal.goal_type === "debt-paydown") {
     const included = goal.linked_credit_card?.include_in_totals;
+    const hasEnvelope = !!goal.funding_category_id;
     return [
       included
-        ? "The card’s full amount owed already reduces Available to save. A payment envelope is an additional reserve, not extra debt paid off."
-        : goal.funding_category_id
-          ? "Allocate real money to the payment envelope when it is available. Money waiting there does not reduce your debt."
-          : "Choose how much cash you can use for a payment. This goal’s monthly amount is a pace estimate; it does not reserve money.",
+        ? hasEnvelope
+          ? "The linked envelope shows payment money beside your debt. Your budget already subtracts the card balance from Available to save, so funding the envelope for the same payment subtracts that money again."
+          : "No payment envelope is needed. Your budget already subtracts this card’s amount owed from Available to save. The planned monthly payment estimates your pace; it does not schedule a payment."
+        : hasEnvelope
+          ? "Add available money to your payment envelope between payments. It stays set aside until you pay your lender."
+          : "Manage payment money in your budget before paying. This goal tracks debt but does not set aside money; connect a payment envelope in Edit goal if you want to see that money here.",
       "Make payments at your bank or lender whenever you are ready. This app does not send or schedule payments.",
       included
-        ? "Update both the paying account and available credit after a payment. Exclude the card-payment transfer from imports when the purchases are already categorized. If you earmarked money in an extra payment envelope, release that earmark after paying; do not also record it as spending."
+        ? "After paying, update the paying account’s balance and the card’s available credit. Exclude the card-payment transfer from imports when the purchases are already categorized." +
+          (hasEnvelope
+            ? " If you also set aside money in the payment envelope, move that payment amount out to Available to save after paying. Don’t record the payment as another expense."
+            : "")
         : goal.linked_credit_card
-          ? "Update the paying account and available credit after paying. While this card is excluded from totals, budget its outgoing payments once, rather than also categorizing its purchases. Categorizing purchases without deducting card debt can overstate Available to save; review the card’s inclusion in Accounts if you use it for everyday spending."
+          ? "Update the paying account and available credit after paying. While this card is excluded from totals, categorize outgoing card payments once, rather than also categorizing its purchases."
           : "Update the paying account and loan balance after paying. Import the outgoing payment once and categorize it to the envelope you use for loan payments.",
-      "Progress is the reduction from starting debt to today’s amount owed. Interest and new borrowing can move it backward; money set aside is shown separately.",
+      "Progress follows the drop from starting debt to today’s amount owed. Interest and new borrowing can move it backward. Money waiting in an envelope does not count as debt paid off.",
     ];
   }
   if (goal.goal_type === "asset-linked")

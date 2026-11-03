@@ -1,6 +1,5 @@
 "use client";
 import { useRecordGuard } from "./record-guard";
-import { NativeSelect } from "./native-select";
 import { useState } from "react";
 import Link from "next/link";
 import { Switch } from "@/components/ui/switch";
@@ -15,6 +14,7 @@ import type { GoalWithDetails, Loan, NonCashAsset } from "@/lib/types";
 import { budgetRequest, useBudget } from "./budget-context";
 import { SetupDialog } from "./setup-dialog";
 import { GoalWizard } from "./goal-wizard";
+import { DebtPaymentChoice } from "./debt-payment-choice";
 
 type Props = {
   initialSource?: string | null;
@@ -108,40 +108,24 @@ function ExistingGoalEditor({
       </div>
       {goal.goal_type === "debt-paydown" && (
         <>
-          <label>
-            Payment envelope (optional)
-            <NativeSelect
-              value={draft.payment}
-              onChange={(e) => change("payment", e.target.value)}
-            >
-              <option value="none">No payment envelope</option>
-              {goal.funding_category &&
-                !paymentEnvelopes.some(
-                  (c) => c.id === goal.funding_category_id,
-                ) && (
-                  <option value={goal.funding_category.id}>
-                    {goal.funding_category.name} · existing link
-                  </option>
-                )}
-              {paymentEnvelopes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} · {money(c.current_balance)} reserved
-                </option>
-              ))}
-            </NativeSelect>
-          </label>
-          <p className="nl-setup-help">
-            Link an envelope you already use so its money and activity appear
-            beside the debt. Linking or unlinking does not move money or change
-            its monthly target.
-          </p>
-          {goal.linked_credit_card?.include_in_totals && (
-            <p className="nl-setup-callout">
-              This card already deducts its full debt from Available to save.
-              Money in a payment envelope is an additional earmark; both reduce
-              available money.
-            </p>
-          )}
+          <DebtPaymentChoice
+            value={draft.payment}
+            linkedEnvelope={goal.funding_category}
+            onChange={(value) => change("payment", value)}
+            envelopes={
+              goal.funding_category &&
+              !paymentEnvelopes.some(
+                (item) => item.id === goal.funding_category_id,
+              )
+                ? [goal.funding_category, ...paymentEnvelopes]
+                : paymentEnvelopes
+            }
+            card={
+              data?.cards.find(
+                (item) => item.id === goal.linked_credit_card_id,
+              ) ?? goal.linked_credit_card
+            }
+          />
           <p className="nl-setup-help">
             <Link href="/new/budget/manage">Manage payment envelopes →</Link>
           </p>

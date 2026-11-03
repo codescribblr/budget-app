@@ -32,6 +32,7 @@ import {
   ReadOnlyNotice,
 } from "./common";
 import { useTaskCheckin } from "./checkin-flow";
+import { GoalHousekeeping } from "./goal-housekeeping";
 import { GoalEditor } from "./goal-editor";
 import { GuidedBuffer } from "./income-buffer";
 import { EnvelopeActivity } from "./envelope-activity";
@@ -467,6 +468,7 @@ function GoalDetails({
   const { data } = useBudget();
   const [tab, setTab] = useState("progress");
   const [moving, setMoving] = useState(false);
+  const [manage, setManage] = useState<"delete" | "relink" | null>(null);
   const [moneyTab, setMoneyTab] = useState<EnvelopeTab>("adjust");
   const category =
     (moving
@@ -480,6 +482,20 @@ function GoalDetails({
   const funding = data?.funding.categories.find(
     (f) => f.categoryId === category?.id,
   );
+  if (manage)
+    return (
+      <GoalHousekeeping
+        key={`${goal.id}:${manage}`}
+        initial={goal}
+        action={manage}
+        canEdit={canEdit}
+        onClose={() => setManage(null)}
+        onSaved={async () => {
+          await onRefresh();
+          if (manage === "delete") onClose();
+        }}
+      />
+    );
   if (moving && category)
     return (
       <EnvelopeEditor
@@ -659,7 +675,20 @@ function GoalDetails({
           <details className="nl-more-tools">
             <summary>More goal tools</summary>
             <div>
-              <Link href="/goals">Delete a goal (classic) ↗</Link>
+              <button
+                className="nl-secondary"
+                disabled={!canEdit}
+                onClick={() => setManage("relink")}
+              >
+                Change tracking source
+              </button>
+              <button
+                className="nl-secondary"
+                disabled={!canEdit}
+                onClick={() => setManage("delete")}
+              >
+                Remove goal
+              </button>
             </div>
           </details>
         </div>

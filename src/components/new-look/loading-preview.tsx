@@ -8,6 +8,7 @@ const views = [
   ["/new/budget", "Envelopes"],
   ["/new/budget/1", "Envelope details"],
   ["/new/budget/manage", "Manage envelopes"],
+  ["/new/budget/organize", "Organize envelopes"],
   ["/new/accounts", "Account balances"],
   ["/new/accounts/manage", "Manage accounts"],
   ["/new/accounts/1", "Cash account details"],

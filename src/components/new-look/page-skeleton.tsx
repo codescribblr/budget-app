@@ -18,6 +18,7 @@ export type SkeletonView =
   | "envelopes"
   | "envelope-detail"
   | "envelope-setup"
+  | "envelope-organize"
   | "accounts"
   | "cash-detail"
   | "card-detail"
@@ -44,6 +45,11 @@ const headings: Record<SkeletonView, [string, string, string]> = {
     "Envelopes · your spending money",
     "What’s in your envelopes",
     "See what you have left before you spend. Cover shortfalls, move extra money, or add to your envelopes.",
+  ],
+  "envelope-organize": [
+    "Envelopes · organize",
+    "Organize envelopes",
+    "Put everyday envelopes first. Select a few to move together or archive the ones you no longer use.",
   ],
   "envelope-detail": ["Your envelope", "Envelope details", ""],
   "envelope-setup": [
@@ -144,11 +150,13 @@ const headings: Record<SkeletonView, [string, string, string]> = {
 export function skeletonViewForPath(path: string): SkeletonView {
   const [, , area, detail] = path.split("/");
   if (area === "budget")
-    return detail === "manage"
-      ? "envelope-setup"
-      : detail
-        ? "envelope-detail"
-        : "envelopes";
+    return detail === "organize"
+      ? "envelope-organize"
+      : detail === "manage"
+        ? "envelope-setup"
+        : detail
+          ? "envelope-detail"
+          : "envelopes";
   if (area === "accounts")
     return detail === "manage"
       ? "account-setup"
@@ -391,6 +399,8 @@ function ViewContent({
           <SkeletonRows kind="activity" count={4} />
         </>
       );
+    case "envelope-organize":
+      return <><SkeletonToolbar /><SkeletonToolbar /><div className="nl-order-loading"><SkeletonRows kind="activity" count={7} label="Loading envelope organization" /></div></>;
     case "account-setup":
     case "envelope-setup":
       return (
