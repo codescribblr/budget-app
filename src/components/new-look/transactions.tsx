@@ -76,6 +76,7 @@ import { DataBoundary, budgetRequest, useBudget } from "./budget-context";
 import { PageHeading, ReadOnlyNotice } from "./common";
 import { TransactionFilter } from "./transaction-filters";
 import { NativeSelect } from "./native-select";
+import { TransactionCorrections } from "./transaction-corrections";
 import { TransactionReviewDetail } from "./transaction-detail";
 
 export function GuidedTransactions() {
@@ -125,6 +126,9 @@ function TransactionReview() {
   const [batchCategory, setBatchCategory] = useState("");
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchTags, setBatchTags] = useState(false);
+  const [corrections, setCorrections] = useState<
+    TransactionWithSplits[] | null
+  >(null);
   const [mutationNotice, setMutationNotice] = useState<string | null>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
   const query = useMemo(() => {
@@ -703,10 +707,21 @@ function TransactionReview() {
                     Find duplicates
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/transactions">
-                    Bulk date & account edits (classic) ↗
-                  </Link>
+                <DropdownMenuItem
+                  disabled={!canEdit}
+                  onSelect={() => {
+                    setSelecting(true);
+                    requestAnimationFrame(() =>
+                      document
+                        .getElementById("transaction-selection")
+                        ?.scrollIntoView({
+                          block: "center",
+                          behavior: "instant",
+                        }),
+                    );
+                  }}
+                >
+                  <Pencil size={15} /> Correct multiple transactions
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -741,7 +756,7 @@ function TransactionReview() {
           </button>
         </div>
         {selecting && (
-          <div className="nl-tx-selection">
+          <div id="transaction-selection" className="nl-tx-selection">
             <label>
               <Checkbox
                 aria-label="Select all transactions on this page"
@@ -766,6 +781,19 @@ function TransactionReview() {
               </span>
             </label>
             <div>
+              <button
+                className="nl-primary"
+                disabled={!selected.size || loading || !canEdit}
+                onClick={() =>
+                  setCorrections(
+                    [...selected]
+                      .map((id) => selectedSnapshots.current.get(id)!)
+                      .filter(Boolean),
+                  )
+                }
+              >
+                <Pencil size={14} /> Correct details
+              </button>
               <button
                 className="nl-secondary"
                 disabled={!selected.size || loading || !canEdit}
@@ -1187,6 +1215,16 @@ function TransactionReview() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {corrections && (
+        <TransactionCorrections
+          records={corrections}
+          onClose={() => setCorrections(null)}
+          onApplied={() => {
+            setSelected(new Set());
+            saved();
+          }}
+        />
+      )}
       <Dialog
         open={batchOpen}
         onOpenChange={(open) => {

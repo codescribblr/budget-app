@@ -30,6 +30,7 @@ function database(failSecondPage = false) {
           data: [
             {
               id: 1,
+              revision: "00000000-0000-4000-8000-000000000001",
               date: "2026-10-01",
               description: "Bank detail",
               total_amount: "40",
@@ -89,6 +90,7 @@ describe("transaction review endpoint", () => {
     });
     expect(data.totalPages).toBe(41);
     expect(data.transactions[0]).toMatchObject({
+      revision: "00000000-0000-4000-8000-000000000001",
       merchant_name: "Shop",
       account_name: "Checking",
       total_amount: 40,

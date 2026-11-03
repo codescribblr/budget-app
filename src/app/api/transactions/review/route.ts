@@ -110,6 +110,7 @@ export async function GET(request: NextRequest) {
         row.merchant_override || (global?.status === "active" ? global : null);
       return {
         id: row.id,
+        revision: row.revision,
         date: row.date,
         description: row.description,
         total_amount: Number(row.total_amount),

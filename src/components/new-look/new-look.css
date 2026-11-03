@@ -2765,3 +2765,76 @@ button.nl-activity-link {
 .new-look .nl-more-tools>summary:focus-visible { outline:2px solid var(--ring); outline-offset:4px; border-radius:3px; }
 .new-look .nl-more-tools>div { display:flex; flex-wrap:wrap; gap:12px 20px; padding-top:12px; }
 .new-look .nl-more-tools a { color:var(--primary); text-decoration:underline; text-underline-offset:3px; }
+
+/* Bulk corrections keep the next action visible while the preview scrolls. */
+.nl-tx-selection > div { flex-wrap: wrap; }
+.nl-tx-selection button.nl-primary { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 12px; }
+.nl-correction-steps { display: flex; gap: 24px; margin: 0; padding: 4px 24px 20px; list-style: none; color: var(--muted-foreground); font-size: 12px; }
+.nl-correction-steps li { display: flex; align-items: center; gap: 7px; }
+.nl-correction-steps li[aria-current] { color: var(--foreground); font-weight: 600; }
+.nl-correction-steps li > span { display: inline-flex; align-items: center; justify-content: center; width: 23px; height: 23px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.nl-correction-steps li[aria-current] > span { color: var(--primary-foreground); background: var(--primary); }
+.nl-correction-fields, .nl-correction-review { padding: 0 24px 24px; }
+.nl-correction-fields { gap: 20px; }
+.nl-correction-date { padding-block: 16px; border-block: 1px solid var(--border); }
+.nl-correction-date > label:not(:first-child) { display: grid; margin-top: 12px; gap: 7px; }
+.nl-correction-date .nl-switch-label { justify-content: space-between; }
+.nl-correction-date small { display: block; margin-top: 4px; }
+.nl-correction-fields label { display: grid; gap: 7px; }
+.nl-correction-fields .nl-switch-label { display: flex; }
+.nl-correction-fields .nl-input { min-width: 0; max-width: 100%; min-height: 42px; }
+.nl-correction-hint { margin: 0; font-size: 12px; color: var(--muted-foreground); line-height: 1.65; }
+.nl-correction-impact { background: var(--accent); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 22px; }
+.nl-correction-impact h3, .nl-correction-preview-heading h3 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+.nl-correction-impact p { font-size: 12px; line-height: 1.65; margin: 5px 0 0; }
+.nl-correction-impact dl { margin-bottom: 12px; display: grid; gap: 8px; }
+.nl-correction-impact dl > div { display: flex; gap: 16px; justify-content: space-between; font-size: 13px; }
+.nl-correction-impact dd { text-align: right; font-weight: 600; }
+.nl-correction-preview-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.nl-correction-preview-heading > span { font-size: 12px; color: var(--muted-foreground); }
+.nl-correction-records { list-style: none; padding: 0; margin: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.nl-correction-records li { padding: 16px; }
+.nl-correction-records li + li { border-top: 1px solid var(--border); }
+.nl-correction-record-title { display: flex; align-items: baseline; gap: 16px; justify-content: space-between; font-size: 13px; }
+.nl-correction-record-title strong { overflow-wrap: anywhere; }
+.nl-correction-record-title > span { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.nl-correction-records li > p { margin: 4px 0 12px; color: var(--muted-foreground); font-size: 11px; }
+.nl-correction-records dl { display: grid; gap: 7px; font-size: 12px; }
+.nl-correction-records dl > div { display: grid; grid-template-columns: 65px minmax(0, 1fr); gap: 8px; }
+.nl-correction-records dt { color: var(--muted-foreground); }
+.nl-correction-records dd { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; overflow-wrap: anywhere; }
+.nl-correction-records dd > span { color: var(--muted-foreground); }
+.nl-correction-records dd svg { flex-shrink: 0; }
+.nl-correction-success { text-align: center; padding: 24px; }
+.nl-correction-success svg { margin: 0 auto 16px; color: var(--primary); }
+.nl-correction-success h3 { font-size: 20px; font-weight: 600; }
+.nl-correction-success p { color: var(--muted-foreground); font-size: 13px; line-height: 1.7; margin: 10px auto; max-width: 380px; }
+.nl-corrections .nl-setup-footer > button { margin-bottom: 12px; }
+@media (max-width: 520px) {
+  .nl-correction-fields, .nl-correction-review { padding-inline: 20px; }
+  .nl-correction-steps { padding-inline: 20px; gap: 18px; }
+  .nl-correction-records dl > div { grid-template-columns: 1fr; gap: 3px; }
+  .nl-corrections .nl-form-actions { flex-wrap: wrap; }
+  .nl-corrections .nl-form-actions .nl-primary { flex: 1 0 100%; }
+}
+
+/* Show saved values at the point where a bulk correction is chosen. */
+.nl-correction-selection { margin: 0 24px 20px; font-size: 12px; }
+.nl-correction-selection > summary { cursor: pointer; color: var(--primary); width: fit-content; font-weight: 500; }
+.nl-correction-selection > summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: 3px; }
+.nl-correction-selection > .nl-correction-records { margin-top: 12px; max-height: 280px; overflow-y: auto; }
+.nl-correction-field { display: grid; gap: 8px; min-width: 0; }
+.nl-correction-current { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; column-gap: 12px; font-size: 12px; }
+.nl-correction-current-label { color: var(--muted-foreground); font-size: 11px; }
+.nl-correction-current > ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; max-height: 132px; overflow-y: auto; }
+.nl-correction-current li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.nl-correction-current li > span { overflow-wrap: anywhere; }
+.nl-correction-current li > small { flex-shrink: 0; color: var(--muted-foreground); font-size: 10px; font-weight: 400; }
+.nl-correction-date > .nl-correction-current { margin-top: 12px; }
+.nl-correction-date .nl-correction-current small { margin-top: 0; }
+.nl-correction-record-title { margin-bottom: 10px; }
+.nl-correction-kept { color: var(--muted-foreground); font-size: 10px; border-radius: 4px; background: var(--muted); padding: 1px 5px; }
+@media (max-width: 520px) {
+  .nl-correction-selection { margin-inline: 20px; }
+  .nl-correction-current { grid-template-columns: 1fr; row-gap: 4px; }
+}

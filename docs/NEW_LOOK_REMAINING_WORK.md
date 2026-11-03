@@ -25,7 +25,7 @@ Detailed design, current-code findings, examples, implementation stages, and acc
 
 ### N02 — Pending checks and deposits
 
-**Status: local review — implemented November 3, 2026; not yet deployed.**
+**Status: deployed in `2a94252` on November 3, 2026.**
 
 Their combined amount already affects Available to save, but `/new` lacks the individual records and add/edit/remove workflow. Show what is outstanding and explain its effect. Design clearing/removal around the actual accounting model before implementation; the current help text and form are not fully aligned. Avoid counting a cleared/imported payment twice.
 
@@ -35,7 +35,7 @@ Existing revision-checked database writes are now wired into the pending edit/de
 
 ### N03 — Cash account and credit card details
 
-**Status: local review — implemented November 3, 2026; not yet deployed.**
+**Status: deployed in `2a94252` on November 3, 2026.**
 
 Balance entry and setup are covered. Add account-specific balance history/audit review, relevant card utilization and optional statement information, and a considered removal workflow. Keep available credit as the daily card input. Statement balances must remain separate from the live debt calculation.
 
@@ -47,17 +47,19 @@ N02/N03 validation: 25 focused schema/route/guard tests, TypeScript, production 
 
 #### N03 extension — Carried credit-card debt
 
-Implemented for local review. `/new/loans?cards=carried` adds an optional card group and includes only explicitly reviewed carried balances in the payoff total. Card details provide the same review: not reviewed (null), no carried balance (zero), or a dated, manually recorded remaining balance from earlier billing cycles. No current-balance or statement-balance fallback is used; imports do not infer or update this amount. Users update it after payments or a statement review.
+Deployed in `2a94252`. `/new/loans?cards=carried` adds an optional card group and includes only explicitly reviewed carried balances in the payoff total. Card details provide the same review: not reviewed (null), no carried balance (zero), or a dated, manually recorded remaining balance from earlier billing cycles. No current-balance or statement-balance fallback is used; imports do not infer or update this amount. Users update it after payments or a statement review.
 
-The full card liability still drives Available to save and net worth and is never counted twice. Existing statement-based goals are unchanged. Migration 152 is required and has been applied only to the test database.
+The full card liability still drives Available to save and net worth and is never counted twice. Existing statement-based goals are unchanged. Migration 152 was applied to test and production; the release workflow backed up production first.
 
-### N04 — Remaining bulk transaction corrections
+### N04 — Bulk transaction corrections
 
-**Status: backlog.**
+**Status: implemented for local review — not yet deployed.**
 
-Bulk envelope assignment and tags already work. Add batch changes to account/card, date, income/expense type, and historical status, with an explicit preview of affected records and financial impact. Preserve splits unless the user explicitly replaces them.
+Transactions → Select transactions → Correct details opens a two-step editor for account/card (including no account), a shared date, money-in/out direction and historical status. Every field defaults to keeping the original details. The review shows each changed field before/after, affected envelope balances and available-to-save changes. Existing split amounts, envelope assignments, tags and recorded bank/card balances are preserved. Records that already match are skipped. Each correction field shows the current values with counts for mixed selections, and the selected transaction details are available inside the dialog. The final review includes both changed values and explicitly marked kept values, including records already matching the correction.
 
-Done when a mistaken import assignment can be corrected in `/new`, with stale-write protection and recoverable partial failures.
+The new corrections endpoint requires the selected record versions and a persistent operation ID. Migration 153 applies the whole correction atomically through the existing guarded transaction command. Any stale/missing record stops the batch; users explicitly load the latest records and review again. An uncertain response can safely retry the identical command. This replaces the planned partial-failure flow with all-or-nothing saves. Classic bulk editing stays compatible. The list API now retains transaction revisions so all existing guarded selection actions also work.
+
+Migration 153 is applied only to test. Validation: 28 focused tests, TypeScript, an isolated production build, and rollback-only database checks for input/access/scope validation, before/after impact calculations, receipt replay, stale/missing records, split preservation, atomic rollback after a later-row failure, calendar-date validation, and unchanged recorded balances. Browser checks covered desktop/mobile at 390px, both themes, native date selection, account-only saves, and a two-tab stale selection followed by explicit latest-record review. Test transactions were restored to their original account; no amounts, envelope assignments or dates were changed during browser QA.
 
 ### N05 — Envelope and goal housekeeping
 
@@ -103,11 +105,11 @@ Current net worth and history are covered. Retirement timing, forecast assumptio
 
 ### N11 — Property valuation workflows
 
-**Status: local review — implemented November 3, 2026; not yet deployed.**
+**Status: deployed in `2a94252` on November 3, 2026.**
 
 Real-estate details now include address/property attributes, automatic valuation settings, RentCast request usage/limits, dated low/central/high estimates, comparable properties, value-selection previews, and manual values. Selecting a saved estimate uses no provider request. Refreshing explicitly fetches and updates the recorded value using the saved preference; monthly automatic updates retain existing behavior. Turning tracking off allows a manually maintained value. Integration settings remain at `/new/settings/integrations`.
 
-Migration 152 expands guarded property settings, reserves request quota atomically, and commits the estimate, recorded value, and audit entry together. A provider response cannot overwrite a newer edit. Selecting an estimate checks both the asset revision and the reviewed estimate ID. Classic requests remain compatible. Migration 152 is applied only to the test database and must precede deployment of this code.
+Migration 152 expands guarded property settings, reserves request quota atomically, and commits the estimate, recorded value, and audit entry together. A provider response cannot overwrite a newer edit. Selecting an estimate checks both the asset revision and the reviewed estimate ID. Classic requests remain compatible. Migration 152 and the property workflow were deployed in `2a94252`; the production backup and migration completed before the application release.
 
 N03 extension/N11 validation: 33 focused tests, TypeScript, an isolated production build, and rollback-only database checks covering stale writes, permissions, audit entries, and unchanged spendable balances. Browser checks exercised saving property details, selecting a saved estimate, viewing comparables, and reviewing carried debt on a narrow phone layout. A clearly labeled sample property uses synthetic estimates/comparables; no live RentCast request was made. Mobile property settings and the summary were subsequently verified at 390px in both themes without horizontal overflow.
 
