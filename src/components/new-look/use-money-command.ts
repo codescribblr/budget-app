@@ -5,7 +5,8 @@ import {
   recordMoneyCommand,
 } from "@/lib/pending-money-command";
 import { useRef, useState } from "react";
-import { budgetRequest, BudgetRequestError } from "@/lib/budget-request";
+import { budgetRequest } from "@/lib/budget-request";
+import { isMoneyCommandRejected } from "@/lib/money-command-errors";
 
 /** An uncertain request is retried only explicitly, with the identical operation
  * ID and payload. A committed command returns its receipt without moving again. */
@@ -59,10 +60,7 @@ export function useMoneyCommand(budgetId: number | undefined) {
       setUncertain(false);
       return result;
     } catch (error) {
-      const rejected =
-        error instanceof BudgetRequestError &&
-        error.status >= 400 &&
-        error.status < 500;
+      const rejected = isMoneyCommandRejected(error);
       if (rejected) {
         pending.current = null;
         recordMoneyCommand(scope, null);
@@ -73,5 +71,10 @@ export function useMoneyCommand(budgetId: number | undefined) {
       busy.current = false;
     }
   }
-  return { run, uncertain };
+  async function retry<T>(): Promise<T> {
+    const command = pending.current;
+    if (!command) throw new Error("There is no pending change to check.");
+    return run<T>(command.url, command.body, command.method);
+  }
+  return { run, retry, uncertain };
 }

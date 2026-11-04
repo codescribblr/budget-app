@@ -2,9 +2,9 @@
 import { useMoneyCommand } from "./use-money-command";
 import { useState } from "react";
 import { bufferMovePreview } from "@/lib/guided-goals";
-import { cents, money } from "@/lib/new-look";
-import type { DashboardSummary } from "@/lib/types";
-import { budgetRequest, useBudget } from "./budget-context";
+import { money } from "@/lib/new-look";
+import { moneyCommandErrorMessage } from "@/lib/money-command-errors";
+import { useBudget } from "./budget-context";
 import { SetupDialog } from "./setup-dialog";
 
 export function BufferMove({
@@ -53,24 +53,33 @@ export function BufferMove({
       }
       onClose={onClose}
       onSave={async () => {
-        const next = bufferMovePreview(direction, amount, balance, available);
+        // A successful write may already be reflected by live refresh after a
+        // lost response. Check the original command without validating its
+        // amount against the now-lower source balance a second time.
+        const next = command.uncertain
+          ? null
+          : bufferMovePreview(direction, amount, balance, available);
+        type Receipt = { amountAdded?: number; amountWithdrawn?: number };
+        let result: Receipt;
         try {
-          await command.run(
-            `/api/income-buffer/${direction === "add" ? "add" : "fund-month"}`,
-            {
-              amount: next.amount,
-              expectedBalance: balance,
-              expectedAvailable: available,
-            },
-          );
+          result = command.uncertain
+            ? await command.retry<Receipt>()
+            : await command.run<Receipt>(
+                `/api/income-buffer/${direction === "add" ? "add" : "fund-month"}`,
+                {
+                  amount: next!.amount,
+                  expectedBalance: balance,
+                  expectedAvailable: available,
+                },
+              );
         } catch (err) {
           // A lost response can hide a completed write. Never silently retry it.
           void refresh().catch(() => {});
-          throw new Error(
-            `${err instanceof Error ? err.message : "Could not confirm this change."} If the outcome is uncertain, use Check change outcome to confirm it safely.`,
-          );
+          throw new Error(moneyCommandErrorMessage(err));
         }
-        await onSaved(next.amount);
+        await onSaved(
+          (direction === "add" ? result.amountAdded : result.amountWithdrawn)!,
+        );
       }}
     >
       {command.uncertain && (
@@ -95,22 +104,24 @@ export function BufferMove({
         Up to {money(Math.max(0, direction === "add" ? available : balance))}{" "}
         {direction === "add" ? "available to reserve" : "in your buffer"}.
       </p>
-      {validation && (
+      {!command.uncertain && validation && (
         <p className="nl-error" role="status">
           {validation}
         </p>
       )}
-      <div className="nl-setup-preview">
-        <span>Buffer after this change</span>
-        <strong>{money(preview?.balance ?? balance)}</strong>
-        <span>Available to save afterward</span>
-        <strong>{money(preview?.available ?? available)}</strong>
-        <small>
-          {direction === "add"
-            ? "Other envelope balances and bank balances stay unchanged."
-            : "The money returns to Available to save. You can choose which envelopes to fund next."}
-        </small>
-      </div>
+      {!command.uncertain && (
+        <div className="nl-setup-preview">
+          <span>Buffer after this change</span>
+          <strong>{money(preview?.balance ?? balance)}</strong>
+          <span>Available to save afterward</span>
+          <strong>{money(preview?.available ?? available)}</strong>
+          <small>
+            {direction === "add"
+              ? "Other envelope balances and bank balances stay unchanged."
+              : "The money returns to Available to save. You can choose which envelopes to fund next."}
+          </small>
+        </div>
+      )}
     </SetupDialog>
   );
 }

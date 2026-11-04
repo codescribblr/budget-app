@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { normalizeMoneyExpectation } from "./money-precision";
 import { NextResponse } from "next/server";
 import { getActiveAccountId } from "./account-context";
 import { getAuthenticatedUser } from "./supabase-queries";
@@ -69,12 +70,16 @@ export async function executeEnvelopeCommand(
       { status: 409 },
     );
   const command: Record<string, unknown> = { kind };
-  for (const [key, value] of Object.entries({
-    expectedRevisions,
-    expectedAvailable,
-    expectedBalance,
-  }))
-    if (value !== undefined) command[key] = value;
+  if (expectedRevisions !== undefined) command.expectedRevisions = expectedRevisions;
+  try {
+    for (const [key, value] of Object.entries({ expectedAvailable, expectedBalance }))
+      if (value !== undefined) command[key] = normalizeMoneyExpectation(value);
+  } catch (error) {
+    return NextResponse.json(
+      { error: (error as Error).message, code: "INVALID_REVISION" },
+      { status: 400 },
+    );
+  }
   if (kind === "allocate") {
     command.allocations = body.allocations ?? [
       { categoryId: body.categoryId, amount: body.amount },

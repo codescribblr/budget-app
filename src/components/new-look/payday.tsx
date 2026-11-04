@@ -1,5 +1,6 @@
 "use client";
 import { useMoneyCommand } from "./use-money-command";
+import { moneyCommandErrorMessage } from "@/lib/money-command-errors";
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -183,9 +184,7 @@ function PaydayContent() {
         );
     } catch (err) {
       setPreview(null);
-      setError(
-        `${err instanceof Error ? err.message : "Allocation could not be confirmed."} Your entries are retained. If the result is uncertain, check the allocation outcome before entering another allocation.`,
-      );
+      setError(moneyCommandErrorMessage(err));
       // Retain the draft and operation ID until the outcome is confirmed.
     } finally {
       try {

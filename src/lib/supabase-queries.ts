@@ -32,6 +32,7 @@ import { cache } from 'react';
 import { logBalanceChange, logBalanceChanges } from './audit/category-balance-audit';
 import { splitRowsDiffer, splitsAffectEnvelopesDifferently } from './category-transaction-edits';
 import { getCreditCardBalanceOwed } from './credit-card-balance';
+import { calculateBudgetTotals } from './budget-totals';
 import { resolveMerchantDisplayName } from './merchant-grouping';
 
 // =====================================================
@@ -1347,58 +1348,14 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     monthlyNetIncome = calculateMonthlyNetIncome(settingsObj);
   }
 
-  // Calculate totals (only include accounts/credit cards with include_in_totals = true)
-  const totalMonies = (accounts as Account[])
-    .filter(acc => acc.include_in_totals === true)
-    .reduce((sum, acc) => sum + Number(acc.balance), 0);
-
-  // Filter categories for envelope display (exclude system categories and buffer)
-  const envelopeCategories = (categories as Category[]).filter(cat => !cat.is_system && !cat.is_buffer);
-
-  // For totals calculation, include buffer category but exclude other system categories
-  // Buffer category is special: doesn't show in lists but DOES count in totals
-  const categoriesTotalBalance = (categories as Category[])
-    .filter(cat => !cat.is_system || cat.is_buffer)
-    .reduce((sum, cat) => sum + Number(cat.current_balance), 0);
-
-  const bufferBalance = (categories as Category[])
-    .filter(cat => cat.is_buffer)
-    .reduce((sum, cat) => sum + Number(cat.current_balance), 0);
-
-  const hasNegativeEnvelopes = (categories as Category[])
-    .filter(cat => !cat.is_system || cat.is_buffer)
-    .some(cat => Number(cat.current_balance) < 0);
-
-  const totalCreditCardBalances = (creditCards as CreditCard[])
-    .filter(cc => cc.include_in_totals === true)
-    .reduce((sum, cc) => sum + getCreditCardBalanceOwed(cc), 0);
-
-  // Calculate pending checks total: expenses subtract, income adds
-  // Income is positive (adds to available funds), expense is negative (subtracts from available funds)
-  const totalPendingChecks = (pendingChecks as PendingCheck[])
-    .reduce((sum, pc) => {
-      const amount = Number(pc.amount);
-      // Income adds to available funds (positive), expenses subtract (negative)
-      return sum + (pc.type === 'income' ? amount : -amount);
-    }, 0);
-
-  // Add totalPendingChecks (income increases savings, expenses decrease savings)
-  const currentSavings = totalMonies - categoriesTotalBalance - totalCreditCardBalances + totalPendingChecks;
-
-  // Calculate total monthly budget (exclude buffer from budget totals)
-  const totalMonthlyBudget = envelopeCategories
-    .reduce((sum, cat) => sum + Number(cat.monthly_amount), 0);
-
   return {
-    total_monies: totalMonies,
-    total_envelopes: categoriesTotalBalance, // Includes buffer category balance
-    buffer_balance: bufferBalance,
-    total_credit_card_balances: totalCreditCardBalances,
-    total_pending_checks: totalPendingChecks,
-    current_savings: currentSavings,
-    has_negative_envelopes: hasNegativeEnvelopes,
+    ...calculateBudgetTotals({
+      accounts: accounts as Account[],
+      categories: categories as Category[],
+      creditCards: creditCards as CreditCard[],
+      pendingChecks: pendingChecks as PendingCheck[],
+    }),
     monthly_net_income: monthlyNetIncome,
-    total_monthly_budget: totalMonthlyBudget,
   };
 }
 

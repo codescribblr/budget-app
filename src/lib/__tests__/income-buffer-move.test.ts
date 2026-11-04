@@ -77,3 +77,28 @@ describe("buffer-funded allocation API", () => {
     expect(await result.json()).toMatchObject({ code: "STALE_RECORD" });
   });
 });
+
+describe("shared money command precision", () => {
+  it.each(["allocate", "buffer-add", "buffer-release", "transfer", "set-balance"])(
+    "normalizes reviewed cents for %s without modifying the requested movement",
+    async kind => {
+      const { executeEnvelopeCommand } = await import("../envelope-command-route");
+      const response = await executeEnvelopeCommand({
+        expectedBudgetId: 27, operationId: crypto.randomUUID(),
+        expectedAvailable: 1000.10 - 250.20 - 500,
+        expectedBalance: 0.1 + 0.2,
+        amount: 0.1, categoryId: 1, fromCategoryId: 1, toCategoryId: 2,
+      }, kind);
+      expect(response.status).toBe(200);
+      const command = mocks.rpc.mock.calls[0][1].p_command;
+      expect(command).toMatchObject({ expectedAvailable: 249.9, expectedBalance: 0.3 });
+      expect(kind === "allocate" ? command.allocations[0].amount : command.amount).toBe(0.1);
+    },
+  );
+  it.each([null, "100", NaN, Infinity])("rejects invalid expected balances before writing: %s", async expectedAvailable => {
+    const { executeEnvelopeCommand } = await import("../envelope-command-route");
+    const response = await executeEnvelopeCommand({ amount: 10, expectedAvailable }, "buffer-add");
+    expect(response.status).toBe(400);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+});
