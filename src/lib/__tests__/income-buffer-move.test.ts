@@ -19,3 +19,61 @@ describe("atomic buffer API compatibility",()=>{
  it("passes the same guarded operation identity for safe replay",async()=>{const operationId=crypto.randomUUID();await moveIncomeBuffer(request({amount:10,expectedBudgetId:27,operationId}),"add");expect(mocks.rpc.mock.calls[0][1].p_operation_id).toBe(operationId);});
  it("surfaces authoritative insufficient-money validation",async()=>{mocks.rpc.mockResolvedValue({error:{code:"22023",message:"Not enough available money."}});expect((await moveIncomeBuffer(request({amount:2500}),"add")).status).toBe(400);});
 });
+
+describe("buffer-funded allocation API", () => {
+  it("sends both reviewed source balances and the withdrawal in one guarded command", async () => {
+    const { executeEnvelopeCommand } =
+      await import("../envelope-command-route");
+    const operationId = crypto.randomUUID();
+    await executeEnvelopeCommand(
+      {
+        expectedBudgetId: 27,
+        operationId,
+        allocations: [{ categoryId: 1, amount: 250 }],
+        month: "2026-11-01",
+        expectedAvailable: 100,
+        expectedBalance: 500,
+        bufferWithdrawAmount: 150,
+      },
+      "allocate",
+    );
+    expect(mocks.rpc).toHaveBeenCalledWith("run_envelope_command", {
+      p_budget_id: 27,
+      p_operation_id: operationId,
+      p_command: {
+        kind: "allocate",
+        allocations: [{ categoryId: 1, amount: 250 }],
+        month: "2026-11-01",
+        expectedAvailable: 100,
+        expectedBalance: 500,
+        bufferWithdrawAmount: 150,
+      },
+    });
+  });
+  it("returns a stale-source conflict to the funding review", async () => {
+    const { executeEnvelopeCommand } =
+      await import("../envelope-command-route");
+    mocks.rpc.mockResolvedValue({
+      data: {
+        status: "conflict",
+        error:
+          "Your buffer changed. Review the latest balance before continuing.",
+      },
+      error: null,
+    });
+    const result = await executeEnvelopeCommand(
+      {
+        expectedBudgetId: 27,
+        operationId: crypto.randomUUID(),
+        allocations: [{ categoryId: 1, amount: 250 }],
+        month: "2026-11-01",
+        expectedAvailable: 100,
+        expectedBalance: 500,
+        bufferWithdrawAmount: 150,
+      },
+      "allocate",
+    );
+    expect(result.status).toBe(409);
+    expect(await result.json()).toMatchObject({ code: "STALE_RECORD" });
+  });
+});

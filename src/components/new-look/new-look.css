@@ -2838,3 +2838,30 @@ button.nl-activity-link {
   .nl-correction-selection { margin-inline: 20px; }
   .nl-correction-current { grid-template-columns: 1fr; row-gap: 4px; }
 }
+
+/* Keep reserved buffer money visible beside the allocation it will support. */
+.nl-funding-layout { align-items: start; }
+.nl-funding-layout > .nl-form { align-content: start; }
+.nl-funding-picture > p:last-child { font-size: 12px; color: var(--muted-foreground); }
+.nl-funding-buffer { padding-top: 17px; border-top: 1px solid var(--border); }
+.nl-funding-buffer-heading, .nl-funding-buffer-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
+.nl-funding-buffer-heading > span { display: inline-flex; align-items: center; gap: 7px; }
+.nl-funding-buffer-heading > strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nl-form .nl-funding-buffer-switch { display: flex; align-items: center; margin-top: 14px; cursor: pointer; }
+.nl-funding-buffer > p { font-size: 12px; color: var(--muted-foreground); margin: 10px 0 0; }
+.nl-funding-buffer-entry { margin-top: 14px; gap: 10px; grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+.nl-funding-buffer-entry > :is(small, p) { grid-column: 1 / -1; }
+@media (max-width: 540px) { .nl-funding-buffer-entry { grid-template-columns: minmax(0, 1fr); } }
+.nl-funding-buffer-entry > button { min-height: 36px; padding: 7px 10px; font-size: 12px; }
+.nl-funding-buffer-entry .nl-error { margin: 0; font-size: 12px; }
+
+.nl-monthly-funding-summary { padding: 16px; border-radius: 8px; background: var(--accent); }
+.nl-monthly-funding-total { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; }
+.nl-monthly-funding-total > strong { font-size: 23px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.nl-monthly-funding-summary > p { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+.nl-monthly-funding-summary > .nl-monthly-funding-shortfall { color: var(--foreground); font-weight: 550; }
+.nl-monthly-funding-summary > button { margin-top: 12px; min-height: 36px; font-size: 12px; padding: 7px 11px; }
+
+.nl-funding-section-title { flex-wrap: wrap; }
+.nl-funding-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 540px) { .nl-funding-actions { width: 100%; } .nl-funding-actions > button { flex: 1 1 auto; } }

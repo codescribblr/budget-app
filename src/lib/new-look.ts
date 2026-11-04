@@ -143,11 +143,12 @@ export function suggestAllocation(
   funding: Funding[],
   limit: number,
   usePriority = true,
+  includeGoals = false,
 ) {
   let remaining = Math.max(0, cents(limit));
   const result: Record<number, string> = {};
   const ordered = ordinaryEnvelopes(categories)
-    .filter((category) => !category.is_goal)
+    .filter((category) => includeGoals || !category.is_goal)
     .sort(
       (a, b) =>
         (usePriority ? (a.priority ?? 5) - (b.priority ?? 5) : 0) ||

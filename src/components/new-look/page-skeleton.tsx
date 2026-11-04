@@ -400,7 +400,19 @@ function ViewContent({
         </>
       );
     case "envelope-organize":
-      return <><SkeletonToolbar /><SkeletonToolbar /><div className="nl-order-loading"><SkeletonRows kind="activity" count={7} label="Loading envelope organization" /></div></>;
+      return (
+        <>
+          <SkeletonToolbar />
+          <SkeletonToolbar />
+          <div className="nl-order-loading">
+            <SkeletonRows
+              kind="activity"
+              count={7}
+              label="Loading envelope organization"
+            />
+          </div>
+        </>
+      );
     case "account-setup":
     case "envelope-setup":
       return (
@@ -502,14 +514,37 @@ function ViewContent({
       );
     case "payday":
       return (
-        <div className="nl-two-column">
-          <Panel title="Money to allocate">
-            <SkeletonFields count={3} />
-          </Panel>
-          <Panel title="Your monthly plan">
-            <SkeletonRows count={4} />
-          </Panel>
-        </div>
+        <>
+          <div className="nl-two-column">
+            <Panel title="1. Choose how much to allocate">
+              <div className="nl-monthly-funding-summary">
+                <div className="nl-monthly-funding-total">
+                  <span>Still to fund this month</span>
+                  <SkeletonLine width={110} height={28} />
+                </div>
+                <SkeletonLine width="85%" />
+                <SkeletonLine width="70%" />
+              </div>
+              <SkeletonFields count={1} />
+              <SkeletonLine width="85%" />
+            </Panel>
+            <Panel title="Your funding picture">
+              <SkeletonRows count={3} />
+            </Panel>
+          </div>
+          <div className="nl-section-title" style={{ marginTop: 28 }}>
+            <h2>2. Choose what to fund</h2>
+          </div>
+          <SkeletonTable
+            columns={[
+              "Envelope",
+              "Monthly plan",
+              "Already funded",
+              "Remaining to fund",
+              "Fund now",
+            ]}
+          />
+        </>
       );
     case "goals":
       return (
