@@ -199,7 +199,7 @@ describe("remaining monthly funding suggestion", () => {
       allocations: { 1: "0.00", 2: "100.00" },
     });
   });
-  it("uses target-balance gaps and includes goal monthly targets while excluding inactive/system envelopes", () => {
+  it("caps monthly contributions at balance targets and includes goal targets while excluding inactive/system envelopes", () => {
     const result = monthlyFundingSuggestion(
       [
         category(1, {
@@ -212,7 +212,7 @@ describe("remaining monthly funding suggestion", () => {
         category(4, { is_system: true }),
         category(5, { is_buffer: true }),
       ],
-      [funded(1, 100), funded(2, 25)],
+      [funded(1, 25), funded(2, 25)],
       50,
       500,
     );
@@ -222,6 +222,62 @@ describe("remaining monthly funding suggestion", () => {
       buffer: 75,
       allocations: { 1: "50.00", 2: "75.00" },
     });
+  });
+  it.each(["accumulation", "target_balance"] as const)(
+    "suggests buffer money only for the remaining monthly %s contribution",
+    (category_type) => {
+      const medical = category(1, {
+        name: "Medical",
+        category_type,
+        monthly_amount: 200,
+        annual_target: 2400,
+        target_balance: 5000,
+        current_balance: 200,
+      });
+      expect(monthlyFundingSuggestion([medical], [], 0, 5000)).toMatchObject({
+        remaining: 200,
+        amount: 200,
+        buffer: 200,
+        canFundAll: true,
+        allocations: { 1: "200.00" },
+      });
+      expect(
+        monthlyFundingSuggestion([medical], [funded(1, 75)], 25, 5000),
+      ).toMatchObject({
+        remaining: 125,
+        amount: 125,
+        buffer: 100,
+        allocations: { 1: "125.00" },
+      });
+      expect(
+        monthlyFundingSuggestion([medical], [funded(1, 200)], 0, 5000),
+      ).toMatchObject({
+        remaining: 0,
+        amount: 0,
+        buffer: 0,
+        canFundAll: false,
+        allocations: { 1: "0.00" },
+      });
+    },
+  );
+  it("stops reserve funding at its balance target and leaves zero-monthly reserves manual", () => {
+    const reserve = category(1, {
+      category_type: "target_balance",
+      monthly_amount: 200,
+      target_balance: 5000,
+      current_balance: 4980,
+    });
+    expect(monthlyFundingSuggestion([reserve], [], 0, 5000)).toMatchObject({
+      remaining: 20,
+      buffer: 20,
+      allocations: { 1: "20.00" },
+    });
+    expect(
+      monthlyFundingSuggestion([{ ...reserve, monthly_amount: 0 }], [], 0, 5000),
+    ).toMatchObject({ remaining: 0, buffer: 0, canFundAll: false });
+    expect(
+      monthlyFundingSuggestion([{ ...reserve, current_balance: 5100 }], [], 0, 5000),
+    ).toMatchObject({ remaining: 0, buffer: 0, canFundAll: false });
   });
   it("preserves priority order when money is limited, with goal envelopes included", () => {
     const rows = [

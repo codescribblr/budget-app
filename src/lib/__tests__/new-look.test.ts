@@ -90,19 +90,38 @@ describe("envelope signals", () => {
   });
 });
 describe("paycheck suggestions", () => {
-  it("tops up target balances without double-subtracting prior funding and leaves goals manual", () => {
+  it("caps reserve contributions at the balance gap without subtracting funding twice and leaves goals manual", () => {
     const target = category(1, {
       category_type: "target_balance",
       target_balance: 500,
       current_balance: 490,
-      monthly_amount: 0,
+      monthly_amount: 100,
     });
-    expect(remainingFunding(target, 200)).toBe(10);
+    expect(remainingFunding(target, 25)).toBe(10);
     expect(remainingFunding({ ...target, current_balance: 600 }, 0)).toBe(0);
     expect(
       suggestAllocation([target, category(2, { is_goal: true })], [], 100),
     ).toEqual({ 1: "10.00" });
   });
+  it.each(["accumulation", "target_balance"] as const)(
+    "limits %s funding to the monthly contribution regardless of its long-term target",
+    (category_type) => {
+      const medical = category(1, {
+        category_type,
+        monthly_amount: 200,
+        annual_target: 2400,
+        target_balance: 5000,
+        current_balance: 200,
+      });
+      expect(remainingFunding(medical, 0)).toBe(200);
+      expect(remainingFunding(medical, 75)).toBe(125);
+      expect(remainingFunding(medical, 200)).toBe(0);
+      expect(remainingFunding(medical, 250)).toBe(0);
+      expect(remainingFunding({ ...medical, current_balance: -50 }, 200)).toBe(0);
+      expect(remainingFunding({ ...medical, monthly_amount: 0 }, 0)).toBe(0);
+      expect(suggestAllocation([medical], [], 5000)).toEqual({ 1: "200.00" });
+    },
+  );
   it("uses funding history, not current balance, and stops at the cent-exact limit", () => {
     const categories = [
       category(1, { priority: 2 }),

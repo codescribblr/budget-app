@@ -260,7 +260,7 @@ function PaydayContent() {
               <p>
                 {monthly.remaining > 0
                   ? `${monthly.envelopeCount} ${monthly.envelopeCount === 1 ? "envelope needs" : "envelopes need"} more funding. Money already funded is accounted for.`
-                  : "All envelope funding targets are covered."}
+                  : "This month’s funding targets are covered."}
               </p>
               {monthly.remaining > 0 && (
                 <>
@@ -577,9 +577,9 @@ function PaydayContent() {
           </div>
         </div>
         <p className="nl-footnote">
-          Remaining to fund uses your current monthly plan minus allocations
-          already recorded this month. Target-balance envelopes use the gap to
-          their target. Goal envelopes use their monthly funding targets.{" "}
+          Remaining to fund is your planned monthly contribution minus what
+          you’ve already funded this month. Reserve envelopes also stop at
+          their balance target.{" "}
           {suggestionsEnabled
             ? `Suggestions follow ${isFeatureEnabled("priority_system") ? "priority, then envelope order" : "envelope order"} and stop at the amount you set. Every amount is editable.`
             : "Enter the amounts you want to fund below."}

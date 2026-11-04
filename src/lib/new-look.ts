@@ -124,19 +124,21 @@ export interface Funding {
   targetAmount: number;
 }
 export function remainingFunding(category: Category, fundedAmount: number) {
-  // A target balance already includes prior allocations. Subtracting funding
-  // again would underfund it; spending can legitimately open a new gap.
-  if (category.category_type === "target_balance") {
-    return (
-      Math.max(
-        0,
-        cents(category.target_balance ?? 0) - cents(category.current_balance),
-      ) / 100
-    );
-  }
-  return (
-    Math.max(0, cents(category.monthly_amount) - cents(fundedAmount)) / 100
+  const monthlyRemaining = Math.max(
+    0,
+    cents(category.monthly_amount) - cents(fundedAmount),
   );
+  // A reserve's balance target is a ceiling, not this month's contribution.
+  // Its current balance already includes funding, so don't subtract funding
+  // from the balance gap again. A $0 monthly plan stays manually funded.
+  if (category.category_type === "target_balance") {
+    const balanceGap = Math.max(
+      0,
+      cents(category.target_balance ?? 0) - cents(category.current_balance),
+    );
+    return Math.min(monthlyRemaining, balanceGap) / 100;
+  }
+  return monthlyRemaining / 100;
 }
 export function suggestAllocation(
   categories: Category[],
