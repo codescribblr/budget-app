@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/dialog';
 import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
 import { parseCSVFile } from '@/lib/csv-parser';
+import { tryParseCSVWithTemplate } from '@/lib/import/csv-template-parser';
+import type { CSVImportTemplate } from '@/lib/mapping-templates';
 import { parseImageFile } from '@/lib/image-parser';
 import { analyzeCSV } from '@/lib/column-analyzer';
 import type { ParsedTransaction } from '@/lib/import-types';
@@ -158,13 +160,30 @@ export default function FileUpload({
         updateProgress(15, 'Analyzing CSV structure...');
         // Analyze CSV structure
         const analysis = analyzeCSV(rawData);
+
+        const openColumnMapping = () => {
+          sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
+          sessionStorage.setItem('csvData', JSON.stringify(rawData));
+          sessionStorage.setItem('csvFileName', file.name);
+          sessionStorage.setItem('csvTargetAccountId', String(targetAccountId ?? ''));
+          sessionStorage.setItem('csvTargetCreditCardId', String(targetCreditCardId ?? ''));
+          // Start from fresh analysis, without metadata from the failed template
+          // or a previous upload.
+          sessionStorage.removeItem('csvTemplateId');
+          sessionStorage.removeItem('csvMappingName');
+          sessionStorage.removeItem('csvFingerprint');
+          sessionStorage.removeItem('csvDateFormat');
+          sessionStorage.removeItem('remapBatchId');
+          setIsProcessing(false);
+          setProgress(0);
+          setProgressStage('');
+          router.push(importPath(`/map-columns`));
+        };
         
         // Check for matching template FIRST (before checking confidence)
         // This allows templates to automatically apply even if auto-detection has low confidence
         updateProgress(20, 'Checking for saved templates...');
-        let templateFound = false;
-        let templateId: number | undefined;
-        let templateName: string | undefined;
+        let savedTemplate: CSVImportTemplate | null = null;
         
         try {
           const { loadTemplate } = await import('@/lib/mapping-templates');
@@ -175,10 +194,7 @@ export default function FileUpload({
           );
           
           if (template && template.id) {
-            templateFound = true;
-            templateId = template.id;
-            templateName = template.templateName;
-            console.log('Found matching template:', { templateId, templateName, fingerprint: analysis.fingerprint });
+            savedTemplate = template;
           }
         } catch (err) {
           console.warn('Failed to check for template:', err);
@@ -186,26 +202,28 @@ export default function FileUpload({
         }
         
         // If template found, use it automatically (skip mapping page)
-        if (templateFound) {
+        if (savedTemplate) {
+          const templateName = savedTemplate.templateName;
           updateProgress(30, `Using template: ${templateName || 'Saved Template'}...`);
-          // Parse CSV with template mapping
-          const result = await parseCSVFile(file, {
-            targetAccountId,
-            targetCreditCardId,
-          });
-          transactions = result.transactions;
+          // Use the template already loaded for this account. An unusable
+          // template should lead to column mapping, not an empty-file error.
+          const parsed = await tryParseCSVWithTemplate(rawData, savedTemplate, file.name);
+          if (!parsed) {
+            toast.info("The saved template couldn't read this file. Please review the column mapping.");
+            openColumnMapping();
+            return;
+          }
+          transactions = parsed;
           
           // Store CSV data and template info
           sessionStorage.setItem('csvData', JSON.stringify(rawData));
           sessionStorage.setItem('csvFileName', file.name);
           sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
           sessionStorage.setItem('csvMappingName', templateName || 'Saved Template');
-          sessionStorage.setItem('csvTemplateId', templateId!.toString());
-          if (result.fingerprint) {
-            sessionStorage.setItem('csvFingerprint', result.fingerprint);
-          }
-          if (result.dateFormat) {
-            sessionStorage.setItem('csvDateFormat', result.dateFormat);
+          sessionStorage.setItem('csvTemplateId', savedTemplate.id!.toString());
+          sessionStorage.setItem('csvFingerprint', analysis.fingerprint);
+          if (savedTemplate.mapping.dateFormat) {
+            sessionStorage.setItem('csvDateFormat', savedTemplate.mapping.dateFormat);
           }
         } else {
           // No template found - check if we have high confidence for auto-detection
@@ -258,13 +276,7 @@ export default function FileUpload({
             }
           } else {
             // No template and low confidence - navigate to mapping page
-            sessionStorage.setItem('csvAnalysis', JSON.stringify(analysis));
-            sessionStorage.setItem('csvData', JSON.stringify(rawData));
-            sessionStorage.setItem('csvFileName', file.name);
-            sessionStorage.setItem('csvTargetAccountId', String(targetAccountId ?? ''));
-            sessionStorage.setItem('csvTargetCreditCardId', String(targetCreditCardId ?? ''));
-            router.push(importPath(`/map-columns`));
-            setIsProcessing(false);
+            openColumnMapping();
             return;
           }
         }
