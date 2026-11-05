@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import {
   detectStatusColumnIndex,
   shouldExcludeTransactionByStatus,
@@ -21,22 +22,22 @@ const ROBINHOOD_HEADERS = [
 
 describe('shouldExcludeTransactionByStatus', () => {
   it('excludes declined transactions from dedicated status column values', () => {
-    expect(shouldExcludeTransactionByStatus('Declined')).toBe(true);
-    expect(shouldExcludeTransactionByStatus('declined')).toBe(true);
+    assert.equal(shouldExcludeTransactionByStatus('Declined'), true);
+    assert.equal(shouldExcludeTransactionByStatus('declined'), true);
   });
 
   it('excludes pending transactions', () => {
-    expect(shouldExcludeTransactionByStatus('Pending')).toBe(true);
+    assert.equal(shouldExcludeTransactionByStatus('Pending'), true);
   });
 
   it('includes posted transactions', () => {
-    expect(shouldExcludeTransactionByStatus('Posted')).toBe(false);
-    expect(shouldExcludeTransactionByStatus('Cleared')).toBe(false);
+    assert.equal(shouldExcludeTransactionByStatus('Posted'), false);
+    assert.equal(shouldExcludeTransactionByStatus('Cleared'), false);
   });
 
   it('does not treat merchant/description text as status', () => {
-    expect(shouldExcludeTransactionByStatus('Transact')).toBe(null);
-    expect(shouldExcludeTransactionByStatus('Declined Payment Services LLC')).toBe(null);
+    assert.equal(shouldExcludeTransactionByStatus('Transact'), null);
+    assert.equal(shouldExcludeTransactionByStatus('Declined Payment Services LLC'), null);
   });
 });
 
@@ -49,7 +50,7 @@ describe('detectStatusColumnIndex', () => {
       ['2026-06-24', '1:00 PM', 'Jonathan Wadsworth', '5.00', '15', '', 'Pending', 'Purchase', 'Coffee Shop', ''],
     ];
 
-    expect(detectStatusColumnIndex(data, true)).toBe(6);
+    assert.equal(detectStatusColumnIndex(data, true), 6);
   });
 
   it('returns null when no dedicated status column exists', () => {
@@ -59,7 +60,7 @@ describe('detectStatusColumnIndex', () => {
       ['2026-06-23', 'Grocery Store', '20.00'],
     ];
 
-    expect(detectStatusColumnIndex(data, true)).toBe(null);
+    assert.equal(detectStatusColumnIndex(data, true), null);
   });
 });
 
@@ -86,8 +87,8 @@ describe('parseCSVWithMapping upload path', () => {
 
     const transactions = await parseCSVWithMapping(data, ROBINHOOD_TEMPLATE_MAPPING, 'card.csv');
 
-    expect(transactions).toHaveLength(1);
-    expect(transactions[0].description).toBe('Taco Bell');
+    assert.equal(transactions.length, 1);
+    assert.equal(transactions[0].description, 'Taco Bell');
   });
 
   it('supports debit/credit fallback when amount column is not mapped', async () => {
@@ -112,8 +113,12 @@ describe('parseCSVWithMapping upload path', () => {
 
     const transactions = await parseCSVWithMapping(data, mapping, 'bank.csv');
 
-    expect(transactions).toHaveLength(2);
-    expect(transactions[0]).toMatchObject({ description: 'Grocery Store', amount: 12, transaction_type: 'expense' });
-    expect(transactions[1]).toMatchObject({ description: 'Paycheck', amount: 50, transaction_type: 'income' });
+    assert.deepEqual(
+      transactions.map(({ description, amount, transaction_type }) => ({ description, amount, transaction_type })),
+      [
+        { description: 'Grocery Store', amount: 12, transaction_type: 'expense' },
+        { description: 'Paycheck', amount: 50, transaction_type: 'income' },
+      ]
+    );
   });
 });

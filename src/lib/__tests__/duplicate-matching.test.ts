@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import {
   descriptionsMatchForDuplicate,
   extractComparableTextsFromOriginalData,
@@ -6,42 +7,46 @@ import {
 
 describe('descriptionsMatchForDuplicate', () => {
   it('matches short import merchant names against full bank descriptions', () => {
-    expect(
+    assert.equal(
       descriptionsMatchForDuplicate(
         { description: 'ZAXBYS 1050 GREENVILLE SC' },
         { description: "Zaxby's", merchant: "Zaxby's" }
-      )
-    ).toBe(true);
+      ),
+      true
+    );
   });
 
   it('matches when import description is a prefix of existing description', () => {
-    expect(
+    assert.equal(
       descriptionsMatchForDuplicate(
         { description: "ZAXBY'S #42901 GREER SC" },
         { description: "Zaxby's", merchant: "Zaxby's" }
-      )
-    ).toBe(true);
+      ),
+      true
+    );
   });
 
   it('does not match different merchants with the same amount and date', () => {
-    expect(
+    assert.equal(
       descriptionsMatchForDuplicate(
         { description: 'WALMART SUPERCENTER' },
         { description: 'Target', merchant: 'Target' }
-      )
-    ).toBe(false);
+      ),
+      false
+    );
   });
 
   it('uses stored merchant names when available', () => {
-    expect(
+    assert.equal(
       descriptionsMatchForDuplicate(
         {
           description: 'ZAXBYS 1050 GREENVILLE SC',
           merchantName: "Zaxby's",
         },
         { description: "Zaxby's", merchant: "Zaxby's" }
-      )
-    ).toBe(true);
+      ),
+      true
+    );
   });
 
   it('matches short import labels using raw CSV original data', () => {
@@ -53,16 +58,17 @@ describe('descriptionsMatchForDuplicate', () => {
       _uploadFileName: 'card-export.csv',
     };
 
-    expect(
+    assert.equal(
       descriptionsMatchForDuplicate(
         { description: 'SCGOV866-340-7105DMV0049 GREER SC' },
         { description: 'scdmv', merchant: 'scdmv', originalData }
-      )
-    ).toBe(true);
+      ),
+      true
+    );
   });
 
   it('matches when existing transaction has stored original import row text', () => {
-    expect(
+    assert.equal(
       descriptionsMatchForDuplicate(
         {
           description: 'scdmv',
@@ -77,20 +83,22 @@ describe('descriptionsMatchForDuplicate', () => {
             2: '26.43',
           },
         }
-      )
-    ).toBe(true);
+      ),
+      true
+    );
   });
 });
 
 describe('extractComparableTextsFromOriginalData', () => {
   it('extracts CSV row values and skips metadata keys', () => {
-    expect(
+    assert.deepEqual(
       extractComparableTextsFromOriginalData({
         0: '04/27/2026',
         1: 'SCGOV866-340-7105DMV0049 GREER SC',
         isDuplicate: true,
         _uploadFileName: 'card-export.csv',
-      })
-    ).toEqual(['04/27/2026', 'SCGOV866-340-7105DMV0049 GREER SC']);
+      }),
+      ['04/27/2026', 'SCGOV866-340-7105DMV0049 GREER SC']
+    );
   });
 });

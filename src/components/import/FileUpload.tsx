@@ -2,7 +2,7 @@
 import { freshFetch as fetch } from "@/lib/view-freshness";
 import { useImportPaths } from './use-import-paths';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -108,7 +108,7 @@ export default function FileUpload({
   };
 
   // Handle file selection - show account dialog before processing
-  const handleFileSelected = (file: File) => {
+  const handleFileSelected = useCallback((file: File) => {
     if (disabled) {
       setError('You only have read access to this account. Only account owners and editors can import transactions.');
       return;
@@ -117,7 +117,7 @@ export default function FileUpload({
     setSelectedTargetCreditCardId(null);
     setPendingFileForAccount(file);
     setShowAccountDialog(true);
-  };
+  }, [disabled]);
 
   const handleAccountDialogContinue = () => {
     const file = pendingFileForAccount;
@@ -476,11 +476,6 @@ export default function FileUpload({
       setIsDragging(false);
       dragCounterRef.current = 0;
 
-      if (disabled) {
-        setError('You only have read access to this account. Only account owners and editors can import transactions.');
-        return;
-      }
-
       const files = e.dataTransfer?.files;
       if (files && files.length > 0) {
         handleFileSelected(files[0]);
@@ -500,7 +495,7 @@ export default function FileUpload({
       document.removeEventListener('dragover', handleDragOver);
       document.removeEventListener('drop', handleDrop);
     };
-  }, []);
+  }, [handleFileSelected]);
 
   const handleButtonClick = () => {
     fileInputRef.current?.click();
