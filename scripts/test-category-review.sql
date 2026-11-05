@@ -106,4 +106,32 @@ BEGIN
  PERFORM set_config('request.jwt.claim.sub',owner::text,true);
  RAISE NOTICE 'PASS saved splits, stale writes, late AI, budget isolation, trusted approval, partial import, idempotent evidence, corrections, legacy edits, deletion, preference revisions';
 END $$;
+-- Bulk confirmation follows the same durable review/evidence path as individual choices.
+DO $$
+DECLARE owner uuid; budget bigint; cat bigint; setup bigint; merchant bigint; grp bigint; rows jsonb; decisions jsonb; result jsonb; refs jsonb;
+BEGIN
+ SELECT owner_id INTO owner FROM public.budget_accounts WHERE id=27;
+ PERFORM set_config('request.jwt.claim.sub',owner::text,true);
+ INSERT INTO public.budget_accounts(name,owner_id) VALUES('Bulk confirmation rollback',owner) RETURNING id INTO budget;
+ INSERT INTO public.categories(user_id,account_id,name,monthly_amount,current_balance) VALUES(owner,budget,'Food',100,100) RETURNING id INTO cat;
+ INSERT INTO public.global_merchants(display_name,status) VALUES('Bulk confirmation '||budget,'active') RETURNING id INTO merchant;
+ INSERT INTO public.merchant_groups(user_id,account_id,display_name,global_merchant_id) VALUES(owner,budget,'Bulk merchant',merchant) RETURNING id INTO grp;
+ INSERT INTO public.automatic_import_setups(account_id,user_id,source_type,source_identifier) VALUES(budget,owner,'manual','bulk-confirm-test') RETURNING id INTO setup;
+ INSERT INTO public.queued_imports(account_id,import_setup_id,transaction_date,description,merchant,amount,transaction_type,hash,source_batch_id,status,original_data,category_suggestion)
+ SELECT budget,setup,current_date,'BULK QA '||n,'QA Merchant',20,'expense','bulk-'||budget||'-'||n,'qa-bulk-confirm','reviewing','{}',
+ jsonb_build_object('outcome','suggest','source',CASE WHEN n=1 THEN 'history' ELSE 'ai' END,'categoryId',cat,'merchantId',merchant,'alwaysAsk',true) FROM generate_series(1,2) n;
+ SELECT jsonb_agg(jsonb_build_object('id',q.id,'revision',q.revision,'state','reviewed','merchant',q.merchant,'forceImport',false,'patch',jsonb_build_object('date',current_date::text,'description',q.description,'total_amount',q.amount,'transaction_type','expense','account_id',null,'credit_card_id',null,'is_historical',false,'tag_ids','[]'::jsonb,'splits',jsonb_build_array(jsonb_build_object('category_id',cat,'amount',q.amount))))) INTO decisions FROM public.queued_imports q WHERE q.account_id=budget;
+ result:=public.save_category_review(budget,'qa-bulk-confirm',decisions);
+ IF result->>'status'<>'saved' OR jsonb_array_length(result->'rows')<>2 THEN RAISE EXCEPTION 'bulk confirmation failed %',result; END IF;
+ -- Approval must use the new revisions, without losing suggestion provenance.
+ SELECT jsonb_agg(jsonb_build_object('id','queued-'||(q->>'id'),'queuedId',q->'id','expectedRevision',q->'revision','requireCategoryReview',true,'patch',jsonb_build_object('merchant_group_id',grp))) INTO refs FROM jsonb_array_elements(result->'rows') q;
+ result:=public.approve_import_chunk(budget,'qa-bulk-confirm',refs);
+ IF (result->>'imported')::int<>2 OR jsonb_array_length(result->'failures')<>0 THEN RAISE EXCEPTION 'bulk reviewed import failed %',result; END IF;
+ IF (SELECT count(*) FROM public.transaction_category_evidence WHERE account_id=budget AND source='reviewed')<>2 THEN RAISE EXCEPTION 'bulk confirmation did not record individual review evidence'; END IF;
+ result:=public.category_history(budget,ARRAY[merchant]);
+ IF jsonb_array_length(result->merchant::text)<>2 OR EXISTS(SELECT 1 FROM jsonb_array_elements(result->merchant::text) h WHERE h->>'confirmed'<>'true') THEN RAISE EXCEPTION 'bulk confirmation missing from confirmed history %',result; END IF;
+ result:=public.approve_import_chunk(budget,'qa-bulk-confirm',refs);
+ IF (result->>'skipped')::int<>2 OR (SELECT current_balance FROM public.categories WHERE id=cat)<>60 THEN RAISE EXCEPTION 'bulk retry changed balances twice %',result; END IF;
+ RAISE NOTICE 'PASS bulk history/AI confirmation, fresh revisions, confirmed evidence and retry-safe import';
+END $$;
 ROLLBACK;

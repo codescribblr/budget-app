@@ -478,7 +478,8 @@ function ViewContent({
             <div>
               <h2>A place for every purchase</h2>
               <p>
-                Confirm the uncertain ones. Your choices are saved as you go.
+                Check the envelopes below. Suggestions are included, and you can
+                confirm them together when importing.
               </p>
             </div>
           </div>

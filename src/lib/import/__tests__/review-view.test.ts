@@ -17,18 +17,26 @@ const tx = (
   originalData: "{}",
   status: "pending",
   isDuplicate: false,
-  splits: [{ categoryId: 1, categoryName: "Groceries", amount: 20 }],
+  splits: [],
   ...changes,
 });
-const ready = (t: ParsedTransaction): ParsedTransaction => ({
-  ...t,
-  categoryReview: {
-    state: "reviewed",
-    patch: reviewPatch(t),
-    merchant: t.merchant,
-    forceImport: false,
-  },
-});
+const ready = (t: ParsedTransaction): ParsedTransaction => {
+  const next = {
+    ...t,
+    splits: t.splits.length
+      ? t.splits
+      : [{ categoryId: 1, categoryName: "Groceries", amount: 20 }],
+  };
+  return {
+    ...next,
+    categoryReview: {
+      state: "reviewed",
+      patch: reviewPatch(next),
+      merchant: next.merchant,
+      forceImport: false,
+    },
+  };
+};
 
 describe("stable import review workspace", () => {
   it("keeps completed rows in place, including when every row is ready", () => {
@@ -48,16 +56,17 @@ describe("stable import review workspace", () => {
     ).toEqual(["1", "2", "3"]);
   });
   it("retains a result after changing the envelope that matched its search", () => {
-    const original = tx("1");
-    const ids = reviewViewIds([original], "attention", "groceries");
-    const changed = ready({
-      ...original,
+    const original = {
+      ...tx("1"),
+      splits: [{ categoryId: 1, categoryName: "Groceries", amount: 20 }],
+    };
+    const ids = reviewViewIds([original], "ready", "groceries");
+    const changed = {
+      ...ready(original),
       splits: [{ categoryId: 2, categoryName: "Dining out", amount: 20 }],
-    });
-    expect(reviewViewIds([changed], "attention", "groceries", ids)).toEqual([
-      "1",
-    ]);
-    expect(reviewViewIds([changed], "attention", "groceries")).toEqual([]);
+    };
+    expect(reviewViewIds([changed], "ready", "groceries", ids)).toEqual(["1"]);
+    expect(reviewViewIds([changed], "ready", "groceries")).toEqual([]);
   });
   it("reapplies filters when explicitly chosen again", () => {
     const rows = [ready(tx("1")), tx("2"), tx("3", { isDuplicate: true })];
