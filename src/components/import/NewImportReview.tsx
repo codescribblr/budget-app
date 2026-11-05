@@ -8,6 +8,7 @@ import {
   Sparkles,
   ArrowRight,
   Undo2,
+  Pencil,
 } from "lucide-react";
 import { freshFetch as fetch } from "@/lib/view-freshness";
 import type { ParsedTransaction } from "@/lib/import-types";
@@ -29,6 +30,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { TransactionFlowAmount } from "@/components/new-look/transaction-flow-amount";
 import { initialReviewFilter, reviewViewIds } from "@/lib/import/review-view";
+import { reviewValidation } from "@/lib/import/mobile-review";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useFeature } from "@/contexts/FeatureContext";
 import { useAIUsage } from "@/hooks/use-ai-usage";
@@ -115,7 +117,7 @@ export default function NewImportReview({
   const [confirmImport, setConfirmImport] = useState<
     ParsedTransaction[] | null
   >(null);
-  const [bulk, setBulk] = useState(false);
+  const [bulk, setBulk] = useState<ParsedTransaction[] | null>(null);
   const [message, setMessage] = useState("");
   const [announcement, setAnnouncement] = useState("");
   const [undo, setUndo] = useState<{
@@ -201,7 +203,7 @@ export default function NewImportReview({
     });
     const saved = itemsToSave.map((t) => {
       const row = data.rows.find((r: any) => `queued-${r.id}` === t.id);
-      if (!row)
+      if (!row?.revision || row.category_review?.state !== (t.reviewSkipped ? "skipped" : "reviewed"))
         throw new Error(
           "Could not save every review choice. Refresh before continuing.",
         );
@@ -524,7 +526,9 @@ export default function NewImportReview({
     }
   }
   async function bulkSave(updates: BulkEditUpdates) {
-    const rows = items.filter((t) => selected.has(t.id));
+    // Use the rows and revisions shown when the editor opened, not a live rebase.
+    const rows = bulk ?? [];
+    if (!rows.length) throw new Error("Select transactions before editing them.");
     if (rows.some((t) => categorizationBucket(t) === "duplicates"))
       throw new Error("Review duplicates individually before including them.");
     const next = rows.map((t) => ({
@@ -555,9 +559,14 @@ export default function NewImportReview({
       throw new Error(
         "Choose an envelope before marking selected transactions ready.",
       );
+    for (const row of next) {
+      const error = reviewValidation(row);
+      if (error) throw new Error(`${row.merchant}: ${error}`);
+    }
     await save(next, false);
-    setBulk(false);
+    setBulk(null);
     setSelected(new Set());
+    toast.success(`${next.length} transactions updated and marked ready`);
   }
   const currentEditor = session
     ? items.find((t) => t.id === session.snapshot.id)
@@ -677,17 +686,22 @@ export default function NewImportReview({
         {announcement}
       </span>
       {selected.size > 0 && (
-        <div className="nl-category-selection">
-          <span>{selected.size} selected</span>
-          <button
-            onClick={() => setBulk(true)}
-            disabled={busy || selected.size > 100 || metadata !== "ready"}
-          >
-            Edit & confirm selected
-          </button>
-          <button onClick={() => setSelected(new Set())}>
-            Clear selection
-          </button>
+        <div className="nl-category-selection" role="region" aria-label="Selected transaction actions">
+          <strong>{selected.size} selected</strong>
+          <div>
+            <button
+              className="nl-primary"
+              onClick={() => setBulk(items.filter((t) => selected.has(t.id)))}
+              disabled={busy || selected.size > 100 || metadata !== "ready"}
+            >
+              <Pencil size={16} aria-hidden="true" />
+              Edit & confirm selected
+            </button>
+            <button className="nl-text-action" disabled={busy} onClick={() => setSelected(new Set())}>
+              Clear selection
+            </button>
+          </div>
+          {selected.size > 100 && <p>Choose up to 100 transactions at a time.</p>}
         </div>
       )}
       {metadata === "loading" ? (
@@ -1074,12 +1088,13 @@ export default function NewImportReview({
       {bulk && (
         <BulkEditDialog
           open
-          transactions={items.filter((t) => selected.has(t.id))}
+          transactions={bulk}
           categories={categories}
           accounts={accounts}
           creditCards={cards}
-          onClose={() => setBulk(false)}
+          onClose={() => setBulk(null)}
           onSave={bulkSave}
+          confirmOnSave
         />
       )}
     </section>

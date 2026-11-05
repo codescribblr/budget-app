@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { useState, useRef } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -20,6 +20,7 @@ interface BulkEditDialogProps {
   open: boolean;
   onClose: () => void;
   onSave: (updates: BulkEditUpdates) => Promise<void>;
+  confirmOnSave?: boolean;
 }
 
 export interface BulkEditUpdates {
@@ -32,15 +33,22 @@ export interface BulkEditUpdates {
   transactionType?: 'income' | 'expense';
 }
 
-export default function BulkEditDialog({
-  transactions,
+export default function BulkEditDialog(props: BulkEditDialogProps) {
+  // Each opening has its own draft. Background refreshes must not reset it.
+  return props.open ? <BulkEditForm {...props} /> : null;
+}
+
+function BulkEditForm({
+  transactions: initialTransactions,
   categories,
   accounts,
   creditCards,
   open,
   onClose,
   onSave,
+  confirmOnSave = false,
 }: BulkEditDialogProps) {
+  const [transactions] = useState(initialTransactions);
   // Calculate initial values - show "Various" if different
   const getInitialDate = (): Date | null => {
     const dates = transactions.map(t => t.date);
@@ -52,7 +60,7 @@ export default function BulkEditDialog({
   };
 
   const getInitialCategory = (): number | null | 'various' => {
-    const categoryIds = transactions.map(t => t.splits[0]?.categoryId).filter(id => id !== undefined);
+    const categoryIds = transactions.map(t => t.splits.length > 1 ? 'various' : (t.splits[0]?.categoryId || null));
     if (categoryIds.length === 0) return null;
     const allSame = categoryIds.every(id => id === categoryIds[0]);
     if (allSame) return categoryIds[0] || null;
@@ -90,8 +98,9 @@ export default function BulkEditDialog({
   const [accountValue, setAccountValue] = useState<string | 'various'>(getInitialAccount());
   const [isHistorical, setIsHistorical] = useState<boolean | 'various'>(getInitialHistorical());
   const [transactionType, setTransactionType] = useState<'income' | 'expense' | 'various'>(getInitialTransactionType());
-  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const saving = useRef(false);
+  const [error, setError] = useState('');
 
   const getInitialTags = (): number[] => {
     const tagIds = transactions.map(t => t.tag_ids || []).flat();
@@ -106,20 +115,13 @@ export default function BulkEditDialog({
     return allSame ? firstTags : [];
   };
 
-  // Reset form when dialog opens/closes or transactions change
-  useEffect(() => {
-    if (open) {
-      setDate(getInitialDate());
-      setCategoryId(getInitialCategory());
-      setAccountValue(getInitialAccount());
-      setIsHistorical(getInitialHistorical());
-      setTransactionType(getInitialTransactionType());
-      setSelectedTagIds(getInitialTags());
-    }
-  }, [open, transactions]);
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>(getInitialTags);
 
   const handleSave = async () => {
+    if (saving.current) return;
+    saving.current = true;
     setIsSaving(true);
+    setError('');
     try {
       const updates: BulkEditUpdates = {};
 
@@ -176,31 +178,38 @@ export default function BulkEditDialog({
         updates.transactionType = transactionType;
       }
 
-      // Only save if there are actual changes
-      if (Object.keys(updates).length > 0) {
+      // Confirmation itself is a saved decision, even when the fields are unchanged.
+      if (confirmOnSave || Object.keys(updates).length > 0) {
         await onSave(updates);
       }
 
       onClose();
     } catch (error) {
-      console.error('Error saving bulk edits:', error);
+      setError(error instanceof Error ? error.message : 'Could not save these transactions. Please try again.');
     } finally {
+      saving.current = false;
       setIsSaving(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
+    <Dialog open={open} onOpenChange={(next) => { if (!next && !saving.current) onClose(); }}>
+      <DialogContent className="sm:max-w-[500px]" showCloseButton={!isSaving} onPointerDownOutside={(event) => event.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Bulk Edit {transactions.length} Transaction{transactions.length !== 1 ? 's' : ''}</DialogTitle>
+          <DialogDescription>
+            {confirmOnSave
+              ? 'Changes apply to every selected transaction. Saving confirms their envelopes and marks them ready to import.'
+              : 'Change the fields you want to apply to every selected transaction.'}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <fieldset className="space-y-4 py-4 min-w-0" disabled={isSaving}>
           {/* Date */}
           <div className="space-y-2">
             <Label htmlFor="bulk-date">Date</Label>
             <DatePicker
+              id="bulk-date"
               date={date || undefined}
               onDateChange={(newDate) => setDate(newDate || null)}
             />
@@ -339,14 +348,16 @@ export default function BulkEditDialog({
               <span className="text-sm text-muted-foreground ml-2">(Various)</span>
             )}
           </div>
-        </div>
+        </fieldset>
+
+        {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={isSaving}>
-            {isSaving ? 'Saving...' : 'Save Changes'}
+            {isSaving ? 'Saving...' : confirmOnSave ? 'Save & mark ready' : 'Save Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>

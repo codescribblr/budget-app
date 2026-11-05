@@ -9,6 +9,8 @@ const {createRequire} = require('node:module');
 const project = createRequire(process.cwd()+'/package.json');
 const {build} = project('esbuild');
 const {chromium} = project(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const screenshots=process.env.IMPORT_FLOW_SCREENSHOTS;
+if(screenshots)fs.mkdirSync(screenshots,{recursive:true});
 const Papa = project('papaparse');
 const {analyzeCSV} = project('./src/lib/column-analyzer.ts');
 const {parseCSVWithMapping} = project('./src/lib/csv-parser-helpers.ts');
@@ -16,6 +18,7 @@ const csv = ['DATE,DESCRIPTION,AMOUNT,CHECK #,STATUS', ...Array.from({length:26}
 const raw = Papa.parse(csv).data;
 const mapping = {dateColumn:0,descriptionColumn:1,amountColumn:2,debitColumn:null,creditColumn:null,transactionTypeColumn:null,statusColumn:4,amountSignConvention:'positive_is_income',dateFormat:'MM/dd/yyyy',hasHeaders:true};
 const category = {id:1,name:'Groceries',sort_order:0,is_archived:false,category_type:'expense'};
+const transport = {...category,id:2,name:'Transport'};
 const navigation = `import {useSyncExternalStore} from 'react';
  const subscribe=fn=>{window.addEventListener('test-route',fn);return ()=>window.removeEventListener('test-route',fn)};
  const snapshot=()=>location.pathname+location.search;
@@ -29,7 +32,7 @@ const navigation = `import {useSyncExternalStore} from 'react';
 const stubs = {
  'next/navigation':navigation,
  '@/hooks/use-account-permissions':'export const useAccountPermissions=()=>({isEditor:true,isOwner:true,isLoading:false})',
- '@/components/new-look/use-resource-version':'export const useResourceVersion=()=>0',
+ '@/components/new-look/use-resource-version':`import {useSyncExternalStore} from 'react';let version=0;window.refreshImportTest=()=>{version++;window.dispatchEvent(new Event('import-test-refresh'))};const subscribe=fn=>{window.addEventListener('import-test-refresh',fn);return()=>window.removeEventListener('import-test-refresh',fn)};export const useResourceVersion=()=>useSyncExternalStore(subscribe,()=>version)`,
  '@/contexts/SubscriptionContext':'export const useSubscription=()=>({isPremium:false})',
  '@/contexts/FeatureContext':'export const useFeature=()=>false;export const useFeatures=()=>({hasPremium:false,isFeatureEnabled:()=>false,loading:false,error:null,refreshFeatures:()=>{}})',
  '@/hooks/use-ai-usage':'export const useAIUsage=()=>({stats:null,refreshStats:()=>{}})',
@@ -56,10 +59,18 @@ const stubs = {
    {name:'incomplete mapping resumes through remap',remap:true,width:1280},
    {name:'remap saves template without a second prompt',remap:true,saveRemap:true,width:1280},
    {name:'prepared review load failure can retry',queue:true,failReview:true,width:1280},
+   {name:'bulk category applies to mixed suggestions and unassigned rows',queue:true,bulk:'mixed',width:1280},
+   {name:'bulk confirms unchanged suggested categories',queue:true,bulk:'unchanged',width:1280},
+   {name:'bulk retry preserves changes through refresh',queue:true,bulk:'retry',width:1280},
+   {name:'bulk stale edits show conflict without replacing newer choices',queue:true,bulk:'conflict',width:1280},
+   {name:'bulk waits for the save before closing',queue:true,bulk:'slow',width:1280},
+   {name:'bulk mobile action and category save (dark, reduced motion)',queue:true,bulk:'mixed',width:390,dark:true},
   ]){
+   if(process.env.IMPORT_FLOW_SCENARIO&&!scenario.name.includes(process.env.IMPORT_FLOW_SCENARIO))continue;
    let tasks={csv_mapping:!scenario.remap,duplicate_detection:false,categorization:false,import_defaults_assignment:false};
-   let rows=[],revisions=0,queuedBody=null,failed=false,preparedReads=0;
-   const calls=[],errors=[];
+   let rows=[],revisions=0,queuedBody=null,failed=false,preparedReads=0,bulkFailed=false;
+   const calls=[],errors=[];let releaseBulkSave;
+   const bulkSaveGate=new Promise(resolve=>{releaseBulkSave=resolve});
    function seed(transactions,isHistorical=false){rows=transactions.map((t,i)=>({id:i+1,revision:'r'+(++revisions),account_id:27,source_batch_id:'flow-batch',import_setup_id:1,transaction_date:t.date,description:t.description,merchant:t.merchant,amount:t.amount,transaction_type:t.transaction_type,hash:t.hash,original_data:{},target_account_id:10,target_credit_card_id:null,is_historical:isHistorical,tag_ids:[],suggested_category_id:null,status:'pending',csv_file_name:'checking-flow.csv',csv_fingerprint:'5-648d3d59',csv_mapping_name:'Checking mapping'}))}
    if(scenario.queue||scenario.remap)seed(parsed);
    const page=await browser.newPage({viewport:{width:scenario.width,height:1000},colorScheme:scenario.dark?'dark':'light',reducedMotion:scenario.dark?'reduce':'no-preference'});
@@ -74,10 +85,10 @@ const stubs = {
     }
     calls.push({path:pathname,method:req.method(),body});
     let data;
-    if(pathname==='/api/categories')data=[category];
+    if(pathname==='/api/categories')data=[category,transport];
     else if(pathname==='/api/accounts')data=[{id:10,name:'Checking test'}];
     else if(pathname==='/api/accounts/10')data={id:10,name:'Checking test'};
-    else if(pathname==='/api/credit-cards')data=[];
+    else if(pathname==='/api/credit-cards'||pathname==='/api/tags')data=[];
     else if(pathname==='/api/automatic-imports/setups/1')data={setup:{source_type:'manual',integration_name:'Manual import'}};
     else if(pathname==='/api/import/templates')data={id:20,fingerprint:'5-648d3d59',column_count:5,date_column:0,description_column:scenario.broken?2:1,amount_column:scenario.broken?5:2,amount_sign_convention:'positive_is_income',date_format:'MM/dd/yyyy',has_headers:true};
     else if(pathname==='/api/import/queue-manual'){queuedBody=body;seed(body.transactions,body.isHistorical);data={success:true,batchId:'flow-batch',queuedCount:rows.length}}
@@ -97,6 +108,9 @@ const stubs = {
       for(const input of body.rows){const row=rows.find(r=>r.id===input.id);row.revision='r'+(++revisions);row.category_suggestion={version:1,fingerprint:'test',merchantId:null,merchantName:row.merchant,historyVersion:'v1',generatedAt:'now',alwaysAsk:false,history:{candidates:row.id<=4?[{categoryId:1,categoryName:'Groceries',count:3,reason:'History'}]:[],confirmedCount:3,otherCount:0,splitCount:0,recent:[],eligible:false,reason:'Review this suggestion'},outcome:row.id<=4?'suggest':'ask',source:row.id<=4?'history':null,categoryId:row.id<=4?1:null,reason:'Review this suggestion'}}
       data={results:body.rows.map(t=>({id:t.id,status:'saved'}))};
      }else if(body.action==='save'){
+      if(scenario.bulk==='slow')await bulkSaveGate;
+      if(scenario.bulk==='retry'&&!bulkFailed){bulkFailed=true;return route.fulfill({status:503,json:{error:'Bulk save interrupted. Please retry.'}})}
+      if(body.rows.some(input=>input.revision!==rows.find(r=>r.id===input.id).revision))return route.fulfill({status:409,json:{error:'These transactions changed elsewhere. Close this editor and reopen the latest saved version.'}});
       const saved=body.rows.map(input=>{const row=rows.find(r=>r.id===input.id);assert.equal(input.revision,row.revision);row.revision='r'+(++revisions);row.category_review={state:input.state,patch:input.patch,merchant:input.merchant,forceImport:input.forceImport};return row});data={rows:saved};
      }else throw new Error('Unexpected review action '+body.action);
     }else if(pathname.endsWith('/mark-task-complete')){tasks[body.task]=true;rows[0].revision='r'+(++revisions);data={success:true}}
@@ -136,7 +150,65 @@ const stubs = {
    assert.equal(calls.filter(c=>c.path==='/api/import/review'&&c.body.action==='history').length,scenario.failHistory?2:1);
    assert.equal(calls.filter(c=>c.path==='/api/automatic-imports/queue/approve-batch').length,0);
    if(scenario.weekly)assert.equal(new URL(page.url()).searchParams.get('checkin'),'weekly');
-   if(scenario.finish){
+   if(scenario.bulk){
+    const ids=scenario.bulk==='unchanged'?[1,2,3]:[1,5,6];
+    const before=structuredClone(rows);
+    const target=scenario.bulk==='retry'||scenario.bulk==='conflict'?transport:category;
+    const rowFor=id=>page.locator('[data-review-id="queued-'+id+'"]');
+    for(const id of ids)await rowFor(id).getByRole('checkbox').check();
+    const action=page.getByRole('button',{name:'Edit & confirm selected',exact:true});
+    assert.equal(await action.evaluate(el=>el.classList.contains('nl-primary')),true,'Bulk action is a prominent button');
+    await rowFor(ids.at(-1)).scrollIntoViewIfNeeded();
+    const actionBounds=await action.boundingBox();
+    assert.ok(actionBounds.y>=0&&actionBounds.y+actionBounds.height<=1000,'Bulk action remains visible while reviewing lower rows');
+    if(screenshots&&scenario.bulk==='mixed')await page.screenshot({path:path.join(screenshots,`bulk-action-${scenario.width}.png`)});
+    await action.click();
+    const dialog=page.getByRole('dialog',{name:'Bulk Edit 3 Transactions',exact:true});
+    const choose=async()=>{await dialog.getByRole('combobox',{name:'Category',exact:true}).click();await page.getByRole('option',{name:target.name,exact:true}).click()};
+    if(scenario.bulk!=='unchanged')await choose();
+    if(screenshots&&scenario.bulk==='mixed')await page.screenshot({path:path.join(screenshots,`bulk-dialog-${scenario.width}.png`)});
+    if(scenario.bulk==='retry'||scenario.bulk==='conflict'){
+     if(scenario.bulk==='conflict')rows[4].revision='remote-edit';
+     const refresh=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/accounts/10');
+     await page.evaluate(()=>window.refreshImportTest());await refresh;
+     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+     assert.match(await dialog.getByRole('combobox',{name:'Category',exact:true}).innerText(),/Transport/,'Refresh preserves the category draft');
+    }
+    await dialog.getByRole('button',{name:/Save Changes|Save & mark ready/}).click();
+    if(scenario.bulk==='slow'){
+     await dialog.getByRole('button',{name:'Saving...',exact:true}).waitFor();await page.keyboard.press('Escape');
+     assert.equal(await dialog.isVisible(),true,'Saving cannot dismiss the editor');
+     assert.equal(await dialog.getByRole('combobox',{name:'Category',exact:true}).isDisabled(),true);
+     releaseBulkSave();
+    }
+    if(scenario.bulk==='retry'||scenario.bulk==='conflict'){
+     const alert=dialog.getByRole('alert');await alert.waitFor();
+     assert.match(await alert.innerText(),scenario.bulk==='retry'?/interrupted/:/changed elsewhere/);
+     assert.equal(rows.filter(r=>r.category_review).length,0,'Failure cannot claim partial success');
+     assert.match(await dialog.getByRole('combobox',{name:'Category',exact:true}).innerText(),/Transport/);
+     if(scenario.bulk==='conflict'){
+      await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await action.click();await choose();
+     }
+     await dialog.getByRole('button',{name:'Save & mark ready',exact:true}).click();
+    }
+    await dialog.waitFor({state:'hidden'});
+    const saves=calls.filter(c=>c.path==='/api/import/review'&&c.body.action==='save');
+    assert.equal(saves.length,scenario.bulk==='retry'||scenario.bulk==='conflict'?2:1,'Bulk edit persists and confirms all selected rows');
+    assert.deepEqual(saves.at(-1).body.rows.map(r=>r.id).sort((a,b)=>a-b),ids);
+    for(const id of ids){
+     const row=rows[id-1],patch=row.category_review.patch;
+     assert.equal(row.category_review.state,'reviewed');assert.deepEqual(patch.splits,[{category_id:target.id,amount:row.amount}]);
+     assert.equal(patch.date,before[id-1].transaction_date);assert.equal(patch.account_id,before[id-1].target_account_id);
+     assert.equal(patch.is_historical,before[id-1].is_historical);assert.deepEqual(patch.tag_ids,before[id-1].tag_ids);
+     assert.equal(await rowFor(id).getAttribute('data-state'),'ready');
+    }
+    for(const row of rows.filter(r=>!ids.includes(r.id)))assert.deepEqual(row,before[row.id-1],'Unselected rows stay unchanged');
+    assert.equal(await page.getByRole('button',{name:'Ready 3',exact:true}).count(),1);
+    assert.equal(await page.locator('[data-review-id]').count(),10,'Confirmed rows remain visible in their review workspace');
+    await page.reload();await page.getByRole('heading',{name:'A place for every purchase'}).waitFor();
+    await page.getByRole('button',{name:'Ready 3',exact:true}).click();assert.equal(await page.locator('[data-review-id]').count(),3);
+    for(const id of ids)assert.equal(await rowFor(id).getAttribute('data-state'),'ready');
+   }else if(scenario.finish){
     assert.equal(queuedBody.isHistorical,true);assert.equal(queuedBody.targetAccountId,10);
     for(let id=5;id<=10;id++){
      await page.locator('[data-review-id="queued-'+id+'"]').getByRole('button',{name:/Choose envelope for/}).click();
