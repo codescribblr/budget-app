@@ -196,13 +196,13 @@ describe("durable review state", () => {
     expect(categorizationBucket(skipped)).toBe("skipped");
   });
   it("keeps ready, attention, duplicates and left out exclusive", () => {
-    expect(categorizationBucket(tx())).toBe("ready");
+    expect(categorizationBucket(tx())).toBe("attention");
     expect(categorizationBucket(tx({ splits: [] }))).toBe("attention");
     expect(
       categorizationBucket(
         tx({ categorization: { ...suggestion(), outcome: "auto" } }),
       ),
-    ).toBe("ready");
+    ).toBe("attention");
     expect(categorizationBucket(tx({ isDuplicate: true }))).toBe("duplicates");
     expect(categorizationBucket(tx({ reviewSkipped: true }))).toBe("skipped");
     expect(

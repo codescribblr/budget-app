@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ParsedTransaction } from "@/lib/import-types";
-import { reviewViewIds } from "../review-view";
+import { initialReviewFilter, reviewViewIds } from "../review-view";
 import { reviewPatch } from "../categorization";
 
 const tx = (
@@ -39,6 +39,27 @@ const ready = (t: ParsedTransaction): ParsedTransaction => {
 };
 
 describe("stable import review workspace", () => {
+  it("shows unconfirmed suggestions alongside missing envelopes on first review", () => {
+    const suggested = tx("suggested", {
+      splits: [{ categoryId: 1, categoryName: "Groceries", amount: 20 }],
+    });
+    const missing = tx("missing");
+    const confirmed = ready(tx("confirmed"));
+    const rows = [suggested, missing, confirmed, tx("duplicate", { isDuplicate: true })];
+    expect(initialReviewFilter(rows)).toBe("attention");
+    expect(initialReviewFilter([suggested])).toBe("attention");
+    expect(reviewViewIds(rows, "attention", "")).toEqual(["suggested", "missing"]);
+    expect(reviewViewIds(rows, "ready", "")).toEqual(["confirmed"]);
+    expect(reviewViewIds([suggested], "attention", "")).toEqual(["suggested"]);
+  });
+  it("opens a populated tab for already reviewed, duplicate-only, or skipped batches", () => {
+    const duplicate = tx("duplicate", { isDuplicate: true });
+    const skipped = tx("skipped", { reviewSkipped: true });
+    expect(initialReviewFilter([duplicate, ready(tx("confirmed"))])).toBe("ready");
+    expect(initialReviewFilter([duplicate, skipped])).toBe("duplicates");
+    expect(initialReviewFilter([skipped])).toBe("skipped");
+    expect(initialReviewFilter([])).toBe("attention");
+  });
   it("keeps completed rows in place, including when every row is ready", () => {
     const rows = [tx("1"), tx("2"), tx("3")];
     const ids = reviewViewIds(rows, "attention", "");
@@ -60,7 +81,7 @@ describe("stable import review workspace", () => {
       ...tx("1"),
       splits: [{ categoryId: 1, categoryName: "Groceries", amount: 20 }],
     };
-    const ids = reviewViewIds([original], "ready", "groceries");
+    const ids = reviewViewIds([ready(original)], "ready", "groceries");
     const changed = {
       ...ready(original),
       splits: [{ categoryId: 2, categoryName: "Dining out", amount: 20 }],

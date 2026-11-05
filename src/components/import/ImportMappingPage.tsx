@@ -21,25 +21,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import type { CSVAnalysisResult, ColumnAnalysis } from '@/lib/column-analyzer';
 import type { ColumnMapping } from '@/lib/mapping-templates';
 import { CheckCircle2, AlertCircle, XCircle, ArrowLeft, Info } from 'lucide-react';
 import { saveTemplate } from '@/lib/mapping-templates';
 import { parseCSVWithMapping, detectStatusColumnIndex, shouldExcludeTransactionByStatus } from '@/lib/csv-parser-helpers';
-import type { ParsedTransaction } from '@/lib/import-types';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
-import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
-import { prepareQueuedImport } from '@/lib/import/queued-import-processing';
 
 type FieldType = 'date' | 'amount' | 'description' | 'debit' | 'credit' | 'status' | 'ignore';
 
@@ -224,13 +213,8 @@ export default function MapColumnsPage() {
   const [remapBatchId, setRemapBatchId] = useState<string | null>(null);
   const [currentTemplateId, setCurrentTemplateId] = useState<number | null>(null);
   const [currentTemplateName, setCurrentTemplateName] = useState<string | null>(null);
-  const [showTemplateOptions, setShowTemplateOptions] = useState(false);
   const [templateSaveMode, setTemplateSaveMode] = useState<'none' | 'overwrite' | 'new'>('none');
-  const [overwriteTemplateId, setOverwriteTemplateId] = useState<number | null>(null);
   const [deleteOldTemplate, setDeleteOldTemplate] = useState(false);
-  const [isProcessingRemap, setIsProcessingRemap] = useState(false);
-  const [processingProgress, setProcessingProgress] = useState(0);
-  const [processingStage, setProcessingStage] = useState('');
   const [targetAccountId, setTargetAccountId] = useState<number | null>(null);
   const [targetCreditCardId, setTargetCreditCardId] = useState<number | null>(null);
 
@@ -500,6 +484,7 @@ export default function MapColumnsPage() {
   };
 
   const handleCancel = () => {
+    toast.dismiss('csv-template-mapping');
     // Clear session storage and go back
     sessionStorage.removeItem('csvAnalysis');
     sessionStorage.removeItem('csvData');
@@ -574,24 +559,17 @@ export default function MapColumnsPage() {
 
       // Handle remap flow
       if (isRemap && remapBatchId) {
-        // Show template options dialog if user wants to save template
-        if (shouldSaveTemplate || templateSaveMode !== 'none') {
-          // If no current template and user selected overwrite, default to new
-          if (templateSaveMode === 'overwrite' && !currentTemplateId) {
-            setTemplateSaveMode('new');
-          }
-          setShowTemplateOptions(true);
-          setIsProcessing(false);
-          return;
-        }
-
-        // Apply remap directly without saving template, then process client-side
+        // Save the template choices already made on this page, then open review.
         const remapResponse = await fetch(`/api/import/queue/${remapBatchId}/apply-remap`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             mapping,
-            saveAsTemplate: false, ...getRemapGuard(),
+            saveAsTemplate: templateSaveMode !== 'none',
+            ...getRemapGuard(),
+            templateName: templateSaveMode === 'new' ? (templateName || undefined) : undefined,
+            overwriteTemplateId: templateSaveMode === 'overwrite' ? (currentTemplateId || undefined) : undefined,
+            deleteOldTemplate: templateSaveMode === 'new' && deleteOldTemplate,
           }),
         });
 
@@ -600,103 +578,7 @@ export default function MapColumnsPage() {
           throw new Error(errorData.error || 'Failed to apply remap');
         }
 
-        // Start client-side processing (same flow as template save)
-        setIsProcessing(false); // Close the mapping dialog
-        setIsProcessingRemap(true);
-        setRemapBatchId(remapBatchId); // Update state with batchId
-        setProcessingProgress(0);
-        setProcessingStage('Loading queued transactions...');
-
-        // Process transactions on client side (same flow as review button)
-        try {
-          // Fetch all queued imports for this batch
-          const fetchResponse = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(remapBatchId)}`);
-          if (!fetchResponse.ok) {
-            throw new Error('Failed to fetch batch transactions');
-          }
-
-          const fetchData = await fetchResponse.json();
-          const queuedImports = fetchData.imports || [];
-
-          if (queuedImports.length === 0) {
-            throw new Error('No transactions found for this batch');
-          }
-
-          setProcessingProgress(10);
-          setProcessingStage(`Found ${queuedImports.length} transaction${queuedImports.length !== 1 ? 's' : ''}. Converting format...`);
-
-          // Process transactions: check duplicates and auto-categorize
-          setProcessingProgress(20);
-          setProcessingStage('Processing transactions...');
-          const updateProgress = (progress: number, stage: string) => {
-            setProcessingProgress(progress);
-            setProcessingStage(stage);
-          };
-
-          const prepared = await prepareQueuedImport(remapBatchId, ({ progress, stage }) => updateProgress(progress, stage));
-          const processedTransactions = prepared.transactions;
-
-          // Store processed transactions and batch info in sessionStorage
-          sessionStorage.setItem('queuedBatchId', remapBatchId);
-          sessionStorage.setItem('queuedProcessedTransactions', JSON.stringify(processedTransactions));
-
-          // Store batch info
-          const firstImport = queuedImports[0];
-          const batchInfo = {
-            setup_name: 'Manual Import',
-            source_type: 'manual',
-            target_account_name: null as string | null,
-            is_credit_card: false,
-            is_historical: false as boolean | 'mixed',
-          };
-
-          if (firstImport) {
-            batchInfo.is_credit_card = !!firstImport.target_credit_card_id;
-            const allHistorical = queuedImports.every((qi: any) => qi.is_historical === true);
-            const someHistorical = queuedImports.some((qi: any) => qi.is_historical === true);
-            batchInfo.is_historical = allHistorical ? true : someHistorical ? 'mixed' : false;
-
-            // Fetch account/credit card name if mapped
-            try {
-              if (firstImport.target_account_id) {
-                const accountResponse = await fetch(`/api/accounts/${firstImport.target_account_id}`);
-                if (accountResponse.ok) {
-                  const account = await accountResponse.json();
-                  batchInfo.target_account_name = account.name;
-                }
-              } else if (firstImport.target_credit_card_id) {
-                const cardResponse = await fetch(`/api/credit-cards/${firstImport.target_credit_card_id}`);
-                if (cardResponse.ok) {
-                  const card = await cardResponse.json();
-                  batchInfo.target_account_name = card.name;
-                }
-              }
-            } catch (err) {
-              console.warn('Failed to fetch account/card name:', err);
-            }
-          }
-
-          sessionStorage.setItem('queuedBatchInfo', JSON.stringify(batchInfo));
-
-          setProcessingProgress(100);
-          setProcessingStage('Processing complete!');
-
-          // Clear remap-related sessionStorage
-          sessionStorage.removeItem('remapBatchId');
-          sessionStorage.removeItem('csvData');
-          sessionStorage.removeItem('csvAnalysis');
-          sessionStorage.removeItem('csvFileName');
-
-          // Navigate to batch review page after a short delay
-          setTimeout(() => {
-            setIsProcessingRemap(false);
-            window.location.href = importPath(`/${remapBatchId}`);
-          }, 500);
-        } catch (processError: any) {
-          console.error('Error processing remapped transactions:', processError);
-          setIsProcessingRemap(false);
-          toast.error(processError.message || 'Failed to process remapped transactions');
-        }
+        openBatchReview(remapBatchId);
         return;
       }
 
@@ -738,6 +620,7 @@ export default function MapColumnsPage() {
           fileName,
           targetAccountId: targetAccountId ?? undefined,
           targetCreditCardId: targetCreditCardId ?? undefined,
+          isHistorical: sessionStorage.getItem('csvIsHistorical') === 'true',
           csvData, // csvData is already parsed from sessionStorage above
           csvAnalysis: analysis,
           csvFingerprint: analysis.fingerprint,
@@ -751,19 +634,23 @@ export default function MapColumnsPage() {
         throw new Error(errorData.error || 'Failed to queue import');
       }
 
-      // Clear CSV data from sessionStorage
-      sessionStorage.removeItem('csvAnalysis');
-      sessionStorage.removeItem('csvData');
-      sessionStorage.removeItem('csvFileName');
-      sessionStorage.removeItem('remapBatchId');
-
-      toast.success(`Queued ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''} for review`);
-      router.push(importPath());
+      const result = await queueResponse.json();
+      if (!result.batchId) throw new Error('The import was saved without a batch ID. Return to imports to find it.');
+      openBatchReview(result.batchId);
     } catch (err) {
       console.error('Error processing file with mapping:', err);
       setError(err instanceof Error ? err.message : 'Failed to process file');
       setIsProcessing(false);
     }
+  };
+
+  const openBatchReview = (batchId: string) => {
+    toast.dismiss('csv-template-mapping');
+    sessionStorage.setItem('queuedBatchId', batchId);
+    for (const key of ['csvAnalysis', 'csvData', 'csvFileName', 'remapBatchId', 'csvIsHistorical']) {
+      sessionStorage.removeItem(key);
+    }
+    router.push(importPath(`/${encodeURIComponent(batchId)}`));
   };
 
   const findColumnForField = (fieldType: FieldType): number | null => {
@@ -1390,6 +1277,9 @@ export default function MapColumnsPage() {
             </div>
           )}
 
+          <p className="text-sm text-muted-foreground">
+            Next, we’ll check for duplicates and suggest envelopes, then open your transactions for review.
+          </p>
           <div className="flex justify-between">
             <Button variant="outline" onClick={handleCancel} disabled={isProcessing}>
               <ArrowLeft className="size-4 mr-2" />
@@ -1402,255 +1292,7 @@ export default function MapColumnsPage() {
         </CardContent>
       </Card>
 
-      {/* Template Options Dialog for Remap */}
-      <Dialog open={showTemplateOptions} onOpenChange={setShowTemplateOptions}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save Template</DialogTitle>
-            <DialogDescription>
-              Choose how to save this mapping as a template.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label>Save Option</Label>
-              <Select
-                value={templateSaveMode}
-                onValueChange={(value) => setTemplateSaveMode(value as typeof templateSaveMode)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {currentTemplateId && (
-                    <SelectItem value="overwrite">Overwrite existing template</SelectItem>
-                  )}
-                  <SelectItem value="new">Create new template</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
 
-            {templateSaveMode === 'overwrite' && currentTemplateId && (
-              <div className="p-2 bg-yellow-50 theme-surface-warning dark:bg-yellow-950 rounded">
-                <p className="text-sm">
-                  Will overwrite: <strong>{currentTemplateName || 'Current Template'}</strong>
-                </p>
-              </div>
-            )}
-
-            {templateSaveMode === 'new' && (
-              <>
-                <div>
-                  <Label htmlFor="dialog-template-name">Template Name</Label>
-                  <Input
-                    id="dialog-template-name"
-                    placeholder="e.g., Bank of America Checking (Updated)"
-                    value={templateName}
-                    onChange={(e) => setTemplateName(e.target.value)}
-                  />
-                </div>
-                {currentTemplateId && (
-                  <div className="flex items-center space-x-2">
-                    <OptionToggle
-                      id="dialog-delete-old-template"
-                      checked={deleteOldTemplate}
-                      onCheckedChange={(checked) => setDeleteOldTemplate(checked === true)}
-                    />
-                    <Label htmlFor="dialog-delete-old-template" className="cursor-pointer text-sm">
-                      Delete old template: {currentTemplateName || 'Current Template'}
-                    </Label>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowTemplateOptions(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                if (!analysis || !remapBatchId) return;
-
-                setIsProcessing(true);
-                setShowTemplateOptions(false);
-
-                try {
-                  // Get CSV data from sessionStorage (stored during remap load)
-                  const csvDataStr = sessionStorage.getItem('csvData');
-                  if (!csvDataStr) {
-                    throw new Error('CSV data not found');
-                  }
-                  const csvData = JSON.parse(csvDataStr);
-
-                  // Get analysis from sessionStorage
-                  const csvAnalysisStr = sessionStorage.getItem('csvAnalysis');
-                  if (!csvAnalysisStr) {
-                    throw new Error('CSV analysis not found');
-                  }
-                  const csvAnalysis = JSON.parse(csvAnalysisStr);
-
-                  const mapping: ColumnMapping = {
-                    dateColumn: findColumnForField('date'),
-                    amountColumn: findColumnForField('amount'),
-                    descriptionColumn: findColumnForField('description'),
-                    debitColumn: findColumnForField('debit'),
-                    creditColumn: findColumnForField('credit'),
-                    transactionTypeColumn: amountSignConvention === 'separate_column' ? transactionTypeColumn : null,
-                    statusColumn: statusColumn,
-                    amountSignConvention,
-                    dateFormat: analysis.dateFormat,
-                    hasHeaders: analysis.hasHeaders,
-                  };
-
-                  // Generate mapping name if not saving template
-                  let mappingNameForRemap: string | undefined;
-                  if (templateSaveMode === 'new' && templateName) {
-                    mappingNameForRemap = templateName;
-                  } else if (templateSaveMode === 'overwrite' && currentTemplateName) {
-                    mappingNameForRemap = currentTemplateName;
-                  } else {
-                    // Generate automatic name using analysis from sessionStorage
-                    const { generateAutomaticMappingName } = await import('@/lib/mapping-name-generator');
-                    const storedFileName = sessionStorage.getItem('csvFileName') || fileName || 'unknown.csv';
-                    mappingNameForRemap = generateAutomaticMappingName(csvAnalysis, storedFileName);
-                  }
-
-                  const remapResponse = await fetch(`/api/import/queue/${remapBatchId}/apply-remap`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      mapping,
-                      saveAsTemplate: true, ...getRemapGuard(),
-                      templateName: templateSaveMode === 'new' ? (templateName || undefined) : undefined,
-                      overwriteTemplateId: templateSaveMode === 'overwrite' ? (currentTemplateId || undefined) : undefined,
-                      deleteOldTemplate: deleteOldTemplate,
-                    }),
-                  });
-
-                  if (!remapResponse.ok) {
-                    const errorData = await remapResponse.json().catch(() => ({ error: 'Failed to apply remap' }));
-                    throw new Error(errorData.error || 'Failed to apply remap');
-                  }
-
-                  const remapResult = await remapResponse.json();
-
-                  // Close dialog and start client-side processing
-                  setShowTemplateOptions(false);
-                  setIsProcessingRemap(true);
-                  setRemapBatchId(remapBatchId);
-                  setProcessingProgress(0);
-                  setProcessingStage('Loading queued transactions...');
-
-                  // Process transactions on client side (same flow as review button)
-                  try {
-                    // Fetch all queued imports for this batch
-                    const fetchResponse = await fetch(`/api/automatic-imports/queue?batchId=${encodeURIComponent(remapBatchId)}`);
-                    if (!fetchResponse.ok) {
-                      throw new Error('Failed to fetch batch transactions');
-                    }
-
-                    const fetchData = await fetchResponse.json();
-                    const queuedImports = fetchData.imports || [];
-
-                    if (queuedImports.length === 0) {
-                      throw new Error('No transactions found for this batch');
-                    }
-
-                    setProcessingProgress(10);
-                    setProcessingStage(`Found ${queuedImports.length} transaction${queuedImports.length !== 1 ? 's' : ''}. Converting format...`);
-
-                    // Process transactions: check duplicates and auto-categorize
-                    setProcessingProgress(20);
-                    setProcessingStage('Processing transactions...');
-                    const updateProgress = (progress: number, stage: string) => {
-                      setProcessingProgress(progress);
-                      setProcessingStage(stage);
-                    };
-
-                    const prepared = await prepareQueuedImport(remapBatchId, ({ progress, stage }) => updateProgress(progress, stage));
-                    const processedTransactions = prepared.transactions;
-
-                    // Store processed transactions and batch info in sessionStorage
-                    sessionStorage.setItem('queuedBatchId', remapBatchId);
-                    sessionStorage.setItem('queuedProcessedTransactions', JSON.stringify(processedTransactions));
-
-                    // Store batch info
-                    const firstImport = queuedImports[0];
-                    const batchInfo = {
-                      setup_name: 'Manual Import',
-                      source_type: 'manual',
-                      target_account_name: null as string | null,
-                      is_credit_card: false,
-                      is_historical: false as boolean | 'mixed',
-                    };
-
-                    if (firstImport) {
-                      batchInfo.is_credit_card = !!firstImport.target_credit_card_id;
-                      const allHistorical = queuedImports.every((qi: any) => qi.is_historical === true);
-                      const someHistorical = queuedImports.some((qi: any) => qi.is_historical === true);
-                      batchInfo.is_historical = allHistorical ? true : someHistorical ? 'mixed' : false;
-
-                      // Fetch account/credit card name if mapped
-                      try {
-                        if (firstImport.target_account_id) {
-                          const accountResponse = await fetch(`/api/accounts/${firstImport.target_account_id}`);
-                          if (accountResponse.ok) {
-                            const account = await accountResponse.json();
-                            batchInfo.target_account_name = account.name;
-                          }
-                        } else if (firstImport.target_credit_card_id) {
-                          const cardResponse = await fetch(`/api/credit-cards/${firstImport.target_credit_card_id}`);
-                          if (cardResponse.ok) {
-                            const card = await cardResponse.json();
-                            batchInfo.target_account_name = card.name;
-                          }
-                        }
-                      } catch (err) {
-                        console.warn('Failed to fetch account/card name:', err);
-                      }
-                    }
-
-                    sessionStorage.setItem('queuedBatchInfo', JSON.stringify(batchInfo));
-
-                    setProcessingProgress(100);
-                    setProcessingStage('Processing complete!');
-
-                    // Clear remap-related sessionStorage
-                    sessionStorage.removeItem('remapBatchId');
-                    sessionStorage.removeItem('csvData');
-                    sessionStorage.removeItem('csvAnalysis');
-                    sessionStorage.removeItem('csvFileName');
-
-                    // Navigate to batch review page after a short delay
-                    setTimeout(() => {
-                      setIsProcessingRemap(false);
-                      window.location.href = importPath(`/${remapBatchId}`);
-                    }, 500);
-                  } catch (processError: any) {
-                    console.error('Error processing remapped transactions:', processError);
-                    setIsProcessingRemap(false);
-                    toast.error(processError.message || 'Failed to process remapped transactions');
-                  }
-                } catch (err) {
-                  console.error('Error applying remap:', err);
-                  setError(err instanceof Error ? err.message : 'Failed to apply remap');
-                  setIsProcessing(false);
-                }
-              }}
-            >
-              Apply & Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Processing Dialog for Remap */}
-      <QueuedImportProcessingDialog
-        open={isProcessingRemap}
-        progress={processingProgress}
-        stage={processingStage}
-      />
     </div>
   );
 }

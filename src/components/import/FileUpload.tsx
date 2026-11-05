@@ -16,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
 import { parseCSVFile } from '@/lib/csv-parser';
 import { tryParseCSVWithTemplate } from '@/lib/import/csv-template-parser';
 import type { CSVImportTemplate } from '@/lib/mapping-templates';
@@ -53,8 +52,6 @@ export default function FileUpload({
   const [isHistorical, setIsHistorical] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
-  const [queuedBatchId, setQueuedBatchId] = useState<string | null>(null);
-  const [showProcessingDialog, setShowProcessingDialog] = useState(false);
   const [showAccountDialog, setShowAccountDialog] = useState(false);
   const [pendingFileForAccount, setPendingFileForAccount] = useState<File | null>(null);
   const [selectedTargetAccountId, setSelectedTargetAccountId] = useState<number | null>(null);
@@ -167,6 +164,7 @@ export default function FileUpload({
           sessionStorage.setItem('csvFileName', file.name);
           sessionStorage.setItem('csvTargetAccountId', String(targetAccountId ?? ''));
           sessionStorage.setItem('csvTargetCreditCardId', String(targetCreditCardId ?? ''));
+          sessionStorage.setItem('csvIsHistorical', String(isHistorical));
           // Start from fresh analysis, without metadata from the failed template
           // or a previous upload.
           sessionStorage.removeItem('csvTemplateId');
@@ -209,7 +207,7 @@ export default function FileUpload({
           // template should lead to column mapping, not an empty-file error.
           const parsed = await tryParseCSVWithTemplate(rawData, savedTemplate, file.name);
           if (!parsed) {
-            toast.info("The saved template couldn't read this file. Please review the column mapping.");
+            toast.info("The saved template couldn't read this file. Please review the column mapping.", { id: 'csv-template-mapping' });
             openColumnMapping();
             return;
           }
@@ -228,7 +226,6 @@ export default function FileUpload({
         } else {
           // No template found - check if we have high confidence for auto-detection
           updateProgress(20, 'Mapping CSV fields...');
-          await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to make it visible
           
           // Check if we have high confidence for all required fields
           const hasRequiredFields = 
@@ -314,10 +311,8 @@ export default function FileUpload({
             updateProgress(25, 'Analyzing PDF structure...');
             const analysis = analyzeCSV(csvData);
             
-            // Show mapping step for longer so user can see it
             updateProgress(30, 'Mapping CSV fields...');
-            await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to make it visible
-            
+
             // Check if we have high confidence for all required fields
             const hasRequiredFields = 
               analysis.dateColumn !== null &&
@@ -358,6 +353,7 @@ export default function FileUpload({
               sessionStorage.setItem('csvFileName', file.name);
               sessionStorage.setItem('csvTargetAccountId', String(targetAccountId ?? ''));
               sessionStorage.setItem('csvTargetCreditCardId', String(targetCreditCardId ?? ''));
+              sessionStorage.setItem('csvIsHistorical', String(isHistorical));
               router.push(importPath(`/map-columns`));
               setIsProcessing(false);
               return;
@@ -433,17 +429,13 @@ export default function FileUpload({
       }
 
       const saveResult = await saveResponse.json();
-      setQueuedBatchId(saveResult.batchId);
-      setIsProcessing(false);
-      setShowProcessingDialog(true); // Show dialog to handle processing
+      openBatchReview(saveResult.batchId);
     } catch (err) {
       console.error('Error processing file:', err);
       setError(err instanceof Error ? err.message : 'Failed to process file');
       setProgress(0);
       setProgressStage('');
       setIsProcessing(false);
-      setShowProcessingDialog(false);
-      setQueuedBatchId(null);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -513,14 +505,11 @@ export default function FileUpload({
     fileInputRef.current?.click();
   };
 
-  const handleProcessingComplete = () => {
-    if (!queuedBatchId) return;
-    setShowProcessingDialog(false);
+  const openBatchReview = (batchId: string) => {
+    if (!batchId) throw new Error('The import was saved without a batch ID. Return to imports to find it.');
+    sessionStorage.setItem('queuedBatchId', batchId);
     onBatchQueued?.();
-    // Navigate to review page with a small delay to ensure database updates are committed
-    setTimeout(() => {
-      router.push(importPath(`/${queuedBatchId}?t=${Date.now()}`));
-    }, 300);
+    router.push(importPath(`/${encodeURIComponent(batchId)}`));
   };
 
   return (
@@ -579,6 +568,20 @@ export default function FileUpload({
                   )}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="upload-historical"
+                checked={isHistorical}
+                onCheckedChange={(checked) => setIsHistorical(checked === true)}
+                aria-describedby="upload-historical-help"
+              />
+              <div>
+                <Label htmlFor="upload-historical">Historical transactions</Label>
+                <p id="upload-historical-help" className="text-xs text-muted-foreground mt-1">
+                  Include in reports without changing current envelope balances.
+                </p>
+              </div>
             </div>
             {pendingFileForAccount && (
               <p className="text-sm text-muted-foreground">
@@ -651,21 +654,6 @@ export default function FileUpload({
       </div>
 
 
-      {/* Processing Dialog */}
-      {queuedBatchId && (
-        <QueuedImportProcessingDialog
-          open={showProcessingDialog}
-          progress={progress}
-          stage={progressStage}
-          batchId={queuedBatchId}
-          onComplete={handleProcessingComplete}
-          onCancel={() => {
-            setShowProcessingDialog(false);
-            setQueuedBatchId(null);
-          }}
-        />
-      )}
-
       {error && (
         <div className="p-4 bg-red-50 theme-surface-danger dark:bg-red-950 border border-red-200 theme-border-danger dark:border-red-800 rounded-md">
           <p className="text-sm text-red-800 theme-text-danger dark:text-red-200">{error}</p>
@@ -725,9 +713,7 @@ export default function FileUpload({
                   }
 
                   const saveResult = await saveResponse.json();
-                  setQueuedBatchId(saveResult.batchId);
-                  setIsProcessing(false);
-                  setShowProcessingDialog(true); // Show dialog to handle processing
+                  openBatchReview(saveResult.batchId);
                   setPendingFile(null);
                 } catch (err) {
                   console.error('Error processing file with AI:', err);

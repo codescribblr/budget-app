@@ -1,6 +1,6 @@
 import type { ParsedTransaction } from "@/lib/import-types";
 import {
-  categorizationBucket,
+  canImportTransaction,
   needsCategoryConfirmation,
   reviewPatch,
 } from "./categorization";
@@ -25,7 +25,7 @@ export async function confirmImportReview<T>(
   save: (rows: ParsedTransaction[]) => Promise<ParsedTransaction[]>,
   importRows: (rows: ParsedTransaction[]) => Promise<T>,
 ): Promise<T> {
-  const ready = snapshot.filter((t) => categorizationBucket(t) === "ready");
+  const ready = snapshot.filter(canImportTransaction);
   if (!ready.length) throw new Error("Choose an envelope before importing.");
   const unconfirmed = ready.filter(needsCategoryConfirmation);
   const saved = new Map<string, ParsedTransaction>();

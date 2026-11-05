@@ -250,6 +250,17 @@ export function prepareQueuedImport(
       );
       tasks.categorization = true;
     }
+    // Account and historical settings are already saved on the queued rows.
+    // Preserve them (including mixed settings) instead of requiring another
+    // confirmation or rewriting the entire batch from its first row.
+    if (tasks.import_defaults_assignment === false) {
+      report({ progress: 98, stage: "Keeping your import settings…", tasks: { ...tasks } });
+      await request(
+        `/api/import/queue/${encodeURIComponent(batchId)}/mark-task-complete`,
+        { task: "import_defaults_assignment" },
+      );
+      tasks.import_defaults_assignment = true;
+    }
     batch.status = { ...batch.status, processingTasks: tasks };
     report({ progress: 100, stage: "Ready to review", tasks: { ...tasks } });
     return await loadQueuedImport(batchId);

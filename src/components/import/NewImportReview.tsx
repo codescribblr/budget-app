@@ -15,6 +15,7 @@ import type { Account, Category, CreditCard } from "@/lib/types";
 import {
   aiEligible,
   assignReviewEnvelope,
+  canImportTransaction,
   categorizationBucket,
   hydrateCategoryReview,
   needsCategoryConfirmation,
@@ -27,7 +28,7 @@ import {
 } from "@/lib/import/confirm-review";
 import { formatCurrency } from "@/lib/utils";
 import { TransactionFlowAmount } from "@/components/new-look/transaction-flow-amount";
-import { reviewViewIds } from "@/lib/import/review-view";
+import { initialReviewFilter, reviewViewIds } from "@/lib/import/review-view";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useFeature } from "@/contexts/FeatureContext";
 import { useAIUsage } from "@/hooks/use-ai-usage";
@@ -92,11 +93,7 @@ export default function NewImportReview({
     search: string;
     ids: string[];
   }>(() => {
-    const filter: CategoryReviewBucket = transactions.some(
-      (t) => categorizationBucket(t) === "attention",
-    )
-      ? "attention"
-      : "ready";
+    const filter = initialReviewFilter(transactions);
     return { filter, search: "", ids: reviewViewIds(transactions, filter, "") };
   });
   const { filter, search } = view;
@@ -507,7 +504,7 @@ export default function NewImportReview({
         },
       );
       const remaining = snapshot.filter(
-        (t) => categorizationBucket(t) === "attention",
+        (t) => categorizationBucket(t) === "attention" && !canImportTransaction(t),
       ).length;
       setMessage(
         `${data.imported} imported${data.skipped ? ` · ${data.skipped} already imported or duplicates` : ""}. ${remaining} ${remaining === 1 ? "remains" : "remain"} to review.${data.errors?.length ? ` ${data.errors.join(" ")}` : ""}`,
@@ -565,9 +562,8 @@ export default function NewImportReview({
   const currentEditor = session
     ? items.find((t) => t.id === session.snapshot.id)
     : undefined;
-  const importRows = (confirmImport ?? items).filter(
-    (t) => categorizationBucket(t) === "ready",
-  );
+  const importRows = (confirmImport ?? items).filter(canImportTransaction);
+  const importableCount = items.filter(canImportTransaction).length;
   const unconfirmed = importRows.filter(needsCategoryConfirmation);
   const unconfirmedCount = items.filter(needsCategoryConfirmation).length;
   return (
@@ -922,17 +918,17 @@ export default function NewImportReview({
       )}
       <div className="nl-category-finish">
         <div>
-          <strong>{counts.ready} ready to import</strong>
+          <strong>{importableCount} can be imported</strong>
           <span>
             {unconfirmedCount > 0 &&
               `${unconfirmedCount} to confirm at import · `}
-            {counts.attention} need attention · {counts.duplicates} duplicates ·{" "}
+            {counts.attention - unconfirmedCount} need an envelope or correction · {counts.duplicates} duplicates ·{" "}
             {counts.skipped} left out
           </span>
         </div>
         <button
           className="nl-primary"
-          disabled={!counts.ready || busy || aiBusy || metadata !== "ready"}
+          disabled={!importableCount || busy || aiBusy || metadata !== "ready"}
           onClick={() => {
             const snapshot = current.current;
             if (snapshot.some(needsCategoryConfirmation))
@@ -942,7 +938,7 @@ export default function NewImportReview({
         >
           {busy
             ? "Saving…"
-            : `Import ${counts.ready} ${counts.ready === 1 ? "transaction" : "transactions"}`}
+            : `Import ${importableCount} ${importableCount === 1 ? "transaction" : "transactions"}`}
           <ArrowRight size={16} />
         </button>
       </div>
@@ -1057,7 +1053,7 @@ export default function NewImportReview({
               disabled={busy}
               onClick={() => {
                 setConfirmImport(null);
-                changeView("ready", "");
+                changeView("attention", "");
                 if (unconfirmed[0]) restoreEnvelopeFocus(unconfirmed[0].id);
               }}
             >

@@ -130,7 +130,7 @@ describe("queued import checkpoints", () => {
     expect(tasks).toMatchObject({
       duplicate_detection: true,
       categorization: true,
-      import_defaults_assignment: false,
+      import_defaults_assignment: true,
     });
     expect(first.transactions[0].tag_ids).toEqual([9]);
     await run(); // Opening the dialog again does not repeat completed work.
@@ -174,11 +174,32 @@ describe("queued import checkpoints", () => {
     expect(count("save:duplicate_detection")).toBe(0);
     expect(tasks?.duplicate_detection).toBe(false);
   });
-  it("only shows settings when automatic work is already complete", async () => {
+  it("finishes the settings checkpoint without rewriting saved settings", async () => {
     tasks!.duplicate_detection = true;
     tasks!.categorization = true;
+    rows[0].is_historical = true;
+    rows[0].target_account_id = 10;
+    rows.push({ ...rows[0], id: 2, is_historical: false, target_account_id: null, target_credit_card_id: 20 });
+    const originalRows = structuredClone(rows);
+    const prepared = await run();
+    expect(events).toEqual(["/api/import/queue/test-batch/mark-task-complete"]);
+    expect(tasks!.import_defaults_assignment).toBe(true);
+    expect(rows).toEqual(originalRows);
+    expect(prepared.transactions.map(t => t.is_historical)).toEqual([true, false]);
     await run();
-    expect(events).toEqual([]);
+    expect(events).toHaveLength(1);
+  });
+  it("keeps a failed settings checkpoint retryable without repeating duplicate or category work", async () => {
+    tasks!.duplicate_detection = true;
+    tasks!.categorization = true;
+    failedPath = "/api/import/queue/test-batch/mark-task-complete";
+    await expect(run()).rejects.toThrow("Unavailable");
+    expect(tasks!.import_defaults_assignment).toBe(false);
+    failedPath = null;
+    await run();
+    expect(tasks!.import_defaults_assignment).toBe(true);
+    expect(count("/api/import/check-duplicates")).toBe(0);
+    expect(count("/api/categorize")).toBe(0);
   });
   it("leaves legacy batches without metadata reviewable and skips non-applicable tasks", async () => {
     tasks = null;

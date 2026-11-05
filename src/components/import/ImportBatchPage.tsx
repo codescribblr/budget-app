@@ -71,6 +71,16 @@ export default function BatchReviewPage() {
   const [pendingTasks, setPendingTasks] = useState<ProcessingTask[]>([]);
   const loadId = useRef(0);
   const reviewStarted=useRef(false);
+  const preparationStarted = useRef<string | null>(null);
+
+  useEffect(() => {
+    reviewStarted.current = false;
+    preparationStarted.current = null;
+    setTransactions([]);
+    setPendingTasks([]);
+    setLoading(true);
+    setShowProcessingDialog(false);
+  }, [batchId]);
 
   useEffect(() => {
     if (permissionsLoading || !isEditor || !batchId) return;
@@ -78,8 +88,7 @@ export default function BatchReviewPage() {
     // The persisted queue is authoritative. Old handoff caches could belong to another batch.
     sessionStorage.removeItem('queuedProcessedTransactions');
     sessionStorage.removeItem('queuedBatchInfo');
-    setShowProcessingDialog(false);
-  }, [batchId]);
+  }, [batchId, permissionsLoading, isEditor]);
 
   useEffect(() => {
     if (permissionsLoading || !isEditor || !batchId) return;
@@ -87,8 +96,13 @@ export default function BatchReviewPage() {
     return () => { loadId.current++; };
   }, [permissionsLoading, isEditor, batchId, resourceVersion]);
 
-  const loadFromDatabase = async () => {
+  const loadFromDatabase = async (requirePrepared = false) => {
     const requestId = ++loadId.current;
+    const isCurrentRequest = () => {
+      if (requestId === loadId.current) return true;
+      if (requirePrepared) throw new Error('The batch changed while opening review. Retry to load its latest progress.');
+      return false;
+    };
     try {
       setLoading(transactions.length === 0);
       setError(null);
@@ -102,10 +116,11 @@ export default function BatchReviewPage() {
       }
 
       const data = await response.json();
-      if (requestId !== loadId.current) return;
+      if (!isCurrentRequest()) return;
       const queuedImports = data.imports || [];
 
       if (queuedImports.length === 0) {
+        if (requirePrepared) throw new Error('This batch is no longer queued. It may have been imported or deleted on another device.');
         setTransactions([]);setPendingTasks([]);
         setError('This batch is no longer queued. It may have been imported or deleted on another device.');
         setLoading(false);
@@ -145,7 +160,7 @@ export default function BatchReviewPage() {
           : Promise.resolve(null),
       ]);
 
-      if (requestId !== loadId.current) return;
+      if (!isCurrentRequest()) return;
       const setupInfo = setupResult?.setup ?? null;
       const categoryById = new Map<number, { id: number; name: string }>(
         categories.map((c: { id: number; name: string }) => [c.id, c])
@@ -219,8 +234,19 @@ export default function BatchReviewPage() {
       // Check if processing is needed
       const tasks = (firstImport?.processing_tasks as any) || null;
       const incompleteTasks = tasks ? getIncompleteTasks(tasks) : [];
+      if (requirePrepared && incompleteTasks.length) {
+        throw new Error('This import still needs preparation. Retry to continue from your saved progress.');
+      }
       setPendingTasks(incompleteTasks);
       if(!incompleteTasks.length)reviewStarted.current=true;
+      if (incompleteTasks.length && preparationStarted.current !== batchId) {
+        preparationStarted.current = batchId;
+        if (incompleteTasks.includes('csv_mapping')) {
+          router.replace(importPath(`/map-columns?remap=true&batchId=${encodeURIComponent(batchId)}`));
+          return;
+        }
+        setShowProcessingDialog(true);
+      }
 
       const processedTransactions = initialTransactions;
 
@@ -276,8 +302,12 @@ export default function BatchReviewPage() {
       const withinFileDups = sortedTransactions.filter(t => t.isDuplicate && t.duplicateType === 'within-file').length;
       setDuplicateCounts({ database: databaseDups, withinFile: withinFileDups });
 
+      if (!incompleteTasks.length) setShowProcessingDialog(false);
       setLoading(false);
     } catch (err: any) {
+      // Keep the processing dialog open with its retry action if review could
+      // not load. A successful checkpoint must not reveal stale, unfinished rows.
+      if (requirePrepared) throw err;
       if (requestId !== loadId.current) return;
       console.error('Error loading from database:', err);
       setError(err.message || 'Failed to load batch transactions');
@@ -381,7 +411,8 @@ export default function BatchReviewPage() {
             <CardTitle>Error</CardTitle>
             <CardDescription>{error}</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex gap-2">
+            <Button onClick={() => void loadFromDatabase()}>Retry loading</Button>
             <Button onClick={() => router.push(importPath())}>Back to imports</Button>
           </CardContent>
         </Card>
@@ -411,10 +442,9 @@ export default function BatchReviewPage() {
     );
   }
 
-  const handleProcessingComplete = () => {
-    setShowProcessingDialog(false);
-    // Continue only fires after results and the final settings checkpoint are saved.
-    void loadFromDatabase();
+  const handleProcessingComplete = async () => {
+    // Load the saved results before revealing review; do not flash stale rows.
+    await loadFromDatabase(true);
   };
 
   const handleRerunDuplicateCheck = async () => {
@@ -840,20 +870,17 @@ export default function BatchReviewPage() {
 
       </div>
 
-      {pendingTasks.length > 0 && (
+      {pendingTasks.length > 0 && !showProcessingDialog && (
         <div className="rounded-lg border bg-muted/50 p-5 space-y-3" role="status">
-          <h2 className="font-semibold">Finish preparing this import</h2>
-          <p className="text-sm text-muted-foreground">Your completed steps are saved. Continue the remaining steps before reviewing transactions.</p>
-          <Button onClick={() => setShowProcessingDialog(true)}>
-            {pendingTasks.every(task => task === 'import_defaults_assignment') ? 'Review import settings' : 'Resume processing'}
-          </Button>
+          <h2 className="font-semibold">Preparing your import</h2>
+          <p className="text-sm text-muted-foreground">Your completed steps are saved. Your transaction review will open when preparation finishes.</p>
         </div>
       )}
       {(reviewStarted.current || (transactions.length > 0 && pendingTasks.length === 0)) && (
         <TransactionPreview
           transactions={transactions}
           onImportComplete={handleImportComplete}
-          onRefresh={loadFromDatabase}
+          onRefresh={() => loadFromDatabase()}
           onSelectionChange={setSelectedTransactionIds}
         />
       )}

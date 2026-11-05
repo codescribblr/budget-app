@@ -1,7 +1,7 @@
 'use client';
 import { ContentLoading } from "@/components/new-look/page-skeleton";
 import { freshFetch as fetch } from "@/lib/view-freshness";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useResourceVersion } from "@/components/new-look/use-resource-version";
 import { useImportPaths } from './use-import-paths';
 
@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import QueuedImportProcessingDialog from '@/components/import/QueuedImportProcessingDialog';
 import { useAccountPermissions } from '@/hooks/use-account-permissions';
 import { Wallet, CreditCard, Clock, Trash2, CalendarClock } from 'lucide-react';
 import {
@@ -58,7 +57,7 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
   const { isEditor, isLoading: permissionsLoading } = useAccountPermissions();
   const [batches, setBatches] = useState<QueuedImportBatch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [processingBatchId, setProcessingBatchId] = useState<string | null>(null);
+  const router = useRouter();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [batchToDelete, setBatchToDelete] = useState<QueuedImportBatch | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -90,52 +89,9 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
     return () => request.current?.abort();
   }, [permissionsLoading, fetchBatches, refreshKey, resourceVersion]);
 
-  const handleReviewBatch = async (batchId: string, sourceType?: string) => {
-    try {
-      if (sourceType === 'manual') {
-        sessionStorage.setItem('queuedBatchId', batchId);
-        window.location.href = importPath(`/${batchId}`);
-        return;
-      }
-
-      if (!sourceType) {
-        const firstResponse = await fetch(
-          `/api/automatic-imports/queue?batchId=${encodeURIComponent(batchId)}&limit=1`
-        );
-        if (!firstResponse.ok) {
-          throw new Error('Failed to fetch batch transactions');
-        }
-
-        const firstData = await firstResponse.json();
-        const firstImports = firstData.imports || [];
-
-        if (firstImports.length === 0) {
-          throw new Error('No transactions found for this batch');
-        }
-
-        try {
-          const setupResponse = await fetch(
-            `/api/automatic-imports/setups/${firstImports[0].import_setup_id}`
-          );
-          if (setupResponse.ok) {
-            const setup = await setupResponse.json();
-            if (setup.setup?.source_type === 'manual') {
-              sessionStorage.setItem('queuedBatchId', batchId);
-              window.location.href = importPath(`/${batchId}`);
-              return;
-            }
-          }
-        } catch (err) {
-          console.warn('Failed to fetch setup info:', err);
-        }
-      }
-
-      setProcessingBatchId(batchId);
-    } catch (error: unknown) {
-      console.error('Error reviewing batch:', error);
-      const message = error instanceof Error ? error.message : 'Failed to review batch';
-      toast.error(message);
-    }
+  const handleReviewBatch = (batchId: string) => {
+    sessionStorage.setItem('queuedBatchId', batchId);
+    router.push(importPath(`/${encodeURIComponent(batchId)}`));
   };
 
   const handleDeleteBatch = async () => {
@@ -166,14 +122,6 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
       toast.error(message);
     } finally {
       setIsDeleting(false);
-    }
-  };
-
-  const handleProcessingComplete = () => {
-    const batchId = processingBatchId;
-    setProcessingBatchId(null);
-    if (batchId) {
-      window.location.href = importPath(`/${batchId}`);
     }
   };
 
@@ -211,17 +159,6 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
   return (
     <>
       {loadError && <div role="alert" className="nl-notice">Imports could not refresh. Previously loaded batches are retained. <button type="button" onClick={()=>void fetchBatches()}>Try again</button></div>}
-      {processingBatchId && (
-        <QueuedImportProcessingDialog
-          open={!!processingBatchId}
-          progress={0}
-          stage=""
-          batchId={processingBatchId}
-          onComplete={handleProcessingComplete}
-          onCancel={() => setProcessingBatchId(null)}
-        />
-      )}
-
       {batches.length === 0 ? (
         <Card>
           <CardHeader>
@@ -301,7 +238,7 @@ export default function ImportQueueList({ refreshKey }: ImportQueueListProps) {
                       <Trash2 className="h-4 w-4" />
                       {batch.duplicates?.all_duplicates && "Delete batch"}
                     </Button>
-                    <Button size="sm" variant={batch.duplicates?.all_duplicates ? "ghost" : "default"} onClick={() => handleReviewBatch(batch.batch_id, batch.source_type)}>
+                    <Button size="sm" variant={batch.duplicates?.all_duplicates ? "ghost" : "default"} onClick={() => handleReviewBatch(batch.batch_id)}>
                       Review
                     </Button>
                   </div>

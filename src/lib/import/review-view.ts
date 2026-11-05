@@ -4,6 +4,13 @@ import {
   type CategoryReviewBucket,
 } from "./categorization";
 
+/** Open the next useful review step, including a batch containing only duplicates. */
+export function initialReviewFilter(transactions: ParsedTransaction[]): CategoryReviewBucket {
+  const buckets = new Set(transactions.map(categorizationBucket));
+  return (["attention", "ready", "duplicates", "skipped"] as const)
+    .find((bucket) => buckets.has(bucket)) ?? "attention";
+}
+
 /** Keep the review workspace in place until the user explicitly changes its filter/search.
  * Existing IDs retain their order even when their category/status changes remotely.
  * Deleted/imported rows disappear; new matching rows append without moving existing rows.

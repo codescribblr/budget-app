@@ -81,15 +81,25 @@ export function categorizationBucket(
   if ((t.isDuplicate || t.duplicateType) && !t.forceImport) return "duplicates";
   if (t.reviewSkipped || t.categoryReview?.state === "skipped")
     return "skipped";
-  if (reviewValidation(t) || !validAllocation(t.splits, t.amount))
+  if (!canImportTransaction(t) || t.categoryReview?.state !== "reviewed")
     return "attention";
-  // Ready means eligible for import, not that the user has confirmed the choice.
-  // Unconfirmed choices are saved explicitly at the final import confirmation.
   return "ready";
+}
+/** Eligibility is independent of review: suggestions can be confirmed at import
+ * while staying visible in Needs review until the user confirms them.
+ */
+export function canImportTransaction(t: ParsedTransaction): boolean {
+  return (
+    !((t.isDuplicate || t.duplicateType) && !t.forceImport) &&
+    !t.reviewSkipped &&
+    t.categoryReview?.state !== "skipped" &&
+    !reviewValidation(t) &&
+    validAllocation(t.splits, t.amount)
+  );
 }
 export function needsCategoryConfirmation(t: ParsedTransaction) {
   return (
-    categorizationBucket(t) === "ready" &&
+    canImportTransaction(t) &&
     t.categoryReview?.state !== "reviewed"
   );
 }

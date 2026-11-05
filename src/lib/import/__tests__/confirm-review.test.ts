@@ -5,6 +5,7 @@ import {
   aiEligible,
   assignReviewEnvelope,
   categorizationBucket,
+  canImportTransaction,
   needsCategoryConfirmation,
   reviewPatch,
   type CategorySuggestion,
@@ -52,10 +53,12 @@ const suggestion = (source: "ai" | "history", alwaysAsk = false) =>
   }) as CategorySuggestion;
 
 describe("final import confirmation", () => {
-  it("includes valid history/AI suggestions while keeping confirmation distinct from readiness", () => {
+  it("keeps eligible history/AI suggestions in Needs review until final confirmation", () => {
     for (const source of ["ai", "history"] as const) {
       const t = transaction(1, { categorization: suggestion(source) });
-      expect(categorizationBucket(t)).toBe("ready");
+      expect(categorizationBucket(t)).toBe("attention");
+      expect(canImportTransaction(t)).toBe(true);
+      expect(categorizationBucket(reviewed(t))).toBe("ready");
       expect(needsCategoryConfirmation(t)).toBe(true);
       expect(needsCategoryConfirmation(reviewed(t))).toBe(false);
       expect(aiEligible(t)).toBe(true);
