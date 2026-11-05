@@ -74,11 +74,7 @@ export interface CategoryReview {
   suggestion?: CategorySuggestion | null;
 }
 export type CategoryReviewBucket =
-  | "attention"
-  | "ready"
-  | "duplicates"
-  | "skipped"
-  | "all";
+  "attention" | "ready" | "duplicates" | "skipped" | "all";
 export function categorizationBucket(
   t: ParsedTransaction,
 ): Exclude<CategoryReviewBucket, "all"> {
@@ -87,12 +83,15 @@ export function categorizationBucket(
     return "skipped";
   if (reviewValidation(t) || !validAllocation(t.splits, t.amount))
     return "attention";
-  if (
-    t.categoryReview?.state === "reviewed" ||
-    t.categorization?.outcome === "auto"
-  )
-    return "ready";
-  return "attention";
+  // Ready means eligible for import, not that the user has confirmed the choice.
+  // Unconfirmed choices are saved explicitly at the final import confirmation.
+  return "ready";
+}
+export function needsCategoryConfirmation(t: ParsedTransaction) {
+  return (
+    categorizationBucket(t) === "ready" &&
+    t.categoryReview?.state !== "reviewed"
+  );
 }
 export function validAllocation(splits: TransactionSplit[], amount: number) {
   return (
@@ -350,6 +349,6 @@ export function aiEligible(t: ParsedTransaction, explicit = false) {
     categorizationBucket(t) !== "duplicates" &&
     !t.reviewSkipped &&
     t.categoryReview?.state !== "skipped" &&
-    (explicit || (!t.categoryReview && categorizationBucket(t) === "attention"))
+    (explicit || (!t.categoryReview && t.categorization?.outcome !== "auto"))
   );
 }

@@ -17,9 +17,14 @@ import {
   assignReviewEnvelope,
   categorizationBucket,
   hydrateCategoryReview,
+  needsCategoryConfirmation,
   reviewPatch,
   type CategoryReviewBucket,
 } from "@/lib/import/categorization";
+import {
+  categoryReviewSaveRow,
+  confirmImportReview,
+} from "@/lib/import/confirm-review";
 import { formatCurrency } from "@/lib/utils";
 import { TransactionFlowAmount } from "@/components/new-look/transaction-flow-amount";
 import { reviewViewIds } from "@/lib/import/review-view";
@@ -110,7 +115,9 @@ export default function NewImportReview({
   const running = useRef(false);
   const aiRuns = useRef(new Map<string, string>());
   const [confirmAI, setConfirmAI] = useState<ParsedTransaction[] | null>(null);
-  const [confirmImport, setConfirmImport] = useState(false);
+  const [confirmImport, setConfirmImport] = useState<
+    ParsedTransaction[] | null
+  >(null);
   const [bulk, setBulk] = useState(false);
   const [message, setMessage] = useState("");
   const [announcement, setAnnouncement] = useState("");
@@ -190,32 +197,33 @@ export default function NewImportReview({
       previous.map((t) => next.find((n) => n.id === t.id) ?? t),
     );
   }
+  async function persistReview(itemsToSave: ParsedTransaction[]) {
+    const data = await request({
+      action: "save",
+      rows: itemsToSave.map(categoryReviewSaveRow),
+    });
+    const saved = itemsToSave.map((t) => {
+      const row = data.rows.find((r: any) => `queued-${r.id}` === t.id);
+      if (!row)
+        throw new Error(
+          "Could not save every review choice. Refresh before continuing.",
+        );
+      return hydrateCategoryReview(
+        { ...t, revision: row.revision },
+        row,
+        categories,
+      );
+    });
+    replace(saved);
+    return saved;
+  }
   async function save(itemsToSave: ParsedTransaction[], remember = true) {
     if (saving.current)
       throw new Error("A review choice is still saving. Please wait.");
     saving.current = true;
     setBusy(true);
     try {
-      const data = await request({
-        action: "save",
-        rows: itemsToSave.map((t) => ({
-          id: Number(t.id.slice(7)),
-          revision: t.revision,
-          state: t.reviewSkipped ? "skipped" : "reviewed",
-          merchant: t.merchant,
-          forceImport: !!t.forceImport,
-          patch: reviewPatch(t),
-        })),
-      });
-      const saved = itemsToSave.map((t) => {
-        const row = data.rows.find((r: any) => `queued-${r.id}` === t.id);
-        return hydrateCategoryReview(
-          { ...t, revision: row.revision },
-          row,
-          categories,
-        );
-      });
-      replace(saved);
+      const saved = await persistReview(itemsToSave);
       if (remember && saved.length === 1) {
         const before = current.current.find((t) => t.id === saved[0].id)!;
         setUndo({ before, after: saved[0] });
@@ -313,9 +321,7 @@ export default function NewImportReview({
       aiEligible(t, selected.size > 0) &&
       (!selected.size || selected.has(t.id)),
   );
-  const unresolved = items.filter(
-    (t) => !t.categoryReview && categorizationBucket(t) === "attention",
-  );
+  const unresolved = items.filter((t) => aiEligible(t));
   const failedAI = items.filter(
     (t) => aiEligible(t) && t.categorization?.ai?.state === "failed",
   );
@@ -430,7 +436,7 @@ export default function NewImportReview({
         });
       }
       setMessage(
-        `${saved} ${mode === "ai" ? "AI results" : "history suggestions"} saved${failed ? ` · ${failed} need a retry` : ""}${conflicts ? ` · ${conflicts} changed while processing and were left untouched` : ""}. Confirm any suggestions in Needs review.`,
+        `${saved} ${mode === "ai" ? "AI results" : "history suggestions"} saved${failed ? ` · ${failed} need a retry` : ""}${conflicts ? ` · ${conflicts} changed while processing and were left untouched` : ""}. You can confirm suggestions together when importing.`,
       );
       if (conflicts) await onRefresh?.();
     } catch (e: any) {
@@ -472,39 +478,52 @@ export default function NewImportReview({
       toast.error(e.message);
     }
   }
-  async function importReady() {
-    if (saving.current) return;
+  async function importReady(snapshot: ParsedTransaction[]) {
+    if (saving.current || running.current) return;
     saving.current = true;
     setBusy(true);
-    setConfirmImport(false);
-    const ready = items.filter((t) => categorizationBucket(t) === "ready");
+    setUndo(null);
     try {
-      const r = await fetch("/api/automatic-imports/queue/approve-batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          batchId,
-          expectedBudgetId: budgetId,
-          requireCategoryReview: true,
-          transactions: ready,
-        }),
-      });
-      const data = await r.json();
-      if (!r.ok)
-        throw new Error(data.error ?? "Could not import these transactions.");
-      setMessage(
-        `${data.imported} imported${data.skipped ? ` · ${data.skipped} already imported or duplicates` : ""}. ${counts.attention} remain to review.${data.errors?.length ? ` ${data.errors.join(" ")}` : ""}`,
+      const data = await confirmImportReview(
+        snapshot,
+        persistReview,
+        async (ready) => {
+          const r = await fetch("/api/automatic-imports/queue/approve-batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              batchId,
+              expectedBudgetId: budgetId,
+              requireCategoryReview: true,
+              transactions: ready,
+            }),
+          });
+          const result = await r.json();
+          if (!r.ok)
+            throw new Error(
+              result.error ?? "Could not import these transactions.",
+            );
+          return result;
+        },
       );
-      setUndo(null);
+      const remaining = snapshot.filter(
+        (t) => categorizationBucket(t) === "attention",
+      ).length;
+      setMessage(
+        `${data.imported} imported${data.skipped ? ` · ${data.skipped} already imported or duplicates` : ""}. ${remaining} ${remaining === 1 ? "remains" : "remain"} to review.${data.errors?.length ? ` ${data.errors.join(" ")}` : ""}`,
+      );
       setSelected(new Set());
-      if (data.imported === items.length) onImportComplete();
+      if (data.imported === snapshot.length) onImportComplete();
       else await onRefresh?.();
     } catch (e: any) {
       toast.error(e.message);
       setMessage(e.message);
+      // A lost response may have saved reviews. Reload their revisions before retrying.
+      await onRefresh?.().catch(() => {});
     } finally {
       saving.current = false;
       setBusy(false);
+      setConfirmImport(null);
     }
   }
   async function bulkSave(updates: BulkEditUpdates) {
@@ -546,18 +565,11 @@ export default function NewImportReview({
   const currentEditor = session
     ? items.find((t) => t.id === session.snapshot.id)
     : undefined;
-  const readyExpenses = items
-    .filter(
-      (t) =>
-        categorizationBucket(t) === "ready" && t.transaction_type === "expense",
-    )
-    .reduce((s, t) => s + t.amount, 0);
-  const readyIncome = items
-    .filter(
-      (t) =>
-        categorizationBucket(t) === "ready" && t.transaction_type === "income",
-    )
-    .reduce((s, t) => s + t.amount, 0);
+  const importRows = (confirmImport ?? items).filter(
+    (t) => categorizationBucket(t) === "ready",
+  );
+  const unconfirmed = importRows.filter(needsCategoryConfirmation);
+  const unconfirmedCount = items.filter(needsCategoryConfirmation).length;
   return (
     <section
       className="nl-category-review"
@@ -567,8 +579,8 @@ export default function NewImportReview({
         <div>
           <h2>A place for every purchase</h2>
           <p>
-            Work down the list and choose an envelope. Ready transactions stay
-            in place as you go.
+            Check the envelopes below. Suggestions are included, and you can
+            confirm them together when importing.
           </p>
         </div>
         <span>
@@ -739,7 +751,7 @@ export default function NewImportReview({
               </h3>
               <p>
                 {filter === "attention"
-                  ? "Your confirmed transactions are ready to import."
+                  ? "Your transactions have envelopes and are ready to import."
                   : "Try another view or change your search."}
               </p>
               <button
@@ -755,6 +767,7 @@ export default function NewImportReview({
             <ul className="nl-category-list">
               {filtered.slice(0, limit).map((t) => {
                 const bucket = categorizationBucket(t);
+                const unconfirmedChoice = needsCategoryConfirmation(t);
                 const source =
                   t.categoryReview?.state === "reviewed"
                     ? "Reviewed"
@@ -774,10 +787,15 @@ export default function NewImportReview({
                                   ? "Check suggestion"
                                   : "Needs envelope";
                 return (
-                  <li key={t.id} data-state={bucket} data-review-id={t.id}>
+                  <li
+                    key={t.id}
+                    data-state={unconfirmedChoice ? "suggested" : bucket}
+                    data-review-id={t.id}
+                  >
                     <Checkbox
                       aria-label={`Select ${t.merchant}, ${formatCurrency(t.amount)} money ${t.transaction_type === "income" ? "in" : "out"}`}
                       checked={selected.has(t.id)}
+                      disabled={busy}
                       onCheckedChange={() =>
                         setSelected((p) => {
                           const n = new Set(p);
@@ -840,15 +858,17 @@ export default function NewImportReview({
                         )}
                         <div className="nl-category-envelope-meta">
                           <span title={source}>
-                            {bucket === "ready"
-                              ? "Saved for import"
-                              : bucket === "duplicates"
-                                ? "Excluded until you confirm"
-                                : bucket === "skipped"
-                                  ? "Left out of this import"
-                                  : t.splits[0]?.categoryId > 0
-                                    ? `${source} · choose to confirm`
-                                    : "Choose to mark ready"}
+                            {unconfirmedChoice
+                              ? `${source} · included in import`
+                              : bucket === "ready"
+                                ? "Confirmed for import"
+                                : bucket === "duplicates"
+                                  ? "Excluded until you confirm"
+                                  : bucket === "skipped"
+                                    ? "Left out of this import"
+                                    : t.splits[0]?.categoryId > 0
+                                      ? `${source} · choose to confirm`
+                                      : "Choose to mark ready"}
                           </span>
                           {undo?.after.id === t.id && (
                             <button
@@ -868,9 +888,11 @@ export default function NewImportReview({
                           transactionType={t.transaction_type}
                         />
                         <small className="nl-category-status" title={source}>
-                          {bucket === "ready" ? (
+                          {unconfirmedChoice ? (
+                            "Suggested"
+                          ) : bucket === "ready" ? (
                             <>
-                              <Check size={12} aria-hidden="true" /> Ready
+                              <Check size={12} aria-hidden="true" /> Confirmed
                             </>
                           ) : (
                             source
@@ -902,16 +924,25 @@ export default function NewImportReview({
         <div>
           <strong>{counts.ready} ready to import</strong>
           <span>
-            {counts.attention} need review · {counts.duplicates} duplicates ·{" "}
+            {unconfirmedCount > 0 &&
+              `${unconfirmedCount} to confirm at import · `}
+            {counts.attention} need attention · {counts.duplicates} duplicates ·{" "}
             {counts.skipped} left out
           </span>
         </div>
         <button
           className="nl-primary"
-          disabled={!counts.ready || busy}
-          onClick={() => setConfirmImport(true)}
+          disabled={!counts.ready || busy || aiBusy || metadata !== "ready"}
+          onClick={() => {
+            const snapshot = current.current;
+            if (snapshot.some(needsCategoryConfirmation))
+              setConfirmImport(snapshot);
+            else void importReady(snapshot);
+          }}
         >
-          {busy ? "Saving…" : `Import ${counts.ready} transactions`}
+          {busy
+            ? "Saving…"
+            : `Import ${counts.ready} ${counts.ready === 1 ? "transaction" : "transactions"}`}
           <ArrowRight size={16} />
         </button>
       </div>
@@ -988,43 +1019,58 @@ export default function NewImportReview({
           </div>
         </DialogContent>
       </Dialog>
-      <Dialog open={confirmImport} onOpenChange={setConfirmImport}>
-        <DialogContent>
+      <Dialog
+        open={!!confirmImport}
+        onOpenChange={(open) => {
+          if (!open && !saving.current) setConfirmImport(null);
+        }}
+      >
+        <DialogContent
+          className="nl-import-confirm-dialog"
+          showCloseButton={!busy}
+        >
           <DialogHeader>
-            <DialogTitle>Import {counts.ready} transactions</DialogTitle>
+            <DialogTitle>
+              Import {importRows.length}{" "}
+              {importRows.length === 1 ? "transaction" : "transactions"}?
+            </DialogTitle>
             <DialogDescription>
-              Your confirmed envelopes will be updated. Transactions still
-              needing review stay in this batch for later.
+              {unconfirmed.length}{" "}
+              {unconfirmed.length === 1
+                ? "envelope suggestion"
+                : "envelope suggestions"}{" "}
+              will be confirmed automatically when you import.
             </DialogDescription>
           </DialogHeader>
-          <dl className="nl-category-summary">
-            <div>
-              <dt>Money out</dt>
-              <dd className="nl-negative">{formatCurrency(readyExpenses)}</dd>
-            </div>
-            <div>
-              <dt>Money in / refunds</dt>
-              <dd className="nl-accent">{formatCurrency(readyIncome)}</dd>
-            </div>
-            <div>
-              <dt>Still need review</dt>
-              <dd>{counts.attention}</dd>
-            </div>
-          </dl>
-          <p className="nl-footnote">
-            {counts.duplicates} duplicates and {counts.skipped} left-out
-            transactions won’t be imported.
-          </p>
+          {(confirmImport?.length ?? 0) > importRows.length && (
+            <p className="nl-footnote">
+              {(confirmImport?.length ?? 0) - importRows.length}{" "}
+              {(confirmImport?.length ?? 0) - importRows.length === 1
+                ? "transaction won’t"
+                : "transactions won’t"}{" "}
+              be imported and will stay in this batch for later.
+            </p>
+          )}
           <div className="nl-category-dialog-actions">
             <button
               className="nl-secondary"
-              onClick={() => setConfirmImport(false)}
+              disabled={busy}
+              onClick={() => {
+                setConfirmImport(null);
+                changeView("ready", "");
+                if (unconfirmed[0]) restoreEnvelopeFocus(unconfirmed[0].id);
+              }}
             >
-              Keep reviewing
+              Review individually
             </button>
-            <button className="nl-primary" onClick={importReady}>
-              Import {counts.ready}
-              {counts.attention ? " & leave the rest for later" : ""}
+            <button
+              className="nl-primary"
+              disabled={busy}
+              onClick={() => confirmImport && void importReady(confirmImport)}
+            >
+              {busy
+                ? "Confirming & importing…"
+                : `Confirm all & import ${importRows.length}`}
             </button>
           </div>
         </DialogContent>

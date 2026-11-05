@@ -181,7 +181,7 @@ export default function ImportEnvelopePicker({
           <p role="status">
             {saving
               ? "Saving your choice…"
-              : "Choosing an envelope saves & marks ready."}
+              : "Choosing an envelope saves & confirms it."}
           </p>
           {error && (
             <p className="nl-envelope-picker-error" role="alert">
