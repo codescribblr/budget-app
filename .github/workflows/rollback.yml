@@ -39,6 +39,10 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          BACKUP_STORAGE_BACKEND: ${{ vars.BACKUP_STORAGE_BACKEND || 'supabase' }}
+          CLOUD_BACKUP_URL: ${{ vars.CLOUD_BACKUP_URL }}
+          CLOUD_BACKUP_APP_ID: ${{ vars.CLOUD_BACKUP_APP_ID }}
+          CLOUD_BACKUP_TOKEN: ${{ secrets.CLOUD_BACKUP_TOKEN }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
