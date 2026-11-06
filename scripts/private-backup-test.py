@@ -52,6 +52,15 @@ class RecoveryTest(unittest.TestCase):
                     sql=out/metadata['backup_file']
                     self.assertEqual(metadata['sha256_checksum'],hashlib.sha256(sql.read_bytes()).hexdigest())
                     self.assertEqual(sql.stat().st_mode & 0o777,0o600)
+            # Exercise the real packaging wrapper, including platform metadata.
+            (root/'node').write_text('#!/bin/sh\npython3 scripts/extract-private-backup.py "$3" "$PACK_TEST_OUTPUT"\n')
+            (root/'node').chmod(0o700)
+            result=subprocess.run(['bash','scripts/create-private-backup.sh'],cwd=ROOT,
+                env={**os.environ,'PATH':str(root)+':'+os.environ['PATH'],
+                     'SUPABASE_DB_URL':'postgresql://test:synthetic@example.invalid/postgres',
+                     'MODE':'success','PACK_TEST_OUTPUT':str(root/'pack-verified')},capture_output=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual((root/'pack-verified'/'backup.sql').read_text(),'SELECT 1;\n')
 
     def test_archives_and_checksum(self):
         sql = b'SELECT 1;\n'
