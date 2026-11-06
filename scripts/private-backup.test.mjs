@@ -38,3 +38,38 @@ test('only private uploads whose independently downloaded bytes verify succeed',
   await assert.rejects(fakeStorage({corrupt:true}).storage.upload(name, plain));
   await assert.rejects(fakeStorage({failDownload:true}).storage.upload(name, plain), /HTTP 503/);
 });
+
+function fakePanel({ corrupt = false, metadataMismatch = false } = {}) {
+  let stored, receipt, uploads = 0;
+  const fetcher = async (url, options) => {
+    assert.ok(url.startsWith('https://panel.example/api/ci/apps/19/'));
+    assert.equal(options.redirect, 'error'); assert.equal(options.headers.apikey, undefined);
+    assert.equal(options.headers.Authorization, 'Bearer app-backup-only');
+    if (url.endsWith('/backups/policy')) return Response.json({ backend: 'cloud-panel', private: true, encryptedOnly: true, format: 'BUDGET-BACKUP-1' });
+    if (url.endsWith('/backups/verify')) { receipt=JSON.parse(options.body); return Response.json({verified:true}); }
+    if (url.endsWith('/backups')) return Response.json([{object:name,sha256:metadataMismatch?'0'.repeat(64):receipt.sha256,verifiedAt:'2026-11-06T00:00:00Z',replicaAt:'2026-11-06T00:00:01Z'}]);
+    assert.equal(new URL(url).searchParams.get('object'),name);
+    if (options.method === 'POST') { stored=Buffer.from(options.body); uploads++; return Response.json({}); }
+    const response=Buffer.from(stored);if(corrupt)response[response.length-1]^=1;
+    return new Response(response);
+  };
+  return {fetcher,receipt:()=>receipt,uploads:()=>uploads,stored:()=>stored};
+}
+test('Cloud Panel credentials remain app-scoped and need no Supabase storage settings', async () => {
+  const {createBackupStorage}=await import('./private-backup.mjs');
+  const config=storageConfig({BACKUP_STORAGE_BACKEND:'cloud-panel',CLOUD_BACKUP_URL:'https://panel.example',CLOUD_BACKUP_APP_ID:'19',CLOUD_BACKUP_TOKEN:'app-backup-only',BACKUP_ENCRYPTION_KEY:key.toString('hex')});
+  const fake=fakePanel(),storage=createBackupStorage(config,fake.fetcher);
+  const encoded=encrypt(plain,key,name),result=await storage.importEncrypted(name,encoded);
+  assert.deepEqual(fake.stored(),encoded);assert.equal(result.backend,'cloud-panel');assert.ok(result.replicaAt);
+  assert.equal(fake.receipt().decrypted,true);
+  assert.deepEqual(await storage.get(name),plain);
+  assert.equal((await storage.list('production')).length,1);
+  assert.throws(()=>storageConfig({...process.env,BACKUP_STORAGE_BACKEND:'typo'}),/Unsupported/);
+  assert.throws(()=>storageConfig({BACKUP_STORAGE_BACKEND:'cloud-panel',CLOUD_BACKUP_URL:'https://panel.example',CLOUD_BACKUP_APP_ID:'19/../../20',CLOUD_BACKUP_TOKEN:'token',BACKUP_ENCRYPTION_KEY:key.toString('hex')}),/APP_ID/);
+});
+test('Cloud Panel verification follows successful decryption and requires the matching replica', async()=>{
+  const {createBackupStorage}=await import('./private-backup.mjs');
+  const config={backend:'cloud-panel',origin:'https://panel.example',appId:'19',token:'app-backup-only',key};
+  const bad=fakePanel({corrupt:true});await assert.rejects(createBackupStorage(config,bad.fetcher).upload(name,plain));assert.equal(bad.receipt(),undefined);
+  const mismatch=fakePanel({metadataMismatch:true});await assert.rejects(createBackupStorage(config,mismatch.fetcher).upload(name,plain),/metadata changed/);
+});

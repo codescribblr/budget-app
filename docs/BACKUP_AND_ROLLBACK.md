@@ -49,3 +49,14 @@ Existing `scripts/restore-supabase.sh` is a legacy local SQL utility; it does no
 These dumps preserve application schemas and data, including their RLS policies, but exclude Supabase-managed auth/storage/realtime schemas, storage object contents, ownership and grants. Recovery requires the existing managed services and appropriate application grants. They cannot independently recreate an entire Supabase project. The storage protection policy is in `storage.objects`, outside the application's dump, so restoring an application backup does not remove it.
 
 Security remediation preserves each historical GitHub artifact in encrypted private storage, verifies its downloaded bytes and SQL checksum, then deletes the public artifact. Removal prevents future downloads from GitHub; it cannot revoke copies previously downloaded. Assess any incident follow-up separately using available access evidence.
+
+
+## Cloud Panel storage
+
+Set repository variables `BACKUP_STORAGE_BACKEND=cloud-panel`, `CLOUD_BACKUP_URL=https://cloud.jrwdev.com` and `CLOUD_BACKUP_APP_ID` to the budget production app. Set `CLOUD_BACKUP_TOKEN` as a secret containing an expiring app/environment-scoped credential with only `backup:read` and `backup:write`. Keep `BACKUP_ENCRYPTION_KEY` and its recovery copies unchanged. The encryption key is never sent to Cloud Panel.
+
+The deployment, verification and reviewed recovery workflows select this backend through the same client. Cloud Panel uploads independently download and authenticate the archive, confirm its ciphertext and plaintext digests, submit a verification receipt and wait for a second encrypted copy on web02. Failure to confirm that replica stops the backup gate. Supabase Storage remains an explicit fallback backend for portability; selecting Cloud Panel requires no Supabase Storage credentials. The database dump still uses the existing Supabase database while application hosting is migrated separately.
+
+When moving existing archives, preserve their object paths and ciphertext. Download and authenticate each original, validate the SQL archive against its metadata, import it into Cloud Panel, independently download/decrypt/validate the new copy, and wait for its server replica before deleting the Supabase copy. `BackupStorage.importEncrypted` supports that operation without changing the recovery key or format. Keep a private verification ledger; never put SQL dumps, recovery keys or credentials into GitHub artifacts.
+
+A provider change does not remove the `production-recovery` reviewer requirement or permit automatic database restoration. Rotate the scoped backup credential before its expiry. Cloud Panel retention preserves legacy incident archives, at least five verified production recovery points and 90 days of ordinary backups; verification objects expire after seven days.
