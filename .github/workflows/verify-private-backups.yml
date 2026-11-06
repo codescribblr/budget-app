@@ -1,0 +1,50 @@
+name: Verify Private Backups
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/pg-with-url.py
+      - scripts/private-backup*
+      - scripts/extract-private-backup*
+      - scripts/create-private-backup.sh
+      - scripts/backup-with-metadata.sh
+      - scripts/check-pending-migrations.sh
+      - .github/workflows/verify-private-backups.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/pg-with-url.py
+      - scripts/private-backup*
+      - scripts/extract-private-backup*
+      - scripts/create-private-backup.sh
+      - scripts/backup-with-metadata.sh
+      - scripts/check-pending-migrations.sh
+      - .github/workflows/verify-private-backups.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: node --test scripts/private-backup.test.mjs
+      - run: python3 scripts/private-backup-test.py
+      - name: Verify private storage round trip with synthetic data
+        if: github.ref == 'refs/heads/main'
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          printf 'synthetic backup verification\n' > "$work/source"
+          object="verification/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip.enc"
+          node scripts/private-backup.mjs upload "$work/source" "$object"
+          node scripts/private-backup.mjs download "$object" "$work/restored"
+          cmp "$work/source" "$work/restored"

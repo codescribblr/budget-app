@@ -1,70 +1,27 @@
-#!/bin/bash
-
-# Check for Pending Migrations
-# Returns exit code 0 if there are pending migrations, 1 if none
-#
-# Usage:
-#   ./scripts/check-pending-migrations.sh
-#
-# Environment Variables Required:
-#   SUPABASE_DB_URL - PostgreSQL connection string
-
-set -e
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Configuration
-MIGRATIONS_DIR="migrations"
-MIGRATIONS_TABLE="_migrations"
-
-# Validate environment variables
-if [ -z "$SUPABASE_DB_URL" ]; then
-  echo -e "${RED}❌ Error: SUPABASE_DB_URL environment variable is not set${NC}" >&2
-  exit 1
+#!/usr/bin/env bash
+# Exit 0 = pending, 1 = none, 2 = failure. Errors must stop deployment.
+set -euo pipefail
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+trap 'exit 2' ERR
+if [[ -z "${SUPABASE_DB_URL:-}" ]]; then
+  echo 'SUPABASE_DB_URL is required' >&2
+  exit 2
 fi
-
-# Create migrations tracking table if it doesn't exist (silently)
-psql "$SUPABASE_DB_URL" -c "
-  CREATE TABLE IF NOT EXISTS $MIGRATIONS_TABLE (
-    id SERIAL PRIMARY KEY,
-    migration_name TEXT NOT NULL UNIQUE,
-    executed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-" >/dev/null 2>&1 || true
-
-# Get list of executed migrations
-EXECUTED_MIGRATIONS=$(psql "$SUPABASE_DB_URL" -t -c "SELECT migration_name FROM $MIGRATIONS_TABLE ORDER BY migration_name;" 2>/dev/null | tr -d ' ' || echo "")
-
-# Get all migration files
-MIGRATION_FILES=$(ls -1 $MIGRATIONS_DIR/*.sql 2>/dev/null | sort || echo "")
-
-if [ -z "$MIGRATION_FILES" ]; then
-  # No migration files found
-  exit 1
+exists=$(python3 "$script_dir/pg-with-url.py" psql -XAt -v ON_ERROR_STOP=1 -c "SELECT to_regclass('public._migrations') IS NOT NULL;")
+executed=''
+if [[ "$exists" == 't' ]]; then
+  executed=$(python3 "$script_dir/pg-with-url.py" psql -XAt -v ON_ERROR_STOP=1 -c 'SELECT migration_name FROM public._migrations;')
+elif [[ "$exists" != 'f' ]]; then
+  echo 'Unexpected migration status response' >&2
+  exit 2
 fi
-
-# Check for pending migrations
-PENDING_COUNT=0
-for MIGRATION_FILE in $MIGRATION_FILES; do
-  MIGRATION_NAME=$(basename "$MIGRATION_FILE")
-  
-  # Check if migration has already been executed
-  if ! echo "$EXECUTED_MIGRATIONS" | grep -q "^$MIGRATION_NAME$"; then
-    PENDING_COUNT=$((PENDING_COUNT + 1))
-  fi
+shopt -s nullglob
+files=(migrations/*.sql)
+if (( ${#files[@]} == 0 )); then
+  echo 'No migration files found' >&2
+  exit 2
+fi
+for file in "${files[@]}"; do
+  if ! grep -Fxq -- "${file##*/}" <<< "$executed"; then exit 0; fi
 done
-
-# Exit with 0 if there are pending migrations, 1 if none
-if [ $PENDING_COUNT -gt 0 ]; then
-  exit 0
-else
-  exit 1
-fi
-
-
-
+exit 1

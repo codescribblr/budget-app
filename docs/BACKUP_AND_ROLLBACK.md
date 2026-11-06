@@ -1,194 +1,51 @@
-# Database Backup and Rollback Guide
+# Private deployment backups and recovery
 
-## Overview
+Deployment backups contain customer financial data. This repository is public: **never upload SQL, decrypted archives or restore logs as GitHub Actions artifacts**.
 
-This guide explains how automatic database backups work during deployments and how to rollback if something goes wrong.
+## Storage and keys
 
-## Automatic Backups During Deployment
+The production workflow creates a temporary application-schema SQL dump and SHA-256 metadata, compresses them, encrypts with AES-256-GCM, and stores the result in the existing Supabase project's private `deployment-backups` bucket. A separate authenticated download must decrypt and match the original bytes before migrations begin. Any database-status, dump, upload, encryption or verification error stops deployment.
 
-### How It Works
+`BACKUP_ENCRYPTION_KEY` is a random 32-byte key encoded as 64 hex characters. GitHub stores it as an Actions secret; it is never a public Next.js variable. Keep recovery copies independently of GitHub. The configured recovery locations are the owner's gitignored `.env.backup-recovery` (0600) and web02's `/root/budget-recovery/backup-encryption.env` (0600, parent 0700). Never paste their contents into logs, tickets or source control. Losing every copy loses the backups. Retain old keys until all archives they protect are re-encrypted and verified; merely replacing the secret makes old archives unreadable.
 
-When you push to the `main` branch:
+The bucket must remain private, accept only `application/octet-stream`, and limit uploads to 50 MiB. The tool accepts at most 48 MiB compressed plaintext and binds each authenticated ciphertext to its exact object path. Do not rename objects. Migration 155 adds a restrictive RLS policy denying both `anon` and `authenticated` access to this bucket, even if other permissive policies exist. Only trusted service-role operations should access it.
 
-1. **Check for Pending Migrations**: The workflow checks if there are any pending migrations
-2. **Create Backup** (if migrations pending): Before running migrations, a backup is automatically created
-3. **Store Backup**: The backup is stored as a GitHub Actions artifact for 90 days
-4. **Run Migrations**: Migrations are executed
-5. **Deploy**: Application is deployed to Vercel
+Production objects: `production/<run>-<attempt>-<commit>.tar.gz.enc`.
+Preserved historical objects: `legacy/<original-artifact-name>.zip.enc`.
+Synthetic CI checks: `verification/<run>-<attempt>.zip.enc` (contain no customer data).
 
-### Backup Storage
+These small archives use the existing Supabase storage quota. Inspect usage monthly. Retain at least the latest five verified production backups, all backups inside the release rollback window, and incident-recovery copies. After a successful recovery rehearsal, archives older than 90 days can be removed through privileged storage administration. Historical copies are initially preserved rather than automatically expired. Configure an independent encrypted off-provider copy before treating this as complete Supabase disaster recovery.
 
-Backups are stored in two places:
+## Verification and retrieval
 
-1. **GitHub Actions Artifacts**: Automatically uploaded and kept for 90 days
-   - Accessible from: Repository → Actions → Select workflow run → Artifacts
-   - Artifact name format: `db-backup-{run_id}-{commit_sha}`
-
-2. **Backup Metadata**: Each backup includes a JSON metadata file with:
-   - Commit SHA and short hash
-   - Branch name
-   - Timestamp
-   - Pending migrations that were about to run
-   - File size
-
-### When Backups Are Created
-
-- ✅ **Backups ARE created** when there are pending migrations
-- ❌ **Backups are NOT created** when there are no pending migrations (no changes needed)
-
-This ensures backups are only created when necessary, saving storage and time.
-
-## Manual Rollback Process
-
-If something goes wrong after a deployment, you can rollback the database using the GitHub Actions workflow.
-
-### Step 1: Find the Backup Artifact
-
-1. Go to your GitHub repository
-2. Click on **Actions** tab
-3. Find the deployment run that created the backup (look for runs with artifacts)
-4. Click on the workflow run
-5. Scroll down to the **Artifacts** section
-6. Note the artifact name (format: `db-backup-{run_id}-{commit_sha}`)
-
-### Step 2: Trigger Rollback Workflow
-
-1. Go to **Actions** tab
-2. Select **Rollback Database** workflow from the left sidebar
-3. Click **Run workflow** button
-4. Fill in the form:
-   - **Backup artifact name**: Enter the artifact name from Step 1 (e.g., `db-backup-123456789-abc1234`)
-   - **Confirm rollback**: Type `ROLLBACK` (all caps) to confirm
-5. Click **Run workflow**
-
-### Step 3: Monitor the Rollback
-
-- The workflow will download the backup artifact
-- Display backup metadata (commit, timestamp, etc.)
-- Restore the database from the backup
-- Show success/failure status
-
-### Step 4: Redeploy if Needed
-
-After rolling back the database, you may need to:
-
-1. **Revert code changes** if the issue was in the code:
-   ```bash
-   git revert <commit-sha>
-   git push origin main
-   ```
-
-2. **Or redeploy the previous version** if the database schema doesn't match the current code
-
-## Local Backup and Restore
-
-You can also create backups manually using the scripts:
-
-### Create a Backup
+Use a trusted shell with `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `BACKUP_ENCRYPTION_KEY` securely loaded into the environment. Node 24 and Python 3 suffice; no npm install is needed.
 
 ```bash
-export SUPABASE_DB_URL='your-connection-string'
-./scripts/backup-supabase.sh
+node --test scripts/private-backup.test.mjs
+python3 scripts/private-backup-test.py
+node scripts/private-backup.mjs list production
+node scripts/private-backup.mjs list legacy
+umask 077
+node scripts/private-backup.mjs download 'production/<exact-object>.tar.gz.enc' /private/path/backup.archive
+python3 scripts/extract-private-backup.py /private/path/backup.archive /private/path/extracted
 ```
 
-### Restore from Backup
+Extraction accepts only one flat SQL/metadata pair, rejects links/traversal/extra files, limits expansion and verifies the SQL checksum. Download and extraction refuse to overwrite existing files. Clean up decrypted files after use. GitHub's **Verify Private Backups** workflow performs encryption failure tests, safe extraction tests, migration-check error tests, and a synthetic storage upload/download without reading production SQL.
 
-```bash
-export SUPABASE_DB_URL='your-connection-string'
-./scripts/restore-supabase.sh database/backups/backup_YYYYMMDD_HHMMSS.sql
-```
+## Production restore
 
-## Backup Artifact Management
+A database restore is a separate, manual operation: it can discard valid transactions written after the backup. Prefer application rollback when the current schema remains compatible. Rehearse database recovery against a disposable Supabase-compatible database first; checksum verification alone is not a full restore rehearsal.
 
-### Viewing Artifacts
+1. Identify the exact private object and a compatible application release; arrange a write-maintenance window.
+2. Run **Rollback Database** on `main`, enter the object path and the exact confirmation `RESTORE PRODUCTION`.
+3. The `production-recovery` GitHub environment requires the owner's approval and permits only `main`.
+4. The job checks private storage, decrypts/authenticates, validates the SQL checksum, and restores with `psql -X -v ON_ERROR_STOP=1 --single-transaction`. SQL errors stop and roll back the transaction. Private SQL/restore output is not published.
+5. Verify application permissions/RLS, financial totals and integrations before reopening writes. The workflow never changes the application release automatically.
 
-1. Go to Repository → Actions
-2. Click on any workflow run
-3. Scroll to the bottom to see **Artifacts** section
-4. Click on an artifact to download it
+Existing `scripts/restore-supabase.sh` is a legacy local SQL utility; it does not provide authenticated private-archive recovery. Use the reviewed workflow for production.
 
-### Downloading Artifacts Locally
+## Scope and limitations
 
-1. Download the artifact ZIP file from GitHub Actions
-2. Extract it to get:
-   - `backup_YYYYMMDD_HHMMSS.sql` - The database backup
-   - `backup_YYYYMMDD_HHMMSS.metadata.json` - Backup metadata
+These dumps preserve application schemas and data, including their RLS policies, but exclude Supabase-managed auth/storage/realtime schemas, storage object contents, ownership and grants. Recovery requires the existing managed services and appropriate application grants. They cannot independently recreate an entire Supabase project. The storage protection policy is in `storage.objects`, outside the application's dump, so restoring an application backup does not remove it.
 
-### Restoring from Downloaded Artifact
-
-```bash
-# Extract the artifact ZIP file
-unzip db-backup-*.zip -d database/backups/
-
-# Restore using the restore script
-export SUPABASE_DB_URL='your-connection-string'
-./scripts/restore-supabase.sh database/backups/backup_YYYYMMDD_HHMMSS.sql
-```
-
-## Troubleshooting
-
-### "No backup artifact found"
-
-- Check that the deployment actually had pending migrations
-- Verify the artifact name is correct (case-sensitive)
-- Artifacts expire after 90 days - older backups may not be available
-
-### "Rollback failed"
-
-- Check that `SUPABASE_DB_URL` secret is set correctly in GitHub
-- Verify the backup file is not corrupted
-- Check GitHub Actions logs for detailed error messages
-
-### "Database restored but app still broken"
-
-- The database may have been rolled back, but the code version doesn't match
-- You may need to revert code changes or redeploy the previous version
-- Check the backup metadata to see which commit the backup was from
-
-### Backup Not Created
-
-- This is normal if there were no pending migrations
-- Only deployments with pending migrations create backups
-- You can manually create a backup anytime using `./scripts/backup-supabase.sh`
-
-## Best Practices
-
-1. **Test migrations locally** before pushing to production
-2. **Review migration files** before committing
-3. **Monitor deployments** to ensure backups are created when expected
-4. **Keep multiple backups** - GitHub Actions keeps artifacts for 90 days
-5. **Document rollbacks** - If you rollback, document why and what was fixed
-
-## Backup Metadata Example
-
-```json
-{
-  "backup_file": "backup_20250120_143022.sql",
-  "timestamp": "20250120_143022",
-  "created_at": "2025-01-20T14:30:22Z",
-  "commit_sha": "abc123def456...",
-  "commit_short": "abc1234",
-  "branch": "main",
-  "git_ref": "refs/heads/main",
-  "run_id": "123456789",
-  "file_size": "245K",
-  "pending_migrations": "022_add_subscriptions.sql, 023_add_new_feature.sql",
-  "backup_type": "pre_migration"
-}
-```
-
-## Related Scripts
-
-- `scripts/check-pending-migrations.sh` - Check if migrations are pending
-- `scripts/backup-with-metadata.sh` - Create backup with deployment metadata
-- `scripts/backup-supabase.sh` - Manual backup script
-- `scripts/restore-supabase.sh` - Restore from backup script
-- `scripts/run-migrations.sh` - Run database migrations
-
-## Workflow Files
-
-- `.github/workflows/deploy.yml` - Main deployment workflow (includes backup)
-- `.github/workflows/rollback.yml` - Manual rollback workflow
-
-
-
+Security remediation preserves each historical GitHub artifact in encrypted private storage, verifies its downloaded bytes and SQL checksum, then deletes the public artifact. Removal prevents future downloads from GitHub; it cannot revoke copies previously downloaded. Assess any incident follow-up separately using available access evidence.
