@@ -6,6 +6,9 @@ on:
       - main
 
 # Use Node 24 for JavaScript-based actions (see GitHub Actions Node 20 deprecation).
+permissions:
+  contents: read
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -23,104 +26,40 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v6
 
-      - name: 🗄️ Install PostgreSQL client (matching server version)
+      - name: Set up Node for private backups
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install matching PostgreSQL client
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: |
-          sudo apt-get update
-          # Install basic tools and PostgreSQL repository setup
-          sudo apt-get install -y wget ca-certificates lsb-release gnupg curl
-          
-          # Add PostgreSQL official APT repository with modern GPG key handling
-          sudo mkdir -p /etc/apt/keyrings
-          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg
-          echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update
-          
-          # Install a basic PostgreSQL client to query server version
-          # Try to install a recent version that can connect (we'll upgrade to exact match after)
-          sudo apt-get install -y postgresql-client-17 || sudo apt-get install -y postgresql-client-16 || sudo apt-get install -y postgresql-client-15
-          
-          # Detect server version by querying the database
-          echo "🔍 Detecting PostgreSQL server version..."
-          if [ -z "$SUPABASE_DB_URL" ]; then
-            echo "⚠️  SUPABASE_DB_URL not set, defaulting to PostgreSQL 17"
-            SERVER_VERSION="17"
-          else
-            # Query server version - extract major version number (e.g., "17.6" -> "17")
-            SERVER_VERSION=$(psql "$SUPABASE_DB_URL" -t -c "SELECT substring(version() from 'PostgreSQL ([0-9]+)')" 2>/dev/null | tr -d ' ' || echo "")
-            
-            if [ -z "$SERVER_VERSION" ]; then
-              echo "⚠️  Could not detect server version, defaulting to PostgreSQL 17"
-              SERVER_VERSION="17"
-            else
-              echo "✅ Detected PostgreSQL server version: $SERVER_VERSION"
-            fi
-          fi
-          
-          # Remove any existing PostgreSQL clients to avoid conflicts
-          sudo apt-get remove -y postgresql-client postgresql-client-common postgresql-15 postgresql-client-15 postgresql-16 postgresql-client-16 postgresql-17 postgresql-client-17 2>/dev/null || true
-          
-          # Install the matching PostgreSQL client version
-          echo "📦 Installing PostgreSQL client version $SERVER_VERSION..."
-          if sudo apt-get install -y "postgresql-client-$SERVER_VERSION"; then
-            echo "✅ Successfully installed PostgreSQL client version $SERVER_VERSION"
-          else
-            echo "❌ Failed to install PostgreSQL client version $SERVER_VERSION"
-            echo "⚠️  Falling back to PostgreSQL 17"
-            sudo apt-get install -y postgresql-client-17
-            SERVER_VERSION="17"
-          fi
-          
-          # Ensure PostgreSQL binaries are in PATH
-          echo "/usr/lib/postgresql/$SERVER_VERSION/bin" >> $GITHUB_PATH
-          
-          # Verify pg_dump is available and show version
-          if [ -f "/usr/lib/postgresql/$SERVER_VERSION/bin/pg_dump" ]; then
-            echo "✅ Using: $(/usr/lib/postgresql/$SERVER_VERSION/bin/pg_dump --version)"
-          elif command -v pg_dump >/dev/null 2>&1; then
-            echo "✅ Using: $(pg_dump --version)"
-          else
-            echo "⚠️  Warning: pg_dump not found, but continuing..."
-          fi
+        run: bash scripts/install-pg-client.sh
 
       - name: 🔍 Check for pending migrations
         id: check_migrations
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          chmod +x scripts/check-pending-migrations.sh
-          if ./scripts/check-pending-migrations.sh; then
-            echo "has_pending=true" >> $GITHUB_OUTPUT
-            echo "📋 Pending migrations detected - backup will be created"
-          else
-            echo "has_pending=false" >> $GITHUB_OUTPUT
-            echo "✨ No pending migrations - skipping backup"
-          fi
+          set +e
+          bash scripts/check-pending-migrations.sh
+          status=$?
+          set -e
+          case "$status" in
+            0) echo "has_pending=true" >> "$GITHUB_OUTPUT" ;;
+            1) echo "has_pending=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Migration status check failed; deployment stopped" >&2; exit 1 ;;
+          esac
 
-      - name: 💾 Backup database (if migrations pending)
+      - name: Create and verify private encrypted backup
+        id: backup
         if: steps.check_migrations.outputs.has_pending == 'true'
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          GITHUB_SHA: ${{ github.sha }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          GITHUB_REF: ${{ github.ref }}
-        run: |
-          chmod +x scripts/backup-with-metadata.sh
-          mkdir -p database/backups
-          ./scripts/backup-with-metadata.sh database/backups
-          echo "📦 Backup created before migrations"
-
-      - name: 📦 Upload backup artifact
-        if: steps.check_migrations.outputs.has_pending == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: db-backup-${{ github.run_id }}-${{ github.sha }}
-          path: |
-            database/backups/backup_*.sql
-            database/backups/backup_*.metadata.json
-          retention-days: 90
-          if-no-files-found: ignore
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: bash scripts/create-private-backup.sh
 
       - name: 🔄 Run database migrations
         env:
@@ -149,7 +88,7 @@ jobs:
         run: |
           echo "🎉 Deployment completed successfully!"
           if [ "${{ steps.check_migrations.outputs.has_pending }}" == "true" ]; then
-            echo "💾 Database backup created and stored as artifact"
+            echo "Database backup encrypted, stored privately and verified by download"
           fi
           echo "📊 Migrations applied"
           echo "🌐 Application deployed to Vercel"
