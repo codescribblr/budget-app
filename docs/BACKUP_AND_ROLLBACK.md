@@ -4,21 +4,21 @@ Deployment backups contain customer financial data. This repository is public: *
 
 ## Storage and keys
 
-The production workflow creates a temporary application-schema SQL dump and SHA-256 metadata, compresses them, encrypts with AES-256-GCM, and stores the result in the existing Supabase project's private `deployment-backups` bucket. A separate authenticated download must decrypt and match the original bytes before migrations begin. Any database-status, dump, upload, encryption or verification error stops deployment.
+The production workflow creates a temporary application-schema SQL dump and SHA-256 metadata, compresses them, encrypts with AES-256-GCM, and stores the result in Cloud Panel app 19 with an independently verified encrypted replica on web02. The temporary private Supabase bucket remains an optional fallback backend; it is no longer used by production. A separate authenticated download must decrypt and match the original bytes before migrations begin. Any database-status, dump, upload, encryption or verification error stops deployment.
 
 `BACKUP_ENCRYPTION_KEY` is a random 32-byte key encoded as 64 hex characters. GitHub stores it as an Actions secret; it is never a public Next.js variable. Keep recovery copies independently of GitHub. The configured recovery locations are the owner's gitignored `.env.backup-recovery` (0600) and web02's `/root/budget-recovery/backup-encryption.env` (0600, parent 0700). Never paste their contents into logs, tickets or source control. Losing every copy loses the backups. Retain old keys until all archives they protect are re-encrypted and verified; merely replacing the secret makes old archives unreadable.
 
-The bucket must remain private, accept only `application/octet-stream`, and limit uploads to 50 MiB. The tool accepts at most 48 MiB compressed plaintext and binds each authenticated ciphertext to its exact object path. Do not rename objects. Migration 155 adds a restrictive RLS policy denying both `anon` and `authenticated` access to this bucket, even if other permissive policies exist. Only trusted service-role operations should access it.
+When using the Supabase fallback, the bucket must remain private, accept only `application/octet-stream`, and limit uploads to 50 MiB. The tool accepts at most 48 MiB compressed plaintext and binds each authenticated ciphertext to its exact object path. Do not rename objects. Migration 155 adds a restrictive RLS policy denying both `anon` and `authenticated` access to this bucket, even if other permissive policies exist. Only trusted service-role operations should access it.
 
 Production objects: `production/<run>-<attempt>-<commit>.tar.gz.enc`.
 Preserved historical objects: `legacy/<original-artifact-name>.zip.enc`.
 Synthetic CI checks: `verification/<run>-<attempt>.zip.enc` (contain no customer data).
 
-These small archives use the existing Supabase storage quota. Inspect usage monthly. Retain at least the latest five verified production backups, all backups inside the release rollback window, and incident-recovery copies. After a successful recovery rehearsal, archives older than 90 days can be removed through privileged storage administration. Historical copies are initially preserved rather than automatically expired. Configure an independent encrypted off-provider copy before treating this as complete Supabase disaster recovery.
+Cloud Panel owns the current retention policy and keeps opaque ciphertext on its private volume plus web02. The encryption key stays outside panel/app environment configuration. Inspect storage and replica health monthly. Retain at least the latest five verified production backups, all backups inside the release rollback window, and incident-recovery copies. After a successful recovery rehearsal, archives older than 90 days can be removed through privileged storage administration. Historical copies are initially preserved rather than automatically expired. Configure an independent encrypted off-provider copy before treating this as complete Supabase disaster recovery.
 
 ## Verification and retrieval
 
-Use a trusted shell with `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `BACKUP_ENCRYPTION_KEY` securely loaded into the environment. Node 24 and Python 3 suffice; no npm install is needed.
+Use a trusted shell with `BACKUP_STORAGE_BACKEND=cloud-panel`, `CLOUD_BACKUP_URL=https://cloud.jrwdev.com`, `CLOUD_BACKUP_APP_ID=19`, `CLOUD_BACKUP_TOKEN` and `BACKUP_ENCRYPTION_KEY` securely loaded into the environment. The Supabase fallback instead needs `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Node 24 and Python 3 suffice; no npm install is needed.
 
 ```bash
 node --test scripts/private-backup.test.mjs
@@ -60,3 +60,7 @@ The deployment, verification and reviewed recovery workflows select this backend
 When moving existing archives, preserve their object paths and ciphertext. Download and authenticate each original, validate the SQL archive against its metadata, import it into Cloud Panel, independently download/decrypt/validate the new copy, and wait for its server replica before deleting the Supabase copy. `BackupStorage.importEncrypted` supports that operation without changing the recovery key or format. Keep a private verification ledger; never put SQL dumps, recovery keys or credentials into GitHub artifacts.
 
 A provider change does not remove the `production-recovery` reviewer requirement or permit automatic database restoration. Rotate the scoped backup credential before its expiry. Cloud Panel retention preserves legacy incident archives, at least five verified production recovery points and 90 days of ordinary backups; verification objects expire after seven days.
+
+## Completed storage transfer
+
+On November 6, 2026 (local time), all 17 historical archives and two newer recovery archives were copied as unchanged ciphertext to Cloud Panel, authenticated after independent download, extracted with matching SQL checksums, and verified against their web02 replicas before the temporary Supabase originals were deleted. A fresh production dump was then stored and verified directly through Cloud Panel. The two temporary synthetic verification objects were also removed. There are no public `db-backup` GitHub artifacts remaining. Private verification ledgers are retained in `/root/budget-recovery/` on web02. The backup-only credential expires November 6, 2027 and must be rotated before then. The two encrypted copies use separate hosts under the same infrastructure account; they are not protection against loss of that entire account.
