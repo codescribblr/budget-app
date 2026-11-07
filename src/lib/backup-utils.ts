@@ -13,6 +13,7 @@ import {
   validateImportSelection,
 } from './backup-data-types';
 import { deleteSelectedBackupDataTypes } from './backup-selective-delete';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 export type { BackupDataType };
 export {
@@ -46,22 +47,19 @@ type BackupOperationContext = {
   accountId: number;
 };
 
-let backupOperationContext: BackupOperationContext | null = null;
+// API-key operations must never lend their service-role account to an
+// overlapping cookie-authenticated request in the same Node process.
+const backupOperationContext = new AsyncLocalStorage<BackupOperationContext>();
 
 export async function exportAccountDataForAccount(
   accountId: number,
   createdByUserId: string
 ): Promise<AccountBackupData> {
-  backupOperationContext = {
+  return backupOperationContext.run({
     supabase: createServiceRoleClient(),
     userId: createdByUserId,
     accountId,
-  };
-  try {
-    return await exportAccountData();
-  } finally {
-    backupOperationContext = null;
-  }
+  }, () => exportAccountData());
 }
 
 export async function importAccountDataForAccount(
@@ -69,16 +67,11 @@ export async function importAccountDataForAccount(
   userId: string,
   backupData: UserBackupData | AccountBackupData
 ): Promise<void> {
-  backupOperationContext = {
+  return backupOperationContext.run({
     supabase: createServiceRoleClient(),
     userId,
     accountId,
-  };
-  try {
-    await importUserDataFromFile(backupData as UserBackupData);
-  } finally {
-    backupOperationContext = null;
-  }
+  }, () => importUserDataFromFile(backupData as UserBackupData));
 }
 
 export interface AccountBackupData {
@@ -210,10 +203,11 @@ export async function exportAccountData(options?: ExportOptions): Promise<Accoun
   let user: { id: string };
   let accountId: number;
 
-  if (backupOperationContext) {
-    supabase = backupOperationContext.supabase;
-    user = { id: backupOperationContext.userId };
-    accountId = backupOperationContext.accountId;
+  const operationContext = backupOperationContext.getStore();
+  if (operationContext) {
+    supabase = operationContext.supabase;
+    user = { id: operationContext.userId };
+    accountId = operationContext.accountId;
   } else {
     const auth = await getAuthenticatedUser();
     supabase = auth.supabase;
@@ -619,10 +613,11 @@ export async function importUserDataFromFile(
   let user: { id: string };
   let accountId: number;
 
-  if (backupOperationContext) {
-    supabase = backupOperationContext.supabase;
-    user = { id: backupOperationContext.userId };
-    accountId = backupOperationContext.accountId;
+  const operationContext = backupOperationContext.getStore();
+  if (operationContext) {
+    supabase = operationContext.supabase;
+    user = { id: operationContext.userId };
+    accountId = operationContext.accountId;
   } else {
     const auth = await getAuthenticatedUser();
     supabase = auth.supabase;
