@@ -9,7 +9,8 @@
     "deploymentEnabled": {
       "main": false,
       "cloud-panel-staging": false,
-      "codex/cloud-panel-migration": false
+      "codex/cloud-panel-migration": false,
+      "codex/runtime-security-patches": false
     }
   }
 }
