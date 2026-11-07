@@ -9,6 +9,9 @@ on:
       - scripts/migration*.py
       - scripts/run-migrations.sh
       - scripts/test-release-database.py
+      - scripts/cloud-config*.mjs
+      - src/lib/backup-utils.ts
+      - src/lib/__tests__/backup-context.test.ts
       - migrations/156_atomic_scheduled_job_claims.sql
       - src/lib/deployment/**
       - src/lib/scheduled-jobs/**
@@ -54,6 +57,7 @@ jobs:
           subprocess.run(['npx','vitest','run','--maxWorkers=2',*files],check=True)
           PY
       - run: python3 scripts/migration-runner-test.py
+      - run: node --test scripts/cloud-config.test.mjs
       - name: Verify migration transactions and job claims
         env:
           TEST_DATABASE_URL: postgresql://postgres:local-proof-only@127.0.0.1:5432/budget_release_test?sslmode=disable
