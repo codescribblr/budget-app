@@ -6,10 +6,12 @@ on:
       - package-lock.json
       - .github/workflows/runtime-security.yml
       - .github/workflows/deploy-cloud-panel.yml
+      - .github/workflows/deploy.yml
       - scripts/migration*.py
       - scripts/run-migrations.sh
       - scripts/test-release-database.py
       - scripts/cloud-config*.mjs
+      - scripts/verify-vercel-cron*.mjs
       - src/lib/backup-utils.ts
       - src/lib/__tests__/backup-context.test.ts
       - src/lib/import/import-batches.ts
@@ -62,6 +64,7 @@ jobs:
           PY
       - run: python3 scripts/migration-runner-test.py
       - run: node --test scripts/cloud-config.test.mjs
+      - run: node --test scripts/verify-vercel-cron.test.mjs
       - name: Verify migration transactions and job claims
         env:
           TEST_DATABASE_URL: postgresql://postgres:local-proof-only@127.0.0.1:5432/budget_release_test?sslmode=disable
