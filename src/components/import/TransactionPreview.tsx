@@ -762,6 +762,13 @@ function ClassicTransactionPreview({ transactions, onImportComplete, onSelection
     setProgressMessage(`Importing ${toImport.length} transaction${toImport.length !== 1 ? 's' : ''}...`);
 
     try {
+      const identityResponse = await fetch('/api/budget-accounts', { cache: 'no-store' });
+      if (!identityResponse.ok) throw new Error('Reload the active budget before importing.');
+      const { activeAccountId: sourceBudgetId } = await identityResponse.json();
+      if (!Number.isSafeInteger(sourceBudgetId) || sourceBudgetId <= 0 ||
+          toImport.some(row => row.budgetId !== undefined && row.budgetId !== sourceBudgetId)) {
+        throw new Error('The active budget changed. Reload this review before importing.');
+      }
       const result = await importInBatches(toImport, async (chunk) => {
       let response;
       
@@ -773,6 +780,7 @@ function ClassicTransactionPreview({ transactions, onImportComplete, onSelection
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             batchId,
+            sourceBudgetId,
             ...(modern ? { expectedBudgetId: toImport[0]?.budgetId } : {}),
             transactions: chunk.map(txn => ({
               ...txn,
@@ -790,6 +798,7 @@ function ClassicTransactionPreview({ transactions, onImportComplete, onSelection
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            sourceBudgetId,
             transactions: chunk.map(txn => ({
               ...txn,
               // Use per-transaction is_historical if set, otherwise fall back to global flag

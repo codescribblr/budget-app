@@ -15,6 +15,10 @@ on:
       - src/lib/backup-utils.ts
       - src/lib/__tests__/backup-context.test.ts
       - src/lib/import/import-batches.ts
+      - src/lib/import/request-budget.ts
+      - src/lib/import/__tests__/request-budget.test.ts
+      - src/app/api/import/transactions/route.ts
+      - src/app/api/automatic-imports/queue/approve-batch/route.ts
       - src/lib/import/__tests__/import-batches.test.ts
       - src/components/import/TransactionPreview.tsx
       - src/components/import/NewImportReview.tsx
