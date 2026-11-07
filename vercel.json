@@ -7,7 +7,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "main": false
+      "main": false,
+      "codex/runtime-security-patches": false
     }
   }
 }
