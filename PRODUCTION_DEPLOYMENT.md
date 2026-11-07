@@ -1,6 +1,6 @@
 # Production Deployment Guide
 
-Complete guide for deploying the budget application with automated database migrations.
+Production currently stays on Vercel. The Cloud Panel staging implementation, release contract and gated cutover procedure are documented in [Cloud Panel deployment](docs/CLOUD_PANEL_DEPLOYMENT.md). `PRODUCTION_HOST` must remain unset/Vercel until those gates are complete. The historical setup instructions below describe the existing Vercel service.
 
 ## 🏗️ Architecture
 

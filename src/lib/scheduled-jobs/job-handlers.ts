@@ -516,7 +516,7 @@ export async function handleRentCastSync(): Promise<JobResult> {
     }
 
     return {
-      success: true,
+      success: totalFailed === 0,
       message: `RentCast sync completed: ${totalSynced} synced, ${totalSkipped} skipped, ${totalFailed} failed`,
     };
   } catch (error: any) {

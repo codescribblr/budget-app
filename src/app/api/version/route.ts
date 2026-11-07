@@ -1,31 +1,7 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-
-/**
- * API route that returns the current build version
- * This is used by the client to detect when a new version is available
- */
+import { readReleaseVersion, releaseResponseHeaders } from '@/lib/deployment/server-version';
+export const dynamic = 'force-dynamic';
 export async function GET() {
-  try {
-    const versionPath = path.join(process.cwd(), 'public', 'version.json');
-    
-    if (fs.existsSync(versionPath)) {
-      const versionData = fs.readFileSync(versionPath, 'utf8');
-      const version = JSON.parse(versionData);
-      return NextResponse.json(version);
-    }
-    
-    // Fallback if version file doesn't exist
-    return NextResponse.json({
-      buildTime: new Date().toISOString(),
-      buildTimestamp: Date.now(),
-    });
-  } catch (error) {
-    console.error('Error reading version file:', error);
-    return NextResponse.json(
-      { error: 'Failed to read version' },
-      { status: 500 }
-    );
-  }
+  try { return NextResponse.json(readReleaseVersion(), { headers: releaseResponseHeaders }); }
+  catch { return NextResponse.json({ error: 'Release manifest unavailable' }, { status: 503, headers: releaseResponseHeaders }); }
 }

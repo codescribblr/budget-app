@@ -1,8 +1,40 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { INTERFACE_COOKIE } from '@/lib/new-look'
+import { legacyOriginResponse } from '@/lib/deployment/legacy-origin'
+import { stagingAccessStatus } from '@/lib/deployment/staging'
 
 export async function middleware(request: NextRequest) {
+  const response = await handleRequest(request);
+  if (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging') {
+    response.headers.set('Cache-Control', 'no-store');
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  }
+  return response;
+}
+
+async function handleRequest(request: NextRequest) {
+  const transition = await legacyOriginResponse(request, process.env.LEGACY_HOST_REDIRECT);
+  if (transition) return transition;
+  // A staging smoke artifact has no working service credentials. Keep API
+  // handlers, authentication callbacks and server actions inaccessible as well.
+  if (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'smoke') {
+    const path = request.nextUrl.pathname;
+    const allowed = ['/login', '/privacy', '/terms', '/api/health/live', '/api/health/ready', '/api/version', '/version.json', '/manifest.json', '/sw.js'];
+    if (!['GET', 'HEAD'].includes(request.method) || !allowed.includes(path)) {
+      return NextResponse.json({ error: 'This staging site only tests deployment. Sign-in and budget changes are disabled.' }, { status: 503, headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
+    }
+    const response = NextResponse.next();
+    response.headers.set('Cache-Control', 'no-store');
+    response.headers.set('X-Robots-Tag', 'noindex');
+    return response;
+  }
+  // These public probes do not refresh sessions or depend on cookie middleware.
+  if (['/api/health/live', '/api/health/ready', '/api/version', '/version.json'].includes(request.nextUrl.pathname)) {
+    const response = NextResponse.next();
+    response.headers.set('Cache-Control', 'no-store');
+    return response;
+  }
   let supabaseResponse = NextResponse.next({
     request,
   })
@@ -30,6 +62,20 @@ export async function middleware(request: NextRequest) {
 
   // Refresh session if expired - required for Server Components
   const { data: { user } } = await supabase.auth.getUser()
+
+  if (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging') {
+    const status = stagingAccessStatus(request.nextUrl.pathname, request.method, user?.id, {
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      STAGING_ALLOWED_USER_IDS: process.env.STAGING_ALLOWED_USER_IDS,
+    });
+    if (status) {
+      if (status === 401 && request.method === 'GET' && !request.nextUrl.pathname.startsWith('/api/')) {
+        const url = request.nextUrl.clone(); url.pathname = '/login'; url.search = '';
+        return NextResponse.redirect(url);
+      }
+      return NextResponse.json({ error: status === 503 ? 'This operation is disabled in staging.' : 'Staging is limited to dedicated test accounts.' }, { status });
+    }
+  }
 
   // Admin routes - require admin privileges (includes /admin/test/*)
   const isAdminPath = request.nextUrl.pathname.startsWith('/admin')
@@ -101,6 +147,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // API identifiers may contain dots; never let the static-file exclusion
+    // bypass staging isolation or retirement guards for an API mutation.
+    '/api/:path*',
     /*
      * Match all request paths except for the ones starting with:
      * - _next/static (static files)

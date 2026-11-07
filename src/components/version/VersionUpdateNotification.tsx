@@ -3,7 +3,8 @@
 import { useVersionCheck } from '@/hooks/use-version-check';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { hasUnsavedChanges } from '@/lib/deployment/unsaved-changes';
 import { usePathname } from 'next/navigation';
 
 /**
@@ -18,17 +19,16 @@ export function VersionUpdateNotification() {
   const [isDismissed, setIsDismissed] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (hasUpdate && !isDismissed) {
-      setIsVisible(true);
-    }
-  }, [hasUpdate, isDismissed]);
+  const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [blockedRefresh, setBlockedRefresh] = useState(false);
+  useEffect(() => { setIsVisible(hasUpdate && !isDismissed); }, [hasUpdate, isDismissed]);
+  useEffect(() => () => { if (dismissTimer.current) clearTimeout(dismissTimer.current); }, []);
 
   const handleDismiss = () => {
     setIsVisible(false);
     setIsDismissed(true);
     // Re-check after 5 minutes
-    setTimeout(() => {
+    dismissTimer.current = setTimeout(() => {
       setIsDismissed(false);
     }, 5 * 60 * 1000);
   };
@@ -36,8 +36,12 @@ export function VersionUpdateNotification() {
   const handleRefresh = () => {
     if (isRefreshing) return; // Prevent multiple clicks
     
-    setIsRefreshing(true);
-    refreshPage();
+    setBlockedRefresh(hasUnsavedChanges());
+    if (refreshPage()) {
+      setIsRefreshing(true);
+      // A browser beforeunload guard can cancel navigation after reload is requested.
+      setTimeout(() => setIsRefreshing(false), 1500);
+    }
   };
 
   if (!isVisible) {
@@ -55,7 +59,7 @@ export function VersionUpdateNotification() {
             <div role="status">
               <p className="font-medium">New version available</p>
               <p className="text-sm text-muted-foreground">
-                {isNewLook ? 'Refresh to get the latest improvements.' : 'A new version of the app is available. Refresh to get the latest updates.'}
+                {blockedRefresh ? 'Save or discard your edits before refreshing.' : 'Save your work, then refresh to load the available version.'}
               </p>
             </div>
           </div>
