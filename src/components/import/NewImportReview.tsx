@@ -1,4 +1,5 @@
 "use client";
+import { importInBatches } from '@/lib/import/import-batches';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
@@ -486,7 +487,7 @@ export default function NewImportReview({
       const data = await confirmImportReview(
         snapshot,
         persistReview,
-        async (ready) => {
+        async (ready) => importInBatches(ready, async (chunk) => {
           const r = await fetch("/api/automatic-imports/queue/approve-batch", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -494,7 +495,7 @@ export default function NewImportReview({
               batchId,
               expectedBudgetId: budgetId,
               requireCategoryReview: true,
-              transactions: ready,
+              transactions: chunk,
             }),
           });
           const result = await r.json();
@@ -503,7 +504,7 @@ export default function NewImportReview({
               result.error ?? "Could not import these transactions.",
             );
           return result;
-        },
+        }, (progress) => setMessage(`Imported ${progress.imported} of ${ready.length} transactions...`)),
       );
       const remaining = snapshot.filter(
         (t) => categorizationBucket(t) === "attention" && !canImportTransaction(t),
@@ -512,7 +513,7 @@ export default function NewImportReview({
         `${data.imported} imported${data.skipped ? ` · ${data.skipped} already imported or duplicates` : ""}. ${remaining} ${remaining === 1 ? "remains" : "remain"} to review.${data.errors?.length ? ` ${data.errors.join(" ")}` : ""}`,
       );
       setSelected(new Set());
-      if (data.imported === snapshot.length) onImportComplete();
+      if (data.imported === snapshot.length && !data.errors.length) onImportComplete();
       else await onRefresh?.();
     } catch (e: any) {
       toast.error(e.message);

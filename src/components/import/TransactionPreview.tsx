@@ -23,6 +23,7 @@ import type { Category, Account, CreditCard } from '@/lib/types';
 import TransactionEditDialog from './TransactionEditDialog';
 import ImportConfirmationDialog from './ImportConfirmationDialog';
 import ImportProgressDialog from './ImportProgressDialog';
+import { importInBatches } from '@/lib/import/import-batches';
 import BulkEditDialog, { BulkEditUpdates } from './BulkEditDialog';
 import { generateTransactionHash } from '@/lib/csv-parser';
 import { parseLocalDate, formatLocalDate } from '@/lib/date-utils';
@@ -761,6 +762,7 @@ function ClassicTransactionPreview({ transactions, onImportComplete, onSelection
     setProgressMessage(`Importing ${toImport.length} transaction${toImport.length !== 1 ? 's' : ''}...`);
 
     try {
+      const result = await importInBatches(toImport, async (chunk) => {
       let response;
       
       if (isQueuedImport && batchId) {
@@ -772,7 +774,7 @@ function ClassicTransactionPreview({ transactions, onImportComplete, onSelection
           body: JSON.stringify({
             batchId,
             ...(modern ? { expectedBudgetId: toImport[0]?.budgetId } : {}),
-            transactions: toImport.map(txn => ({
+            transactions: chunk.map(txn => ({
               ...txn,
               // Ensure hash is included (should already be in txn.hash from queued import)
               hash: txn.hash || '',
@@ -788,7 +790,7 @@ function ClassicTransactionPreview({ transactions, onImportComplete, onSelection
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            transactions: toImport.map(txn => ({
+            transactions: chunk.map(txn => ({
               ...txn,
               // Use per-transaction is_historical if set, otherwise fall back to global flag
               is_historical: txn.is_historical !== undefined ? txn.is_historical : isHistorical,
@@ -804,25 +806,17 @@ function ClassicTransactionPreview({ transactions, onImportComplete, onSelection
         throw new Error(errorMessage || 'Failed to import transactions');
       }
 
-      const result = await response.json();
+      return response.json();
+      }, (progress) => {
+        setImportedCount(progress.imported);
+        setProgressMessage(`Imported ${progress.imported} of ${toImport.length} transactions...`);
+      });
       const { imported, skipped, requested, skippedItems, errors } = result;
       const attempted = requested ?? toImport.length;
       const importedTotal = imported ?? 0;
       const skippedTotal = skipped ?? 0;
 
       setImportedCount(importedTotal);
-
-      if (!response.ok) {
-        const errorMessage = result.error
-          || errors?.[0]
-          || (skippedItems?.length
-            ? skippedItems.slice(0, 5).map((item: { description: string; reason: string }) => `${item.description}: ${item.reason}`).join('; ')
-            : null)
-          || 'Failed to import transactions';
-        setProgressStatus('error');
-        setProgressMessage(errorMessage);
-        return;
-      }
 
       if (importedTotal === 0 && attempted > 0) {
         const detail = skippedItems?.length
@@ -842,6 +836,11 @@ function ClassicTransactionPreview({ transactions, onImportComplete, onSelection
         return;
       }
 
+      if (errors.length) {
+        setProgressStatus('error');
+        setProgressMessage(`Imported ${importedTotal} of ${attempted}. ${errors.join(' ')}`);
+        return;
+      }
       setProgressStatus('success');
       setProgressMessage('All transactions have been processed successfully.');
     } catch (error) {
