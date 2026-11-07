@@ -3,6 +3,25 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { INTERFACE_COOKIE } from '@/lib/new-look'
 
 export async function middleware(request: NextRequest) {
+  // A staging smoke artifact has no working service credentials. Keep API
+  // handlers, authentication callbacks and server actions inaccessible as well.
+  if (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'smoke') {
+    const path = request.nextUrl.pathname;
+    const allowed = ['/login', '/privacy', '/terms', '/api/health/live', '/api/health/ready', '/api/version', '/version.json', '/manifest.json', '/sw.js'];
+    if (!['GET', 'HEAD'].includes(request.method) || !allowed.includes(path)) {
+      return NextResponse.json({ error: 'This staging site only tests deployment. Sign-in and budget changes are disabled.' }, { status: 503, headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
+    }
+    const response = NextResponse.next();
+    response.headers.set('Cache-Control', 'no-store');
+    response.headers.set('X-Robots-Tag', 'noindex');
+    return response;
+  }
+  // These public probes do not refresh sessions or depend on cookie middleware.
+  if (['/api/health/live', '/api/health/ready', '/api/version', '/version.json'].includes(request.nextUrl.pathname)) {
+    const response = NextResponse.next();
+    response.headers.set('Cache-Control', 'no-store');
+    return response;
+  }
   let supabaseResponse = NextResponse.next({
     request,
   })

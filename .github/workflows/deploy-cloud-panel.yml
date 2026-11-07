@@ -1,0 +1,123 @@
+name: Deploy with Cloud Panel
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment environment (production requires the cutover flag)
+        type: choice
+        default: staging
+        options: [staging, production]
+  push:
+    branches: [main, cloud-panel-staging]
+permissions:
+  contents: read
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/cloud-panel-staging' || (github.event_name == 'workflow_dispatch' && inputs.target == 'staging') || (github.ref == 'refs/heads/main' && vars.PRODUCTION_HOST == 'cloud-panel')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: local-proof-only
+          POSTGRES_DB: budget_release_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    environment: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.target == 'production')) && 'cloud-production' || 'cloud-staging' }}
+    concurrency:
+      group: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.target == 'production')) && 'production-deployment' || 'cloud-panel-staging' }}
+      cancel-in-progress: false
+    env:
+      CLOUD_TARGET: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.target == 'production')) && 'production' || 'staging' }}
+      CLOUD_PANEL_URL: https://cloud.jrwdev.com
+      CLOUD_PANEL_APP_ID: ${{ vars.CLOUD_PANEL_APP_ID }}
+      CLOUD_PANEL_DEPLOY_TOKEN: ${{ secrets.CLOUD_PANEL_DEPLOY_TOKEN }}
+      CLOUD_SCHEMA_GENERATION: scheduled-jobs-v2
+      CLOUD_REQUIRED_ENV: NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: node scripts/cloud-release.mjs config
+      - run: node scripts/validate-cloud-config.mjs
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm rebuild better-sqlite3 sharp
+      - run: npx vitest run src/lib/deployment/__tests__ src/lib/scheduled-jobs/__tests__
+      - run: python3 scripts/migration-runner-test.py
+      - name: Verify migrations and job leases in a disposable database
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:local-proof-only@127.0.0.1:5432/budget_release_test?sslmode=disable
+        run: python3 scripts/test-release-database.py
+      - name: Build and package Linux standalone runtime
+        run: |
+          node scripts/cloud-release.mjs build npm run build
+          node scripts/prepare-standalone.mjs
+          node scripts/cloud-release.mjs package .release-work/standalone .release-work/release.tar.gz
+      - name: Reserve deployment and stage artifact
+        run: node scripts/cloud-release.mjs stage
+      - name: Install matching PostgreSQL client
+        if: env.CLOUD_TARGET == 'production'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash scripts/install-pg-client.sh
+      - name: Check production migrations
+        id: migrations
+        if: env.CLOUD_TARGET == 'production'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set +e
+          bash scripts/check-pending-migrations.sh
+          status=$?
+          set -e
+          case "$status" in
+            0) echo 'pending=true' >> "$GITHUB_OUTPUT" ;;
+            1) echo 'pending=false' >> "$GITHUB_OUTPUT" ;;
+            *) exit 1 ;;
+          esac
+      - name: Verify a recovery backup before schema changes
+        id: backup
+        if: steps.migrations.outputs.pending == 'true'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          BACKUP_STORAGE_BACKEND: cloud-panel
+          CLOUD_BACKUP_URL: https://cloud.jrwdev.com
+          CLOUD_BACKUP_APP_ID: ${{ vars.CLOUD_PANEL_APP_ID }}
+          CLOUD_BACKUP_TOKEN: ${{ secrets.CLOUD_BACKUP_TOKEN }}
+        run: bash scripts/create-private-backup.sh
+      - name: Apply compatible migrations under database lock
+        if: env.CLOUD_TARGET == 'production'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash scripts/run-migrations.sh
+      - name: Start candidate and check readiness
+        env:
+          CLOUD_MIGRATION_STATUS: ${{ steps.migrations.outputs.pending == 'true' && 'completed' || 'not_needed' }}
+          CLOUD_BACKUP_OBJECT: ${{ steps.backup.outputs.backup_object }}
+        run: node scripts/cloud-release.mjs prepare
+      - name: Switch traffic and drain the previous release
+        id: promote
+        run: node scripts/cloud-release.mjs promote
+      - name: Apply post-deploy migrations
+        if: env.CLOUD_TARGET == 'production'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash scripts/run-migrations.sh --post-deploy
+      - run: node scripts/cloud-release.mjs finalize
+      - name: Keep failed finalization locked for review
+        if: failure() && steps.promote.outcome == 'success'
+        run: node scripts/cloud-release.mjs finalize failed
+      - name: Report deployment state for recovery
+        if: failure()
+        run: test ! -f .cloud-release.json || node scripts/cloud-release.mjs status
+      - name: Remove private runner files
+        if: always()
+        run: rm -rf .cloud-build.json .cloud-release.json .release-work

@@ -14,6 +14,7 @@ import { safeReturnPath } from '@/lib/new-look';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 function LoginForm() {
+  const smokeMode = process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'smoke';
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = safeReturnPath(searchParams.get('redirectTo'), typeof document !== 'undefined' && document.cookie.split('; ').includes('budget-interface=new') ? '/new' : '/dashboard');
@@ -31,6 +32,7 @@ function LoginForm() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (smokeMode) return;
     setError('');
     setLoading(true);
 
@@ -77,6 +79,7 @@ function LoginForm() {
   };
 
   const handleForgotPasswordClick = () => {
+    if (smokeMode) return;
     // Pre-fill the reset email with the current email if available
     setResetEmail(email);
     setResetSuccess(false);
@@ -85,6 +88,7 @@ function LoginForm() {
 
   const handleSendResetLink = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (smokeMode) return;
     setResetLoading(true);
 
     try {
@@ -112,6 +116,7 @@ function LoginForm() {
   };
 
   const handleGoogleSignIn = async () => {
+    if (smokeMode) return;
     try {
       const supabase = createClient();
       const callbackUrl = redirectTo 
@@ -164,6 +169,7 @@ function LoginForm() {
       </div>
 
       <Card className="w-full max-w-md">
+        {smokeMode && <p role="status" className="m-4 rounded-md bg-amber-100 p-3 text-sm text-amber-950">Staging deployment test. Sign-in and budget changes are disabled.</p>}
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">Welcome Back</CardTitle>
           <CardDescription className="text-center">
@@ -171,6 +177,7 @@ function LoginForm() {
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
+          <fieldset disabled={smokeMode}>
           <CardContent className="space-y-4 relative">
             {error && (
               <div className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
@@ -285,6 +292,7 @@ function LoginForm() {
               </Link>
             </div>
           </CardFooter>
+          </fieldset>
         </form>
       </Card>
 

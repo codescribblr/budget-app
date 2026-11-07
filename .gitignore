@@ -43,3 +43,9 @@ next-env.d.ts
 
 # database backups
 /database/backups/
+
+# Private deployment configuration and generated release files
+.cloud-build.json
+.cloud-release.json
+.release-work/
+__pycache__/

@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   migrate-and-deploy:
+    if: vars.PRODUCTION_HOST != 'cloud-panel'
     name: Run Migrations & Deploy
     runs-on: ubuntu-latest
 
