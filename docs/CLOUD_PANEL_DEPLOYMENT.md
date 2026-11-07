@@ -20,7 +20,7 @@ The smoke-mode flag is baked into browser and server output. Switching to a func
 6. Promote after readiness, verify the public TLS endpoint's exact release identity, and drain the previous runtime. Finalize post-deploy migrations, then mark the release active.
 7. If post-deploy migration/finalization fails, leave the deployment locked for review. Do not restore a database or silently roll back a schema change. Incompatible schema generations cannot use application rollback.
 
-`scheduled-jobs-v2` is this release's schema compatibility generation. Change it whenever a future contract migration makes prior application artifacts unsafe. Retained old chunks support open tabs; `/api/version` and readiness are uncached. The browser compares the loaded JavaScript identity with the server on its first check, on focus and every 60 seconds. Rollback is also an identity change. Refresh requires confirmation and refuses while registered budget editors contain unsaved changes; existing native before-unload guards remain effective.
+`scheduled-jobs-v2-security-20261107` is this release's compatibility generation; it also prevents rollback to the earlier staging artifacts that contained vulnerable dependencies. Change it whenever a future contract migration makes prior application artifacts unsafe. Retained old chunks support open tabs; `/api/version` and readiness are uncached. The browser compares the loaded JavaScript identity with the server on its first check, on focus and every 60 seconds. Rollback is also an identity change. Refresh requires confirmation and refuses while registered budget editors contain unsaved changes; existing native before-unload guards remain effective.
 
 ## Migration and scheduled-job safety
 
@@ -45,3 +45,11 @@ Application rollback is distinct from restoring data. Use the panel only for a c
 ## Verification evidence
 
 See the Cloud Panel repository's `docs/ARTIFACT_RELEASES.md` for the live synthetic proof: GitHub build/upload/promotion, TLS, streaming drain, restart recovery, rollback, rejected unsafe inputs, secret isolation, managed jobs and replicated encrypted archives. Budget-specific staging proof and capacity measurements are appended after the live runs complete.
+
+## Dependency and capacity findings
+
+The initial Linux build and browser smoke checks passed, including login rendering, image optimization, React Server Component responses, blocked mutations and no browser JavaScript errors. Its second deployment was rejected by the agent for insufficient memory headroom, leaving the first serving release unchanged. web02 has about 1,963 MiB usable RAM and about 452–473 MiB available with one budget runtime; that runtime accounted for roughly 294–303 MiB after the browser/image checks. A 384 MiB candidate requires 512 MiB headroom. These are smoke measurements, not production peak-load approval.
+
+A dependency audit then identified applicable self-hosted image-processing advisories, including [the Next.js SVG advisory](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw). The temporary budget staging runtime was stopped while compatible patches were applied. The patch keeps Next 15 (15.5.29), uses Sharp 0.35.5 and updates vulnerable compatible transitive dependencies. Next's pinned PostCSS is overridden to patched 8.5.32 to avoid an unnecessary Next 16 migration. CI now rejects high/critical production dependency advisories before staging an artifact. Prior vulnerable artifacts must not be restarted.
+
+The deployment/rollback browser proof and capacity qualification remain pending until patched releases can safely run together. A CPU/RAM-only increase to at least 4 GB is recommended for further testing, with a snapshot and coordinated outage for other web02 tenants. Do not reduce the memory gate to force a passing result.

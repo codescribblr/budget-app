@@ -8,6 +8,6 @@ The client compares the server identity with the identity of its loaded code imm
 
 Users can dismiss the banner for five minutes. Refresh asks them to save first and confirm. Registered unsaved budget editors block the refresh; existing browser before-unload protections still apply. Canceling refresh leaves the page and update banner intact. New version checks are disabled in development.
 
-Tests cover first-fetch races, rollback identities, invalid manifests and multiple dirty editors. The staging browser proof covers live promotion, retained chunks, canceling the confirmation, refreshing to the new build and repeating that process after rollback. Full unsaved financial-form testing belongs in an authenticated isolated staging environment.
+Tests cover first-fetch races, rollback identities, invalid manifests and multiple dirty editors. The staging browser harness is prepared to verify live promotion, retained chunks, canceling the confirmation, refreshing to the new build and repeating that process after rollback; this sequence remains pending the dual-runtime capacity gate. Full unsaved financial-form testing belongs in an authenticated isolated staging environment.
 
 See [Cloud Panel deployment](CLOUD_PANEL_DEPLOYMENT.md) for release and cutover details.

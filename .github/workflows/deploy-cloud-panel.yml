@@ -36,7 +36,7 @@ jobs:
       CLOUD_PANEL_URL: https://cloud.jrwdev.com
       CLOUD_PANEL_APP_ID: ${{ vars.CLOUD_PANEL_APP_ID }}
       CLOUD_PANEL_DEPLOY_TOKEN: ${{ secrets.CLOUD_PANEL_DEPLOY_TOKEN }}
-      CLOUD_SCHEMA_GENERATION: scheduled-jobs-v2
+      CLOUD_SCHEMA_GENERATION: scheduled-jobs-v2-security-20261107
       CLOUD_REQUIRED_ENV: NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY
       NEXT_TELEMETRY_DISABLED: 1
     steps:
@@ -49,6 +49,8 @@ jobs:
       - run: node scripts/validate-cloud-config.mjs
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm rebuild better-sqlite3 sharp
+      - name: Reject known high-severity production dependency vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
       - run: npx vitest run src/lib/deployment/__tests__ src/lib/scheduled-jobs/__tests__
       - run: python3 scripts/migration-runner-test.py
       - name: Verify migrations and job leases in a disposable database
