@@ -1,8 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { INTERFACE_COOKIE } from '@/lib/new-look'
+import { legacyOriginResponse } from '@/lib/deployment/legacy-origin'
 
 export async function middleware(request: NextRequest) {
+  const transition = await legacyOriginResponse(request, process.env.LEGACY_HOST_REDIRECT);
+  if (transition) return transition;
   // A staging smoke artifact has no working service credentials. Keep API
   // handlers, authentication callbacks and server actions inaccessible as well.
   if (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'smoke') {
@@ -120,6 +123,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // API identifiers may contain dots; never let the static-file exclusion
+    // bypass staging isolation or retirement guards for an API mutation.
+    '/api/:path*',
     /*
      * Match all request paths except for the ones starting with:
      * - _next/static (static files)

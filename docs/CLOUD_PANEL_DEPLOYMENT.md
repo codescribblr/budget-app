@@ -1,6 +1,6 @@
 # Cloud Panel deployment and migration gates
 
-The Cloud Panel implementation is live on cloud.jrwdev.com; web02 runs agent 0.11.1. Budget production remains on Vercel. The `PRODUCTION_HOST` repository variable defaults to Vercel; do not change it during staging. This branch introduces the budget runtime and deployment contract; it does not authorize a DNS, webhook or cron cutover.
+The Cloud Panel implementation is live on cloud.jrwdev.com; web02 runs agent 0.11.2. Budget production remains on Vercel. The `PRODUCTION_HOST` repository variable defaults to Vercel; do not change it during staging. This branch introduces the budget runtime and deployment contract; it does not authorize a DNS, webhook or cron cutover.
 
 ## Current staging contract
 
@@ -53,3 +53,14 @@ The initial Linux build and browser smoke checks passed, including login renderi
 A dependency audit then identified applicable self-hosted image-processing advisories, including [the Next.js SVG advisory](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw). The temporary budget staging runtime was stopped while compatible patches were applied. The patch keeps Next 15 (15.5.29), uses Sharp 0.35.5 and updates vulnerable compatible transitive dependencies. Next's pinned PostCSS is overridden to patched 8.5.32 to avoid an unnecessary Next 16 migration. CI now rejects high/critical production dependency advisories before staging an artifact. Prior vulnerable artifacts must not be restarted.
 
 The deployment/rollback browser proof and capacity qualification remain pending until patched releases can safely run together. A CPU/RAM-only increase to at least 4 GB is recommended for further testing, with a snapshot and coordinated outage for other web02 tenants. Do not reduce the memory gate to force a passing result.
+
+## Retiring the old Vercel hostname
+
+`LEGACY_HOST_REDIRECT=https://everydollarbudget.app` is an explicit transition mode for the **old Vercel deployment only**. Leave it unset on Cloud Panel and during normal Vercel operation. Enable it only after the canonical domain reaches the healthy Cloud Panel release and the old Cloudflare redirect to Vercel has been removed; doing it in reverse order would create a redirect loop.
+
+In transition mode, old-origin `/api/version` and `/version.json` read the canonical site's public version with no credentials, no caching, no redirects and a four-second timeout. Open tabs running the update client can see the changed identity. Refreshing then follows an uncached temporary redirect to the new origin, preserving the path and query. API calls and unsafe methods receive 503 instead of executing old code or replaying writes across origins. Static chunks remain available for old tabs. Existing unsaved-form guards still require users to save before the write-maintenance cutover; this mechanism does not move unsaved edits or cookies across domains.
+
+Move webhook callbacks and Supabase allowed redirects before enabling this mode, allow in-flight requests/jobs to finish, and expect a fresh sign-in on the canonical hostname. Previously issued authentication links may need to be requested again because PKCE cookies are host-specific. Keep the old hostname available through the observation window for bookmarks/PWAs, then retire the Vercel project. Transition mode is tested with synthetic requests and stays disabled in all configured live environments.
+
+
+The patched release `r-42328408757-1-73d1897ed4ad` passed GitHub run 42328408757 and the live browser smoke checks with zero browser JavaScript errors. The production dependency audit is clean. Agent 0.11.2 also passed a real Nginx integration test for large-upload admission before Node body buffering: concurrent large/chunked uploads receive 429, small writes and GETs remain concurrent, separate apps are independent, and oversize bodies receive 413. The guard applies when a release is promoted under the new agent. The staging 384 MiB memory limit is for smoke tests; a maximum-size financial import still requires memory qualification before production.
