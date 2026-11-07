@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 function LoginForm() {
   const smokeMode = process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'smoke';
+  const externalAuthDisabled = smokeMode || process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging';
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = safeReturnPath(searchParams.get('redirectTo'), typeof document !== 'undefined' && document.cookie.split('; ').includes('budget-interface=new') ? '/new' : '/dashboard');
@@ -79,7 +80,7 @@ function LoginForm() {
   };
 
   const handleForgotPasswordClick = () => {
-    if (smokeMode) return;
+    if (externalAuthDisabled) return;
     // Pre-fill the reset email with the current email if available
     setResetEmail(email);
     setResetSuccess(false);
@@ -88,7 +89,7 @@ function LoginForm() {
 
   const handleSendResetLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (smokeMode) return;
+    if (externalAuthDisabled) return;
     setResetLoading(true);
 
     try {
@@ -116,7 +117,7 @@ function LoginForm() {
   };
 
   const handleGoogleSignIn = async () => {
-    if (smokeMode) return;
+    if (externalAuthDisabled) return;
     try {
       const supabase = createClient();
       const callbackUrl = redirectTo 
@@ -206,6 +207,7 @@ function LoginForm() {
                 <button
                   type="button"
                   onClick={handleForgotPasswordClick}
+                  disabled={externalAuthDisabled}
                   className="text-xs text-primary hover:underline"
                   aria-label="Forgot password"
                   tabIndex={4}
@@ -253,7 +255,7 @@ function LoginForm() {
               variant="outline"
               className="w-full"
               onClick={handleGoogleSignIn}
-              disabled={loading}
+              disabled={externalAuthDisabled || loading}
             >
               <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                 <path
@@ -276,7 +278,7 @@ function LoginForm() {
               Continue with Google
             </Button>
             
-            <div className="text-sm text-center text-muted-foreground">
+            {!externalAuthDisabled && <div className="text-sm text-center text-muted-foreground">
               Don't have an account?{' '}
               <Link 
                 href={`/signup${searchParams.toString() ? `?${searchParams.toString()}` : ''}`}
@@ -284,7 +286,7 @@ function LoginForm() {
               >
                 Sign up
               </Link>
-            </div>
+            </div>}
 
             <div className="text-xs text-center text-muted-foreground pt-2">
               <Link href="/" className="hover:underline">

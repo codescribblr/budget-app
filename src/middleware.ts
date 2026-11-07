@@ -2,8 +2,18 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { INTERFACE_COOKIE } from '@/lib/new-look'
 import { legacyOriginResponse } from '@/lib/deployment/legacy-origin'
+import { stagingAccessStatus } from '@/lib/deployment/staging'
 
 export async function middleware(request: NextRequest) {
+  const response = await handleRequest(request);
+  if (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging') {
+    response.headers.set('Cache-Control', 'no-store');
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  }
+  return response;
+}
+
+async function handleRequest(request: NextRequest) {
   const transition = await legacyOriginResponse(request, process.env.LEGACY_HOST_REDIRECT);
   if (transition) return transition;
   // A staging smoke artifact has no working service credentials. Keep API
@@ -52,6 +62,20 @@ export async function middleware(request: NextRequest) {
 
   // Refresh session if expired - required for Server Components
   const { data: { user } } = await supabase.auth.getUser()
+
+  if (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging') {
+    const status = stagingAccessStatus(request.nextUrl.pathname, request.method, user?.id, {
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      STAGING_ALLOWED_USER_IDS: process.env.STAGING_ALLOWED_USER_IDS,
+    });
+    if (status) {
+      if (status === 401 && request.method === 'GET' && !request.nextUrl.pathname.startsWith('/api/')) {
+        const url = request.nextUrl.clone(); url.pathname = '/login'; url.search = '';
+        return NextResponse.redirect(url);
+      }
+      return NextResponse.json({ error: status === 503 ? 'This operation is disabled in staging.' : 'Staging is limited to dedicated test accounts.' }, { status });
+    }
+  }
 
   // Admin routes - require admin privileges (includes /admin/test/*)
   const isAdminPath = request.nextUrl.pathname.startsWith('/admin')

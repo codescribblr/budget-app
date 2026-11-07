@@ -149,6 +149,9 @@ async function run() {
     const requiredEnv = (process.env.CLOUD_REQUIRED_ENV || "")
       .split(",")
       .filter(Boolean);
+    if (config.buildEnv.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging') {
+      requiredEnv.push('STAGING_ALLOWED_USER_IDS', 'SCHEDULED_JOBS_ENABLED');
+    }
     if (
       !/^[\w.-]{1,80}$/.test(schema) ||
       requiredEnv.some((key) => !/^[A-Z][A-Z0-9_]*$/.test(key))

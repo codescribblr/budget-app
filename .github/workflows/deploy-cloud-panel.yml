@@ -52,6 +52,7 @@ jobs:
       - name: Reject known high-severity production dependency vulnerabilities
         run: npm audit --omit=dev --audit-level=high
       - run: npx vitest run src/lib/deployment/__tests__ src/lib/scheduled-jobs/__tests__
+      - run: node --test scripts/cloud-config.test.mjs
       - run: python3 scripts/migration-runner-test.py
       - name: Verify migrations and job leases in a disposable database
         env:
