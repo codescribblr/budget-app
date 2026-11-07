@@ -1,0 +1,61 @@
+name: Runtime Security Checks
+on:
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/runtime-security.yml
+      - .github/workflows/deploy-cloud-panel.yml
+      - scripts/migration*.py
+      - scripts/run-migrations.sh
+      - scripts/test-release-database.py
+      - migrations/156_atomic_scheduled_job_claims.sql
+      - src/lib/deployment/**
+      - src/lib/scheduled-jobs/**
+      - src/hooks/use-version-check.ts
+      - src/middleware.ts
+      - next.config.ts
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: local-proof-only
+          POSTGRES_DB: budget_release_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://staging-disabled.invalid
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: staging-placeholder
+      SUPABASE_SERVICE_ROLE_KEY: staging-placeholder
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm rebuild better-sqlite3 sharp
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npx tsc --noEmit
+      - name: Run Vitest suites (the repository also has separate Node test files)
+        run: |
+          python3 - <<'PY'
+          import pathlib,re,subprocess
+          files=[str(p) for p in pathlib.Path('src').rglob('*.test.ts') if re.search(r'from [\'\"]vitest[\'\"]',p.read_text())]
+          subprocess.run(['npx','vitest','run','--maxWorkers=2',*files],check=True)
+          PY
+      - run: python3 scripts/migration-runner-test.py
+      - name: Verify migration transactions and job claims
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:local-proof-only@127.0.0.1:5432/budget_release_test?sslmode=disable
+        run: python3 scripts/test-release-database.py
+      - run: npm run build
