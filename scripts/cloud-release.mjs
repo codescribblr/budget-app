@@ -107,6 +107,15 @@ async function poll(id, wanted) {
   );
 }
 async function run() {
+  if (command === "ci-report") {
+    const run = required("GITHUB_RUN_ID"), attempt = process.env.GITHUB_RUN_ATTEMPT || "1";
+    const repository = required("GITHUB_REPOSITORY"), commit = required("GITHUB_SHA");
+    const status = args[0];
+    if (!/^[1-9][0-9]*$/.test(run) || !/^[1-9][0-9]*$/.test(attempt) || !/^[a-f0-9]{40}$/.test(commit) || !["running","success","failure","cancelled"].includes(status)) throw Error("Invalid CI report identity or status");
+    await request("/builds", "POST", {runId: run, attempt, commitSha: commit, runUrl: `https://github.com/${repository}/actions/runs/${run}`, status});
+    console.log(`Workflow ${run}, attempt ${attempt}: ${status} recorded in Cloud Panel`);
+    return;
+  }
   if (command === "config") {
     const config = await request("/build-config");
     for (const value of Object.values(config.buildEnv)) mask(value);
@@ -292,7 +301,7 @@ async function run() {
     return;
   }
   throw Error(
-    "Usage: cloud-release.mjs config | build COMMAND... | package DIRECTORY ARCHIVE | stage | prepare | promote | finalize [failed] | status | abort | reconcile | renew",
+    "Usage: cloud-release.mjs ci-report running|success|failure|cancelled | config | build COMMAND... | package DIRECTORY ARCHIVE | stage | prepare | promote | finalize [failed] | status | abort | reconcile | renew",
   );
 }
 run().catch((error) => {
