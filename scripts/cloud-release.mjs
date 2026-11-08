@@ -152,6 +152,9 @@ async function run() {
     if (config.buildEnv.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging') {
       requiredEnv.push('STAGING_ALLOWED_USER_IDS', 'SCHEDULED_JOBS_ENABLED');
     }
+    if (config.environment === 'production') {
+      requiredEnv.push('CRON_SECRET', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET', 'RESEND_RECEIVING_DOMAIN');
+    }
     if (
       !/^[\w.-]{1,80}$/.test(schema) ||
       requiredEnv.some((key) => !/^[A-Z][A-Z0-9_]*$/.test(key))

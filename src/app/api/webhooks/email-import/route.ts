@@ -1,175 +1,55 @@
 import { NextResponse } from 'next/server';
+import { Resend } from 'resend';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { processEmailAttachments } from '@/lib/automatic-imports/email-processor';
 import type { EmailAttachment } from '@/lib/automatic-imports/email-processor';
 
-/**
- * POST /api/webhooks/email-import
- * Handle incoming emails for automatic import
- * 
- * Supports multiple email providers:
- * - Resend (JSON webhook with API calls for attachments)
- * - SendGrid Inbound Parse (form-data)
- * - Postmark (form-data)
- * - AWS SES (form-data)
- * 
- * Expected payload format varies by provider, but should include:
- * - To/Recipient: unique email address identifying the import setup
- * - Attachments: PDF/CSV files
- * - From: original sender
- */
+/** Receive authenticated Resend events. Unsigned multipart providers are unsupported. */
 export async function POST(request: Request) {
   try {
-    // Verify webhook signature if configured
-    // TODO: Add webhook signature verification based on email provider
-    
-    const contentType = request.headers.get('content-type') || '';
-    let to: string;
-    let attachments: EmailAttachment[] = [];
-    
-    // Detect provider by content type
-    if (contentType.includes('application/json')) {
-      // Resend webhook format (JSON)
-      const resendWebhook = await request.json();
-      
-      // Resend webhook payload structure:
-      // { type: 'email.received', data: { email_id, from, to, subject, ... } }
-      if (resendWebhook.type !== 'email.received') {
-        return NextResponse.json(
-          { error: 'Invalid webhook event type' },
-          { status: 400 }
-        );
-      }
-      
-      const emailData = resendWebhook.data;
-      // Handle to field - could be string or array
-      const toField = emailData.to;
-      to = Array.isArray(toField) ? toField[0] : toField;
-      const emailId = emailData.email_id;
-      
-      if (!emailId) {
-        return NextResponse.json(
-          { error: 'Missing email_id in Resend webhook' },
-          { status: 400 }
-        );
-      }
-      
-      // Fetch attachments from Resend API
-      const resendApiKey = process.env.RESEND_API_KEY;
-      if (!resendApiKey) {
-        return NextResponse.json(
-          { error: 'RESEND_API_KEY not configured' },
-          { status: 500 }
-        );
-      }
-      
-      // Get attachments list
-      const attachmentsResponse = await fetch(
-        `https://api.resend.com/emails/${emailId}/attachments`,
-        {
-          headers: {
-            'Authorization': `Bearer ${resendApiKey}`,
-          },
-        }
-      );
-      
-      if (!attachmentsResponse.ok) {
-        console.error('Error fetching attachments from Resend:', await attachmentsResponse.text());
-        return NextResponse.json(
-          { error: 'Failed to fetch attachments from Resend' },
-          { status: 500 }
-        );
-      }
-      
-      const attachmentsData = await attachmentsResponse.json();
-      
-      // Resend API returns: { data: [{ id, filename, content_type, size, download_url }] }
-      const attachmentList = attachmentsData.data || attachmentsData || [];
-      
-      // Download each attachment
-      for (const attachment of attachmentList) {
-        if (!attachment.download_url) {
-          console.warn(`Attachment ${attachment.filename || attachment.id} missing download_url`);
-          continue;
-        }
-        
-        try {
-          const downloadResponse = await fetch(attachment.download_url);
-          if (!downloadResponse.ok) {
-            console.error(`Failed to download attachment: ${downloadResponse.statusText}`);
-            continue;
-          }
-          
-          const buffer = Buffer.from(await downloadResponse.arrayBuffer());
-          attachments.push({
-            filename: attachment.filename || `attachment-${attachment.id}`,
-            contentType: attachment.content_type || attachment.contentType || 'application/octet-stream',
-            content: buffer,
-          });
-        } catch (error) {
-          console.error(`Error downloading attachment ${attachment.filename || attachment.id}:`, error);
-        }
-      }
-    } else {
-      // Form-data format (SendGrid, Postmark, etc.)
-      const formData = await request.formData();
-      
-      // Extract email metadata
-      to = formData.get('to') as string;
-      
-      // Extract attachments
-      // SendGrid format
-      const attachmentCount = parseInt(formData.get('attachments') as string) || 0;
-      for (let i = 1; i <= attachmentCount; i++) {
-        const file = formData.get(`attachment${i}`) as File;
-        if (file) {
-          const buffer = Buffer.from(await file.arrayBuffer());
-          attachments.push({
-            filename: file.name,
-            contentType: file.type,
-            content: buffer,
-          });
-        }
-      }
-      
-      // Alternative: Check for files directly in formData
-      for (const [key, value] of formData.entries()) {
-        if (value instanceof File && value.name) {
-          const buffer = Buffer.from(await value.arrayBuffer());
-          attachments.push({
-            filename: value.name,
-            contentType: value.type,
-            content: buffer,
-          });
-        }
-      }
+    if (!request.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+      return NextResponse.json({ error: 'Only signed Resend JSON events are supported' }, { status: 415 });
     }
-
-    if (attachments.length === 0) {
-      return NextResponse.json(
-        { error: 'No attachments found in email' },
-        { status: 400 }
-      );
+    const signingSecret = process.env.RESEND_WEBHOOK_SECRET;
+    const apiKey = process.env.RESEND_API_KEY;
+    const domain = process.env.RESEND_RECEIVING_DOMAIN?.trim().toLowerCase();
+    if (!signingSecret?.trim() || !apiKey?.trim() || !domain) {
+      return NextResponse.json({ error: 'Email webhook not configured' }, { status: 503 });
     }
-
-    // Extract import setup ID from email address
-    // Format: setup-{id}@{domain}
-    // Example: setup-123@imports.budgetapp.com
-    const emailMatch = to.match(/setup[_-](\d+)@/i);
-    if (!emailMatch || !emailMatch[1]) {
-      return NextResponse.json(
-        { error: `Could not identify import setup from email address: ${to}` },
-        { status: 400 }
-      );
+    const id = request.headers.get('svix-id');
+    const timestamp = request.headers.get('svix-timestamp');
+    const signature = request.headers.get('svix-signature');
+    if (!id || !timestamp || !signature) {
+      return NextResponse.json({ error: 'Missing webhook signature' }, { status: 401 });
     }
-
-    const importSetupId = parseInt(emailMatch[1], 10);
-    if (isNaN(importSetupId)) {
-      return NextResponse.json(
-        { error: 'Invalid import setup ID in email address' },
-        { status: 400 }
-      );
+    const resend = new Resend(apiKey);
+    let event;
+    try {
+      // Verification also checks the timestamp and returns the authenticated JSON.
+      event = resend.webhooks.verify({
+        payload: await request.text(), headers: { id, timestamp, signature }, webhookSecret: signingSecret,
+      });
+    } catch {
+      return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
     }
+    if (event.type !== 'email.received') {
+      return NextResponse.json({ received: true, ignored: true });
+    }
+    const emailId = event.data?.email_id;
+    if (typeof emailId !== 'string' || !/^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i.test(emailId)) {
+      return NextResponse.json({ error: 'Invalid received email ID' }, { status: 400 });
+    }
+    const recipients = Array.isArray(event.data.to) ? event.data.to : [event.data.to];
+    const setupIds = new Set(recipients.flatMap(recipient => {
+      const match = typeof recipient === 'string' && recipient.trim().match(/^setup[_-](\d+)@([^<>\s]+)$/i);
+      if (!match || match[2].toLowerCase() !== domain) return [];
+      const setupId = Number(match[1]);
+      return Number.isSafeInteger(setupId) && setupId > 0 ? [setupId] : [];
+    }));
+    if (setupIds.size !== 1) {
+      return NextResponse.json({ error: 'A single valid import recipient is required' }, { status: 400 });
+    }
+    const importSetupId = [...setupIds][0];
 
     // Verify import setup exists and is active
     // Use service role client since webhooks come from external services
@@ -189,8 +69,41 @@ export async function POST(request: Request) {
       );
     }
 
+    // Resolve the setup before fetching attachments; use the receiving API, not sent mail.
+    const attachments: EmailAttachment[] = [];
+    let after: string | undefined;
+    const seenCursors = new Set<string>();
+    do {
+      const { data, error } = await resend.emails.receiving.attachments.list({ emailId, ...(after ? { after } : {}) });
+      if (error || !data || !Array.isArray(data.data)) {
+        return NextResponse.json({ error: 'Failed to list received attachments' }, { status: 502 });
+      }
+      for (const attachment of data.data) {
+        if (!attachment.download_url) {
+          return NextResponse.json({ error: 'Received attachment is unavailable' }, { status: 502 });
+        }
+        const download = await fetch(attachment.download_url, { signal: AbortSignal.timeout(30_000) });
+        if (!download.ok) {
+          return NextResponse.json({ error: 'Failed to download received attachment' }, { status: 502 });
+        }
+        attachments.push({
+          filename: attachment.filename || `attachment-${attachment.id}`,
+          contentType: attachment.content_type || 'application/octet-stream',
+          content: Buffer.from(await download.arrayBuffer()),
+        });
+      }
+      after = data.has_more ? data.data.at(-1)?.id : undefined;
+      if (data.has_more && (!after || seenCursors.has(after))) {
+        return NextResponse.json({ error: 'Invalid attachment pagination' }, { status: 502 });
+      }
+      if (after) seenCursors.add(after);
+    } while (after);
+    if (!attachments.length) {
+      return NextResponse.json({ error: 'No attachments found in email' }, { status: 400 });
+    }
+
     // Generate batch ID
-    const sourceBatchId = `email-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const sourceBatchId = `email-${emailId}`;
 
     // Process attachments
     const result = await processEmailAttachments({
@@ -214,15 +127,15 @@ export async function POST(request: Request) {
       .eq('id', importSetupId);
 
     return NextResponse.json({
-      success: true,
+      success: result.errors.length === 0,
       processed: result.processed,
       queued: result.queued,
       errors: result.errors,
-    });
+    }, { status: result.errors.length ? 500 : 200 });
   } catch (error: any) {
-    console.error('Error processing email import:', error);
+    console.error('Email import failed; provider retry required');
     return NextResponse.json(
-      { error: error.message || 'Failed to process email import' },
+      { error: 'Failed to process email import' },
       { status: 500 }
     );
   }

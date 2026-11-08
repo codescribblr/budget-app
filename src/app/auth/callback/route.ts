@@ -66,7 +66,9 @@ export async function GET(request: NextRequest) {
               ? `https://${forwardedHost}/invitations/choose`
               : `${origin}/invitations/choose`;
             
-            return NextResponse.redirect(newRedirectUrl);
+            // Keep the session cookies issued during code exchange.
+            response.headers.set('Location', newRedirectUrl);
+            return response;
           }
 
           // No pending invitations - check if user already has a budget account
@@ -159,7 +161,9 @@ export async function GET(request: NextRequest) {
           ? `https://${forwardedHost}/settings/subscription?checkout=premium`
           : `${origin}/settings/subscription?checkout=premium`;
         
-        return NextResponse.redirect(checkoutRedirectUrl);
+        // Keep both session and active-account cookies on the checkout redirect.
+        response.headers.set('Location', checkoutRedirectUrl);
+        return response;
       }
 
       return response

@@ -37,7 +37,8 @@ export async function POST(request: Request) {
     // 3. Timestamp is recent (prevents replay attacks)
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
   } catch (err: any) {
-    console.error('❌ Webhook signature verification failed:', err.message);
+    // SDK verification errors can include the submitted payload. Do not log it.
+    console.error('❌ Webhook signature verification failed');
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
