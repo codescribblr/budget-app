@@ -3,9 +3,14 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { safeReturnPath } from '@/lib/new-look'
 import { publicRequestUrl } from '@/lib/deployment/request-url'
+import { isStagingGoogleUser, stagingGoogleCheckEnabled } from '@/lib/deployment/staging-google'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = publicRequestUrl(request)
+  const staging = process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging';
+  if (staging && !stagingGoogleCheckEnabled(process.env)) {
+    return NextResponse.json({ error: 'Staging authentication checks are disabled.' }, { status: 503 });
+  }
   const code = searchParams.get('code')
   const next = safeReturnPath(searchParams.get('next'), request.cookies.get('budget-interface')?.value === 'new' ? '/new' : '/dashboard')
   const plan = searchParams.get('plan') // 'premium' or null
@@ -36,6 +41,18 @@ export async function GET(request: NextRequest) {
     const { data: { user }, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && user) {
+      // Authenticate the approved operator on the testing backend, then stop
+      // before any invitation, budget creation, subscription or service-role use.
+      if (staging) {
+        if (!isStagingGoogleUser(user, process.env)) {
+          await supabase.auth.signOut({ scope: 'local' });
+          response.headers.set('Location', `${origin}/login?google_check=denied`);
+        } else {
+          response.headers.set('Location', `${origin}/auth/google-check`);
+        }
+        response.headers.set('Cache-Control', 'private, no-store');
+        return response;
+      }
       // Always check for pending invitations sent to user's email first (unless already going to an invite)
       if (!next.startsWith('/invite/')) {
         try {
@@ -154,7 +171,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Return the user to an error page with some instructions
-  return NextResponse.redirect(`${origin}/auth/auth-code-error`)
+  return NextResponse.redirect(staging ? `${origin}/login?google_check=failed` : `${origin}/auth/auth-code-error`)
 }
 
 

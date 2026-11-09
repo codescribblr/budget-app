@@ -4,6 +4,7 @@ import { INTERFACE_COOKIE } from '@/lib/new-look'
 import { legacyOriginResponse } from '@/lib/deployment/legacy-origin'
 import { stagingAccessStatus } from '@/lib/deployment/staging'
 import { publicRequestUrl } from '@/lib/deployment/request-url'
+import { isStagingGoogleUser } from '@/lib/deployment/staging-google'
 
 export async function middleware(request: NextRequest) {
   const response = await handleRequest(request);
@@ -65,16 +66,26 @@ async function handleRequest(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging') {
-    const status = stagingAccessStatus(request.nextUrl.pathname, request.method, user?.id, {
+    const stagingEnv = {
+      NEXT_PUBLIC_DEPLOYMENT_MODE: process.env.NEXT_PUBLIC_DEPLOYMENT_MODE,
       NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
       STAGING_ALLOWED_USER_IDS: process.env.STAGING_ALLOWED_USER_IDS,
-    });
+      NEXT_PUBLIC_STAGING_GOOGLE_CHECK: process.env.NEXT_PUBLIC_STAGING_GOOGLE_CHECK,
+      STAGING_GOOGLE_AUTH_EMAILS: process.env.STAGING_GOOGLE_AUTH_EMAILS,
+    };
+    const status = stagingAccessStatus(request.nextUrl.pathname, request.method, user?.id, stagingEnv, user);
     if (status) {
       if (status === 401 && request.method === 'GET' && !request.nextUrl.pathname.startsWith('/api/')) {
         const url = publicRequestUrl(request); url.pathname = '/login'; url.search = '';
         return NextResponse.redirect(url);
       }
       return NextResponse.json({ error: status === 503 ? 'This operation is disabled in staging.' : 'Staging is limited to dedicated test accounts.' }, { status });
+    }
+    if (isStagingGoogleUser(user, stagingEnv) && ['/', '/login'].includes(request.nextUrl.pathname)) {
+      const url = publicRequestUrl(request); url.pathname = '/auth/google-check'; url.search = '';
+      const response = NextResponse.redirect(url);
+      supabaseResponse.cookies.getAll().forEach(cookie => response.cookies.set(cookie));
+      return response;
     }
   }
 
