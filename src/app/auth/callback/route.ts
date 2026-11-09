@@ -2,26 +2,17 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { safeReturnPath } from '@/lib/new-look'
+import { publicRequestUrl } from '@/lib/deployment/request-url'
 
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams, origin } = publicRequestUrl(request)
   const code = searchParams.get('code')
   const next = safeReturnPath(searchParams.get('next'), request.cookies.get('budget-interface')?.value === 'new' ? '/new' : '/dashboard')
   const plan = searchParams.get('plan') // 'premium' or null
 
   if (code) {
     // Create the response first
-    const forwardedHost = request.headers.get('x-forwarded-host')
-    const isLocalEnv = process.env.NODE_ENV === 'development'
-
-    let redirectUrl: string
-    if (isLocalEnv) {
-      redirectUrl = `${origin}${next}`
-    } else if (forwardedHost) {
-      redirectUrl = `https://${forwardedHost}${next}`
-    } else {
-      redirectUrl = `${origin}${next}`
-    }
+    const redirectUrl = `${origin}${next}`
 
     const response = NextResponse.redirect(redirectUrl)
 
@@ -60,11 +51,7 @@ export async function GET(request: NextRequest) {
           // If user has pending invites, redirect to choice page where they can
           // accept the invitation or create their own account
           if (invitations && invitations.length > 0) {
-            const newRedirectUrl = isLocalEnv
-              ? `${origin}/invitations/choose`
-              : forwardedHost
-              ? `https://${forwardedHost}/invitations/choose`
-              : `${origin}/invitations/choose`;
+            const newRedirectUrl = `${origin}/invitations/choose`;
             
             // Keep the session cookies issued during code exchange.
             response.headers.set('Location', newRedirectUrl);
@@ -155,11 +142,7 @@ export async function GET(request: NextRequest) {
       // Handle premium plan checkout for OAuth signups
       if (plan === 'premium' && !next.startsWith('/invite/')) {
         // Redirect to subscription page which will handle checkout creation
-        const checkoutRedirectUrl = isLocalEnv
-          ? `${origin}/settings/subscription?checkout=premium`
-          : forwardedHost
-          ? `https://${forwardedHost}/settings/subscription?checkout=premium`
-          : `${origin}/settings/subscription?checkout=premium`;
+        const checkoutRedirectUrl = `${origin}/settings/subscription?checkout=premium`;
         
         // Keep both session and active-account cookies on the checkout redirect.
         response.headers.set('Location', checkoutRedirectUrl);

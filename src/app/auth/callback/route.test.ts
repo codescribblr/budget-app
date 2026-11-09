@@ -10,6 +10,7 @@ describe('authentication callback redirects', () => {
   beforeEach(() => {
     vi.resetAllMocks(); invited = false;
     vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://budget-stage.jrwdev.com');
     mocks.server.mockImplementation((_url, _key, options) => ({ auth: {
       exchangeCodeForSession: async () => {
         options.cookies.setAll([
@@ -33,12 +34,16 @@ describe('authentication callback redirects', () => {
     ['?code=fixture', '/invitations/choose', true],
   ])('keeps every session cookie on %s', async (query, path, invitation) => {
     invited = invitation;
-    const response = await GET(new NextRequest(`http://127.0.0.1:3000/auth/callback${query}`, { headers: { 'x-forwarded-host': 'budget-stage.jrwdev.com' } }));
+    const response = await GET(new NextRequest(`http://127.0.0.1:3000/auth/callback${query}`, { headers: { 'x-forwarded-host': 'attacker.example' } }));
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('https://budget-stage.jrwdev.com' + path);
     for (const [name, value] of [['sb-test-auth-token.0', 'synthetic-first'], ['sb-test-auth-token.1', 'synthetic-second']]) {
       expect(response.cookies.get(name)).toMatchObject({ name, value, secure: true, httpOnly: true, path: '/', sameSite: 'lax' });
     }
     if (!invitation) expect(response.cookies.get('active_account_id')?.value).toBe('74');
+  });
+  it('keeps failed authentication on the public origin', async () => {
+    const response = await GET(new NextRequest('http://127.0.0.1:3000/auth/callback', { headers: { 'x-forwarded-host': 'attacker.example' } }));
+    expect(response.headers.get('location')).toBe('https://budget-stage.jrwdev.com/auth/auth-code-error');
   });
 });
