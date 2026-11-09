@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { INTERFACE_COOKIE } from '@/lib/new-look'
 import { legacyOriginResponse } from '@/lib/deployment/legacy-origin'
 import { stagingAccessStatus } from '@/lib/deployment/staging'
+import { publicRequestUrl } from '@/lib/deployment/request-url'
 
 export async function middleware(request: NextRequest) {
   const response = await handleRequest(request);
@@ -70,7 +71,7 @@ async function handleRequest(request: NextRequest) {
     });
     if (status) {
       if (status === 401 && request.method === 'GET' && !request.nextUrl.pathname.startsWith('/api/')) {
-        const url = request.nextUrl.clone(); url.pathname = '/login'; url.search = '';
+        const url = publicRequestUrl(request); url.pathname = '/login'; url.search = '';
         return NextResponse.redirect(url);
       }
       return NextResponse.json({ error: status === 503 ? 'This operation is disabled in staging.' : 'Staging is limited to dedicated test accounts.' }, { status });
@@ -86,7 +87,7 @@ async function handleRequest(request: NextRequest) {
   if (isAdminPath || isTestPath) {
     // Require authentication
     if (!user) {
-      const url = request.nextUrl.clone()
+      const url = publicRequestUrl(request)
       url.pathname = '/login'
       url.search = ''
       url.searchParams.set('redirectTo', request.nextUrl.pathname + request.nextUrl.search)
@@ -121,7 +122,7 @@ async function handleRequest(request: NextRequest) {
 
   // Redirect to login if accessing protected route without authentication
   if ((isProtectedPath || isInvitationsChoose) && !user) {
-    const url = request.nextUrl.clone()
+    const url = publicRequestUrl(request)
     url.pathname = '/login'
     url.search = ''
     url.searchParams.set('redirectTo', request.nextUrl.pathname + request.nextUrl.search)
@@ -130,14 +131,14 @@ async function handleRequest(request: NextRequest) {
 
   // Redirect to dashboard if accessing login/signup while authenticated
   if (isPublicPath && user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
-    const url = request.nextUrl.clone()
+    const url = publicRequestUrl(request)
     url.pathname = request.cookies.get(INTERFACE_COOKIE)?.value === 'new' ? '/new' : '/dashboard'
     return NextResponse.redirect(url)
   }
 
   // Redirect authenticated users from home page to dashboard
   if (request.nextUrl.pathname === '/' && user) {
-    const url = request.nextUrl.clone()
+    const url = publicRequestUrl(request)
     url.pathname = request.cookies.get(INTERFACE_COOKIE)?.value === 'new' ? '/new' : '/dashboard'
     return NextResponse.redirect(url)
   }
