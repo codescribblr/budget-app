@@ -58,3 +58,20 @@ for role in ('anon','authenticated'):
  sql(f"SET ROLE {role}; SELECT claim_scheduled_job(1,'{loser}');",False)
 assert sql('SELECT sum(attempt) FROM scheduled_jobs')=='2'
 print('PASS: only one worker claims a due job; stale tokens cannot renew/finish; expired jobs require review; browser roles denied')
+
+# Restore the same synthetic merchant data into a second budget owned by the
+# same user without weakening duplicate protection inside either budget.
+sql("CREATE TABLE merchant_groups(id bigserial PRIMARY KEY,account_id bigint,user_id uuid NOT NULL,display_name text NOT NULL,UNIQUE(user_id,display_name)); CREATE TABLE merchant_mappings(id bigserial PRIMARY KEY,account_id bigint,user_id uuid NOT NULL,pattern text NOT NULL,UNIQUE(user_id,pattern));")
+for table,column in [('merchant_groups','display_name'),('merchant_mappings','pattern')]:
+ sql(f"INSERT INTO {table}(account_id,user_id,{column}) VALUES(1,'{tokens[0]}','Synthetic merchant'),(NULL,'{tokens[0]}','Legacy merchant')")
+ sql(f"INSERT INTO {table}(account_id,user_id,{column}) VALUES(2,'{tokens[0]}','Synthetic merchant')",False)
+before=sql("SELECT (SELECT json_agg(t ORDER BY id) FROM merchant_groups t)::text || (SELECT json_agg(t ORDER BY id) FROM merchant_mappings t)::text")
+sql((root/'migrations/157_scope_merchant_uniqueness_to_budget.sql').read_text())
+sql((root/'migrations/157_scope_merchant_uniqueness_to_budget.sql').read_text())
+assert sql("SELECT (SELECT json_agg(t ORDER BY id) FROM merchant_groups t)::text || (SELECT json_agg(t ORDER BY id) FROM merchant_mappings t)::text")==before
+for table,column in [('merchant_groups','display_name'),('merchant_mappings','pattern')]:
+ sql(f"INSERT INTO {table}(account_id,user_id,{column}) VALUES(2,'{tokens[0]}','Synthetic merchant')")
+ sql(f"INSERT INTO {table}(account_id,user_id,{column}) VALUES(2,'{tokens[0]}','Synthetic merchant')",False)
+ sql(f"INSERT INTO {table}(account_id,user_id,{column}) VALUES(NULL,'{tokens[0]}','Legacy merchant')",False)
+ sql(f"INSERT INTO {table}(account_id,user_id,{column}) VALUES(2,'{tokens[1]}','Synthetic merchant')")
+print('PASS: merchant uniqueness includes the budget; same-budget and legacy duplicates remain blocked; existing rows and collaborator semantics preserved; migration rerun safe')
