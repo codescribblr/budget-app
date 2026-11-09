@@ -18,6 +18,7 @@ export function validateCloudConfig(config, target) {
       check(!Object.keys(env).some(key=>/^(?:STRIPE_|SMTP_|RESEND_|GOOGLE_|OPENAI_|TELLER_CLIENT_|VAPID_PRIVATE_KEY|ENCRYPTION_KEY)/.test(key)),'Provider credentials must not enter the staging build');
     }
   } else {
+    check(env.NEXT_PUBLIC_STAGING_GOOGLE_CHECK !== '1','Production cannot enable staging Google checks');
     check(!['smoke','staging'].includes(env.NEXT_PUBLIC_DEPLOYMENT_MODE),'Production cannot use a staging mode');
     check(env.NEXT_PUBLIC_SUPABASE_URL==='https://yhmexgwdytmyqourkivz.supabase.co','Production must use its configured project');
     check(env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length>40,'Missing production anonymous key');

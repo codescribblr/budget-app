@@ -88,7 +88,7 @@ export default function RootLayout({
         <LogRocketProvider>
           <ThemeProvider>
             <ServiceWorkerProvider>
-              {process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging' && <div role="status" className="bg-amber-100 px-4 py-2 text-center text-sm text-amber-950">Testing site · Synthetic accounts only · External integrations and scheduled jobs are disabled</div>}
+              {process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging' && <div role="status" className="bg-amber-100 px-4 py-2 text-center text-sm text-amber-950">{process.env.NEXT_PUBLIC_STAGING_GOOGLE_CHECK === '1' ? 'Testing site · Synthetic budget accounts and approved Google sign-in checks' : 'Testing site · Synthetic accounts only · External integrations and scheduled jobs are disabled'}</div>}
               {children}
               <Toaster />
               <InstallPrompt />

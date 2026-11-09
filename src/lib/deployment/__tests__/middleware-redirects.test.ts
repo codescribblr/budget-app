@@ -1,17 +1,50 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-const auth = vi.hoisted(() => ({ user: null as null | { id: string } }));
-vi.mock('@supabase/ssr', () => ({ createServerClient: () => ({
-  auth: { getUser: async () => ({ data: { user: auth.user } }) },
+const auth = vi.hoisted(() => ({ user: null as null | { id: string; email?: string; email_confirmed_at?: string; identities?: { provider: string }[] }, refresh: false }));
+vi.mock('@supabase/ssr', () => ({ createServerClient: (_url: string, _key: string, options: { cookies: { setAll: (cookies: { name: string; value: string }[]) => void } }) => ({
+  auth: { getUser: async () => {
+    if (auth.refresh) options.cookies.setAll([{ name: 'test-session', value: 'refreshed' }]);
+    return { data: { user: auth.user } };
+  } },
 }) }));
 import { middleware } from '@/middleware';
 
 beforeEach(() => {
   auth.user = null;
+  auth.refresh = false;
   vi.stubEnv('NODE_ENV', 'production');
   vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://budget-stage.jrwdev.com');
   vi.stubEnv('NEXT_PUBLIC_DEPLOYMENT_MODE', '');
   vi.stubEnv('LEGACY_HOST_REDIRECT', '');
+  vi.stubEnv('NEXT_PUBLIC_STAGING_GOOGLE_CHECK', '');
+  vi.stubEnv('STAGING_GOOGLE_AUTH_EMAILS', '');
+});
+
+describe('staging Google confirmation isolation', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_DEPLOYMENT_MODE', 'staging');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://nmqlddimigebtlaophbv.supabase.co');
+    vi.stubEnv('STAGING_ALLOWED_USER_IDS', '00000000-0000-4000-8000-000000000001');
+    vi.stubEnv('NEXT_PUBLIC_STAGING_GOOGLE_CHECK', '1');
+    vi.stubEnv('STAGING_GOOGLE_AUTH_EMAILS', 'operator@example.com');
+    auth.user = { id: '00000000-0000-4000-8000-000000000002', email: 'operator@example.com', email_confirmed_at: '2026-11-09', identities: [{ provider: 'google' }] };
+  });
+  it.each(['/', '/login'])('redirects %s to confirmation with refreshed cookies', async path => {
+    auth.refresh = true;
+    const response = await middleware(new NextRequest('http://localhost:38569' + path));
+    expect(response.headers.get('location')).toBe('https://budget-stage.jrwdev.com/auth/google-check');
+    expect(response.cookies.get('test-session')?.value).toBe('refreshed');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+  it.each(['/dashboard', '/new', '/api/transactions'])('denies budget access to %s', async path => {
+    const response = await middleware(new NextRequest('http://localhost:38569' + path));
+    expect(response.status).toBe(403);
+  });
+  it('rejects an unapproved Google account at confirmation', async () => {
+    auth.user!.email = 'unapproved@example.com';
+    const response = await middleware(new NextRequest('http://localhost:38569/auth/google-check'));
+    expect(response.status).toBe(403);
+  });
 });
 afterEach(() => vi.unstubAllEnvs());
 

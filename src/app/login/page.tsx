@@ -11,11 +11,14 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { APP_NAME, APP_DOMAIN } from '@/lib/branding';
 import { safeReturnPath } from '@/lib/new-look';
+import { TESTING_SUPABASE_URL } from '@/lib/deployment/staging-project';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 function LoginForm() {
   const smokeMode = process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'smoke';
   const externalAuthDisabled = smokeMode || process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging';
+  const googleCheck = process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === 'staging' && process.env.NEXT_PUBLIC_STAGING_GOOGLE_CHECK === '1' && process.env.NEXT_PUBLIC_SUPABASE_URL === TESTING_SUPABASE_URL;
+  const googleAuthDisabled = externalAuthDisabled && !googleCheck;
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = safeReturnPath(searchParams.get('redirectTo'), typeof document !== 'undefined' && document.cookie.split('; ').includes('budget-interface=new') ? '/new' : '/dashboard');
@@ -117,7 +120,7 @@ function LoginForm() {
   };
 
   const handleGoogleSignIn = async () => {
-    if (externalAuthDisabled) return;
+    if (googleAuthDisabled) return;
     try {
       const supabase = createClient();
       const callbackUrl = redirectTo 
@@ -255,7 +258,7 @@ function LoginForm() {
               variant="outline"
               className="w-full"
               onClick={handleGoogleSignIn}
-              disabled={externalAuthDisabled || loading}
+              disabled={googleAuthDisabled || loading}
             >
               <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                 <path
