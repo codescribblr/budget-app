@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { ParsedTransaction } from '@/lib/import-types';
 import { learnFromImportedTransactions } from '@/lib/smart-categorizer-supabase';
 import { importTransactions } from '@/lib/supabase-queries';
+import { checkImportBudget } from '@/lib/import/request-budget';
 
 export async function POST(request: Request) {
   try {
@@ -9,11 +10,15 @@ export async function POST(request: Request) {
     const accessCheck = await checkWriteAccess();
     if (accessCheck) return accessCheck;
 
-    const { transactions, isHistorical, fileName } = await request.json() as {
+    const { transactions, isHistorical, fileName, sourceBudgetId } = await request.json() as {
       transactions: ParsedTransaction[];
       isHistorical?: boolean;
       fileName?: string;
+      sourceBudgetId?: number;
     };
+
+    const budgetChanged = await checkImportBudget(sourceBudgetId);
+    if (budgetChanged) return budgetChanged;
 
     if (!Array.isArray(transactions) || transactions.length === 0) {
       return NextResponse.json(

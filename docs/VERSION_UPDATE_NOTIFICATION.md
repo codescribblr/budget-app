@@ -1,56 +1,13 @@
-# Version Update Notification
+# Version update notification
 
-This feature automatically detects when a new version of the app has been deployed and prompts users to refresh their browser to get the latest updates.
+Each build writes `public/version.json` with an immutable `releaseId`, full `commitSha`, `buildTime` and `buildTimestamp`. Next bakes that release ID into the browser JavaScript. Cloud Panel uses the GitHub run and attempt in the ID; rebuilding or rolling back can therefore be distinguished even when the source commit is unchanged.
 
-## How It Works
+`/api/version` reads the manifest without caching and verifies it against the runtime release identity. Missing or mismatched manifests return 503, never a fresh fallback timestamp. Health/version requests bypass Supabase session refresh. The version manifest is included in standalone and Vercel file tracing.
 
-1. **Version Generation**: On each build, a `version.json` file is generated in the `public/` directory containing:
-   - `buildTime`: ISO timestamp of when the build was created
-   - `buildTimestamp`: Unix timestamp for easy comparison
+The client compares the server identity with the identity of its loaded code immediately on mount, every 60 seconds, and on focus/visibility. It does not adopt the first network response as its baseline. Requests cannot overlap and abort after eight seconds. Invalid responses and offline failures cannot invent an update. A rollback to an older build also shows the banner.
 
-2. **Version API**: The `/api/version` endpoint serves the current build version from the `version.json` file.
+Users can dismiss the banner for five minutes. Refresh asks them to save first and confirm. Registered unsaved budget editors block the refresh; existing browser before-unload protections still apply. Canceling refresh leaves the page and update banner intact. New version checks are disabled in development.
 
-3. **Client-Side Checking**: The `useVersionCheck` hook:
-   - Fetches the initial version when the app loads
-   - Periodically checks for updates every 60 seconds (after an initial 30-second delay)
-   - Also checks when the window regains focus or becomes visible
-   - Compares the server version with the client's loaded version
+Tests cover first-fetch races, rollback identities, invalid manifests and multiple dirty editors. The staging browser harness is prepared to verify live promotion, retained chunks, canceling the confirmation, refreshing to the new build and repeating that process after rollback; this sequence remains pending the dual-runtime capacity gate. Full unsaved financial-form testing belongs in an authenticated isolated staging environment.
 
-4. **Notification Display**: When a new version is detected:
-   - A notification banner appears at the bottom of the screen
-   - Users can click "Refresh" to reload the page
-   - Users can dismiss the notification (it will re-check after 5 minutes)
-
-## Implementation Details
-
-### Files Created
-
-- `scripts/generate-version.js` - Generates version.json on build
-- `src/app/api/version/route.ts` - API endpoint serving version info
-- `src/hooks/use-version-check.ts` - React hook for version checking
-- `src/components/version/VersionUpdateNotification.tsx` - Notification component
-
-### Build Integration
-
-The version file is automatically generated before each build via the `prebuild` script in `package.json`. This ensures that every deployment has a unique version identifier.
-
-### Configuration
-
-- **Check Interval**: 60 seconds (configurable in `use-version-check.ts`)
-- **Initial Delay**: 30 seconds before first check
-- **Dismiss Duration**: 5 minutes before re-checking after dismissal
-
-## Usage
-
-The notification component is automatically included in the root layout, so it works across the entire application without any additional setup.
-
-## Testing
-
-To test the feature:
-
-1. Build the app: `npm run build`
-2. Start the server: `npm start`
-3. Open the app in a browser
-4. In another terminal, rebuild the app (this generates a new version)
-5. Wait 30-90 seconds or switch tabs and come back
-6. The notification should appear prompting you to refresh
+See [Cloud Panel deployment](CLOUD_PANEL_DEPLOYMENT.md) for release and cutover details.

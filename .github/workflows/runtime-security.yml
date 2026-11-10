@@ -1,7 +1,42 @@
 name: Runtime Security Checks
 on:
   pull_request:
-    paths: [package.json, package-lock.json, .github/workflows/runtime-security.yml]
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/runtime-security.yml
+      - .github/workflows/deploy-cloud-panel.yml
+      - .github/workflows/deploy.yml
+      - scripts/migration*.py
+      - scripts/run-migrations.sh
+      - scripts/test-release-database.py
+      - scripts/test-write-barrier.py
+      - scripts/cutover/**
+      - scripts/cloud-config*.mjs
+      - scripts/verify-vercel-runtime*.mjs
+      - scripts/verify-pdf-runtime.mjs
+      - scripts/fixtures/pdf-import-synthetic.pdf
+      - src/lib/backup-utils.ts
+      - src/lib/__tests__/backup-context.test.ts
+      - src/lib/pdf-parser.ts
+      - src/lib/__tests__/pdf-parser.test.ts
+      - src/lib/import/import-batches.ts
+      - src/lib/import/request-budget.ts
+      - src/lib/import/__tests__/request-budget.test.ts
+      - src/app/api/import/transactions/route.ts
+      - src/app/api/automatic-imports/queue/approve-batch/route.ts
+      - src/lib/import/__tests__/import-batches.test.ts
+      - src/components/import/TransactionPreview.tsx
+      - src/components/import/NewImportReview.tsx
+      - migrations/156_atomic_scheduled_job_claims.sql
+      - src/app/auth/callback/**
+      - src/app/api/webhooks/**
+      - src/lib/webhooks/**
+      - src/lib/deployment/**
+      - src/lib/scheduled-jobs/**
+      - src/hooks/use-version-check.ts
+      - src/middleware.ts
+      - next.config.ts
   workflow_dispatch:
 permissions:
   contents: read
@@ -9,6 +44,15 @@ jobs:
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: local-proof-only
+          POSTGRES_DB: budget_release_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://staging-disabled.invalid
       NEXT_PUBLIC_SUPABASE_ANON_KEY: staging-placeholder
@@ -31,4 +75,14 @@ jobs:
           files=[str(p) for p in pathlib.Path('src').rglob('*.test.ts') if re.search(r'from [\'\"]vitest[\'\"]',p.read_text())]
           subprocess.run(['npx','vitest','run','--maxWorkers=2',*files],check=True)
           PY
+      - run: python3 scripts/migration-runner-test.py
+      - run: node --test scripts/cloud-config.test.mjs scripts/private-backup.test.mjs scripts/cutover/verify-retired-keys.test.mjs
+      - run: node --test scripts/verify-vercel-runtime.test.mjs
+      - name: Verify migration transactions and job claims
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:local-proof-only@127.0.0.1:5432/budget_release_test?sslmode=disable
+        run: |
+          python3 scripts/test-release-database.py
+          python3 scripts/test-write-barrier.py
       - run: npm run build
+      - run: node scripts/verify-pdf-runtime.mjs

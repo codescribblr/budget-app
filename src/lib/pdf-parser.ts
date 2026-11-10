@@ -19,44 +19,16 @@ export interface PDFParseResult {
  */
 export async function parsePDFFile(file: File): Promise<PDFParseResult> {
   try {
-    // Convert file to buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // PDF.js expects Uint8Array slice semantics. A Node Buffer may share its
+    // sliced storage and corrupt parsing depending on how the upload was allocated.
+    const bytes = new Uint8Array(await file.arrayBuffer());
 
-    // Import pdf-parse v1 (function-based API, no workers needed)
-    // Use require directly - the library has debug code but we can work around it
-    let pdfParse: any;
-    
-    if (typeof require !== 'undefined') {
-      // Use require directly (works in Node.js/Next.js API routes)
-      // The library's index.js has debug code that runs when module.parent is falsy
-      // We'll catch any errors from that and still get the function
-      try {
-        pdfParse = require('pdf-parse');
-      } catch (debugError: any) {
-        // If debug code fails (trying to read test file), try to get the function anyway
-        // The function should still be exported even if debug code fails
-        const pdfParsePath = require.resolve('pdf-parse');
-        const pdfParseModule = require.cache[pdfParsePath];
-        if (pdfParseModule && pdfParseModule.exports) {
-          pdfParse = pdfParseModule.exports;
-        } else {
-          // If that doesn't work, try importing the lib file directly
-          pdfParse = require('pdf-parse/lib/pdf-parse.js');
-        }
-      }
-    } else {
-      // Fallback to dynamic import if require is not available
-      const pdfParseModule = await import('pdf-parse');
-      pdfParse = pdfParseModule.default || pdfParseModule;
-    }
-    
-    if (typeof pdfParse !== 'function') {
-      throw new Error('pdf-parse function not found. Please ensure pdf-parse is installed correctly.');
-    }
+    // Avoid the debug entry point and preserve native loading of PDF.js workers
+    // in the standalone server.
+    const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 
     // Extract text from PDF
-    const pdfData = await pdfParse(buffer);
+    const pdfData = await pdfParse(bytes);
     const text = pdfData.text;
 
     if (!text || text.trim().length === 0) {
@@ -99,9 +71,18 @@ export async function parsePDFFile(file: File): Promise<PDFParseResult> {
  * Parse transactions from extracted PDF text
  * Handles various bank statement formats with automatic format detection
  */
-function parseTransactionsFromText(text: string, fileName: string): ParsedTransaction[] {
+export function parseTransactionsFromText(text: string, fileName: string): ParsedTransaction[] {
   const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
   
+  // Bank and card statements use opposite signs. A shared Description/Amount
+  // heading is not enough to select the credit-card parser.
+  const explicitBankStatement = /^(?:checking|savings|deposit) account\b|^(?:checking|savings|bank) statement\b|^.*\bDebit\s+Credit\b|^.*\bCredit\s+Debit\b/im.test(lines.join('\n'));
+  const explicitCardStatement = /^(?:credit card|cardmember|card account)\b/im.test(lines.join('\n'));
+  if (explicitBankStatement && !explicitCardStatement) {
+    // Do not fall back to card conventions when a known bank format is unreadable.
+    return parseBankStatement(text, lines);
+  }
+
   // Try format-specific parsers first (they're more accurate)
   // These detect their specific format and return empty if not a match
   
@@ -342,6 +323,7 @@ function parseBankStatement(fullText: string, lines: string[]): ParsedTransactio
   // Find the transaction section
   let inTransactionSection = false;
   let hasDebitCreditColumns = false;
+  let creditBeforeDebit = false;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -350,6 +332,7 @@ function parseBankStatement(fullText: string, lines: string[]): ParsedTransactio
     if (/Transactions?|Activity|Date.*Description|Debit.*Credit/i.test(line)) {
       inTransactionSection = true;
       hasDebitCreditColumns = /Debit.*Credit|Credit.*Debit/i.test(line);
+      creditBeforeDebit = /Credit.*Debit/i.test(line);
       continue;
     }
     
@@ -378,8 +361,8 @@ function parseBankStatement(fullText: string, lines: string[]): ParsedTransactio
       if (parts.length < 3) continue;
       
       // Last two columns should be debit and credit
-      const debitStr = parts[parts.length - 2]?.replace(/[\$,\s]/g, '') || '0';
-      const creditStr = parts[parts.length - 1]?.replace(/[\$,\s]/g, '') || '0';
+      const debitStr = parts[parts.length - (creditBeforeDebit ? 1 : 2)]?.replace(/[\$,\s]/g, '') || '0';
+      const creditStr = parts[parts.length - (creditBeforeDebit ? 2 : 1)]?.replace(/[\$,\s]/g, '') || '0';
       
       const debit = parseFloat(debitStr);
       const credit = parseFloat(creditStr);
@@ -417,11 +400,11 @@ function parseBankStatement(fullText: string, lines: string[]): ParsedTransactio
       });
     } else {
       // Single amount column format
-      const amountMatch = line.match(/([-\$]?\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*$/);
+      const amountMatch = line.match(/((?:(?:[-+]?\$?|\$[-+]?)\d[\d,]*(?:\.\d{2})?|\(\$?\d[\d,]*(?:\.\d{2})?\)))\s*$/);
       if (!amountMatch) continue;
-      
+
       const amountStr = amountMatch[1].replace(/[\$,\s\(\)]/g, '');
-      const amount = parseFloat(amountStr);
+      const amount = parseFloat(amountStr) * (amountMatch[1].startsWith('(') ? -1 : 1);
       
       if (isNaN(amount) || amount === 0) continue;
       
@@ -431,7 +414,7 @@ function parseBankStatement(fullText: string, lines: string[]): ParsedTransactio
       
       if (description.length < 3) continue;
       
-      const transactionType: 'income' | 'expense' = amount < 0 ? 'income' : 'expense';
+      const transactionType: 'income' | 'expense' = amount < 0 ? 'expense' : 'income';
       const date = parseBankDate(dateStr);
       const merchant = extractMerchant(description);
       const originalData = JSON.stringify({ line, date: dateStr, description, amount });

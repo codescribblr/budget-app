@@ -144,5 +144,3 @@ REVOKE ALL ON FUNCTION public.create_guided_goal(bigint, jsonb) FROM PUBLIC, ano
 GRANT EXECUTE ON FUNCTION public.create_guided_goal(bigint, jsonb) TO authenticated;
 NOTIFY pgrst, 'reload schema';
 COMMIT;
-
-COMMIT;

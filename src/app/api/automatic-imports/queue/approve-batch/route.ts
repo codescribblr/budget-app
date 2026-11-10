@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { approveAndImportQueuedTransactions } from '@/lib/automatic-imports/queue-manager';
 import { separateImportHash } from '@/lib/import/mobile-review';
 import { checkWriteAccess } from '@/lib/api-helpers';
+import { checkImportBudget } from '@/lib/import/request-budget';
 
 /**
  * POST /api/automatic-imports/queue/approve-batch
@@ -14,6 +15,8 @@ export async function POST(request: Request) {
     if (accessCheck) return accessCheck;
 
     const body = await request.json();
+    const budgetChanged = await checkImportBudget(body.sourceBudgetId);
+    if (budgetChanged) return budgetChanged;
     const guarded = await guardedImportApproval(body);
     if (guarded) return guarded;
     const { batchId, transactions } = body;

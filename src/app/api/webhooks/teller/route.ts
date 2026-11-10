@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { fetchAndQueueTellerTransactions } from '@/lib/automatic-imports/providers/teller-service';
 import { getDecryptedAccessToken } from '@/lib/automatic-imports/helpers';
-import crypto from 'crypto';
+import { verifyTellerSignature } from '@/lib/webhooks/teller-signature';
 
 /**
  * POST /api/webhooks/teller
@@ -31,41 +31,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Parse signature: format is "t=timestamp,v1=signature"
-    const signatureMatch = signature.match(/t=(\d+),v1=(.+)/);
-    if (!signatureMatch) {
-      return NextResponse.json(
-        { error: 'Invalid signature format' },
-        { status: 401 }
-      );
-    }
-
-    const [, timestamp, receivedSignature] = signatureMatch;
-    const signatureTimestamp = parseInt(timestamp);
-
-    // Check timestamp to prevent replay attacks (reject if older than 3 minutes)
-    const now = Math.floor(Date.now() / 1000);
-    if (now - signatureTimestamp > 180) {
-      return NextResponse.json(
-        { error: 'Signature timestamp too old' },
-        { status: 401 }
-      );
-    }
-
-    // Get request body
+    // Keep the original body: JSON normalization invalidates provider signatures.
     const body = await request.text();
-
-    // Construct signed message: timestamp + body
-    const signedMessage = `${timestamp}.${body}`;
-
-    // Compute HMAC-SHA-256
-    const computedSignature = crypto
-      .createHmac('sha256', tellerSigningSecret)
-      .update(signedMessage)
-      .digest('hex');
-
-    // Verify signature
-    if (computedSignature !== receivedSignature) {
+    if (!verifyTellerSignature(body, signature, tellerSigningSecret)) {
       console.error('Teller webhook signature verification failed');
       return NextResponse.json(
         { error: 'Invalid signature' },

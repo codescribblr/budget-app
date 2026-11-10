@@ -1,4 +1,5 @@
 "use client";
+import { registerUnsavedChanges } from '@/lib/deployment/unsaved-changes';
 import {
   Fragment,
   createContext,
@@ -301,6 +302,7 @@ export function useCheckins(cadence: Cadence) {
 export function useUnsavedChanges(dirty: boolean) {
   useEffect(() => {
     if (!dirty) return;
+    const unregister = registerUnsavedChanges();
     const unload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
     };
@@ -321,6 +323,7 @@ export function useUnsavedChanges(dirty: boolean) {
     window.addEventListener("beforeunload", unload);
     document.addEventListener("click", navigate, true);
     return () => {
+      unregister();
       window.removeEventListener("beforeunload", unload);
       document.removeEventListener("click", navigate, true);
     };

@@ -18,7 +18,8 @@ export function InterfaceSwitch({ target }: { target: "new" | "classic" }) {
         }}
       >
         <Icon className="size-4" />
-        {target === "new" ? "Try the new look" : "Switch to classic"}
+        <span className="hidden sm:inline">{target === "new" ? "Try the new look" : "Switch to classic"}</span>
+        <span className="sm:hidden">{target === "new" ? "New look" : "Classic"}</span>
       </Link>
     </Button>
   );

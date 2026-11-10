@@ -16,11 +16,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <SubscriptionProvider>
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset>
+        <SidebarInset className="min-w-0">
           <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
-            <div className="flex flex-1 items-center gap-3 justify-end">
+            <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-3 justify-end">
               <InterfaceSwitch target="new" />
               <CommandPaletteTrigger />
               <NotificationCenter />

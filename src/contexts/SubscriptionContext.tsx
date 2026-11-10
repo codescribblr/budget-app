@@ -31,6 +31,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       setError(null);
       
       const response = await fetch('/api/subscription/status');
+      if (id !== sequence.current) return;
+      // Background refreshes may finish after sign-out. Clear private state
+      // instead of treating an ended session as a subscription service failure.
+      if (response.status === 401) {
+        loaded.current = false;
+        setSubscription(null);
+        return;
+      }
       
       if (!response.ok) {
         throw new Error('Failed to fetch subscription');
@@ -51,6 +59,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     fetchSubscription();
+    return () => { sequence.current++; };
   }, [fetchSubscription, version]);
 
   // Helper functions moved inline to avoid server-side imports
