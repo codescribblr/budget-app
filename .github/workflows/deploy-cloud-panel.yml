@@ -66,6 +66,7 @@ jobs:
         run: |
           node scripts/cloud-release.mjs build npm run build
           node scripts/prepare-standalone.mjs
+          node scripts/verify-pdf-runtime.mjs .release-work/standalone
           node scripts/cloud-release.mjs package .release-work/standalone .release-work/release.tar.gz
       - name: Reserve deployment and stage artifact
         run: node scripts/cloud-release.mjs stage
