@@ -54,7 +54,7 @@ jobs:
       - name: Reject known high-severity production dependency vulnerabilities
         run: npm audit --omit=dev --audit-level=high
       - run: npx vitest run src/lib/deployment/__tests__ src/lib/webhooks/__tests__ src/app/auth/callback/route.test.ts src/app/auth/google-check/route.test.ts src/app/api/webhooks/email-import/route.test.ts src/app/api/webhooks/stripe/route.test.ts src/lib/scheduled-jobs/__tests__ src/lib/import/__tests__/import-batches.test.ts src/lib/import/__tests__/request-budget.test.ts src/lib/__tests__/backup-context.test.ts
-      - run: node --test scripts/cloud-config.test.mjs scripts/cloud-release.test.mjs scripts/private-backup.test.mjs
+      - run: node --test scripts/cloud-config.test.mjs scripts/cloud-release.test.mjs scripts/private-backup.test.mjs scripts/cutover/verify-retired-keys.test.mjs
       - run: python3 scripts/migration-runner-test.py
       - name: Verify migrations and job leases in a disposable database
         env:

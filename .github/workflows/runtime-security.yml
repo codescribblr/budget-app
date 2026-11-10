@@ -72,7 +72,7 @@ jobs:
           subprocess.run(['npx','vitest','run','--maxWorkers=2',*files],check=True)
           PY
       - run: python3 scripts/migration-runner-test.py
-      - run: node --test scripts/cloud-config.test.mjs scripts/private-backup.test.mjs
+      - run: node --test scripts/cloud-config.test.mjs scripts/private-backup.test.mjs scripts/cutover/verify-retired-keys.test.mjs
       - run: node --test scripts/verify-vercel-runtime.test.mjs
       - name: Verify migration transactions and job claims
         env:
