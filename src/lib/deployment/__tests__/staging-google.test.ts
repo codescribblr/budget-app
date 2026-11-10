@@ -23,8 +23,8 @@ describe('isolated staging Google check',()=>{
  });
  it('does not grant the Google operator any budget or provider access',()=>{
   for(const method of ['GET','POST','PUT','DELETE']){
-   for(const path of ['/api/accounts','/api/transactions','/api/backups','/dashboard','/new'])expect(stagingAccessStatus(path,method,operator,env,user),method+' '+path).toBe(403);
-   for(const path of ['/api/webhooks/stripe','/api/cron/run-jobs','/api/invitations','/api/import/process-pdf'])expect(stagingAccessStatus(path,method,operator,env,user),method+' '+path).toBe(503);
+   for(const path of ['/api/accounts','/api/transactions','/api/backups','/api/import/process-pdf','/dashboard','/new'])expect(stagingAccessStatus(path,method,operator,env,user),method+' '+path).toBe(403);
+   for(const path of ['/api/webhooks/stripe','/api/cron/run-jobs','/api/invitations','/api/import/process-image'])expect(stagingAccessStatus(path,method,operator,env,user),method+' '+path).toBe(503);
   }
   expect(stagingAccessStatus('/api/transactions','POST',synthetic,env)).toBeNull();
  });

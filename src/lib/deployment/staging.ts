@@ -10,7 +10,7 @@ export function stagingPathDisabled(path: string, method: string): boolean {
   if ((path.startsWith('/api/admin/') && path !== '/api/admin/check') || path === '/api/admin') return true;
   if (path.startsWith('/api/invitations') && !(path === '/api/invitations/my-invitations' && method === 'GET')) return true;
   if (path.startsWith('/api/subscription/') && !(path === '/api/subscription/status' && method === 'GET')) return true;
-  return /\/rentcast(?:\/|$)/.test(path) || ['/api/import/process-pdf', '/api/import/process-image', '/api/import/ai-categorize', '/api/import/ai-categorize-queued', '/api/import/get-merchant-info'].includes(path);
+  return /\/rentcast(?:\/|$)/.test(path) || ['/api/import/process-image', '/api/import/ai-categorize', '/api/import/ai-categorize-queued', '/api/import/get-merchant-info'].includes(path);
 }
 export function stagingAccessStatus(path: string, method: string, userId: string | undefined, env: GoogleCheckEnv & { STAGING_ALLOWED_USER_IDS?: string }, user?: GoogleCheckUser | null): 401 | 403 | 503 | null {
   if (env.NEXT_PUBLIC_SUPABASE_URL !== TESTING_SUPABASE_URL) return 503;
