@@ -16,6 +16,7 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://budget-stage.jrwdev.com');
   vi.stubEnv('NEXT_PUBLIC_DEPLOYMENT_MODE', '');
   vi.stubEnv('LEGACY_HOST_REDIRECT', '');
+  vi.stubEnv('APP_MAINTENANCE_MODE', '');
   vi.stubEnv('NEXT_PUBLIC_STAGING_GOOGLE_CHECK', '');
   vi.stubEnv('STAGING_GOOGLE_AUTH_EMAILS', '');
 });
@@ -68,5 +69,18 @@ describe('standalone authentication redirects', () => {
     auth.user = { id: 'synthetic-user' };
     const response = await middleware(new NextRequest('https://localhost:38569' + path, { headers: { cookie: 'budget-interface=new', 'x-forwarded-host': 'attacker.example' } }));
     expect(response.headers.get('location')).toBe('https://budget-stage.jrwdev.com/new');
+  });
+});
+
+
+describe('maintenance middleware precedence', () => {
+  it('blocks a callback before session exchange and before old-host redirect', async () => {
+    vi.stubEnv('APP_MAINTENANCE_MODE', 'on');
+    vi.stubEnv('LEGACY_HOST_REDIRECT', 'https://everydollarbudget.app');
+    auth.refresh = true;
+    const response = await middleware(new NextRequest('https://budget-stage.jrwdev.com/auth/callback?code=private'));
+    expect(response.status).toBe(503);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(response.headers.get('location')).toBeNull();
   });
 });
