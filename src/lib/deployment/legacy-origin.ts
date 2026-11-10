@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isReleaseVersion } from './release-identity';
-const headers = { 'Cache-Control': 'no-store, max-age=0', 'Retry-After': '60' };
+const headers = { 'Cache-Control': 'no-store, max-age=0', 'Retry-After': '60', 'Referrer-Policy': 'no-referrer' };
 /** Explicitly enabled only on the retiring Vercel origin after public routing changes. */
 export async function legacyOriginResponse(request: NextRequest, configuredTarget: string | undefined, fetcher: typeof fetch = fetch): Promise<NextResponse | null> {
   if (!configuredTarget) return null;
@@ -31,5 +31,15 @@ export async function legacyOriginResponse(request: NextRequest, configuredTarge
   }
   target.pathname = request.nextUrl.pathname;
   target.search = request.nextUrl.search;
+  if (target.pathname === '/auth/callback') {
+    // The PKCE verifier/session belongs to the old origin. Do not forward a
+    // one-time auth code to a different origin that cannot complete its flow.
+    target.pathname = '/login';
+    target.search = '';
+  }
+  // Browsers can retain the old canonical -> Vercel permanent redirect after
+  // Cloudflare changes. A fresh URI avoids that cached 301 without clearing
+  // cookies, local drafts or unrelated browser data. Keep the user's deep link.
+  target.searchParams.set('__budget_move', crypto.randomUUID());
   return NextResponse.redirect(target, { status: 307, headers });
 }
