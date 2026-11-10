@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { INTERFACE_COOKIE } from '@/lib/new-look'
+import { maintenanceResponse } from '@/lib/deployment/maintenance'
 import { legacyOriginResponse } from '@/lib/deployment/legacy-origin'
 import { stagingAccessStatus } from '@/lib/deployment/staging'
 import { publicRequestUrl } from '@/lib/deployment/request-url'
@@ -16,6 +17,8 @@ export async function middleware(request: NextRequest) {
 }
 
 async function handleRequest(request: NextRequest) {
+  const maintenance = maintenanceResponse(request, process.env.APP_MAINTENANCE_MODE);
+  if (maintenance) return maintenance;
   const transition = await legacyOriginResponse(request, process.env.LEGACY_HOST_REDIRECT);
   if (transition) return transition;
   // A staging smoke artifact has no working service credentials. Keep API

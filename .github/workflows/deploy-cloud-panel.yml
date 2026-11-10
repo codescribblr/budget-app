@@ -59,7 +59,9 @@ jobs:
       - name: Verify migrations and job leases in a disposable database
         env:
           TEST_DATABASE_URL: postgresql://postgres:local-proof-only@127.0.0.1:5432/budget_release_test?sslmode=disable
-        run: python3 scripts/test-release-database.py
+        run: |
+          python3 scripts/test-release-database.py
+          python3 scripts/test-write-barrier.py
       - name: Build and package Linux standalone runtime
         run: |
           node scripts/cloud-release.mjs build npm run build
