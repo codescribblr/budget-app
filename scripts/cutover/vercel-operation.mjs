@@ -90,7 +90,14 @@ async function main(){
     }
     const after=await api(`/v9/projects/${PROJECT}`);
     need(after.crons?.definitions?.length===0,'Old Vercel scheduler definitions remain');
-    const probe=await fetch('https://budget-app-one-lime.vercel.app/transactions?cutover_probe=1',{redirect:'manual',signal:AbortSignal.timeout(15000)});
+    let probe;
+    // Alias propagation can briefly serve the previous deployment even after
+    // Vercel reports promotion complete. Keep the readiness check bounded.
+    for(let attempt=0;attempt<18;attempt++){
+      probe=await fetch('https://budget-app-one-lime.vercel.app/transactions?cutover_probe=1',{redirect:'manual',cache:'no-store',signal:AbortSignal.timeout(15000)});
+      if(probe.headers.get('x-budget-transition')===operation.action)break;
+      await probe.body?.cancel();await new Promise(resolve=>setTimeout(resolve,5000));
+    }
     need(probe.headers.get('x-budget-transition')===operation.action,'Stable Vercel hostname did not receive the transition');
     need(probe.status===(operation.action==='maintenance'?503:307),'Transition response status mismatch');
     if(operation.action==='redirect'){
