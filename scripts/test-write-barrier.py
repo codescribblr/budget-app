@@ -35,6 +35,17 @@ CREATE FUNCTION public.barrier_fake_bypass() RETURNS void LANGUAGE plpgsql SECUR
 CREATE TABLE barrier_partition(id int, value text) PARTITION BY RANGE(id);
 CREATE TABLE barrier_partition_child PARTITION OF barrier_partition FOR VALUES FROM(0) TO(100);
 GRANT ALL ON barrier_partition,barrier_partition_child TO anon, authenticated, service_role;
+-- Model the managed Auth writer as a separate login role. Its profile trigger
+-- runs as postgres, matching the existing hosted create_user_profile function.
+-- This is a disposable transaction proof, not a claim to pause all Auth internals.
+CREATE ROLE supabase_auth_admin LOGIN PASSWORD 'local-proof-only';
+CREATE SCHEMA auth AUTHORIZATION supabase_auth_admin;
+CREATE TABLE auth.users(id uuid PRIMARY KEY);
+ALTER TABLE auth.users OWNER TO supabase_auth_admin;
+CREATE TABLE public.user_profiles(user_id uuid PRIMARY KEY REFERENCES auth.users(id),is_admin boolean NOT NULL DEFAULT false);
+CREATE FUNCTION public.create_user_profile() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN INSERT INTO public.user_profiles(user_id,is_admin) VALUES(NEW.id,false) ON CONFLICT(user_id) DO NOTHING; RETURN NEW; END $$;
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.create_user_profile();
 """)
 installer=(root/'scripts/cutover/install-write-barrier.sql').read_text()
 run(installer)
@@ -43,10 +54,15 @@ def client(source,ok=True,role='authenticated'):
 def freeze(on=True,reason='Isolated maintenance rehearsal'):
  return run(f"SELECT budget_ops.set_write_freeze({str(on).lower()},'{reason}')")
 client("INSERT INTO barrier_probe VALUES(2,'allowed')")
+run("INSERT INTO auth.users VALUES('00000000-0000-4000-8000-000000000001')",session='supabase_auth_admin')
+assert run('SELECT count(*) FROM public.user_profiles')=='1'
 assert client("SELECT rolbypassrls FROM pg_roles WHERE rolname=current_user",role='service_role')=='t'
 client("UPDATE barrier_probe SET value='normal' WHERE id=1",role='service_role')
 assert client('SELECT count(*) FROM barrier_probe')=='2'
 freeze()
+assert 'paused for maintenance' in run("INSERT INTO auth.users VALUES('00000000-0000-4000-8000-000000000002')",False,session='supabase_auth_admin')
+assert run('SELECT count(*) FROM auth.users')=='1'
+assert run('SELECT count(*) FROM public.user_profiles')=='1'
 for role in ('anon','authenticated','service_role'):
  for statement in ["INSERT INTO barrier_probe VALUES(3,'bad')", "UPDATE barrier_probe SET value='bad' WHERE id=1", 'DELETE FROM barrier_probe WHERE id=1', 'TRUNCATE barrier_probe', "INSERT INTO barrier_probe VALUES(1,'bad') ON CONFLICT(id) DO UPDATE SET value=excluded.value", 'SELECT public.barrier_definer_write()', "INSERT INTO barrier_partition VALUES(1,'bad')", "INSERT INTO barrier_partition_child VALUES(1,'bad')"]:
   assert 'paused for maintenance' in client(statement,False,role)
@@ -70,6 +86,10 @@ assert 'Unprotected application tables' in run("SELECT budget_ops.set_write_free
 assert run('SELECT frozen FROM budget_ops.write_control')=='t'
 run(installer)
 freeze(False)
+run("INSERT INTO auth.users VALUES('00000000-0000-4000-8000-000000000003')",session='supabase_auth_admin')
+assert run('SELECT count(*) FROM auth.users')=='2'
+assert run('SELECT count(*) FROM public.user_profiles')=='2'
+print('PASS: a frozen profile write rolls back the complete simulated Auth signup; reopening restores account creation')
 print('PASS: frozen INSERT/UPDATE/DELETE/TRUNCATE/upsert, partitions, privileged RPCs and forged bypass denied; reads and explicit operator bypass work; coverage and reruns fail safely')
 # A transaction which has written must COMMIT before freeze can finish. A writer
 # arriving behind the control change must observe frozen, not a stale snapshot.
