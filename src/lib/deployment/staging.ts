@@ -6,6 +6,9 @@ export { TESTING_SUPABASE_URL } from './staging-project';
 const publicPaths = new Set(['/login', '/privacy', '/terms', '/api/health/live', '/api/health/ready', '/api/version', '/version.json', '/manifest.json', '/sw.js']);
 const disabledPrefixes = ['/signup', '/auth', '/invite', '/api/auth', '/api/cron', '/api/webhooks', '/api/push', '/api/ai', '/api/automatic-imports/teller', '/api/automatic-imports/setups', '/api/automatic-imports/email-domain', '/api/integrations', '/api/settings/integrations', '/api/settings/api-keys', '/api/help/feedback', '/api/interface-feedback', '/api/test', '/api/v1', '/api/recurring-transactions/detect'];
 export function stagingPathDisabled(path: string, method: string): boolean {
+  // Import review reads its own setup metadata; this route performs no provider
+  // call and still enforces the synthetic allowlist and active-budget ownership.
+  if (method === 'GET' && /^\/api\/automatic-imports\/setups\/[1-9]\d*$/.test(path)) return false;
   if (disabledPrefixes.some(prefix => path === prefix || path.startsWith(prefix + '/'))) return true;
   if ((path.startsWith('/api/admin/') && path !== '/api/admin/check') || path === '/api/admin') return true;
   if (path.startsWith('/api/invitations') && !(path === '/api/invitations/my-invitations' && method === 'GET')) return true;
