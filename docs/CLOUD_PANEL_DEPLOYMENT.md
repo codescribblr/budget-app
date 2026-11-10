@@ -2,7 +2,7 @@
 
 The Cloud Panel implementation is live on cloud.jrwdev.com; web02 runs agent 0.12.6 (panel 0.6.17). On November 10, the user authorized the production maintenance window after asking both active users to stop. Production hosting now routes to web02 and `PRODUCTION_HOST=cloud-panel`; the original database, Auth, Storage and production credentials remain in the existing Supabase project. The historical preparation sections below describe earlier states and do not override this cutover record.
 
-## Production cutover in progress — November 10, 2026
+## Production cutover verified — November 10, 2026
 
 The first production workflow, [42893701399](https://github.com/codescribblr/budget-app/actions/runs/42893701399), installed in maintenance mode. The next ordinary main-branch workflow, [42896003461](https://github.com/codescribblr/budget-app/actions/runs/42896003461), finalized `r-42896003461-1-dfe043485787` with maintenance off. Real Google sign-in reached the existing user's dashboard. The independent database write pause was released at 20:40:50 UTC for controlled acceptance; users remain asked to stay out until the final checks finish.
 
@@ -20,7 +20,11 @@ The sole Cloud Panel daily dispatcher is enabled for `0 8 * * *` UTC with `CRON_
 - Complete Vercel recovery settings and environment values are authenticated-encrypted in `verification/vercel-cutover-42891310360-1.zip.enc`, with a verified second-server copy. All 35 source values were compared against Cloud Panel using hashes; the canonical app URL is the intentional difference, private values remain runtime-only, and multiline Teller bytes match. The one-time transition workflow has been removed. Its reviewed source and execution remain in Git commit `074e9e116b39f422916f1efc84141246feec53fe` and run `42894650318`.
 - Staging app 20 and proof app 18 runtimes are temporarily stopped to reserve memory for the production release and its next candidate. The 4 GB server retains its bounded 8 GB swap; admission checks remain enforced. Root-only recovery material is under `/root/budget-recovery/production-cutover-20261110/` on web02 and `/root/cloud-panel-recovery/budget-cutover-20261110/` on the panel host.
 
-Still required before calling the move complete: finish the disposable transaction cleanup and baseline comparison, remaining page checks, and an ordinary release while a browser tab is idle to verify the update notice and email/in-app notification. Application/configuration rollback is available; restoring an older database over new writes always requires review.
+The final ordinary main push completed in [run 42898405585](https://github.com/codescribblr/budget-app/actions/runs/42898405585), activating `r-42898405585-1-2ed29857ee2d`. An untouched, visible production envelope page displayed “New version available” automatically. Its Refresh button retained the signed-in user and the same route; the notice cleared. Cloud Panel showed the release active and healthy, recorded its in-app notification, and the real email reached `jon@jrwdev.com` at 20:52:33 UTC. The new deployment regenerated the proxy with the permanent login fix intact.
+
+Live browser checks covered the classic dashboard, new home, envelopes, accounts, transactions, reports, import queue and settings. A disposable expense was created for $0.01, edited to $0.02 and deleted with explicit confirmation. The Food envelope returned to its original balance; transaction/split counts and totals, account balances, per-budget aggregates, budget counts and job status counts matched the frozen baseline. No real payment, bank transaction or subscription was created. No browser errors were recorded on the checked pages after the proxy fix.
+
+Production can reopen. The next natural daily dispatcher run is November 11 at 08:00 UTC; its authenticated zero-due-job check passed. Existing Teller enrollment remains outside the launch acceptance because it was already nonworking and remains in development. Existing staging proofs cover upload parsing, failed-build retention and failure alerts; those disruptive scenarios were not repeated against production. Application/configuration rollback is available; restoring an older database over new writes always requires review.
 
 ## Current launch scope — revised November 10, 2026
 
