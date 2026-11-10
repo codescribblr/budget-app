@@ -50,7 +50,11 @@ export class BackupStorage {
   async request(path, options = {}) {
     const response = await this.fetcher(`${this.config.origin}/storage/v1/${path}`, {
       ...options, redirect: 'error', signal: AbortSignal.timeout(120_000),
-      headers: { apikey: this.config.token, Authorization: `Bearer ${this.config.token}`, ...options.headers },
+      headers: {
+        apikey: this.config.token,
+        ...(this.config.token.startsWith('sb_secret_') ? {} : { Authorization: `Bearer ${this.config.token}` }),
+        ...options.headers,
+      },
     });
     // Response bodies and request headers can contain secrets; never log them.
     if (!response.ok) throw new Error(`Private backup storage request failed (HTTP ${response.status})`);

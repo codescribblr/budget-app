@@ -20,7 +20,9 @@ export async function GET() {
     // A bounded, read-only request confirms PostgREST and Postgres connectivity.
     // No user rows or external-service details are returned by this endpoint.
     const response = await fetch(`${origin.origin}/rest/v1/user_profiles?select=user_id&limit=0`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
+      // Modern secret keys are opaque API keys, not JWT bearer tokens. Keep
+      // the legacy header only while old service-role JWTs are supported.
+      headers: key.startsWith('sb_secret_') ? { apikey: key } : { apikey: key, Authorization: `Bearer ${key}` },
       redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(4000),
     });
     if (!response.ok) throw Error('Dependency unavailable');

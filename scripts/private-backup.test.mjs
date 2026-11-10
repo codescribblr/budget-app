@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { encrypt, decrypt, validateObject, encryptionKey, storageConfig, BackupStorage, BUCKET } from './private-backup.mjs';
 const key = randomBytes(32), name = 'production/123-abcdef.tar.gz.enc', plain = Buffer.from('private database contents\n');
+test('Supabase backup storage supports opaque secret keys without JWT bearer headers', async () => {
+  for (const token of ['sb_secret_testing-only', 'legacy-service-jwt']) {
+    const storage = new BackupStorage({ origin: 'https://test.supabase.co', token, key }, async (url, options) => {
+      assert.equal(url, `https://test.supabase.co/storage/v1/bucket/${BUCKET}`);
+      assert.deepEqual(options.headers, token.startsWith('sb_secret_') ? { apikey: token } : { apikey: token, Authorization: `Bearer ${token}` });
+      assert.equal(options.redirect, 'error');
+      return Response.json({ id: BUCKET, public: false });
+    });
+    await storage.requirePrivateBucket();
+  }
+});
 test('round trip uses random nonces and does not expose plaintext', () => {
   const a = encrypt(plain, key, name), b = encrypt(plain, key, name);
   assert.deepEqual(decrypt(a, key, name), plain);
