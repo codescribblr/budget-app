@@ -26,6 +26,13 @@ Date          Description          Debit          Credit
 11/02/2024    TEST PAYROLL          0.00          250.00`).map(r => [r.amount, r.transaction_type])).toEqual([[12.34, 'expense'], [250, 'income']]);
   });
 
+  it('honors a reversed Credit / Debit column order', () => {
+    expect(rows(`Savings account
+Date          Description          Credit          Debit
+11/01/2024    TEST GROCER          0.00          12.34
+11/02/2024    TEST PAYROLL          250.00          0.00`).map(r => [r.amount, r.transaction_type])).toEqual([[12.34, 'expense'], [250, 'income']]);
+  });
+
   it('preserves the opposite convention for credit card purchases and payments', () => {
     expect(rows(`Credit card statement
 Checking account used for payments: TEST ONLY
