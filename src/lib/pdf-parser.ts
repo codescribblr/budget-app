@@ -351,6 +351,7 @@ function parseBankStatement(fullText: string, lines: string[]): ParsedTransactio
   // Find the transaction section
   let inTransactionSection = false;
   let hasDebitCreditColumns = false;
+  let creditBeforeDebit = false;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -359,6 +360,7 @@ function parseBankStatement(fullText: string, lines: string[]): ParsedTransactio
     if (/Transactions?|Activity|Date.*Description|Debit.*Credit/i.test(line)) {
       inTransactionSection = true;
       hasDebitCreditColumns = /Debit.*Credit|Credit.*Debit/i.test(line);
+      creditBeforeDebit = /Credit.*Debit/i.test(line);
       continue;
     }
     
@@ -387,8 +389,8 @@ function parseBankStatement(fullText: string, lines: string[]): ParsedTransactio
       if (parts.length < 3) continue;
       
       // Last two columns should be debit and credit
-      const debitStr = parts[parts.length - 2]?.replace(/[\$,\s]/g, '') || '0';
-      const creditStr = parts[parts.length - 1]?.replace(/[\$,\s]/g, '') || '0';
+      const debitStr = parts[parts.length - (creditBeforeDebit ? 1 : 2)]?.replace(/[\$,\s]/g, '') || '0';
+      const creditStr = parts[parts.length - (creditBeforeDebit ? 2 : 1)]?.replace(/[\$,\s]/g, '') || '0';
       
       const debit = parseFloat(debitStr);
       const credit = parseFloat(creditStr);
