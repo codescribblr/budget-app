@@ -22,11 +22,14 @@ IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon
 IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated; END IF;
 IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='service_role') THEN CREATE ROLE service_role BYPASSRLS; END IF;
 END $$;
+ALTER ROLE service_role BYPASSRLS;
 CREATE ROLE barrier_authenticator LOGIN NOINHERIT PASSWORD 'local-proof-only';
 GRANT anon, authenticated, service_role TO barrier_authenticator;
 CREATE TABLE barrier_probe(id int PRIMARY KEY, value text NOT NULL);
 INSERT INTO barrier_probe VALUES(1,'original');
 GRANT ALL ON barrier_probe TO anon, authenticated, service_role;
+ALTER TABLE barrier_probe ENABLE ROW LEVEL SECURITY;
+CREATE POLICY barrier_test_member ON barrier_probe TO authenticated USING(true) WITH CHECK(true);
 CREATE FUNCTION public.barrier_definer_write() RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog AS $$ UPDATE public.barrier_probe SET value='definer' WHERE id=1 $$;
 CREATE FUNCTION public.barrier_fake_bypass() RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN PERFORM set_config('budget_ops.operator_bypass','on',true); UPDATE public.barrier_probe SET value='bypass' WHERE id=1; END $$;
 CREATE TABLE barrier_partition(id int, value text) PARTITION BY RANGE(id);
@@ -40,6 +43,7 @@ def client(source,ok=True,role='authenticated'):
 def freeze(on=True,reason='Isolated maintenance rehearsal'):
  return run(f"SELECT budget_ops.set_write_freeze({str(on).lower()},'{reason}')")
 client("INSERT INTO barrier_probe VALUES(2,'allowed')")
+assert client("SELECT rolbypassrls FROM pg_roles WHERE rolname=current_user",role='service_role')=='t'
 client("UPDATE barrier_probe SET value='normal' WHERE id=1",role='service_role')
 assert client('SELECT count(*) FROM barrier_probe')=='2'
 freeze()
