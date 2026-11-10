@@ -1,0 +1,39 @@
+name: Approved Vercel hosting transition
+on:
+  push:
+    branches: [codex/cloud-panel-migration]
+    paths:
+      - .github/workflows/vercel-cutover.yml
+      - scripts/cutover/vercel-operation.json
+      - scripts/cutover/vercel-operation.mjs
+      - scripts/cutover/vercel-transition.cjs
+permissions:
+  contents: read
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+jobs:
+  transition:
+    if: github.repository == 'codescribblr/budget-app' && github.ref == 'refs/heads/codex/cloud-panel-migration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Perform the approved transition step
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          CLOUD_BACKUP_URL: https://cloud.jrwdev.com
+          CLOUD_BACKUP_APP_ID: '19'
+          CLOUD_BACKUP_TOKEN: ${{ secrets.CLOUD_BACKUP_TOKEN }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: node scripts/cutover/vercel-operation.mjs
+      - name: Remove temporary deployment files
+        if: always()
+        run: rm -rf .vercel-transition
