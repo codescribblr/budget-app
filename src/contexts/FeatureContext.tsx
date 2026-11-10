@@ -51,6 +51,16 @@ export function FeatureProvider({ children }: { children: React.ReactNode }) {
       setError(null);
 
       const response = await fetch('/api/features');
+      if (id !== requestId.current) return;
+      // Sign-out can overlap a settings refresh. Drop the former session's
+      // feature state while navigation completes, without a spurious error.
+      if (response.status === 401) {
+        loaded.current = false;
+        setAccountId(null);
+        setFeatures([]);
+        setHasPremium(false);
+        return;
+      }
       if (!response.ok) {
         throw new Error('Failed to fetch features');
       }
@@ -72,6 +82,7 @@ export function FeatureProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchFeatures();
+    return () => { requestId.current++; };
   }, [fetchFeatures, version]);
 
   const isFeatureEnabled = useCallback((featureName: FeatureName): boolean => {
