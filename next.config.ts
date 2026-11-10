@@ -8,8 +8,12 @@ if (!/^[a-z0-9][a-z0-9_-]{7,127}$/.test(version.releaseId || '')) throw Error('R
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  serverExternalPackages: ['pdf-parse'],
   env: { NEXT_PUBLIC_RELEASE_ID: version.releaseId },
-  outputFileTracingIncludes: { '/*': ['./email-templates/**/*', './public/version.json'] },
+  outputFileTracingIncludes: {
+    '/*': ['./email-templates/**/*', './public/version.json'],
+    '/api/import/process-pdf': ['./node_modules/pdf-parse/lib/pdf.js/v1.10.100/**/*'],
+  },
   experimental: {
     // Default 10MB truncates large backup imports (middleware buffers the full body).
     middlewareClientMaxBodySize: '100mb',

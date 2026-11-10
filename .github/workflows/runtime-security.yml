@@ -14,6 +14,8 @@ on:
       - scripts/cutover/**
       - scripts/cloud-config*.mjs
       - scripts/verify-vercel-runtime*.mjs
+      - scripts/verify-pdf-runtime.mjs
+      - scripts/fixtures/pdf-import-synthetic.pdf
       - src/lib/backup-utils.ts
       - src/lib/__tests__/backup-context.test.ts
       - src/lib/pdf-parser.ts
@@ -83,3 +85,4 @@ jobs:
           python3 scripts/test-release-database.py
           python3 scripts/test-write-barrier.py
       - run: npm run build
+      - run: node scripts/verify-pdf-runtime.mjs

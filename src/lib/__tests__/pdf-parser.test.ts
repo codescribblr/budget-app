@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseTransactionsFromText } from '../pdf-parser';
+import { readFile } from 'node:fs/promises';
+import { parsePDFFile, parseTransactionsFromText } from '../pdf-parser';
 
 const rows = (text: string) => parseTransactionsFromText(text, 'synthetic.pdf').map(({ date, description, amount, transaction_type }) => ({ date, description, amount, transaction_type }));
 
@@ -47,5 +48,19 @@ Trans. date  Post date  Description  Amount
   it('does not silently reinterpret an unrecognized bank statement as a credit card', () => {
     expect(rows(`Checking account statement
 11/01/2024    TEST GROCER          -12.34`)).toEqual([]);
+  });
+});
+
+
+describe('uploaded PDF bytes', () => {
+  it('extracts a real uploaded statement without depending on Node Buffer allocation', async () => {
+    const bytes = await readFile(new URL('../../../scripts/fixtures/pdf-import-synthetic.pdf', import.meta.url));
+    const result = await parsePDFFile(new File([new Uint8Array(bytes)], 'synthetic.pdf', { type: 'application/pdf' }));
+    expect(result.error).toBeUndefined();
+    expect(result.success).toBe(true);
+    expect(result.transactions.map(({ date, amount, transaction_type }) => [date, amount, transaction_type])).toEqual([
+      ['2026-11-01', 12.34, 'expense'], ['2026-11-03', 8.9, 'expense'],
+      ['2026-11-05', 250, 'income'], ['2026-11-07', 4.56, 'expense'],
+    ]);
   });
 });

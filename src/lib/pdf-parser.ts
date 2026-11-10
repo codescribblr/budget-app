@@ -19,44 +19,16 @@ export interface PDFParseResult {
  */
 export async function parsePDFFile(file: File): Promise<PDFParseResult> {
   try {
-    // Convert file to buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // PDF.js expects Uint8Array slice semantics. A Node Buffer may share its
+    // sliced storage and corrupt parsing depending on how the upload was allocated.
+    const bytes = new Uint8Array(await file.arrayBuffer());
 
-    // Import pdf-parse v1 (function-based API, no workers needed)
-    // Use require directly - the library has debug code but we can work around it
-    let pdfParse: any;
-    
-    if (typeof require !== 'undefined') {
-      // Use require directly (works in Node.js/Next.js API routes)
-      // The library's index.js has debug code that runs when module.parent is falsy
-      // We'll catch any errors from that and still get the function
-      try {
-        pdfParse = require('pdf-parse');
-      } catch (debugError: any) {
-        // If debug code fails (trying to read test file), try to get the function anyway
-        // The function should still be exported even if debug code fails
-        const pdfParsePath = require.resolve('pdf-parse');
-        const pdfParseModule = require.cache[pdfParsePath];
-        if (pdfParseModule && pdfParseModule.exports) {
-          pdfParse = pdfParseModule.exports;
-        } else {
-          // If that doesn't work, try importing the lib file directly
-          pdfParse = require('pdf-parse/lib/pdf-parse.js');
-        }
-      }
-    } else {
-      // Fallback to dynamic import if require is not available
-      const pdfParseModule = await import('pdf-parse');
-      pdfParse = pdfParseModule.default || pdfParseModule;
-    }
-    
-    if (typeof pdfParse !== 'function') {
-      throw new Error('pdf-parse function not found. Please ensure pdf-parse is installed correctly.');
-    }
+    // Avoid the debug entry point and preserve native loading of PDF.js workers
+    // in the standalone server.
+    const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 
     // Extract text from PDF
-    const pdfData = await pdfParse(buffer);
+    const pdfData = await pdfParse(bytes);
     const text = pdfData.text;
 
     if (!text || text.trim().length === 0) {
