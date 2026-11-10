@@ -58,10 +58,13 @@ async function request(path, method = "GET", body, headers = {}) {
           : JSON.stringify(body),
     signal: AbortSignal.timeout(120000),
   });
-  if (!response.ok)
-    throw Error(
+  if (!response.ok) {
+    const error = Error(
       `Panel ${method} ${path.split("?")[0]} failed (HTTP ${response.status}); inspect the panel release history`,
     );
+    error.status = response.status;
+    throw error;
+  }
   return response.json();
 }
 async function child(command, args, env = process.env) {
@@ -199,10 +202,49 @@ async function run() {
     console.log(`Prepared immutable release ${id}`);
     return;
   }
-  const state = await json(stateFile);
+  let state;
+  try {
+    state = await json(stateFile);
+  } catch (error) {
+    if (command === "cleanup-upload" && error.code === "ENOENT") {
+      console.log("No packaged release to clean up");
+      return;
+    }
+    throw error;
+  }
   const id = state.id;
   if (!/^[a-z0-9][a-z0-9_-]{7,127}$/.test(id))
     throw Error("Invalid release state");
+  if (command === "cleanup-upload") {
+    const run = required("GITHUB_RUN_ID");
+    const attempt = process.env.GITHUB_RUN_ATTEMPT || "1";
+    const commit = required("GITHUB_SHA");
+    if (state.ciRunId !== run || state.idempotencyKey !== `${run}:${attempt}` || state.commitSha !== commit)
+      throw Error("Upload cleanup does not belong to this workflow attempt");
+    let release;
+    try {
+      release = await request(`/releases/${id}`);
+    } catch (error) {
+      if (error.status === 404) {
+        console.log("Release was not reserved; no upload cleanup needed");
+        return;
+      }
+      throw error;
+    }
+    if (release.id !== id || release.ciRunId !== run || release.idempotencyKey !== state.idempotencyKey ||
+        release.commitSha !== commit || release.artifactSha256 !== state.artifactSHA || release.envRevision !== state.envRevision)
+      throw Error("Reserved upload identity differs from this workflow attempt");
+    // Only a reservation that has never dispatched an agent task is safe to
+    // abandon automatically. Installation/migration/promotion uncertainty
+    // retains its lock for review; this never restores data or changes traffic.
+    if (release.status !== "uploading" || release.taskId || release.migrationGate) {
+      console.log(`Release ${id}: ${release.status}; preserving state for review`);
+      return;
+    }
+    await request(`/releases/${id}/abort`, "POST", {});
+    await poll(id, ["aborted"]);
+    return;
+  }
   if (command === "stage") {
     const input = {
       id,
@@ -302,7 +344,7 @@ async function run() {
     return;
   }
   throw Error(
-    "Usage: cloud-release.mjs ci-report running|success|failure|cancelled | config | build COMMAND... | package DIRECTORY ARCHIVE | stage | prepare | promote | finalize [failed] | status | abort | reconcile | renew",
+    "Usage: cloud-release.mjs ci-report running|success|failure|cancelled | config | build COMMAND... | package DIRECTORY ARCHIVE | stage | cleanup-upload | prepare | promote | finalize [failed] | status | abort | reconcile | renew",
   );
 }
 run().catch((error) => {

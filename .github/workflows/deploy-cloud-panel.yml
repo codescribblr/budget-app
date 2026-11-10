@@ -69,6 +69,7 @@ jobs:
           node scripts/verify-pdf-runtime.mjs .release-work/standalone
           node scripts/cloud-release.mjs package .release-work/standalone .release-work/release.tar.gz
       - name: Reserve deployment and stage artifact
+        id: stage
         run: node scripts/cloud-release.mjs stage
       - name: Install matching PostgreSQL client
         if: env.CLOUD_TARGET == 'production'
@@ -126,6 +127,9 @@ jobs:
       - name: Report deployment state for recovery
         if: failure()
         run: test ! -f .cloud-release.json || node scripts/cloud-release.mjs status
+      - name: Release a failed upload that never reached installation
+        if: failure() && steps.stage.outcome == 'failure'
+        run: node scripts/cloud-release.mjs cleanup-upload
       - name: Report final workflow outcome to Cloud Panel
         if: always()
         env:
