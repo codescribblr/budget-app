@@ -1,6 +1,6 @@
 # Cloud Panel deployment and migration gates
 
-The Cloud Panel implementation is live on cloud.jrwdev.com; web02 runs agent 0.12.1. Budget production remains on Vercel. The `PRODUCTION_HOST` repository variable defaults to Vercel; do not change it during staging. This branch introduces the budget runtime and deployment contract; it does not authorize a DNS, webhook or cron cutover.
+The Cloud Panel implementation is live on cloud.jrwdev.com; web02 runs agent 0.12.5 (panel 0.6.17). Budget production remains on Vercel. The `PRODUCTION_HOST` repository variable defaults to Vercel; do not change it during staging. This branch introduces the budget runtime and deployment contract; it does not authorize a DNS, webhook or cron cutover.
 
 ## Current staging contract
 
@@ -294,4 +294,15 @@ The browser found two harmless but misleading subscription/feature errors when s
 
 Reserved production app 19 now has 39 encrypted configuration entries. Its public app URL is the canonical HTTPS domain, its new runtime-only cron secret has a root-only recovery copy, scheduled jobs are disabled and app maintenance mode is on. Its runtime limits match staging: 1,536 MiB RAM and 512 MiB swap. Per-app success/failure/rollback notifications are configured for in-app and email. It still has no active release or production deploy credential. A DNS-01 certificate for `everydollarbudget.app` was installed without changing traffic routing. Direct TLS validation to web02 passed; HTTP returned the expected 502 because the reserved app has no runtime. This is HTTPS preparation, not proof that production is ready to serve traffic. The canonical domain still redirects to Vercel.
 
-Remaining go-live gates include automatic DNS-certificate renewal qualification, isolated external-provider tests, complete old-credential/immutable-deployment retirement, concurrent production/staging capacity, historical job review and single-dispatcher activation, production GitHub protection, and a timed backup/cutover/rollback rehearsal. Do not treat the successful key rollout as approval to disable shared legacy testing credentials or change production routing.
+Remaining go-live gates include isolated external-provider tests, complete old-credential/immutable-deployment retirement, concurrent production/staging capacity, historical job review and single-dispatcher activation, production GitHub protection, and a timed backup/cutover/rollback rehearsal. Do not treat the successful key rollout as approval to disable shared legacy testing credentials or change production routing.
+
+
+### Automatic DNS certificate renewal — verified November 10, 2026
+
+Panel 0.6.17 and web02 agent 0.12.5 combine the newer security/UI release with persistent DNS-01 certificate renewal. A real renewal request used the same worker as the automatic 30-day expiry check and installed a trusted certificate for `everydollarbudget.app` at 18:22:42 UTC. Direct TLS verified its hostname and chain, and the served certificate matched the file installed on web02. Its expiry is February 8, 2027. The success notification appeared in the live panel; SMTP accepted the email on its first attempt. A panel restart preserved the issuer account, completion state and staging release without issuing again or duplicating the alert. This closes the DNS-renewal qualification gate; scheduled-date behavior is covered by automated tests rather than a claim of waiting 60 days.
+
+Issuer account data and certificate private keys remain encrypted at rest. The installed private key is mode 0600 and the recovery journal cleared after success. Known-good pre-release binaries/database and post-renewal database, encrypted issuer account and encryption-key recovery copy are root-only under `/root/cloud-panel-recovery/dns-renewal-integrated-20261110/` on the panel host. Credential-free receipts, screenshots and SHA-256 manifest are under `/root/budget-recovery/dns-renewal-verification-20261110/` on web02.
+
+The first attempted renewal deployment used an outdated panel checkout and overlapped the security/UI chat's release, temporarily interrupting agent authentication. The newer panel and prior agent were restored before any live renewal request. The verified combined release is based on security/UI commit `5e878f9` plus `d2442e6` and `e8efa0e`; the superseded `e3ae5eb` build must not be deployed. Deployment ownership is now coordinated explicitly between the two chats. No user-owned uncommitted UI changes were included.
+
+Staging remained healthy, production app 19 remained inactive, and the canonical domain continued redirecting to Vercel. Provider isolation, legacy-access retirement, capacity, job ownership and the timed cutover/rollback rehearsal remain required before production traffic moves.
