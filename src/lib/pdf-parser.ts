@@ -99,9 +99,18 @@ export async function parsePDFFile(file: File): Promise<PDFParseResult> {
  * Parse transactions from extracted PDF text
  * Handles various bank statement formats with automatic format detection
  */
-function parseTransactionsFromText(text: string, fileName: string): ParsedTransaction[] {
+export function parseTransactionsFromText(text: string, fileName: string): ParsedTransaction[] {
   const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
   
+  // Bank and card statements use opposite signs. A shared Description/Amount
+  // heading is not enough to select the credit-card parser.
+  const explicitBankStatement = /^(?:checking|savings|deposit) account\b|^(?:checking|savings|bank) statement\b|^.*\bDebit\s+Credit\b|^.*\bCredit\s+Debit\b/im.test(lines.join('\n'));
+  const explicitCardStatement = /^(?:credit card|cardmember|card account)\b/im.test(lines.join('\n'));
+  if (explicitBankStatement && !explicitCardStatement) {
+    // Do not fall back to card conventions when a known bank format is unreadable.
+    return parseBankStatement(text, lines);
+  }
+
   // Try format-specific parsers first (they're more accurate)
   // These detect their specific format and return empty if not a match
   
@@ -417,11 +426,11 @@ function parseBankStatement(fullText: string, lines: string[]): ParsedTransactio
       });
     } else {
       // Single amount column format
-      const amountMatch = line.match(/([-\$]?\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*$/);
+      const amountMatch = line.match(/((?:(?:[-+]?\$?|\$[-+]?)\d[\d,]*(?:\.\d{2})?|\(\$?\d[\d,]*(?:\.\d{2})?\)))\s*$/);
       if (!amountMatch) continue;
-      
+
       const amountStr = amountMatch[1].replace(/[\$,\s\(\)]/g, '');
-      const amount = parseFloat(amountStr);
+      const amount = parseFloat(amountStr) * (amountMatch[1].startsWith('(') ? -1 : 1);
       
       if (isNaN(amount) || amount === 0) continue;
       
@@ -431,7 +440,7 @@ function parseBankStatement(fullText: string, lines: string[]): ParsedTransactio
       
       if (description.length < 3) continue;
       
-      const transactionType: 'income' | 'expense' = amount < 0 ? 'income' : 'expense';
+      const transactionType: 'income' | 'expense' = amount < 0 ? 'expense' : 'income';
       const date = parseBankDate(dateStr);
       const merchant = extractMerchant(description);
       const originalData = JSON.stringify({ line, date: dateStr, description, amount });

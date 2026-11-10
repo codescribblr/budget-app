@@ -16,6 +16,8 @@ on:
       - scripts/verify-vercel-runtime*.mjs
       - src/lib/backup-utils.ts
       - src/lib/__tests__/backup-context.test.ts
+      - src/lib/pdf-parser.ts
+      - src/lib/__tests__/pdf-parser.test.ts
       - src/lib/import/import-batches.ts
       - src/lib/import/request-budget.ts
       - src/lib/import/__tests__/request-budget.test.ts
