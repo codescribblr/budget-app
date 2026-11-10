@@ -18,6 +18,15 @@ describe('functional staging isolation',()=>{
   expect(stagingAccessStatus('/api/import/process-pdf','POST','00000000-0000-4000-8000-000000000002',env)).toBe(403);
   expect(stagingAccessStatus('/api/import/process-image','POST',user,env)).toBe(503);
  });
+ it('permits owned import metadata without enabling provider configuration or fetches',()=>{
+  const path='/api/automatic-imports/setups/42';
+  expect(stagingAccessStatus(path,'GET',user,env)).toBeNull();
+  expect(stagingAccessStatus(path,'GET',undefined,env)).toBe(401);
+  expect(stagingAccessStatus(path,'GET','00000000-0000-4000-8000-000000000002',env)).toBe(403);
+  for(const method of ['POST','PUT','PATCH','DELETE']) expect(stagingAccessStatus(path,method,user,env)).toBe(503);
+  for(const method of ['GET','POST']) expect(stagingAccessStatus(path+'/fetch',method,user,env)).toBe(503);
+  expect(stagingAccessStatus('/api/automatic-imports/setups','POST',user,env)).toBe(503);
+ });
  it('fails closed for a missing allowlist or an incorrect backend',()=>{
   expect(stagingAccessStatus('/login','GET',undefined,{...env,STAGING_ALLOWED_USER_IDS:''})).toBe(503);
   expect(stagingAccessStatus('/api/transactions','POST',user,{...env,NEXT_PUBLIC_SUPABASE_URL:'https://yhmexgwdytmyqourkivz.supabase.co'})).toBe(503);
