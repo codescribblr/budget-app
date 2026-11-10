@@ -8,7 +8,29 @@ describe('retiring-origin transition', () => {
   it('stays inactive unless explicitly configured', async () => { expect(await legacyOriginResponse(request('/login'), undefined)).toBeNull(); });
   it('redirects page requests with their path and query', async () => {
     const r = await legacyOriginResponse(request('/transactions?month=2026-11'), target);
-    expect(r?.status).toBe(307); expect(r?.headers.get('location')).toBe(`${target}/transactions?month=2026-11`); expect(r?.headers.get('cache-control')).toContain('no-store');
+    expect(r?.status).toBe(307);
+    const location = new URL(r!.headers.get('location')!);
+    expect(location.origin).toBe(target);
+    expect(location.pathname).toBe('/transactions');
+    expect(location.searchParams.get('month')).toBe('2026-11');
+    expect(location.searchParams.get('__budget_move')).toMatch(/^[0-9a-f-]{36}$/);
+    expect(r?.headers.get('cache-control')).toContain('no-store');
+  });
+  it('uses a fresh canonical URI even if a prior migration URL was cached', async () => {
+    const path = '/transactions?month=2026-11&__budget_move=old-cached-value';
+    const first = (await legacyOriginResponse(request(path), target))!.headers.get('location')!;
+    const second = (await legacyOriginResponse(request(path), target))!.headers.get('location')!;
+    expect(first).not.toBe(second);
+    expect(first).not.toContain('old-cached-value');
+    expect(new URL(first).searchParams.get('month')).toBe('2026-11');
+  });
+  it('restarts old-origin sign-in without forwarding one-time credentials', async () => {
+    const response = await legacyOriginResponse(request('/auth/callback?code=one-time-code&next=https://attacker.invalid'), target);
+    const location = new URL(response!.headers.get('location')!);
+    expect(location.pathname).toBe('/login');
+    expect(location.searchParams.size).toBe(1);
+    expect(location.searchParams.has('__budget_move')).toBe(true);
+    expect(response!.headers.get('referrer-policy')).toBe('no-referrer');
   });
   it('does not replay API writes or server actions across hosts', async () => {
     for (const [path, method] of [['/api/transactions', 'POST'], ['/api/accounts', 'GET'], ['/login', 'POST']]) {
