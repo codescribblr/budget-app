@@ -4,7 +4,7 @@ export function envelopeReviewTarget(params: Pick<URLSearchParams, "get">) {
   const rawId = params.get("envelope");
   const id = rawId && /^\d+$/.test(rawId) ? Number(rawId) : NaN;
   const value = params.get("tab");
-  const tab: EnvelopeTab = value === "transfer" || value === "adjust" ? value : "activity";
+  const tab: EnvelopeTab = value === "transfer" || value === "activity" ? value : "adjust";
   return {
     categoryId: Number.isSafeInteger(id) && id > 0 ? id : null,
     tab,
@@ -14,7 +14,7 @@ export function envelopeReviewTarget(params: Pick<URLSearchParams, "get">) {
 /** Preserve the surrounding check-in/filter context when opening or closing. */
 export function envelopeReviewHref(
   categoryId: number | null,
-  tab: EnvelopeTab = "activity",
+  tab: EnvelopeTab = "adjust",
   search = "",
 ) {
   const params = new URLSearchParams(search);

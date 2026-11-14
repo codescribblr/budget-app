@@ -233,7 +233,7 @@ function EnvelopeDetailBody({
             <button
               className="nl-primary"
               disabled={!canEdit || !!category.is_archived}
-              onClick={() => changeParam("action", "transfer")}
+              onClick={() => changeParam("action", "adjust")}
             >
               <ArrowLeftRight size={16} />
               {overview.negative ? "Cover shortfall" : "Move money"}

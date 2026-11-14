@@ -422,11 +422,11 @@ export function EnvelopeEditor({
             <Tabs.Trigger value="activity" disabled={saving}>
               Activity
             </Tabs.Trigger>
-            <Tabs.Trigger value="transfer" disabled={saving}>
-              Move money
-            </Tabs.Trigger>
             <Tabs.Trigger value="adjust" disabled={saving}>
               Set balance
+            </Tabs.Trigger>
+            <Tabs.Trigger value="transfer" disabled={saving}>
+              Move money
             </Tabs.Trigger>
           </Tabs.List>
           <Tabs.Content

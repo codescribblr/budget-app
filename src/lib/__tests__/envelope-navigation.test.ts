@@ -10,9 +10,10 @@ describe("envelope review navigation", () => {
     expect(params.get("filter")).toBe("negative");
   });
 
-  it("keeps old review links and unknown tabs on activity", () => {
-    expect(envelopeReviewTarget(new URLSearchParams("envelope=42"))).toEqual({ categoryId: 42, tab: "activity" });
-    expect(envelopeReviewTarget(new URLSearchParams("envelope=42&tab=unknown"))).toEqual({ categoryId: 42, tab: "activity" });
+  it("defaults new, old, and unknown-tab review links to set balance", () => {
+    expect(envelopeReviewHref(42)).toBe("/new/budget?envelope=42&tab=adjust");
+    expect(envelopeReviewTarget(new URLSearchParams("envelope=42"))).toEqual({ categoryId: 42, tab: "adjust" });
+    expect(envelopeReviewTarget(new URLSearchParams("envelope=42&tab=unknown"))).toEqual({ categoryId: 42, tab: "adjust" });
   });
 
   it("clears only dialog state on close, so refresh does not reopen it", () => {

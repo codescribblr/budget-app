@@ -35,7 +35,7 @@ export function EnvelopeRow({
           <Link
             className="nl-activity-link"
             aria-label={`${overview.negative ? "Cover shortfall in" : "Move money for"} ${c.name}`}
-            href={envelopeReviewHref(c.id, "transfer", query)}
+            href={envelopeReviewHref(c.id, undefined, query)}
             scroll={false}
           >
             {overview.negative ? "Cover shortfall" : "Move money"}
